@@ -4,6 +4,17 @@ Put your AI coding agent on autopilot.
 
 Ralph takes plan files from a backlog and drives any CLI-based coding agent to implement them — with branch isolation, feedback loops, and stuck detection baked in. You write the plans (or have your agent write them). Ralph does the rest.
 
+## Why Ralph?
+
+AI agents degrade the longer they run. Context windows fill up, older decisions get compressed away, and the model starts hallucinating or going in circles.
+
+Ralph sidesteps this. Each iteration launches your agent with a **fresh context** — just the plan, current repo state, and build/test/lint feedback. No accumulated confusion, no compression artifacts.
+
+- **No context rot** — iteration 50 is as sharp as iteration 1
+- **Grounded feedback** — real build errors every cycle, not stale memory
+- **Stuck detection** — stops burning tokens when progress stalls
+- **Unattended** — write plans, walk away
+
 ## Get Started
 
 ```bash
@@ -28,10 +39,10 @@ Use .ralph/WRITING-PLANS.md as a guide.
 ### 2. Get ralph cooking
 
 ```bash
-npx ralphai run -- 10
+npx ralphai run
 ```
 
-For best first-run DX, `npx ralphai run -- ...` works out of the box. In initialized repos, you can also invoke `./.ralph/ralph.sh ...` directly.
+Ralph uses sensible defaults out of the box. In initialized repos, you can also invoke `./.ralph/ralph.sh` directly, passing args like iteration count (`10`) or flags (`--resume`, `--dry-run`).
 
 Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops — build, test, lint after every iteration. When a plan is done, it archives the work, merges or opens a PR, and moves on to the next one.
 
@@ -51,17 +62,17 @@ out/        ← done, archived
 If you need to stop mid-run, just kill it. Your work stays in `in-progress/` on the `ralph/*` branch. Pick up where you left off:
 
 ```bash
-npx ralphai run -- 10 --resume
+npx ralphai run
 ```
 
-`--resume` auto-commits any dirty state and continues.
+Ralph auto-resumes from where you left off. You can also pass `--resume` explicitly to `./.ralph/ralph.sh`.
 
 ### 5. Preview before committing
 
 Not sure what Ralph will do? Dry-run it:
 
 ```bash
-npx ralphai run -- --dry-run
+./.ralph/ralph.sh --dry-run
 ```
 
 Shows which plan would be picked, whether it would resume or start fresh, and what the merge target is — without touching anything.
@@ -133,8 +144,8 @@ Init:
   --agent-command=CMD    Set the agent command
 
 Run:
-  -- <args>    Pass arguments to ralph.sh (e.g. -- 10 --resume)
-              In initialized repos, direct invocation via ./.ralph/ralph.sh is also available.
+  Runs with sensible defaults. Pass args to ralph.sh via -- (e.g. -- 10 --resume).
+  In initialized repos, ./.ralph/ralph.sh is also available for direct invocation.
 ```
 
 ## Configuration
