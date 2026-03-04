@@ -1,0 +1,59 @@
+{
+  "name": "ralphai",
+  "version": "0.1.0",
+  "description": "Autonomous task runner for AI coding agents",
+  "type": "module",
+  "bin": {
+    "ralphai": "./bin/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "templates"
+  ],
+  "scripts": {
+    "build": "obuild",
+    "dev": "node --experimental-strip-types src/cli.ts",
+    "test": "vitest --run",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write 'src/**/*.ts'",
+    "ralph": ".ralph/ralph.sh"
+  },
+  "keywords": [
+    "cli",
+    "ai-agents",
+    "autonomous",
+    "task-runner",
+    "ralph",
+    "opencode",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "aider",
+    "goose",
+    "kiro",
+    "amp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mfaux/ralphai.git"
+  },
+  "homepage": "https://github.com/mfaux/ralphai#readme",
+  "bugs": {
+    "url": "https://github.com/mfaux/ralphai/issues"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@types/node": "^22.10.0",
+    "obuild": "^0.4.22",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@10.17.1"
+}
