@@ -42,7 +42,7 @@
   "bugs": {
     "url": "https://github.com/mfaux/ralphai/issues"
   },
-  "author": "",
+  "author": "mfaux",
   "license": "MIT",
   "devDependencies": {
     "@clack/prompts": "^0.11.0",
