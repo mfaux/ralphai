@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { join } from "path";
 
 const CLI_PATH = join(import.meta.dirname, "cli.ts");
@@ -19,8 +19,9 @@ export function runCli(
   timeout?: number,
 ): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const output = execSync(
-      `node --experimental-strip-types "${CLI_PATH}" ${args.join(" ")}`,
+    const output = execFileSync(
+      "node",
+      ["--experimental-strip-types", CLI_PATH, ...args],
       {
         encoding: "utf-8",
         cwd,

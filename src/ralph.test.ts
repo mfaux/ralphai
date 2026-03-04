@@ -95,7 +95,7 @@ describe("ralphai command", () => {
   });
 
   it("init --yes --agent-command uses the provided agent command", () => {
-    runCliOutput(["init", "--yes", "'--agent-command=claude -p'"], testDir);
+    runCliOutput(["init", "--yes", "--agent-command=claude -p"], testDir);
 
     const config = readFileSync(
       join(testDir, ".ralph", "ralph.config"),
@@ -133,7 +133,7 @@ describe("ralphai command", () => {
     expect(config).toBe(customConfig);
   });
 
-  it("ralph.sh is executable", () => {
+  it.skipIf(process.platform === "win32")("ralph.sh is executable", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const stats = statSync(join(testDir, ".ralph", "ralph.sh"));
@@ -531,7 +531,7 @@ describe("ralphai command", () => {
     expect(script).toContain("ralph"); // should have real template content
   });
 
-  it("update --yes keeps ralph.sh executable", () => {
+  it.skipIf(process.platform === "win32")("update --yes keeps ralph.sh executable", () => {
     runCliOutput(["init", "--yes"], testDir);
     runCliOutput(["update", "--yes"], testDir);
 
