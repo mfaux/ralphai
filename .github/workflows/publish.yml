@@ -2,11 +2,8 @@ name: Publish
 
 on:
   push:
-    branches: [main]
     tags:
       - 'v*'
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
     inputs:
       bump:
@@ -21,7 +18,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
 
     steps:
@@ -29,7 +26,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable Corepack
         run: corepack enable
@@ -54,36 +50,31 @@ jobs:
         timeout-minutes: 10
         run: pnpm test
 
-      - name: Determine version bump type
+      - name: Determine version bump
         id: version
         run: |
-          # If tag push, skip version bump (already versioned)
+          # Tag push → skip bump
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "bump=skip" >> $GITHUB_OUTPUT
             echo "Tag push - skipping version bump, will publish directly"
             exit 0
           fi
 
-          # If manually triggered, use the input value
+          # Manual trigger → use input bump
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "bump=${{ inputs.bump }}" >> $GITHUB_OUTPUT
             echo "Manual trigger - will bump ${{ inputs.bump }} version"
             exit 0
           fi
 
-          # Get the latest version tag
+          # Commits since last tag → auto bump
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
           if [ -z "$LATEST_TAG" ]; then
             COMMITS=$(git log --format=%s)
           else
             COMMITS=$(git log ${LATEST_TAG}..HEAD --format=%s)
           fi
 
-          echo "Commits since last tag:"
-          echo "$COMMITS"
-
-          # Check for explicit version bump markers
           if echo "$COMMITS" | grep -q "\[minor\]"; then
             echo "bump=minor" >> $GITHUB_OUTPUT
             echo "Found [minor] - will bump minor version"
@@ -95,35 +86,22 @@ jobs:
             echo "No version marker found - skipping release"
           fi
 
-      - name: Configure git
+      - name: Bump version (local only)
         if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump version
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          npm version ${{ steps.version.outputs.bump }} -m "v%s"
-
-      - name: Push changes
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          git push
-          git push --tags
+          npm version ${{ steps.version.outputs.bump }} --no-git-tag-version
+          echo "Bumped package.json version locally"
 
       - name: Publish to npm
-        id: publish
         if: steps.version.outputs.bump != 'none'
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
-        if: steps.publish.outcome == 'success'
+        if: steps.version.outputs.bump != 'none' || steps.version.outputs.bump == 'skip'
         run: |
           VERSION=$(node -p "require('./package.json').version")
 
+          # Get merged PRs since last tag
           LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$LATEST_TAG" ]; then
             SINCE=""
