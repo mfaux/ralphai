@@ -1508,6 +1508,42 @@ echo "$PROMPT_MODE"
   );
 
   // -------------------------------------------------------------------------
+  // Prompt construction wiring tests (format_file_ref used in prompt)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh wires format_file_ref into prompt construction and detect_plan", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // detect_plan: FILE_REFS uses format_file_ref
+    expect(ralphSh).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
+    // detect_plan: dry-run chosen
+    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$chosen")"');
+    // detect_plan: normal chosen
+    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
+    // LEARNINGS_REF uses format_file_ref
+    expect(ralphSh).toContain(
+      'LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"',
+    );
+    expect(ralphSh).toContain(
+      'LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"',
+    );
+    // Prompt construction uses format_file_ref for progress file
+    expect(ralphSh).toContain(
+      '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
+    );
+    // Backlog selection refs use format_file_ref
+    expect(ralphSh).toContain(
+      'backlog_refs="$backlog_refs $(format_file_ref "$f")"',
+    );
+    // Should NOT have any hardcoded @$var or @${VAR} file references in
+    // prompt construction or detect_plan FILE_REFS assignments
+    expect(ralphSh).not.toMatch(/FILE_REFS=.*@\$/);
+    expect(ralphSh).not.toContain('LEARNINGS_REF=" @LEARNINGS.md"');
+    expect(ralphSh).not.toContain('LEARNINGS_REF="$LEARNINGS_REF @$');
+  });
+
+  // -------------------------------------------------------------------------
   // Run default iteration tests
   // -------------------------------------------------------------------------
 

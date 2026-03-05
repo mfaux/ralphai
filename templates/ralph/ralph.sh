@@ -1197,11 +1197,11 @@ LEARNINGS_HINT=""
 LEARNINGS_STEP=""
 RALPH_LEARNINGS_FILE=".ralph/LEARNINGS.md"
 if [[ -f "LEARNINGS.md" ]]; then
-  LEARNINGS_REF=" @LEARNINGS.md"
+  LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"
   LEARNINGS_HINT=" Also read LEARNINGS.md to avoid repeating past mistakes."
 fi
 if [[ -f "$RALPH_LEARNINGS_FILE" ]]; then
-  LEARNINGS_REF="$LEARNINGS_REF @$RALPH_LEARNINGS_FILE"
+  LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"
   LEARNINGS_HINT="${LEARNINGS_HINT:- }Also read $RALPH_LEARNINGS_FILE to avoid repeating past mistakes."
 fi
 if [[ -f "LEARNINGS.md" || -f "$RALPH_LEARNINGS_FILE" ]]; then
@@ -1321,7 +1321,7 @@ detect_plan() {
     RESUMING=true
     WIP_FILES=("${wip_plans[@]}")
     for f in "${WIP_FILES[@]}"; do
-      FILE_REFS="$FILE_REFS @$f"
+      FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
     echo "Found in-progress plan(s): ${WIP_FILES[*]}"
     return 0
@@ -1408,7 +1408,7 @@ detect_plan() {
     # Build @file references for all dependency-ready backlog plans
     local backlog_refs=""
     for f in "${ready_plans[@]}"; do
-      backlog_refs="$backlog_refs @$f"
+      backlog_refs="$backlog_refs $(format_file_ref "$f")"
     done
 
     local selection_prompt="${backlog_refs}
@@ -1460,7 +1460,7 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     local chosen_base
     chosen_base=$(basename "$chosen")
     WIP_FILES=("$chosen")
-    FILE_REFS=" @$chosen"
+    FILE_REFS=" $(format_file_ref "$chosen")"
     RESUMING=false
     echo "[dry-run] Would move: $chosen -> $WIP_DIR/$chosen_base"
   else
@@ -1473,7 +1473,7 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     echo "Moved $chosen -> $dest"
 
     WIP_FILES=("$dest")
-    FILE_REFS=" @$dest"
+    FILE_REFS=" $(format_file_ref "$dest")"
     RESUMING=false
   fi
   return 0
@@ -1739,7 +1739,7 @@ while true; do
       echo "=== Ralph iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
-    PROMPT="${FILE_REFS} @${PROGRESS_FILE}${LEARNINGS_REF}
+    PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
 1. Read the referenced files and the progress file.${LEARNINGS_HINT}
 2. Find the highest-priority incomplete task (see prioritization rules in the plan).
 3. Implement it with small, focused changes. Testing strategy depends on task type:
