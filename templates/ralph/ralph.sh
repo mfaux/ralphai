@@ -1881,6 +1881,19 @@ ${commit_log:-_No commits._}
   fi
 }
 
+# List remaining group plans from backlog (for PR body formatting).
+# Outputs markdown list items, one per line.
+list_remaining_group_plans() {
+  [[ -n "${GROUP_NAME:-}" ]] || return 0
+  local candidates
+  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
+  local f
+  for f in "${candidates[@]}"; do
+    [[ -f "$f" ]] || continue
+    echo "- $(basename "$f")"
+  done
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
