@@ -9,7 +9,7 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 ### Highlights
 
 - **`npx ralphai init`** — interactive wizard scaffolds `.ralph/` into your project, auto-detects package manager and build/test/lint scripts
-- **Plan-based workflow** — write plans in `.ralph/backlog/`, Ralph picks them up, creates branches, and loops your agent through build/test/lint cycles
+- **Plan-based workflow** — write plans in `.ralph/pipeline/backlog/`, Ralph picks them up, creates branches, and loops your agent through build/test/lint cycles
 - **8 agent presets** — OpenCode, Claude Code, Codex, Gemini CLI, Aider, Goose, Kiro, Amp
 - **Branch isolation** — every plan runs on a `ralph/<plan-name>` branch
 - **Stuck detection** — aborts after N iterations with no progress (default: 3)

@@ -1,8 +1,8 @@
 # Plan files are local-only state (not tracked by git).
 # Only the directory structure (.gitkeep) and config/scripts are committed.
-backlog/*.md
-wip/*.md
-in-progress/*.md
-in-progress/progress.txt
-out/
+pipeline/backlog/*.md
+pipeline/wip/*.md
+pipeline/in-progress/*.md
+pipeline/in-progress/progress.txt
+pipeline/out/
 LEARNINGS.md

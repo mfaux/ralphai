@@ -73,7 +73,7 @@ The threshold is configurable:
 - **CLI flag:** `--max-stuck=5`
 
 When a run is aborted due to stuck detection, the plan and progress files stay
-in `.ralph/in-progress/`. You can resume with `npx ralphai run` after
+in `.ralph/pipeline/in-progress/`. You can resume with `npx ralphai run` after
 investigating what went wrong — or adjust the plan and try again.
 
 ## Branch Isolation

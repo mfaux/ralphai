@@ -66,8 +66,8 @@ npx ralphai run -- 5 --direct
 
 No file arguments needed. The script auto-detects:
 
-1. **In-progress work** — If `.ralph/in-progress/` has plan files, resumes on the current `ralph/*` branch.
-2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralph/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
+1. **In-progress work** — If `.ralph/pipeline/in-progress/` has plan files, resumes on the current `ralph/*` branch.
+2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralph/pipeline/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
 3. **Nothing to do** — If both are empty and no GitHub issues are available, exits.
 
 The iteration budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
@@ -119,12 +119,12 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
 6. `progress.txt` is updated with what was done
-7. On completion (`COMPLETE` signal): plan + progress archived to `out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
-8. On incomplete run: files stay in `in-progress/` for resumption
+7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
+8. On incomplete run: files stay in `pipeline/in-progress/` for resumption
 
 ## Optional plan dependencies (`depends-on`)
 
-`ralph.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralph/out/`.
+`ralph.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralph/pipeline/out/`.
 
 Supported forms:
 
