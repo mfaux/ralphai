@@ -288,6 +288,63 @@ Fields:
 
 If `gh` is not available, the hooks are silently skipped. To disable automatic issue closing while keeping comments, set `issueCloseOnComplete=false` in `.ralph/ralph.config`.
 
+### Optional `group` frontmatter (multi-plan branches)
+
+Use `group: <name>` to declare that multiple plans should execute on a single branch and produce a single PR.
+
+```md
+---
+group: user-authentication
+---
+```
+
+All plans sharing the same `group:` value will:
+
+- Run sequentially on a single `ralph/<group-name>` branch
+- Produce a single PR (created as draft after the first plan, marked ready when all plans complete)
+- Respect `depends-on` ordering within the group
+
+Example — three plans forming a group:
+
+```md
+## <!-- prd-auth-models.md -->
+
+## group: user-authentication
+```
+
+```md
+## <!-- prd-auth-api.md -->
+
+group: user-authentication
+depends-on: [prd-auth-models.md]
+
+---
+```
+
+```md
+## <!-- prd-auth-ui.md -->
+
+group: user-authentication
+depends-on: [prd-auth-api.md]
+
+---
+```
+
+Ralph executes them in order: models → api → ui, all on `ralph/user-authentication`.
+
+**Writing group plans:** Each plan's Background section should reference what prior group plans established — functions, patterns, types — so the executing agent doesn't rebuild or diverge. The first group plan should deliver a working vertical slice; subsequent plans widen it. Avoid splitting a group into "all models → all API → all UI" — instead, split into thin features that each touch all layers.
+
+**When to use groups:**
+
+- Feature work that naturally splits into sequential phases
+- Work where you want a single reviewable PR but small, focused plans for the AI agent
+- When you want to AFK while multiple plans are completed
+
+**When NOT to use groups:**
+
+- Independent plans that don't need to be on the same branch
+- Plans that can run in parallel (groups are sequential)
+
 ### Be specific about locations
 
 Bad: "Update the types file to add prompt support."
