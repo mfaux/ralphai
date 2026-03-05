@@ -1542,6 +1542,58 @@ archive_run() {
   fi
 }
 
+# Advance to the next plan in a group. Moves next plan from backlog to in-progress.
+# Returns 0 if next plan loaded, 1 if group is complete (no more plans).
+advance_group_plan() {
+  [[ -n "${GROUP_NAME:-}" ]] || return 1
+
+  GROUP_PLANS_COMPLETED=$((GROUP_PLANS_COMPLETED + 1))
+
+  # Find next ready group plan from backlog
+  local next_plan=""
+  local candidates
+  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
+
+  for f in "${candidates[@]}"; do
+    [[ -f "$f" ]] || continue
+    local readiness
+    readiness=$(plan_readiness "$f")
+    if [[ "$readiness" == "ready" ]]; then
+      next_plan="$f"
+      break
+    fi
+  done
+
+  if [[ -z "$next_plan" ]]; then
+    # No more group plans ready — group is complete
+    echo "Group '$GROUP_NAME' complete ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans)"
+    return 1
+  fi
+
+  # Move next plan to in-progress
+  local next_basename
+  next_basename=$(basename "$next_plan")
+  local dest="$WIP_DIR/$next_basename"
+  mv "$next_plan" "$dest"
+  echo "Advanced to next group plan: $next_basename"
+
+  # Update tracking
+  WIP_FILES=("$dest")
+  FILE_REFS=" $(format_file_ref "$dest")"
+  GROUP_CURRENT_PLAN="$next_basename"
+  PLAN_DESC=$(plan_description "$dest")
+
+  write_group_state \
+    "group=$GROUP_NAME" \
+    "branch=$GROUP_BRANCH" \
+    "plans_total=$GROUP_PLANS_TOTAL" \
+    "plans_completed=$GROUP_PLANS_COMPLETED" \
+    "current_plan=$GROUP_CURRENT_PLAN" \
+    "pr_url=${GROUP_PR_URL:-}"
+
+  return 0
+}
+
 # --- Detect plan: find in-progress work or pick from backlog ---
 # Sets: WIP_FILES, FILE_REFS, RESUMING
 detect_plan() {
