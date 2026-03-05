@@ -106,8 +106,9 @@ manually open a PR from the feature branch to `main`.
 **Safety guards:**
 
 - Ralph blocks on dirty working state by default; `--resume` auto-commits
-  dirty changes only on `ralph/*` branches
-- `--resume` refuses to auto-commit on `main` or `master`
+  dirty changes on any non-base branch (not just `ralph/*` branches)
+- `--resume` refuses to auto-commit on the configured base branch (defaults to
+  `main`; configurable via `baseBranch`)
 - Direct mode (`--direct`) refuses to run on `main` or `master`
 - Dry-run mode (`--dry-run`) is completely read-only — no file moves, branch
   creation, or agent execution

@@ -237,6 +237,10 @@ For repeatable processes that different developers (or ralph runs) will follow m
 
 ## Writing Guidelines
 
+### Frontmatter keys that are NOT supported
+
+`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPH_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how ralph.sh formats file references in prompts for the current agent, which applies uniformly to the entire run.
+
 ### Optional `depends-on` frontmatter
 
 For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralph.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralph/out/`).
