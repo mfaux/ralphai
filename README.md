@@ -94,6 +94,14 @@ Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a r
 
 See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
 
+## Docs
+
+After `ralphai init`, the good stuff lives in `.ralph/`:
+
+- [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
+- [`.ralph/WRITING-PLANS.md`](.ralph/WRITING-PLANS.md) — guide for writing plan files (give this to your agent)
+- `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
+
 ## Supported Agents
 
 Works with any CLI agent that accepts a prompt argument:
@@ -108,14 +116,6 @@ Works with any CLI agent that accepts a prompt argument:
 | Goose       | `goose run -t`                   |
 | Kiro        | `kiro-cli chat --no-interactive` |
 | Amp         | `amp -x`                         |
-
-## Docs
-
-After `ralphai init`, the good stuff lives in `.ralph/`:
-
-- [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
-- [`.ralph/WRITING-PLANS.md`](.ralph/WRITING-PLANS.md) — guide for writing plan files (give this to your agent)
-- `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
 
 ## CLI Reference
 
