@@ -13,7 +13,7 @@ This follows the same principle as "agents index + focused docs": short entrypoi
 - `.ralph/out/`: Completed plans and progress logs.
 
 Move plans from `wip/` to `backlog/` only when they are runnable.
-For full lifecycle behavior, read `docs/HOW-IT-WORKS.md`.
+For full lifecycle behavior, read `docs/HOW-RALPHAI-WORKS.md`.
 
 ## Plan Type Router (TOC)
 
@@ -186,4 +186,4 @@ When using group mode, also verify:
 
 Use `npx ralphai run -- --dry-run` to validate readiness before long runs.
 If a run stalls repeatedly, split tasks further before retrying.
-Ralph may abort after consecutive non-commit iterations (`maxStuck`; see `docs/HOW-IT-WORKS.md`).
+Ralph may abort after consecutive non-commit iterations (`maxStuck`; see `docs/HOW-RALPHAI-WORKS.md`).
