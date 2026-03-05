@@ -17,11 +17,13 @@ Ralph avoids this by starting each iteration with a **fresh session** — just t
 
 ## Get Started
 
+In your project directory:
+
 ```bash
 npx ralphai init
 ```
 
-That's it. Ralph scaffolds a `.ralph/` directory into your project, detects your package manager and build scripts, and you're ready to go.
+Ralph scaffolds a `.ralph/` directory into your project, detects your package manager and build scripts, and you're ready to go.
 
 > Use `npx ralphai init --yes` to skip prompts and accept defaults.
 
