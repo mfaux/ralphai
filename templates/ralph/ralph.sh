@@ -1958,6 +1958,61 @@ ${commit_log:-_No commits yet._}
     "pr_url=$GROUP_PR_URL"
 }
 
+# Update the body of an existing group draft PR with current progress.
+update_group_pr() {
+  local branch="$1"
+  local completed_plan="$2"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Updating group PR with progress..."
+
+  # Push latest commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR body not updated."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build completed plans list from archive
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    # Skip progress files and non-plan files
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+${completed_list:-_None yet._}
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || {
+    echo "WARNING: Failed to update PR body."
+  }
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
