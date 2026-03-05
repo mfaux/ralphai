@@ -319,6 +319,19 @@ describe("ralphai command", () => {
     expect(ralphSh).toContain("Default: 5 iterations per plan.");
   });
 
+  it("scaffolded ralph.sh contains gh preflight check for PR mode", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // PR mode preflight: checks gh is installed and authenticated
+    expect(ralphSh).toContain('MODE" == "pr"');
+    expect(ralphSh).toContain("command -v gh");
+    expect(ralphSh).toContain("gh auth status");
+    expect(ralphSh).toContain("PR mode (the default) requires the GitHub CLI");
+    expect(ralphSh).toContain("gh is installed but not authenticated");
+    expect(ralphSh).toContain("--direct");
+  });
+
   it("scaffolded ralph.sh contains issue integration defaults", () => {
     runCliOutput(["init", "--yes"], testDir);
 

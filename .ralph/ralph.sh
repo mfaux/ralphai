@@ -1070,6 +1070,23 @@ if [[ -z "$AGENT_COMMAND" ]]; then
   exit 1
 fi
 
+# --- PR mode preflight: validate gh CLI ---
+# In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
+# Check early so the user finds out before the agent runs 10 iterations.
+if [[ "$MODE" == "pr" && "$DRY_RUN" != true ]]; then
+  if ! command -v gh &>/dev/null; then
+    echo "ERROR: PR mode (the default) requires the GitHub CLI (gh)."
+    echo "Install it: https://cli.github.com"
+    echo "Or use --direct to commit on the current branch instead."
+    exit 1
+  fi
+  if ! gh auth status &>/dev/null; then
+    echo "ERROR: gh is installed but not authenticated."
+    echo "Run 'gh auth login' first, or use --direct to skip PR creation."
+    exit 1
+  fi
+fi
+
 # --- Build feedback commands text for prompt ---
 if [[ -n "$FEEDBACK_COMMANDS" ]]; then
   FEEDBACK_COMMANDS_TEXT=$(echo "$FEEDBACK_COMMANDS" | tr ',' ', ')
