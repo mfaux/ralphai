@@ -41,7 +41,7 @@ Plan files in `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-o
 
 ## Scripts
 
-### `ralph.sh <iterations-per-plan> [options]`
+### `ralph.sh [iterations-per-plan] [options]`
 
 Looped autonomous runner. Auto-detects what to work on, runs up to N iterations per plan, with stuck detection.
 
@@ -97,15 +97,15 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## Files
 
-| File / Directory | Purpose                                                  |
-| ---------------- | -------------------------------------------------------- |
-| `ralph.sh`       | Looped autonomous runner (+ `--dry-run`)                 |
-| `ralph.config`   | Optional repo-level config file (key=value format)       |
-| `.ralph/LEARNINGS.md` | Ralph-specific learnings — gitignored, local-only   |
-| `drafts/`        | Parked plans — not scanned by ralph                      |
-| `backlog/`       | Incoming plans queued for ralph to pick up               |
-| `in-progress/`   | Active plans and progress.txt — work in flight           |
-| `out/`           | Archived PRD files and progress logs from completed runs |
+| File / Directory      | Purpose                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `ralph.sh`            | Looped autonomous runner (+ `--dry-run`)                 |
+| `ralph.config`        | Optional repo-level config file (key=value format)       |
+| `.ralph/LEARNINGS.md` | Ralph-specific learnings — gitignored, local-only        |
+| `drafts/`             | Parked plans — not scanned by ralph                      |
+| `backlog/`            | Incoming plans queued for ralph to pick up               |
+| `in-progress/`        | Active plans and progress.txt — work in flight           |
+| `out/`                | Archived PRD files and progress logs from completed runs |
 
 ## How It Works
 
@@ -205,8 +205,10 @@ Use a lightweight review loop after runs:
 1. Review `.ralph/LEARNINGS.md` entries from the run.
 2. Compact findings by merging duplicates and removing one-off noise.
 3. Promote durable guidance:
-  - `AGENTS.md` (or equivalent agent-instruction docs) for immediate repo-specific behavior
-  - skill/reusable docs for stable patterns that should be reused across tasks/repos
+
+- `AGENTS.md` (or equivalent agent-instruction docs) for immediate repo-specific behavior
+- skill/reusable docs for stable patterns that should be reused across tasks/repos
+
 4. Add concise, high-signal takeaways to repo-level `LEARNINGS.md`.
 
 This separation keeps the repo-level `LEARNINGS.md` clean (no agent noise) and prevents auto-commit from interfering with stuck detection.

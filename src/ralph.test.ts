@@ -296,6 +296,29 @@ describe("ralphai command", () => {
     );
   });
 
+  it("scaffolded ralph.sh defaults to 5 iterations when none specified", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Should default ITERATIONS to "5" when unset (no error, no conditional)
+    expect(ralphSh).toContain('ITERATIONS="5"');
+    // Should NOT contain the old error message for missing iterations
+    expect(ralphSh).not.toContain(
+      "ERROR: Missing required <iterations-per-plan>",
+    );
+  });
+
+  it("scaffolded ralph.sh shows iterations-per-plan as optional in usage", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Usage text should use square brackets (optional) not angle brackets (required)
+    expect(ralphSh).toContain("[iterations-per-plan]");
+    expect(ralphSh).not.toContain("<iterations-per-plan>");
+    // Should mention the default
+    expect(ralphSh).toContain("Default: 5 iterations per plan.");
+  });
+
   it("scaffolded ralph.sh contains issue integration defaults", () => {
     runCliOutput(["init", "--yes"], testDir);
 
@@ -995,37 +1018,40 @@ describe("ralphai command", () => {
   // Run default iteration tests
   // -------------------------------------------------------------------------
 
-  describe.skipIf(process.platform === "win32")("run default iterations", () => {
-    beforeEach(() => {
-      // Scaffold ralph, then replace ralph.sh with a stub that echoes args
-      runCliOutput(["init", "--yes"], testDir);
-      writeFileSync(
-        join(testDir, ".ralph", "ralph.sh"),
-        '#!/bin/bash\necho "ARGS:$*"\n',
-      );
-      chmodSync(join(testDir, ".ralph", "ralph.sh"), 0o755);
-    });
+  describe.skipIf(process.platform === "win32")(
+    "run default iterations",
+    () => {
+      beforeEach(() => {
+        // Scaffold ralph, then replace ralph.sh with a stub that echoes args
+        runCliOutput(["init", "--yes"], testDir);
+        writeFileSync(
+          join(testDir, ".ralph", "ralph.sh"),
+          '#!/bin/bash\necho "ARGS:$*"\n',
+        );
+        chmodSync(join(testDir, ".ralph", "ralph.sh"), 0o755);
+      });
 
-    it("run without args passes default iteration count (5) to ralph.sh", () => {
-      const result = runCli(["run"], testDir);
-      expect(result.stdout).toContain("ARGS:5");
-    });
+      it("run without args passes default iteration count (5) to ralph.sh", () => {
+        const result = runCli(["run"], testDir);
+        expect(result.stdout).toContain("ARGS:5");
+      });
 
-    it("run -- 5 passes explicit iteration count to ralph.sh", () => {
-      const result = runCli(["run", "--", "5"], testDir);
-      expect(result.stdout).toContain("ARGS:5");
-    });
+      it("run -- 5 passes explicit iteration count to ralph.sh", () => {
+        const result = runCli(["run", "--", "5"], testDir);
+        expect(result.stdout).toContain("ARGS:5");
+      });
 
-    it("run -- --dry-run passes flags to ralph.sh", () => {
-      const result = runCli(["run", "--", "--dry-run"], testDir);
-      expect(result.stdout).toContain("ARGS:--dry-run");
-    });
+      it("run -- --dry-run passes flags to ralph.sh", () => {
+        const result = runCli(["run", "--", "--dry-run"], testDir);
+        expect(result.stdout).toContain("ARGS:--dry-run");
+      });
 
-    it("run -- 5 --resume passes multiple args to ralph.sh", () => {
-      const result = runCli(["run", "--", "5", "--resume"], testDir);
-      expect(result.stdout).toContain("ARGS:5 --resume");
-    });
-  });
+      it("run -- 5 --resume passes multiple args to ralph.sh", () => {
+        const result = runCli(["run", "--", "5", "--resume"], testDir);
+        expect(result.stdout).toContain("ARGS:5 --resume");
+      });
+    },
+  );
 
   // -------------------------------------------------------------------------
   // GitHub Issues integration tests
