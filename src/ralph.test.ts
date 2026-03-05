@@ -332,6 +332,24 @@ describe("ralphai command", () => {
     expect(ralphSh).toContain("--direct");
   });
 
+  it("scaffolded ralph.sh uses create_pr instead of merge_and_cleanup", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // create_pr function exists and is called on completion
+    expect(ralphSh).toContain("create_pr()");
+    expect(ralphSh).toContain('create_pr "$branch" "$PLAN_DESC"');
+    // Old merge_and_cleanup and is_branch_protected are removed
+    expect(ralphSh).not.toContain("merge_and_cleanup");
+    expect(ralphSh).not.toContain("is_branch_protected");
+    // No direct merge path (git merge --no-ff into base branch)
+    expect(ralphSh).not.toContain("git merge");
+    expect(ralphSh).not.toContain("git branch -d");
+    // No MERGE_TARGET or PROTECTED_BRANCHES variables
+    expect(ralphSh).not.toContain("MERGE_TARGET");
+    expect(ralphSh).not.toContain("PROTECTED_BRANCHES");
+  });
+
   it("scaffolded ralph.sh contains issue integration defaults", () => {
     runCliOutput(["init", "--yes"], testDir);
 

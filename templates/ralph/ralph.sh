@@ -837,28 +837,6 @@ if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
 fi
 
-# --- Temporary compatibility: MERGE_TARGET and PROTECTED_BRANCHES ---
-# TODO(task-3): Remove these when merge_and_cleanup() is replaced by create_pr()
-MERGE_TARGET="$BASE_BRANCH"
-PROTECTED_BRANCHES=""
-
-# --- Helper: check if a branch is protected ---
-is_branch_protected() {
-  local branch_to_check="$1"
-  if [[ -z "$PROTECTED_BRANCHES" ]]; then
-    return 1
-  fi
-  IFS=',' read -ra _protected_list <<< "$PROTECTED_BRANCHES"
-  for _pb in "${_protected_list[@]}"; do
-    local trimmed
-    trimmed=$(echo "$_pb" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    if [[ "$trimmed" == "$branch_to_check" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
 # --- Helper: check if a branch already has open work ---
 # Returns 0 (collision found) or 1 (clear). Sets COLLISION_REASON.
 COLLISION_REASON=""
@@ -1121,8 +1099,8 @@ if [[ "$DRY_RUN" != true ]]; then
   if is_tree_dirty; then
     if [[ "$RESUME" == true ]]; then
       current_branch=$(git rev-parse --abbrev-ref HEAD)
-      if [[ "$current_branch" == "$BASE_BRANCH" ]] || is_branch_protected "$current_branch"; then
-        echo "ERROR: --resume refused on '$current_branch' branch (protected or base branch)."
+      if [[ "$current_branch" == "$BASE_BRANCH" ]]; then
+        echo "ERROR: --resume refused on '$current_branch' branch (base branch)."
         echo "Switch to your ralph/* branch first, then re-run with --resume."
         exit 1
       fi
@@ -1386,55 +1364,43 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
   return 0
 }
 
-# --- Merge and cleanup after completion ---
-merge_and_cleanup() {
+# --- Create PR after completion (PR mode only) ---
+create_pr() {
   local branch="$1"
   local plan_desc="$2"
 
-  # Check if merge target is protected
-  if is_branch_protected "$MERGE_TARGET"; then
-    echo ""
-    echo "Merge target '$MERGE_TARGET' is protected. Attempting to create PR..."
+  echo ""
+  echo "Creating PR for '$branch'..."
 
-    # Check if gh CLI is available
-    if ! command -v gh &>/dev/null; then
-      echo "WARNING: 'gh' CLI not found. Cannot create PR automatically."
-      echo "Install gh (https://cli.github.com) to enable auto-PR for protected branches."
-      echo ""
-      echo "Branch '$branch' left intact for manual merge/PR."
-      echo "To merge manually: git checkout $MERGE_TARGET && git merge $branch --no-ff"
-      return 0
+  # Push branch to remote
+  echo "Pushing $branch to origin..."
+  if ! git push -u origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
+    return 0
+  fi
+
+  # Build PR body from plan content and commit log
+  local pr_body=""
+  local plan_content=""
+  for f in "${WIP_FILES[@]}"; do
+    if [[ -f "$f" ]]; then
+      plan_content=$(cat "$f")
+      break
     fi
-
-    # Push branch to remote
-    echo "Pushing $branch to origin..."
-    if ! git push -u origin "$branch" 2>&1; then
-      echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
-      return 0
+  done
+  # If plan was already archived, check out/ for the timestamped copy
+  if [[ -z "$plan_content" ]]; then
+    local latest_archived
+    latest_archived=$(ls -t "$ARCHIVE_DIR"/*.md 2>/dev/null | head -1)
+    if [[ -n "$latest_archived" ]]; then
+      plan_content=$(cat "$latest_archived")
     fi
+  fi
 
-    # Build PR body from plan content and commit log
-    local pr_body=""
-    local plan_content=""
-    for f in "${WIP_FILES[@]}"; do
-      if [[ -f "$f" ]]; then
-        plan_content=$(cat "$f")
-        break
-      fi
-    done
-    # If plan was already archived, check out/ for the timestamped copy
-    if [[ -z "$plan_content" ]]; then
-      local latest_archived
-      latest_archived=$(ls -t "$ARCHIVE_DIR"/*.md 2>/dev/null | head -1)
-      if [[ -n "$latest_archived" ]]; then
-        plan_content=$(cat "$latest_archived")
-      fi
-    fi
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
 
-    local commit_log
-    commit_log=$(git log "$MERGE_TARGET".."$branch" --oneline --no-decorate 2>/dev/null || true)
-
-    pr_body="## Plan
+  pr_body="## Plan
 
 ${plan_content:-_No plan content available._}
 
@@ -1444,51 +1410,28 @@ ${plan_content:-_No plan content available._}
 ${commit_log:-_No commits._}
 \`\`\`"
 
-    echo "Creating PR: $branch -> $MERGE_TARGET"
-    local pr_url
-    pr_url=$(gh pr create \
-      --base "$MERGE_TARGET" \
-      --head "$branch" \
-      --title "$plan_desc" \
-      --body "$pr_body" 2>&1) || {
-      echo "WARNING: Failed to create PR: $pr_url"
-      echo "Branch '$branch' pushed to origin. Create PR manually."
-      return 0
-    }
-
-    echo ""
-    echo "PR created: $pr_url"
-
-    # Comment on linked issue about the PR (but don't close — PR still needs review)
-    if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
-      local repo
-      repo=$(detect_issue_repo) && \
-      gh issue comment "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --body "Ralph created a PR for this issue: ${pr_url}" >/dev/null 2>&1
-    fi
-
+  echo "Creating PR: $branch -> $BASE_BRANCH"
+  local pr_url
+  pr_url=$(gh pr create \
+    --base "$BASE_BRANCH" \
+    --head "$branch" \
+    --title "$plan_desc" \
+    --body "$pr_body" 2>&1) || {
+    echo "WARNING: Failed to create PR: $pr_url"
+    echo "Branch '$branch' pushed to origin. Create PR manually."
     return 0
-  fi
+  }
 
-  echo "Merging $branch into $MERGE_TARGET..."
-  git checkout "$MERGE_TARGET"
-  git merge "$branch" --no-ff -m "Merge $branch: $plan_desc"
-  git branch -d "$branch"
-  echo "Merged to $MERGE_TARGET. Branch $branch deleted."
+  echo ""
+  echo "PR created: $pr_url"
 
-  # Close linked GitHub issue after successful merge
-  if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_CLOSE_ON_COMPLETE" == "true" ]]; then
+  # Comment on linked issue about the PR (but don't close — PR still needs review)
+  if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
     local repo
-    repo=$(detect_issue_repo) && {
-      gh issue close "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --comment "Completed by Ralph on branch \`${branch}\`. Merged to \`${MERGE_TARGET}\`." >/dev/null 2>&1
-      # Remove in-progress label (issue is now closed)
-      gh issue edit "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --remove-label "$ISSUE_IN_PROGRESS_LABEL" >/dev/null 2>&1
-    }
+    repo=$(detect_issue_repo) && \
+    gh issue comment "$PLAN_ISSUE_NUMBER" \
+      --repo "$repo" \
+      --body "Ralph created a PR for this issue: ${pr_url}" >/dev/null 2>&1
   fi
 }
 
@@ -1547,14 +1490,10 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   fi
 
-  echo "[dry-run] Merge target: $MERGE_TARGET"
-  if is_branch_protected "$MERGE_TARGET"; then
-    echo "[dry-run] Merge target is PROTECTED — would create PR via 'gh' on completion"
+  if [[ "$MODE" == "direct" ]]; then
+    echo "[dry-run] Mode: direct — would commit on current branch (no PR)"
   else
-    echo "[dry-run] Merge target is not protected — would merge directly on completion"
-  fi
-  if [[ -n "$PROTECTED_BRANCHES" ]]; then
-    echo "[dry-run] Protected branches: $PROTECTED_BRANCHES"
+    echo "[dry-run] Mode: pr — would create PR via 'gh' on completion"
   fi
 
   echo "[dry-run] No files moved, no branches created, no agent run executed."
@@ -1730,7 +1669,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo ""
       echo "Plan complete after $i iterations: $PLAN_DESC"
       archive_run
-      merge_and_cleanup "$branch" "$PLAN_DESC"
+      create_pr "$branch" "$PLAN_DESC"
       plans_completed=$((plans_completed + 1))
       completed=true
       break
