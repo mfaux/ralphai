@@ -1721,6 +1721,39 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     WIP_FILES=("$dest")
     FILE_REFS=" $(format_file_ref "$dest")"
     RESUMING=false
+
+    # Check if chosen plan is part of a group
+    local chosen_group
+    chosen_group=$(extract_group "$dest")
+    if [[ -n "$chosen_group" ]]; then
+      # Collect remaining group plans (still in backlog, excluding the one we just moved)
+      local remaining_group_plans
+      mapfile -t remaining_group_plans < <(collect_group_plans "$chosen_group")
+      local total_count=$(( ${#remaining_group_plans[@]} + 1 ))  # +1 for the one we moved
+
+      GROUP_NAME="$chosen_group"
+      GROUP_PLANS_TOTAL="$total_count"
+      GROUP_PLANS_COMPLETED=0
+      GROUP_CURRENT_PLAN="$dest_basename"
+      GROUP_PR_URL=""
+
+      write_group_state \
+        "group=$GROUP_NAME" \
+        "branch=" \
+        "plans_total=$GROUP_PLANS_TOTAL" \
+        "plans_completed=$GROUP_PLANS_COMPLETED" \
+        "current_plan=$GROUP_CURRENT_PLAN" \
+        "pr_url="
+
+      echo "Group '$GROUP_NAME' detected: $total_count plan(s) total"
+      echo "Plan order:"
+      echo "  1. $dest_basename (current)"
+      local n=2
+      for rp in "${remaining_group_plans[@]}"; do
+        echo "  $n. $(basename "$rp")"
+        n=$((n + 1))
+      done
+    fi
   fi
   return 0
 }
