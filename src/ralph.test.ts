@@ -1635,4 +1635,577 @@ echo "$PROMPT_MODE"
     expect(result.stdout).toContain("update");
     expect(result.stdout).toContain("uninstall");
   });
+
+  // -------------------------------------------------------------------------
+  // Group mode foundation: extract_group, group-state, collect_group_plans
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains group mode foundation functions", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    expect(ralphSh).toContain("extract_group()");
+    expect(ralphSh).toContain("write_group_state()");
+    expect(ralphSh).toContain("read_group_state()");
+    expect(ralphSh).toContain("cleanup_group_state()");
+    expect(ralphSh).toContain("collect_group_plans()");
+    expect(ralphSh).toContain("GROUP_STATE_FILE=");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "extract_group function",
+    () => {
+      /** Helper: run extract_group on a temp file with given content */
+      function extractGroup(content: string): string {
+        const planFile = join(
+          tmpdir(),
+          `ralph-test-plan-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
+        );
+        const script = `#!/bin/bash
+extract_group() {
+  local file="$1"
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm && match($0, /^[[:space:]]*group:[[:space:]]*(.+)/, arr) {
+      val=arr[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      gsub(/^\\047|\\047$/, "", val)
+      if (val != "") print val
+      exit
+    }
+  ' "$file"
+}
+extract_group ${JSON.stringify(planFile)}
+`;
+        const scriptFile = join(
+          tmpdir(),
+          `ralph-test-script-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(planFile, content);
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result.trim();
+        } finally {
+          try {
+            rmSync(planFile);
+          } catch {
+            /* ignore */
+          }
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("extracts group name from frontmatter", () => {
+        expect(extractGroup("---\ngroup: my-feature\n---\n# Plan")).toBe(
+          "my-feature",
+        );
+      });
+
+      it("returns empty for no frontmatter", () => {
+        expect(extractGroup("# Just a plan\nNo frontmatter")).toBe("");
+      });
+
+      it("returns empty for frontmatter without group", () => {
+        expect(extractGroup("---\ntitle: something\n---\n# Plan")).toBe("");
+      });
+
+      it("handles quoted group value (double quotes)", () => {
+        expect(extractGroup('---\ngroup: "my-feature"\n---\n')).toBe(
+          "my-feature",
+        );
+      });
+
+      it("handles quoted group value (single quotes)", () => {
+        expect(extractGroup("---\ngroup: 'my-feature'\n---\n")).toBe(
+          "my-feature",
+        );
+      });
+
+      it("handles whitespace around group value", () => {
+        expect(extractGroup("---\ngroup:   my-feature  \n---\n")).toBe(
+          "my-feature",
+        );
+      });
+
+      it("returns empty when group value is empty", () => {
+        expect(extractGroup("---\ngroup:\n---\n")).toBe("");
+      });
+
+      it("extracts group even with other frontmatter keys", () => {
+        expect(
+          extractGroup(
+            "---\ntitle: Plan A\ngroup: shared-feature\ndepends-on: [plan-b.md]\n---\n# Content",
+          ),
+        ).toBe("shared-feature");
+      });
+    },
+  );
+
+  describe.skipIf(process.platform === "win32")(
+    "group-state management functions",
+    () => {
+      let stateDir: string;
+
+      beforeEach(() => {
+        stateDir = join(
+          tmpdir(),
+          `ralph-group-state-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        );
+        mkdirSync(stateDir, { recursive: true });
+      });
+
+      afterEach(() => {
+        if (existsSync(stateDir)) {
+          rmSync(stateDir, { recursive: true, force: true });
+        }
+      });
+
+      it("write_group_state creates state file with key=value pairs", () => {
+        const stateFile = join(stateDir, ".group-state");
+        const script = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
+write_group_state() {
+  mkdir -p "$WIP_DIR"
+  printf '%s\\n' "$@" > "$GROUP_STATE_FILE"
+}
+write_group_state "group=test-feature" "branch=ralph/test-feature" "plans_total=3" "plans_completed=1" "current_plan=prd-b.md"
+cat "$GROUP_STATE_FILE"
+`;
+        const scriptFile = join(stateDir, "test.sh");
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+
+        expect(result.trim()).toBe(
+          "group=test-feature\nbranch=ralph/test-feature\nplans_total=3\nplans_completed=1\ncurrent_plan=prd-b.md",
+        );
+        expect(existsSync(stateFile)).toBe(true);
+      });
+
+      it("read_group_state sets shell variables from state file", () => {
+        const stateFile = join(stateDir, ".group-state");
+        writeFileSync(
+          stateFile,
+          "group=my-group\nbranch=ralph/my-group\nplans_total=5\nplans_completed=2\ncurrent_plan=prd-c.md\npr_url=https://github.com/example/pull/42\n",
+        );
+        const script = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
+GROUP_NAME="" GROUP_BRANCH="" GROUP_PLANS_TOTAL="" GROUP_PLANS_COMPLETED="" GROUP_CURRENT_PLAN="" GROUP_PR_URL=""
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+  local line key val
+  while IFS='=' read -r key val; do
+    [[ -z "$key" || "$key" == \\#* ]] && continue
+    case "$key" in
+      group)           GROUP_NAME="$val" ;;
+      branch)          GROUP_BRANCH="$val" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$val" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$val" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$val" ;;
+      pr_url)          GROUP_PR_URL="$val" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+read_group_state
+echo "name=$GROUP_NAME"
+echo "branch=$GROUP_BRANCH"
+echo "total=$GROUP_PLANS_TOTAL"
+echo "completed=$GROUP_PLANS_COMPLETED"
+echo "current=$GROUP_CURRENT_PLAN"
+echo "pr=$GROUP_PR_URL"
+`;
+        const scriptFile = join(stateDir, "test.sh");
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+
+        expect(result.trim()).toBe(
+          [
+            "name=my-group",
+            "branch=ralph/my-group",
+            "total=5",
+            "completed=2",
+            "current=prd-c.md",
+            "pr=https://github.com/example/pull/42",
+          ].join("\n"),
+        );
+      });
+
+      it("read_group_state returns 1 when no state file exists", () => {
+        const script = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state-nonexistent"
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+}
+read_group_state
+echo "exit=$?"
+`;
+        const scriptFile = join(stateDir, "test.sh");
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+
+        // read_group_state returns 1, so $? in the echo after is 0 (echo succeeds)
+        // but bash -e isn't set, so we need to capture the return code differently
+        const script2 = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state-nonexistent"
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+}
+read_group_state; echo "exit=$?"
+`;
+        writeFileSync(scriptFile, script2);
+        const result2 = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+        expect(result2.trim()).toBe("exit=1");
+      });
+
+      it("cleanup_group_state removes the state file", () => {
+        const stateFile = join(stateDir, ".group-state");
+        writeFileSync(stateFile, "group=test\n");
+        expect(existsSync(stateFile)).toBe(true);
+
+        const script = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
+cleanup_group_state() {
+  rm -f "$GROUP_STATE_FILE"
+}
+cleanup_group_state
+`;
+        const scriptFile = join(stateDir, "test.sh");
+        writeFileSync(scriptFile, script);
+        execSync(`bash ${JSON.stringify(scriptFile)}`);
+
+        expect(existsSync(stateFile)).toBe(false);
+      });
+
+      it("read_group_state ignores comments and unknown keys", () => {
+        const stateFile = join(stateDir, ".group-state");
+        writeFileSync(
+          stateFile,
+          "# comment line\ngroup=valid-group\nunknown_key=should-be-ignored\nbranch=ralph/valid\n",
+        );
+        const script = `#!/bin/bash
+WIP_DIR=${JSON.stringify(stateDir)}
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
+GROUP_NAME="" GROUP_BRANCH=""
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+  local line key val
+  while IFS='=' read -r key val; do
+    [[ -z "$key" || "$key" == \\#* ]] && continue
+    case "$key" in
+      group)           GROUP_NAME="$val" ;;
+      branch)          GROUP_BRANCH="$val" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$val" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$val" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$val" ;;
+      pr_url)          GROUP_PR_URL="$val" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+read_group_state
+echo "name=$GROUP_NAME"
+echo "branch=$GROUP_BRANCH"
+`;
+        const scriptFile = join(stateDir, "test.sh");
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+
+        expect(result.trim()).toBe("name=valid-group\nbranch=ralph/valid");
+      });
+    },
+  );
+
+  describe.skipIf(process.platform === "win32")(
+    "collect_group_plans function",
+    () => {
+      let groupDir: string;
+      let backlogDir: string;
+
+      beforeEach(() => {
+        groupDir = join(
+          tmpdir(),
+          `ralph-group-collect-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        );
+        backlogDir = join(groupDir, "backlog");
+        mkdirSync(backlogDir, { recursive: true });
+      });
+
+      afterEach(() => {
+        if (existsSync(groupDir)) {
+          rmSync(groupDir, { recursive: true, force: true });
+        }
+      });
+
+      /** Helper: build a bash script that defines extract_group, extract_depends_on,
+       *  and collect_group_plans, then calls collect_group_plans with the given group name */
+      function runCollectGroupPlans(groupName: string, dir: string): string[] {
+        const script = `#!/bin/bash
+BACKLOG_DIR=${JSON.stringify(join(dir, "backlog"))}
+
+extract_group() {
+  local file="$1"
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm && match($0, /^[[:space:]]*group:[[:space:]]*(.+)/, arr) {
+      val=arr[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      gsub(/^\\047|\\047$/, "", val)
+      if (val != "") print val
+      exit
+    }
+  ' "$file"
+}
+
+extract_depends_on() {
+  local file="$1"
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+  awk '
+    BEGIN { in_fm=0; dep_mode=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm {
+      line=$0
+      if (match(line, /^[[:space:]]*depends-on:[[:space:]]*\\[[^\\]]*\\][[:space:]]*$/)) {
+        dep_mode=0
+        sub(/^[[:space:]]*depends-on:[[:space:]]*\\[/, "", line)
+        sub(/\\][[:space:]]*$/, "", line)
+        n=split(line, parts, ",")
+        for (i=1; i<=n; i++) {
+          dep=parts[i]
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", dep)
+          if (dep != "") print dep
+        }
+        next
+      }
+      if (match(line, /^[[:space:]]*depends-on:[[:space:]]*$/)) {
+        dep_mode=1; next
+      }
+      if (dep_mode == 1 && match(line, /^[[:space:]]*-[[:space:]]+/)) {
+        dep=line
+        sub(/^[[:space:]]*-[[:space:]]+/, "", dep)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", dep)
+        if (dep != "") print dep
+        next
+      }
+      if (dep_mode == 1 && match(line, /^[[:alnum:]_-]+:[[:space:]]*/)) {
+        dep_mode=0
+      }
+    }
+  ' "$file"
+}
+
+collect_group_plans() {
+  local group_name="$1"
+  local -a group_files=()
+  local -a ordered=()
+  local -A seen=()
+  local -A deps_map=()
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fg
+    fg=$(extract_group "$f")
+    if [[ "$fg" == "$group_name" ]]; then
+      group_files+=("$f")
+      local fb
+      fb=$(basename "$f")
+      local dep_list
+      dep_list=$(extract_depends_on "$f")
+      deps_map["$fb"]="$dep_list"
+    fi
+  done
+  local -A group_basenames=()
+  for f in "\${group_files[@]}"; do
+    group_basenames["$(basename "$f")"]=1
+  done
+  local -A in_degree=()
+  for f in "\${group_files[@]}"; do
+    local fb
+    fb=$(basename "$f")
+    in_degree["$fb"]=0
+  done
+  for fb in "\${!deps_map[@]}"; do
+    while IFS= read -r dep; do
+      [[ -z "$dep" ]] && continue
+      dep=$(basename "$dep")
+      if [[ -n "\${group_basenames[$dep]+x}" ]]; then
+        in_degree["$fb"]=$(( \${in_degree["$fb"]} + 1 ))
+      fi
+    done <<< "\${deps_map[$fb]}"
+  done
+  local -a queue=()
+  for fb in "\${!in_degree[@]}"; do
+    if [[ \${in_degree["$fb"]} -eq 0 ]]; then
+      queue+=("$fb")
+    fi
+  done
+  IFS=$'\\n' queue=($(sort <<< "\${queue[*]}")); unset IFS
+  while [[ \${#queue[@]} -gt 0 ]]; do
+    local current="\${queue[0]}"
+    queue=("\${queue[@]:1}")
+    ordered+=("$current")
+    seen["$current"]=1
+    for fb in "\${!deps_map[@]}"; do
+      [[ -n "\${seen[$fb]+x}" ]] && continue
+      while IFS= read -r dep; do
+        [[ -z "$dep" ]] && continue
+        dep=$(basename "$dep")
+        if [[ "$dep" == "$current" ]]; then
+          in_degree["$fb"]=$(( \${in_degree["$fb"]} - 1 ))
+          if [[ \${in_degree["$fb"]} -eq 0 ]]; then
+            queue+=("$fb")
+          fi
+        fi
+      done <<< "\${deps_map[$fb]}"
+    done
+    if [[ \${#queue[@]} -gt 1 ]]; then
+      IFS=$'\\n' queue=($(sort <<< "\${queue[*]}")); unset IFS
+    fi
+  done
+  for fb in "\${ordered[@]}"; do
+    echo "$BACKLOG_DIR/$fb"
+  done
+}
+
+collect_group_plans ${JSON.stringify(groupName)}
+`;
+        const scriptFile = join(dir, "test-collect.sh");
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+        });
+        return result.trim() === "" ? [] : result.trim().split("\n");
+      }
+
+      it("collects plans matching the group name", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: feature-x\n---\n# Plan A\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-b.md"),
+          "---\ngroup: feature-x\n---\n# Plan B\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-c.md"),
+          "---\ngroup: other-feature\n---\n# Plan C\n",
+        );
+
+        const plans = runCollectGroupPlans("feature-x", groupDir);
+        expect(plans).toHaveLength(2);
+        expect(plans.map((p: string) => p.split("/").pop())).toEqual([
+          "prd-a.md",
+          "prd-b.md",
+        ]);
+      });
+
+      it("returns plans in dependency order", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: feature-x\ndepends-on: [prd-b.md]\n---\n# Plan A depends on B\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-b.md"),
+          "---\ngroup: feature-x\n---\n# Plan B (no deps)\n",
+        );
+
+        const plans = runCollectGroupPlans("feature-x", groupDir);
+        const names = plans.map((p: string) => p.split("/").pop());
+        expect(names).toEqual(["prd-b.md", "prd-a.md"]);
+      });
+
+      it("returns empty for non-existent group", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: feature-x\n---\n# Plan A\n",
+        );
+
+        const plans = runCollectGroupPlans("nonexistent", groupDir);
+        expect(plans).toEqual([]);
+      });
+
+      it("handles plans with no frontmatter", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: feature-x\n---\n# Plan A\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-no-fm.md"),
+          "# No frontmatter plan\n",
+        );
+
+        const plans = runCollectGroupPlans("feature-x", groupDir);
+        expect(plans).toHaveLength(1);
+        expect(plans[0]).toContain("prd-a.md");
+      });
+
+      it("handles chain of three dependencies in correct order", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: chain\ndepends-on: [prd-b.md]\n---\n# A depends on B\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-b.md"),
+          "---\ngroup: chain\ndepends-on: [prd-c.md]\n---\n# B depends on C\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-c.md"),
+          "---\ngroup: chain\n---\n# C (root)\n",
+        );
+
+        const plans = runCollectGroupPlans("chain", groupDir);
+        const names = plans.map((p: string) => p.split("/").pop());
+        expect(names).toEqual(["prd-c.md", "prd-b.md", "prd-a.md"]);
+      });
+
+      it("ignores cross-group dependencies", () => {
+        writeFileSync(
+          join(backlogDir, "prd-a.md"),
+          "---\ngroup: feature-x\ndepends-on: [prd-external.md]\n---\n# A depends on external plan\n",
+        );
+        writeFileSync(
+          join(backlogDir, "prd-b.md"),
+          "---\ngroup: feature-x\n---\n# B (no deps)\n",
+        );
+
+        const plans = runCollectGroupPlans("feature-x", groupDir);
+        const names = plans.map((p: string) => p.split("/").pop());
+        // Both should appear; the external dep should not block ordering
+        expect(names).toEqual(["prd-a.md", "prd-b.md"]);
+      });
+    },
+  );
 });

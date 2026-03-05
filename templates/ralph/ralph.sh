@@ -52,6 +52,7 @@ BACKLOG_DIR=".ralph/backlog"
 ARCHIVE_DIR=".ralph/out"
 CONFIG_FILE=".ralph/ralph.config"
 PROGRESS_FILE="$WIP_DIR/progress.txt"
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
 DRY_RUN=false
 RESUME=false
 ITERATIONS=""
@@ -612,6 +613,152 @@ extract_depends_on() {
       }
     }
   ' "$file"
+}
+
+# Extract group name from YAML frontmatter (returns empty if not set)
+# Supported form: group: my-feature-name
+extract_group() {
+  local file="$1"
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm && match($0, /^[[:space:]]*group:[[:space:]]*(.+)/, arr) {
+      val=arr[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      gsub(/^\047|\047$/, "", val)
+      if (val != "") print val
+      exit
+    }
+  ' "$file"
+}
+
+# Write group state (key=value file)
+# Usage: write_group_state "group=my-feature" "branch=ralph/my-feature" "plans_total=5" ...
+write_group_state() {
+  mkdir -p "$WIP_DIR"
+  printf '%s\n' "$@" > "$GROUP_STATE_FILE"
+}
+
+# Read group state into caller's scope. Sets variables like GROUP_NAME, GROUP_BRANCH, etc.
+# Returns 1 if no state file exists.
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+  local line key val
+  while IFS='=' read -r key val; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    case "$key" in
+      group)           GROUP_NAME="$val" ;;
+      branch)          GROUP_BRANCH="$val" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$val" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$val" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$val" ;;
+      pr_url)          GROUP_PR_URL="$val" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+
+# Remove group state file (called when group completes or is abandoned)
+cleanup_group_state() {
+  rm -f "$GROUP_STATE_FILE"
+}
+
+# Collect all backlog plans belonging to a group, in dependency order.
+# Outputs one plan path per line. Plans with no intra-group deps come first (stable filesystem order).
+# Usage: mapfile -t plans < <(collect_group_plans "my-feature")
+collect_group_plans() {
+  local group_name="$1"
+  local -a group_files=()
+  local -a ordered=()
+  local -A seen=()
+  local -A deps_map=()
+
+  # Scan backlog for matching group
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fg
+    fg=$(extract_group "$f")
+    if [[ "$fg" == "$group_name" ]]; then
+      group_files+=("$f")
+      local fb
+      fb=$(basename "$f")
+      # Store intra-group deps (only deps that are also in this group)
+      local dep_list
+      dep_list=$(extract_depends_on "$f")
+      deps_map["$fb"]="$dep_list"
+    fi
+  done
+
+  # Build set of group basenames for filtering
+  local -A group_basenames=()
+  for f in "${group_files[@]}"; do
+    group_basenames["$(basename "$f")"]=1
+  done
+
+  # Topological sort (Kahn's algorithm) on intra-group dependencies
+  # Ignore deps that point outside the group (they're handled by plan_readiness)
+  local -A in_degree=()
+  for f in "${group_files[@]}"; do
+    local fb
+    fb=$(basename "$f")
+    in_degree["$fb"]=0
+  done
+
+  for fb in "${!deps_map[@]}"; do
+    while IFS= read -r dep; do
+      [[ -z "$dep" ]] && continue
+      dep=$(basename "$dep")
+      # Only count intra-group deps
+      if [[ -n "${group_basenames[$dep]+x}" ]]; then
+        in_degree["$fb"]=$(( ${in_degree["$fb"]} + 1 ))
+      fi
+    done <<< "${deps_map[$fb]}"
+  done
+
+  # Process nodes with in_degree 0
+  local -a queue=()
+  for fb in "${!in_degree[@]}"; do
+    if [[ ${in_degree["$fb"]} -eq 0 ]]; then
+      queue+=("$fb")
+    fi
+  done
+  # Sort queue for stable ordering (filesystem alphabetical)
+  IFS=$'\n' queue=($(sort <<< "${queue[*]}")); unset IFS
+
+  while [[ ${#queue[@]} -gt 0 ]]; do
+    local current="${queue[0]}"
+    queue=("${queue[@]:1}")
+    ordered+=("$current")
+    seen["$current"]=1
+
+    # Find plans that depend on current
+    for fb in "${!deps_map[@]}"; do
+      [[ -n "${seen[$fb]+x}" ]] && continue
+      while IFS= read -r dep; do
+        [[ -z "$dep" ]] && continue
+        dep=$(basename "$dep")
+        if [[ "$dep" == "$current" ]]; then
+          in_degree["$fb"]=$(( ${in_degree["$fb"]} - 1 ))
+          if [[ ${in_degree["$fb"]} -eq 0 ]]; then
+            queue+=("$fb")
+          fi
+        fi
+      done <<< "${deps_map[$fb]}"
+    done
+    # Re-sort queue for stable ordering
+    if [[ ${#queue[@]} -gt 1 ]]; then
+      IFS=$'\n' queue=($(sort <<< "${queue[*]}")); unset IFS
+    fi
+  done
+
+  # Output full paths in topological order
+  for fb in "${ordered[@]}"; do
+    echo "$BACKLOG_DIR/$fb"
+  done
 }
 
 # Return dependency status for a plan basename:
