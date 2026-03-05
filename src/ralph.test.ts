@@ -42,14 +42,20 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralph", "LEARNINGS.md"))).toBe(true);
 
     // Subdirectories with .gitkeep
-    expect(existsSync(join(testDir, ".ralph", "backlog", ".gitkeep"))).toBe(
-      true,
-    );
-    expect(existsSync(join(testDir, ".ralph", "wip", ".gitkeep"))).toBe(true);
-    expect(existsSync(join(testDir, ".ralph", "in-progress", ".gitkeep"))).toBe(
-      true,
-    );
-    expect(existsSync(join(testDir, ".ralph", "out", ".gitkeep"))).toBe(true);
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "backlog", ".gitkeep")),
+    ).toBe(true);
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "wip", ".gitkeep")),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(testDir, ".ralph", "pipeline", "in-progress", ".gitkeep"),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "out", ".gitkeep")),
+    ).toBe(true);
   });
 
   it("init --yes creates .gitignore for plan files", () => {
@@ -59,11 +65,11 @@ describe("ralphai command", () => {
       join(testDir, ".ralph", ".gitignore"),
       "utf-8",
     );
-    expect(gitignore).toContain("backlog/*.md");
-    expect(gitignore).toContain("wip/*.md");
-    expect(gitignore).toContain("in-progress/*.md");
-    expect(gitignore).toContain("in-progress/progress.txt");
-    expect(gitignore).toContain("out/");
+    expect(gitignore).toContain("pipeline/backlog/*.md");
+    expect(gitignore).toContain("pipeline/wip/*.md");
+    expect(gitignore).toContain("pipeline/in-progress/*.md");
+    expect(gitignore).toContain("pipeline/in-progress/progress.txt");
+    expect(gitignore).toContain("pipeline/out/");
     expect(gitignore).toContain("LEARNINGS.md");
   });
 
@@ -287,10 +293,10 @@ describe("ralphai command", () => {
     const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(ralphSh).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md",
     );
     expect(ralphSh).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md",
     );
   });
 
@@ -597,7 +603,7 @@ describe("ralphai command", () => {
 
     // Add a plan file to backlog
     writeFileSync(
-      join(testDir, ".ralph", "backlog", "my-plan.md"),
+      join(testDir, ".ralph", "pipeline", "backlog", "my-plan.md"),
       "# Plan\nDo something.\n",
     );
 
@@ -605,11 +611,11 @@ describe("ralphai command", () => {
     runCliOutput(["update", "--yes"], testDir);
 
     // Plan file should still be there
-    expect(existsSync(join(testDir, ".ralph", "backlog", "my-plan.md"))).toBe(
-      true,
-    );
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "backlog", "my-plan.md")),
+    ).toBe(true);
     const plan = readFileSync(
-      join(testDir, ".ralph", "backlog", "my-plan.md"),
+      join(testDir, ".ralph", "pipeline", "backlog", "my-plan.md"),
       "utf-8",
     );
     expect(plan).toContain("Do something.");
@@ -707,7 +713,7 @@ describe("ralphai command", () => {
 
     // Add a plan file
     writeFileSync(
-      join(testDir, ".ralph", "backlog", "old-plan.md"),
+      join(testDir, ".ralph", "pipeline", "backlog", "old-plan.md"),
       "# Old plan",
     );
 
@@ -715,12 +721,12 @@ describe("ralphai command", () => {
     runCliOutput(["init", "--force", "--yes"], testDir);
 
     // Plan file should be gone (directory was deleted and recreated with only .gitkeep)
-    expect(existsSync(join(testDir, ".ralph", "backlog", "old-plan.md"))).toBe(
-      false,
-    );
-    expect(existsSync(join(testDir, ".ralph", "backlog", ".gitkeep"))).toBe(
-      true,
-    );
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "backlog", "old-plan.md")),
+    ).toBe(false);
+    expect(
+      existsSync(join(testDir, ".ralph", "pipeline", "backlog", ".gitkeep")),
+    ).toBe(true);
   });
 
   // -------------------------------------------------------------------------
@@ -1252,9 +1258,9 @@ ${cleanupFile}
         const result = formatRef({
           promptMode: "auto",
           agentType: "claude",
-          filepath: ".ralph/in-progress/prd-foo.md",
+          filepath: ".ralph/pipeline/in-progress/prd-foo.md",
         });
-        expect(result).toBe("@.ralph/in-progress/prd-foo.md");
+        expect(result).toBe("@.ralph/pipeline/in-progress/prd-foo.md");
       });
 
       it("auto mode with opencode agent returns @filepath", () => {

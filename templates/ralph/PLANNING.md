@@ -1,8 +1,8 @@
 # Writing Ralph Plan Files
 
-Guide for writing plan files that ralph scripts consume. Plans go in `.ralph/backlog/` and are picked automatically by `ralph.sh`.
+Guide for writing plan files that ralph scripts consume. Plans go in `.ralph/pipeline/backlog/` and are picked automatically by `ralph.sh`.
 
-Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralph/wip/`. `ralph.sh` does not scan `wip/` — move plans to `backlog/` when they're ready to be picked up.
+Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralph/pipeline/wip/`. `ralph.sh` does not scan `wip/` — move plans to `pipeline/backlog/` when they're ready to be picked up.
 
 ## Core Principles
 
@@ -244,7 +244,7 @@ For repeatable processes that different developers (or ralph runs) will follow m
 
 ### Optional `depends-on` frontmatter
 
-For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralph.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralph/out/`).
+For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralph.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralph/pipeline/out/`).
 
 Use basename references (not full paths):
 

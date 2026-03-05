@@ -276,7 +276,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   clack.intro("Setting up Ralph — autonomous task runner");
 
   clack.note(
-    "Ralph picks up plan files from .ralph/backlog/ and drives an AI\n" +
+    "Ralph picks up plan files from .ralph/pipeline/backlog/ and drives an AI\n" +
       "coding agent to implement them autonomously, with built-in\n" +
       "feedback loops, git hygiene, and safety rails.",
     "What is Ralph?",
@@ -580,7 +580,7 @@ ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"
 
   // Create subdirectories with .gitkeep
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    const subdirPath = join(ralphDir, subdir);
+    const subdirPath = join(ralphDir, "pipeline", subdir);
     mkdirSync(subdirPath, { recursive: true });
     writeFileSync(join(subdirPath, ".gitkeep"), "");
   }
@@ -610,11 +610,11 @@ Each entry should include:
   // Create .ralph/.gitignore — plan files are local-only state, not tracked by git
   const gitignoreContent = `# Plan files are local-only state (not tracked by git).
 # Only the directory structure (.gitkeep) and config/scripts are committed.
-backlog/*.md
-wip/*.md
-in-progress/*.md
-in-progress/progress.txt
-out/
+pipeline/backlog/*.md
+pipeline/wip/*.md
+pipeline/in-progress/*.md
+pipeline/in-progress/progress.txt
+pipeline/out/
 LEARNINGS.md
 `;
   writeFileSync(join(ralphDir, ".gitignore"), gitignoreContent);
@@ -650,9 +650,9 @@ LEARNINGS.md
   console.log(
     `  .ralph/LEARNINGS.md      ${DIM}Ralph-specific learnings (gitignored)${RESET}`,
   );
-  console.log(`  .ralph/backlog/          ${DIM}Queue plans here${RESET}`);
+  console.log(`  .ralph/pipeline/backlog/ ${DIM}Queue plans here${RESET}`);
   console.log(
-    `  .ralph/wip/              ${DIM}Park unready plans here${RESET}`,
+    `  .ralph/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
   );
   if (createdLearnings) {
     console.log(
@@ -682,7 +682,9 @@ LEARNINGS.md
   console.log(
     `  2. Read ${TEXT}.ralph/PLANNING.md${RESET} for how to write plans`,
   );
-  console.log(`  3. Create your first plan in ${TEXT}.ralph/backlog/${RESET}`);
+  console.log(
+    `  3. Create your first plan in ${TEXT}.ralph/pipeline/backlog/${RESET}`,
+  );
   console.log(`  4. Preview:  ${TEXT}./.ralph/ralph.sh --dry-run${RESET}`);
   console.log(`  5. Run:      ${TEXT}./.ralph/ralph.sh 10${RESET}`);
   if (addedNpmScript) {
@@ -748,8 +750,8 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
     }
   }
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    if (existsSync(join(ralphDir, subdir))) {
-      skipped.push(`${subdir}/`);
+    if (existsSync(join(ralphDir, "pipeline", subdir))) {
+      skipped.push(`pipeline/${subdir}/`);
     }
   }
 

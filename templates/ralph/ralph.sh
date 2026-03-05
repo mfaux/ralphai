@@ -5,8 +5,8 @@
 # Usage: .ralph/ralph.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
-#   1. If .ralph/in-progress/ has plan files → resume on the current ralph/* branch
-#   2. Otherwise, pick the best plan from .ralph/backlog/ (LLM-selected if multiple)
+#   1. If .ralph/pipeline/in-progress/ has plan files → resume on the current ralph/* branch
+#   2. Otherwise, pick the best plan from .ralph/pipeline/backlog/ (LLM-selected if multiple)
 #
 # On completion of a plan (PR mode, the default): pushes the branch and creates
 # a PR via 'gh' CLI. In direct mode (--direct): commits on the current branch
@@ -47,9 +47,9 @@ ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
 PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
-WIP_DIR=".ralph/in-progress"
-BACKLOG_DIR=".ralph/backlog"
-ARCHIVE_DIR=".ralph/out"
+WIP_DIR=".ralph/pipeline/in-progress"
+BACKLOG_DIR=".ralph/pipeline/backlog"
+ARCHIVE_DIR=".ralph/pipeline/out"
 CONFIG_FILE=".ralph/ralph.config"
 PROGRESS_FILE="$WIP_DIR/progress.txt"
 GROUP_STATE_FILE="$WIP_DIR/.group-state"
@@ -1638,11 +1638,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md"
       return 1
     fi
   fi

@@ -66,8 +66,8 @@ npx ralphai run -- 5 --direct
 
 No file arguments needed. The script auto-detects:
 
-1. **In-progress work** — If `.ralph/in-progress/` has plan files, resumes on the current `ralph/*` branch.
-2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralph/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
+1. **In-progress work** — If `.ralph/pipeline/in-progress/` has plan files, resumes on the current `ralph/*` branch.
+2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralph/pipeline/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
 3. **Nothing to do** — If both are empty and no GitHub issues are available, exits.
 
 The iteration budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
@@ -119,12 +119,12 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
 6. `progress.txt` is updated with what was done
-7. On completion (`COMPLETE` signal): plan + progress archived to `out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
-8. On incomplete run: files stay in `in-progress/` for resumption
+7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
+8. On incomplete run: files stay in `pipeline/in-progress/` for resumption
 
 ## Optional plan dependencies (`depends-on`)
 
-`ralph.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralph/out/`.
+`ralph.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralph/pipeline/out/`.
 
 Supported forms:
 
@@ -383,6 +383,47 @@ mode=direct
 2. When all plans are done, you manually open a PR from `feature/big-thing` to `main`
 
 Alternatively, use the default PR mode with `--base-branch=feature/big-thing` to create `ralph/*` sub-branches that open PRs against the feature branch.
+
+### Group Mode (Multi-Plan Branches)
+
+Group mode lets multiple plans execute sequentially on a single shared branch and produce a single PR. Add `group: <name>` to the YAML frontmatter of each plan in the group:
+
+```yaml
+---
+group: user-authentication
+---
+```
+
+All plans sharing the same `group:` value will:
+
+- Run sequentially on a single `ralph/<group-name>` branch (e.g. `ralph/user-authentication`)
+- Produce a single PR (created as **draft** after the first plan, marked **ready** when all plans complete)
+- Respect `depends-on` ordering within the group
+
+**PR lifecycle:**
+
+1. **First plan completes** — branch is pushed, draft PR created via `gh pr create --draft`
+2. **Each subsequent plan completes** — PR body updated with cumulative progress (completed/remaining plans, commit log)
+3. **Last plan completes** — PR marked ready for review via `gh pr ready`, `.group-state` cleaned up
+
+**Failure handling:**
+
+- If a group plan gets stuck or exhausts its iterations, the branch is pushed and a draft PR is created/updated with a failure note
+- `.group-state` is preserved so `--resume` can recover from where the group left off
+- Remaining group plans are not attempted after a failure
+
+**When to use groups:**
+
+- Feature work that naturally splits into sequential phases
+- When you want a single reviewable PR but small, focused plans for the AI agent
+- When you want to AFK while multiple plans are completed
+
+**When NOT to use groups:**
+
+- Independent plans that don't need to be on the same branch
+- Plans that can run in parallel (groups are sequential)
+
+See [PLANNING.md](PLANNING.md) for full `group:` frontmatter documentation and examples.
 
 ### GitHub Issues Integration
 

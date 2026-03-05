@@ -31,7 +31,7 @@ Ralph scaffolds a `.ralph/` directory into your project, detects your package ma
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLANNING.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralph/pipeline/backlog/`. Point it at `.ralph/PLANNING.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
 
 ```
 Create a plan in the ralph backlog for adding dark mode support.
@@ -50,17 +50,17 @@ Or call the shell script directly:
 ./.ralph/ralph.sh
 ```
 
-Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it pushes the branch and opens a pull request. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `in-progress/` on the branch — just run again to resume.
+Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it pushes the branch and opens a pull request. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `pipeline/in-progress/` on the branch — just run again to resume.
 
 ### 3. Steer
 
-Not ready for Ralph to pick something up? Keep it in `.ralph/wip/`. Move to `backlog/` when ready.
+Not ready for Ralph to pick something up? Keep it in `.ralph/pipeline/wip/`. Move to `pipeline/backlog/` when ready.
 
 ```
-wip/           ← work in progress, ralph ignores
-backlog/       ← queued, ralph picks from here
-in-progress/   ← ralph is working on it
-out/           ← done, archived
+pipeline/wip/           ← work in progress, ralph ignores
+pipeline/backlog/       ← queued, ralph picks from here
+pipeline/in-progress/   ← ralph is working on it
+pipeline/out/           ← done, archived
 ```
 
 ### 4. Pause and resume
