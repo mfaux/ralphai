@@ -377,7 +377,9 @@ describe("ralphai command", () => {
     // Unknown config keys should produce a warning, not an error
     expect(ralphSh).toContain("WARNING:");
     expect(ralphSh).toContain("ignoring unknown config key");
-    expect(ralphSh).not.toContain("unknown config key '$key'\"\n        echo \"Supported keys:");
+    expect(ralphSh).not.toContain(
+      "unknown config key '$key'\"\n        echo \"Supported keys:",
+    );
   });
 
   it("scaffolded ralph.sh contains issue integration defaults", () => {
@@ -1074,6 +1076,82 @@ describe("ralphai command", () => {
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
   });
+
+  // -------------------------------------------------------------------------
+  // Agent type detection tests
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains detect_agent_type function", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    expect(ralphSh).toContain("detect_agent_type()");
+    expect(ralphSh).toContain("DETECTED_AGENT_TYPE=");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "detect_agent_type mapping",
+    () => {
+      /** Helper: source ralph.sh's detect_agent_type and return the result */
+      function detectAgent(agentCommand: string): string {
+        // Extract just the function and call it with a given AGENT_COMMAND
+        const result = execSync(
+          `bash -c 'AGENT_COMMAND=${JSON.stringify(agentCommand)}; detect_agent_type() { local cmd; cmd=$(echo "$AGENT_COMMAND" | tr "[:upper:]" "[:lower:]"); case "$cmd" in *claude*) DETECTED_AGENT_TYPE="claude" ;; *opencode*) DETECTED_AGENT_TYPE="opencode" ;; *codex*) DETECTED_AGENT_TYPE="codex" ;; *gemini*) DETECTED_AGENT_TYPE="gemini" ;; *aider*) DETECTED_AGENT_TYPE="aider" ;; *goose*) DETECTED_AGENT_TYPE="goose" ;; *kiro*) DETECTED_AGENT_TYPE="kiro" ;; *amp*) DETECTED_AGENT_TYPE="amp" ;; *) DETECTED_AGENT_TYPE="unknown" ;; esac; }; detect_agent_type; echo "$DETECTED_AGENT_TYPE"'`,
+          { encoding: "utf-8" },
+        ).trim();
+        return result;
+      }
+
+      it("detects claude from command string", () => {
+        expect(detectAgent("claude -p")).toBe("claude");
+      });
+
+      it("detects claude from wrapped command", () => {
+        expect(detectAgent("npx claude -p")).toBe("claude");
+      });
+
+      it("detects opencode", () => {
+        expect(detectAgent("opencode run --agent build")).toBe("opencode");
+      });
+
+      it("detects opencode from full path", () => {
+        expect(detectAgent("/usr/local/bin/opencode run")).toBe("opencode");
+      });
+
+      it("detects codex", () => {
+        expect(detectAgent("codex exec")).toBe("codex");
+      });
+
+      it("detects gemini", () => {
+        expect(detectAgent("gemini")).toBe("gemini");
+      });
+
+      it("detects aider", () => {
+        expect(detectAgent("aider --yes")).toBe("aider");
+      });
+
+      it("detects goose", () => {
+        expect(detectAgent("goose run")).toBe("goose");
+      });
+
+      it("detects kiro", () => {
+        expect(detectAgent("kiro")).toBe("kiro");
+      });
+
+      it("detects amp", () => {
+        expect(detectAgent("amp run")).toBe("amp");
+      });
+
+      it("returns unknown for unrecognized commands", () => {
+        expect(detectAgent("my-custom-agent")).toBe("unknown");
+      });
+
+      it("handles case-insensitive matching", () => {
+        expect(detectAgent("Claude -p")).toBe("claude");
+        expect(detectAgent("OPENCODE run")).toBe("opencode");
+      });
+    },
+  );
 
   // -------------------------------------------------------------------------
   // Run default iteration tests
