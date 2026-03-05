@@ -6,9 +6,9 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 
 ## Why Ralph?
 
-AI agents degrade the longer they run. Context windows fill up, older decisions get compressed away, and the model starts hallucinating or going in circles.
+AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages — so it forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-IT-WORKS.md#context-rot)
 
-Ralph sidesteps this. Each iteration launches your agent with a **fresh context** — just the plan, current repo state, and build/test/lint feedback. No accumulated confusion, no compression artifacts.
+Ralph avoids this by starting each iteration with a **fresh session** — just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
 
 - **No context rot** — iteration 50 is as sharp as iteration 1
 - **Grounded feedback** — real build errors every cycle, not stale memory
