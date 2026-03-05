@@ -26,7 +26,7 @@ npx ralphai run -- 5 --resume
 
 ## Lifecycle
 
-Plans flow through three directories:
+Plans flow through four directories:
 
 ```
 wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
