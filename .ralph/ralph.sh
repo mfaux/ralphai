@@ -2,7 +2,7 @@
 # ralph.sh — Ralph (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: .ralph/ralph.sh <iterations-per-plan> [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--merge-target=<branch>] [--protected-branches=<list>] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: .ralph/ralph.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--merge-target=<branch>] [--protected-branches=<list>] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralph/in-progress/ has plan files → resume on the current ralph/* branch
@@ -490,11 +490,12 @@ read_issue_frontmatter() {
 }
 
 print_usage() {
-  echo "Usage: $0 <iterations-per-plan> [options]"
+  echo "Usage: $0 [iterations-per-plan] [options]"
   echo ""
   echo "  Auto-detects work: resumes in-progress plans, or picks from backlog."
   echo "  Iteration budget resets for each new plan (normal mode)."
   echo "  Pass 0 for unlimited iterations (runs until complete or stuck)."
+  echo "  Default: 5 iterations per plan."
   echo ""
   echo "Options:"
   echo "  --dry-run, -n                    Preview what Ralph would do without mutating state"
@@ -845,13 +846,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$ITERATIONS" ]]; then
-  if [[ "$DRY_RUN" == true || "$SHOW_CONFIG" == true ]]; then
-    ITERATIONS="1"
-  else
-    echo "ERROR: Missing required <iterations-per-plan>"
-    print_usage
-    exit 1
-  fi
+  ITERATIONS="5"
 fi
 
 if ! [[ "$ITERATIONS" =~ ^[0-9]+$ ]]; then

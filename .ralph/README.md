@@ -50,7 +50,7 @@ Plan files in `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-o
 
 ## Scripts
 
-### `ralph.sh <iterations-per-plan> [options]`
+### `ralph.sh [iterations-per-plan] [options]`
 
 Looped autonomous runner. Auto-detects what to work on, runs up to N iterations per plan, with stuck detection.
 
