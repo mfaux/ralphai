@@ -8,9 +8,10 @@ Plans that aren't ready for execution (waiting on external prerequisites, need h
 
 1. **Define the end state, not the journey.** Ralph picks tasks and figures out how. You specify what "done" looks like via acceptance criteria.
 2. **Small steps.** Each task should be one logical commit. If a task feels too large, break it into subtasks. Context rot degrades quality on long tasks.
-3. **Risky work first.** Architectural decisions, integration points, and unknowns go at the top. Polish and docs go last. Ralph will pick easy wins if you let it.
-4. **Explicit acceptance criteria.** Use checkboxes. Without them, ralph declares victory early or skips edge cases.
-5. **Feedback loops are guardrails.** Every task must pass your configured feedback commands (build, test, lint) before committing. The ralph prompt enforces this, but the plan should assume it.
+3. **Vertical slices first.** Structure tasks so the first task delivers a minimal but working end-to-end slice through the user's project — the "skateboard." Subsequent tasks widen the slice: add edge cases, improve UX, harden error handling, extend to more inputs. This ensures every intermediate state is demonstrably useful and testable, not just a pile of disconnected foundations. A working thin path through the system beats a perfect layer that nothing uses yet.
+4. **Risky work first.** Architectural decisions, integration points, and unknowns go at the top. Polish and docs go last. Ralph will pick easy wins if you let it.
+5. **Explicit acceptance criteria.** Use checkboxes. Without them, ralph declares victory early or skips edge cases.
+6. **Feedback loops are guardrails.** Every task must pass your configured feedback commands (build, test, lint) before committing. The ralph prompt enforces this, but the plan should assume it.
 
 ## Plan Types
 
@@ -342,11 +343,12 @@ When writing bug fix tasks, include the reproduction case (input, expected outpu
 
 Every task should leave the build and tests passing. This means:
 
-1. Add types/interfaces first (no callers yet)
-2. Add functions next (no callers yet)
-3. Wire callers last (connects everything)
-4. Tests after wiring (exercises the full path)
-5. Docs last (describes the final state)
+1. **Thin vertical slice first** — types + function + wiring + test for one end-to-end path. The narrowest version that proves the architecture works.
+2. **Widen the slice** — additional cases, inputs, error handling. Each task extends the working path.
+3. **Harden** — edge cases, validation, error messages.
+4. **Docs last** — describes the final state.
+
+Avoid building complete layers (all types, then all functions, then all wiring). Layer-first ordering means nothing works until the last task, and you can't catch design mistakes early.
 
 ### Include acceptance criteria with checkboxes
 
