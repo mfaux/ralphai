@@ -1894,6 +1894,70 @@ list_remaining_group_plans() {
   done
 }
 
+# Create a draft PR for a group after the first plan completes.
+# Sets GROUP_PR_URL and updates .group-state.
+create_group_pr() {
+  local branch="$1"
+  local group_name="$2"
+
+  echo ""
+  echo "Creating draft PR for group '$group_name'..."
+
+  # Push branch
+  echo "Pushing $branch to origin..."
+  if ! git push -u origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
+    return 0
+  fi
+
+  local pr_title="feat: $group_name"
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $group_name
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+- $GROUP_CURRENT_PLAN ✅
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits yet._}
+\`\`\`"
+
+  local pr_url
+  pr_url=$(gh pr create \
+    --draft \
+    --base "$BASE_BRANCH" \
+    --head "$branch" \
+    --title "$pr_title" \
+    --body "$pr_body" 2>&1) || {
+    echo "WARNING: Failed to create draft PR: $pr_url"
+    echo "Branch '$branch' pushed to origin. Create PR manually."
+    return 0
+  }
+
+  echo "Draft PR created: $pr_url"
+  GROUP_PR_URL="$pr_url"
+
+  # Persist PR URL in group state
+  write_group_state \
+    "group=$GROUP_NAME" \
+    "branch=$GROUP_BRANCH" \
+    "plans_total=$GROUP_PLANS_TOTAL" \
+    "plans_completed=$GROUP_PLANS_COMPLETED" \
+    "current_plan=$GROUP_CURRENT_PLAN" \
+    "pr_url=$GROUP_PR_URL"
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
