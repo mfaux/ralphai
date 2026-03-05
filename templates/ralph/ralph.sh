@@ -1950,11 +1950,16 @@ while true; do
     echo "Initialized $PROGRESS_FILE"
   else
     git checkout "$BASE_BRANCH"
-    # Derive branch slug from plan file name (e.g. prd-add-dark-mode.md → add-dark-mode)
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
-    branch="ralph/${slug}"
+    if [[ -n "${GROUP_NAME:-}" ]]; then
+      # Group mode: branch named after the group
+      branch="ralph/${GROUP_NAME}"
+    else
+      # Normal mode: branch named after the plan
+      slug="${plan_basename#prd-}"
+      slug="${slug%.md}"
+      branch="ralph/${slug}"
+    fi
 
     # Guard: a bare "ralph" branch blocks all "ralph/*" branches (git ref hierarchy conflict)
     if git show-ref --verify --quiet "refs/heads/ralph"; then
@@ -1995,6 +2000,18 @@ while true; do
       exit 1
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
+
+    # Update group state with branch name
+    if [[ -n "${GROUP_NAME:-}" && -f "$GROUP_STATE_FILE" ]]; then
+      GROUP_BRANCH="$branch"
+      write_group_state \
+        "group=$GROUP_NAME" \
+        "branch=$GROUP_BRANCH" \
+        "plans_total=$GROUP_PLANS_TOTAL" \
+        "plans_completed=$GROUP_PLANS_COMPLETED" \
+        "current_plan=$GROUP_CURRENT_PLAN" \
+        "pr_url=${GROUP_PR_URL:-}"
+    fi
 
     # Initialize progress file
     mkdir -p "$WIP_DIR"
