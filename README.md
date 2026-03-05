@@ -81,17 +81,7 @@ Shows which plan would be picked, whether it would resume or start fresh, and wh
 
 ### 6. Close the learnings loop
 
-Ralph’s virtuous cycle includes a two-tier learnings flow:
-
-- `.ralph/LEARNINGS.md` (gitignored) — Ralph logs mistakes and lessons during runs.
-- `LEARNINGS.md` (repo root, tracked) — you curate durable learnings Ralph should always consider.
-
-After runs, weigh in on findings: review `.ralph/LEARNINGS.md`, compact duplicate/noisy entries into concise takeaways, and promote durable patterns:
-
-- **Agent instructions (e.g. `AGENTS.md`)** for immediate repo-specific behavior guidance
-- **Skills / reusable docs** for stable patterns worth reusing across tasks or repos
-
-Keep this lightweight: summarize what matters, drop one-off noise, and preserve only lessons with lasting value.
+Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `LEARNINGS.md` (tracked) or `AGENTS.md`. [How the learnings system works →](docs/HOW-IT-WORKS.md#learnings-system)
 
 ## How `ralphai` Works
 
@@ -101,6 +91,8 @@ Keep this lightweight: summarize what matters, drop one-off noise, and preserve 
 - **Auto-PR** — protected branches get a PR via `gh`; unprotected branches merge directly
 - **Plan dependencies** — plans can declare `depends-on` for ordering across a backlog
 - **GitHub Issues** — Ralph can pull labeled issues when the backlog is empty
+
+See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
 
 ## Supported Agents
 
