@@ -90,7 +90,7 @@ describe("ralphai command", () => {
     );
     expect(config).toContain("agentCommand=opencode run --agent build");
     expect(config).toContain("baseBranch=");
-    expect(config).toContain("protectedBranches=main,master");
+    expect(config).not.toContain("protectedBranches");
     // feedbackCommands should be commented out when empty
     expect(config).toContain("# feedbackCommands=");
   });
@@ -348,6 +348,36 @@ describe("ralphai command", () => {
     // No MERGE_TARGET or PROTECTED_BRANCHES variables
     expect(ralphSh).not.toContain("MERGE_TARGET");
     expect(ralphSh).not.toContain("PROTECTED_BRANCHES");
+  });
+
+  it("scaffolded ralph.sh has direct mode safety guard for main/master", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Direct mode refuses to run on main or master
+    expect(ralphSh).toContain("Direct mode cannot run on");
+    expect(ralphSh).toContain(
+      "Switch to a feature branch, or use PR mode (the default)",
+    );
+  });
+
+  it("scaffolded ralph.sh skips create_pr in direct mode", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Completion handler should conditionally call create_pr only in PR mode
+    expect(ralphSh).toContain('if [[ "$MODE" == "pr" ]]; then');
+    expect(ralphSh).toContain("Direct mode: commits are on branch");
+  });
+
+  it("scaffolded ralph.sh warns on unknown config keys instead of erroring", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Unknown config keys should produce a warning, not an error
+    expect(ralphSh).toContain("WARNING:");
+    expect(ralphSh).toContain("ignoring unknown config key");
+    expect(ralphSh).not.toContain("unknown config key '$key'\"\n        echo \"Supported keys:");
   });
 
   it("scaffolded ralph.sh contains issue integration defaults", () => {
