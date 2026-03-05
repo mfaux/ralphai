@@ -32,7 +32,6 @@ interface WizardAnswers {
   agentCommand: string;
   baseBranch: string;
   feedbackCommands: string;
-  protectedBranches: string;
   issueSource: "none" | "github";
 }
 
@@ -355,21 +354,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 4. Protected branches
-  const protectedBranches = await clack.text({
-    message: "Protected branches (comma-separated):",
-    initialValue: "main,master",
-    validate: (value) => {
-      if (!value.trim()) return "At least one protected branch is required";
-    },
-  });
-
-  if (clack.isCancel(protectedBranches)) {
-    clack.cancel("Setup cancelled.");
-    return null;
-  }
-
-  // 5. GitHub Issues integration
+  // 4. GitHub Issues integration
   const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: false,
@@ -392,7 +377,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     agentCommand,
     baseBranch,
     feedbackCommands: feedbackCommands || "",
-    protectedBranches,
     issueSource: enableIssues ? "github" : "none",
   };
 }
@@ -589,7 +573,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
 agentCommand=${answers.agentCommand}
 baseBranch=${answers.baseBranch}
 ${feedbackLine}
-protectedBranches=${answers.protectedBranches}
 ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"}
 `;
 
@@ -881,7 +864,6 @@ async function runRalphInit(options: RalphOptions, cwd: string): Promise<void> {
       agentCommand: options.agentCommand || "opencode run --agent build",
       baseBranch: detectBaseBranch(),
       feedbackCommands: detectFeedbackCommands(cwd),
-      protectedBranches: "main,master",
       issueSource: "none",
     };
   } else {

@@ -198,9 +198,7 @@ load_config() {
         CONFIG_ITERATION_TIMEOUT="$value"
         ;;
       *)
-        echo "ERROR: $config_path:$line_num: unknown config key '$key'"
-        echo "Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck, mode, issueSource, issueLabel, issueInProgressLabel, issueRepo, issueCloseOnComplete, issueCommentProgress, iterationTimeout"
-        exit 1
+        echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
     esac
   done < "$config_path"
@@ -1467,6 +1465,15 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Mode: resume in-progress"
     echo "[dry-run] Would run on current branch: $current_branch"
     echo "[dry-run] Would keep existing $PROGRESS_FILE"
+  elif [[ "$MODE" == "direct" ]]; then
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+      echo "[dry-run] ERROR: Direct mode cannot run on '$current_branch'."
+      echo "[dry-run] Switch to a feature branch, or use PR mode (the default)."
+    else
+      echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
+    fi
+    echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
     slug="${plan_basename#prd-}"
@@ -1480,15 +1487,9 @@ if [[ "$DRY_RUN" == true ]]; then
       echo "[dry-run] WARNING: $COLLISION_REASON"
       echo "[dry-run] This plan would be SKIPPED in a real run."
     fi
-    echo "[dry-run] Mode: pick from backlog"
-    echo "[dry-run] Would create branch from $BASE_BRANCH: $branch"
+    echo "[dry-run] Mode: pr — would create branch from $BASE_BRANCH: $branch"
+    echo "[dry-run] Would create PR via 'gh' on completion"
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
-  fi
-
-  if [[ "$MODE" == "direct" ]]; then
-    echo "[dry-run] Mode: direct — would commit on current branch (no PR)"
-  else
-    echo "[dry-run] Mode: pr — would create PR via 'gh' on completion"
   fi
 
   echo "[dry-run] No files moved, no branches created, no agent run executed."
@@ -1515,7 +1516,7 @@ while true; do
   # --- Branch strategy ---
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$current_branch" == "$BASE_BRANCH" ]]; then
+    if [[ "$MODE" != "direct" && "$current_branch" == "$BASE_BRANCH" ]]; then
       echo "ERROR: Resuming requires being on a ralph/* branch, not '$BASE_BRANCH'."
       echo "Checkout the branch you want to resume, then run again."
       exit 1
@@ -1525,6 +1526,27 @@ while true; do
 
     # Preserve existing progress file
     echo "Resuming — keeping existing $PROGRESS_FILE"
+  elif [[ "$MODE" == "direct" ]]; then
+    # Direct mode: work on the current branch, no branch creation, no PR
+    current_branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+      echo "ERROR: Direct mode cannot run on '$current_branch'."
+      echo "Switch to a feature branch, or use PR mode (the default)."
+      # Roll back: move plan file back to backlog
+      plan_basename=$(basename "${WIP_FILES[0]}")
+      rollback_dest="$BACKLOG_DIR/${plan_basename}"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      echo "Rolled back: moved plan to $rollback_dest"
+      exit 1
+    fi
+    branch="$current_branch"
+    echo "Direct mode: working on current branch '$branch' (no PR will be created)"
+
+    # Initialize progress file
+    mkdir -p "$WIP_DIR"
+    echo "## Progress Log" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+    echo "Initialized $PROGRESS_FILE"
   else
     git checkout "$BASE_BRANCH"
     # Derive branch slug from plan file name (e.g. prd-add-dark-mode.md → add-dark-mode)
@@ -1664,7 +1686,11 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo ""
       echo "Plan complete after $i iterations: $PLAN_DESC"
       archive_run
-      create_pr "$branch" "$PLAN_DESC"
+      if [[ "$MODE" == "pr" ]]; then
+        create_pr "$branch" "$PLAN_DESC"
+      else
+        echo "Direct mode: commits are on branch '$branch'. No PR created."
+      fi
       plans_completed=$((plans_completed + 1))
       completed=true
       break
