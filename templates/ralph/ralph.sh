@@ -2341,7 +2341,31 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
         echo "ERROR: $MAX_STUCK consecutive iterations with no progress. Aborting."
         echo "Branch: $branch"
-        echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+          echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+          echo "Pushing partial work and creating/updating draft PR..."
+          git push origin "$branch" 2>/dev/null || true
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            create_group_pr "$branch" "$GROUP_NAME"
+            # Append failure note to PR body
+            if [[ -n "${GROUP_PR_URL:-}" ]]; then
+              fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+              gh pr edit "$GROUP_PR_URL" --body "${fail_body}
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+            fi
+          else
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+            gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+          fi
+          echo "Group state preserved in $GROUP_STATE_FILE for --resume."
+        else
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        fi
         exit 1
       fi
     else
@@ -2414,7 +2438,18 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
   if [[ "$completed" == false ]]; then
     echo ""
     echo "Finished $ITERATIONS iterations without completing: $PLAN_DESC"
-    echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+      echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+      git push origin "$branch" 2>/dev/null || true
+      if [[ -z "${GROUP_PR_URL:-}" ]]; then
+        create_group_pr "$branch" "$GROUP_NAME"
+      else
+        update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+      fi
+      echo "Group state preserved for --resume."
+    else
+      echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    fi
     echo "Branch: $branch"
     exit 0
   fi
