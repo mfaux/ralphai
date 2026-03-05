@@ -38,13 +38,13 @@ ${BOLD}Init Options:${RESET}
   --agent-command=CMD    Set the agent command (default: opencode run --agent build)
 
 ${BOLD}Run Options:${RESET}
-  (no args)              Run with defaults (10 iterations per plan)
+  (no args)              Run with defaults (5 iterations per plan)
   -- <args>              Override: pass arguments directly to ralph.sh
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} npx ralphai init                  ${DIM}# interactive setup${RESET}
   ${DIM}$${RESET} npx ralphai init --yes             ${DIM}# setup with defaults${RESET}
-  ${DIM}$${RESET} npx ralphai run                    ${DIM}# run with defaults (10 iterations per plan)${RESET}
+  ${DIM}$${RESET} npx ralphai run                    ${DIM}# run with defaults (5 iterations per plan)${RESET}
   ${DIM}$${RESET} npx ralphai run -- 5               ${DIM}# override: 5 iterations per plan${RESET}
   ${DIM}$${RESET} npx ralphai run -- --dry-run       ${DIM}# preview only${RESET}
   ${DIM}$${RESET} npx ralphai update --yes           ${DIM}# update templates${RESET}

@@ -534,7 +534,7 @@ print_usage() {
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
   echo ""
   echo "Examples:"
-  echo "  $0 10                                        # 10 iterations per plan"
+  echo "  $0 10                                        # 10 iterations per plan (default: 5)"
   echo "  $0 0                                         # unlimited iterations per plan"
   echo "  $0 --dry-run                                 # preview only"
   echo "  $0 10 --dry-run                              # preview with explicit iterations"
@@ -1321,11 +1321,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/WRITING-PLANS.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/WRITING-PLANS.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
       return 1
     fi
   fi

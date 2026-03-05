@@ -2,13 +2,13 @@
 
 Put your AI coding agent on autopilot.
 
-Ralph takes plan files from a backlog and drives any CLI-based coding agent to implement them — with branch isolation, feedback loops, and stuck detection baked in. You write the plans (or have your agent write them). Ralph does the rest.
+Ralph takes plan files from a backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralph does the rest.
 
 ## Why Ralph?
 
-AI agents degrade the longer they run. Context windows fill up, older decisions get compressed away, and the model starts hallucinating or going in circles.
+AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-IT-WORKS.md#context-rot)
 
-Ralph sidesteps this. Each iteration launches your agent with a **fresh context** — just the plan, current repo state, and build/test/lint feedback. No accumulated confusion, no compression artifacts.
+Ralph avoids this by starting each iteration with a **fresh session**: just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
 
 - **No context rot** — iteration 50 is as sharp as iteration 1
 - **Grounded feedback** — real build errors every cycle, not stale memory
@@ -17,11 +17,13 @@ Ralph sidesteps this. Each iteration launches your agent with a **fresh context*
 
 ## Get Started
 
+In your project directory:
+
 ```bash
 npx ralphai init
 ```
 
-That's it. Ralph scaffolds a `.ralph/` directory into your project, detects your package manager and build scripts, and you're ready to go.
+Ralph scaffolds a `.ralph/` directory into your project, detects your package manager and build scripts, and you're ready to go.
 
 > Use `npx ralphai init --yes` to skip prompts and accept defaults.
 
@@ -29,67 +31,45 @@ That's it. Ralph scaffolds a `.ralph/` directory into your project, detects your
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/WRITING-PLANS.md` for structure and examples, or roll your own format — Ralph just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLAN-GUIDE.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
 
 ```
-Create a plan in .ralph/backlog/ for adding dark mode support.
-Use .ralph/WRITING-PLANS.md as a guide.
+Create a plan in the ralph backlog for adding dark mode support.
+Use PLAN-GUIDE.md as a guide.
 ```
 
-### 2. Get ralph cooking
+### 2. Run
 
 ```bash
 npx ralphai run
 ```
 
-Ralph uses sensible defaults out of the box. In initialized repos, you can also invoke `./.ralph/ralph.sh` directly, passing args like iteration count (`10`) or flags (`--resume`, `--dry-run`).
+Or call the shell script directly:
 
-Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops — build, test, lint after every iteration. When a plan is done, it archives the work, merges or opens a PR, and moves on to the next one.
+```bash
+./.ralph/ralph.sh
+```
+
+Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it merges or opens a PR and moves on to the next one. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `in-progress/` on the branch — just run again to resume.
 
 ### 3. Steer
 
-Not ready for Ralph to pick something up? Keep it in `.ralph/drafts/`. Ralph never looks there. Move it to `backlog/` when you're ready.
+Not ready for Ralph to pick something up? Keep it in `.ralph/drafts/`. Move to `backlog/` when ready.
 
 ```
-drafts/     ← parked, ralph ignores these
-backlog/    ← queued, ralph picks from here
-in-progress/← ralph is working on it
-out/        ← done, archived
+drafts/        ← parked, ralph ignores
+backlog/       ← queued, ralph picks from here
+in-progress/   ← ralph is working on it
+out/           ← done, archived
 ```
 
-### 4. Take a break
+### 4. Pause and resume
 
-If you need to stop mid-run, just kill it. Your work stays in `in-progress/` on the `ralph/*` branch. Pick up where you left off:
+Stop mid-run any time. Work stays in `in-progress/` on the `ralph/*` branch. Resume with `npx ralphai run` (auto-detects in-progress work). Preview what Ralph would do without touching anything: `./.ralph/ralph.sh --dry-run`.
 
-```bash
-npx ralphai run
-```
+### 5. Close the learnings loop
 
-Ralph auto-resumes from where you left off. You can also pass `--resume` explicitly to `./.ralph/ralph.sh`.
-
-### 5. Preview before committing
-
-Not sure what Ralph will do? Dry-run it:
-
-```bash
-./.ralph/ralph.sh --dry-run
-```
-
-Shows which plan would be picked, whether it would resume or start fresh, and what the merge target is — without touching anything.
-
-### 6. Close the learnings loop
-
-Ralph’s virtuous cycle includes a two-tier learnings flow:
-
-- `.ralph/LEARNINGS.md` (gitignored) — Ralph logs mistakes and lessons during runs.
-- `LEARNINGS.md` (repo root, tracked) — you curate durable learnings Ralph should always consider.
-
-After runs, weigh in on findings: review `.ralph/LEARNINGS.md`, compact duplicate/noisy entries into concise takeaways, and promote durable patterns:
-
-- **Agent instructions (e.g. `AGENTS.md`)** for immediate repo-specific behavior guidance
-- **Skills / reusable docs** for stable patterns worth reusing across tasks or repos
-
-Keep this lightweight: summarize what matters, drop one-off noise, and preserve only lessons with lasting value.
+Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `LEARNINGS.md` (tracked) or `AGENTS.md`. [How the learnings system works →](docs/HOW-IT-WORKS.md#learnings-system)
 
 ## How `ralphai` Works
 
@@ -100,9 +80,22 @@ Keep this lightweight: summarize what matters, drop one-off noise, and preserve 
 - **Plan dependencies** — plans can declare `depends-on` for ordering across a backlog
 - **GitHub Issues** — Ralph can pull labeled issues when the backlog is empty
 
+See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
+
+## Docs
+
+After `ralphai init`, the good stuff lives in `.ralph/`:
+
+- [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
+- [`.ralph/PLAN-GUIDE.md`](.ralph/PLAN-GUIDE.md) — guide for writing plan files (give this to your agent)
+- `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
+
 ## Supported Agents
 
 Works with any CLI agent that accepts a prompt argument:
+
+<details>
+<summary>Agent commands</summary>
 
 | Agent       | Command                          |
 | ----------- | -------------------------------- |
@@ -115,15 +108,12 @@ Works with any CLI agent that accepts a prompt argument:
 | Kiro        | `kiro-cli chat --no-interactive` |
 | Amp         | `amp -x`                         |
 
-## Docs
-
-After `ralphai init`, the good stuff lives in `.ralph/`:
-
-- [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
-- [`.ralph/WRITING-PLANS.md`](.ralph/WRITING-PLANS.md) — guide for writing plan files (give this to your agent)
-- `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
+</details>
 
 ## CLI Reference
+
+<details>
+<summary>Commands and options</summary>
 
 ```
 ralphai <command> [options]
@@ -144,10 +134,12 @@ Init:
   --agent-command=CMD    Set the agent command
 
 Run:
-  Runs with sensible defaults (10 iterations per plan). Use -- to override
+  Runs with sensible defaults (5 iterations per plan). Use -- to override
   (e.g. -- 5 for 5 iterations, -- --dry-run for preview).
   In initialized repos, ./.ralph/ralph.sh is also available for direct invocation.
 ```
+
+</details>
 
 ## Configuration
 
@@ -176,7 +168,8 @@ Settings resolve in this order: **CLI flags > env vars > `.ralph/ralph.config` >
 
 ## Acknowledgements
 
-Inspired by [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley.
+- [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley — the technique behind the loop
+- [Vercel CLI](https://github.com/vercel/vercel) — CLI DX inspiration
 
 ## License
 
