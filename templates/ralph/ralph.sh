@@ -53,6 +53,15 @@ ARCHIVE_DIR=".ralph/out"
 CONFIG_FILE=".ralph/ralph.config"
 PROGRESS_FILE="$WIP_DIR/progress.txt"
 GROUP_STATE_FILE="$WIP_DIR/.group-state"
+
+# --- Group mode state (populated by read_group_state / detect_plan) ---
+GROUP_NAME=""
+GROUP_BRANCH=""
+GROUP_PLANS_TOTAL=0
+GROUP_PLANS_COMPLETED=0
+GROUP_CURRENT_PLAN=""
+GROUP_PR_URL=""
+
 DRY_RUN=false
 RESUME=false
 ITERATIONS=""
@@ -828,6 +837,89 @@ plan_readiness() {
   echo "blocked:$joined"
 }
 
+# --- Group mode: frontmatter extraction and state management ---
+
+# Extract group name from plan file YAML frontmatter.
+# Prints the group name, or nothing if no group: key is present.
+extract_group() {
+  local file="$1"
+
+  # No frontmatter block
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm {
+      # Match: group: <name>  (with optional quotes)
+      if (match($0, /^[[:space:]]*group:[[:space:]]*/)) {
+        val = substr($0, RLENGTH + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+        gsub(/^"|"$/, "", val)
+        gsub(/^\047|\047$/, "", val)
+        if (val != "") print val
+      }
+    }
+  ' "$file"
+}
+
+# Read .group-state file into GROUP_* variables.
+# File format: key=value, one per line.
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+
+  while IFS='=' read -r key value; do
+    case "$key" in
+      group)           GROUP_NAME="$value" ;;
+      branch)          GROUP_BRANCH="$value" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$value" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$value" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$value" ;;
+      pr_url)          GROUP_PR_URL="$value" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+
+# Write .group-state file from key=value arguments.
+# Usage: write_group_state "group=foo" "branch=ralph/foo" ...
+write_group_state() {
+  mkdir -p "$(dirname "$GROUP_STATE_FILE")"
+  printf '%s\n' "$@" > "$GROUP_STATE_FILE"
+}
+
+# Remove .group-state file and reset GROUP_* variables.
+cleanup_group_state() {
+  rm -f "$GROUP_STATE_FILE"
+  GROUP_NAME=""
+  GROUP_BRANCH=""
+  GROUP_PLANS_TOTAL=0
+  GROUP_PLANS_COMPLETED=0
+  GROUP_CURRENT_PLAN=""
+  GROUP_PR_URL=""
+}
+
+# Collect all backlog plans belonging to a group, sorted by filename.
+# Prints one plan path per line. Only returns plans currently in $BACKLOG_DIR.
+collect_group_plans() {
+  local group_name="$1"
+  local plans=()
+
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fg
+    fg=$(extract_group "$f")
+    if [[ "$fg" == "$group_name" ]]; then
+      plans+=("$f")
+    fi
+  done
+
+  # Sort by filename for deterministic ordering
+  printf '%s\n' "${plans[@]}" | sort
+}
+
 # --- Parse args ---
 for arg in "$@"; do
   case "$arg" in
@@ -1471,6 +1563,13 @@ detect_plan() {
       FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
     echo "Found in-progress plan(s): ${WIP_FILES[*]}"
+
+    # Check for group context alongside resume
+    if [[ -f "$GROUP_STATE_FILE" ]]; then
+      read_group_state
+      echo "Resuming group '$GROUP_NAME' (plan ${GROUP_PLANS_COMPLETED}/${GROUP_PLANS_TOTAL} completed)"
+    fi
+
     return 0
   fi
 
