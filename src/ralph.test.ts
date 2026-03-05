@@ -1340,6 +1340,174 @@ ${cleanupFile}
   );
 
   // -------------------------------------------------------------------------
+  // promptMode config key tests (config file, env var, CLI flag)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains promptMode config infrastructure", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Config file loader case
+    expect(ralphSh).toContain("promptMode)");
+    expect(ralphSh).toContain("CONFIG_PROMPT_MODE=");
+    // Env var override
+    expect(ralphSh).toContain("RALPH_PROMPT_MODE");
+    // CLI flag
+    expect(ralphSh).toContain("--prompt-mode=");
+    expect(ralphSh).toContain("CLI_PROMPT_MODE=");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "promptMode config precedence",
+    () => {
+      /**
+       * Helper: create a minimal bash script that sources the config loading
+       * functions from ralph.sh and tests PROMPT_MODE resolution.
+       * We inline the relevant functions to avoid needing a full git repo.
+       */
+      function resolvePromptMode(opts: {
+        configValue?: string;
+        envValue?: string;
+        cliValue?: string;
+      }): string {
+        const configContent = opts.configValue
+          ? `promptMode=${opts.configValue}`
+          : "";
+        const envExport = opts.envValue
+          ? `export RALPH_PROMPT_MODE=${JSON.stringify(opts.envValue)}`
+          : "";
+        const cliFlag = opts.cliValue ? `--prompt-mode=${opts.cliValue}` : "";
+
+        // Build a script that simulates the config loading pipeline
+        const script = `#!/bin/bash
+set -e
+
+# Defaults
+DEFAULT_PROMPT_MODE="auto"
+PROMPT_MODE="$DEFAULT_PROMPT_MODE"
+CLI_PROMPT_MODE=""
+
+# Simulate load_config
+CONFIG_PROMPT_MODE=""
+config_content=${JSON.stringify(configContent)}
+if [[ -n "$config_content" ]]; then
+  key="\${config_content%%=*}"
+  value="\${config_content#*=}"
+  if [[ "$key" == "promptMode" ]]; then
+    if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+      echo "ERROR: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+      exit 1
+    fi
+    CONFIG_PROMPT_MODE="$value"
+  fi
+fi
+
+# Simulate apply_config
+if [[ -n "\${CONFIG_PROMPT_MODE:-}" ]]; then
+  PROMPT_MODE="$CONFIG_PROMPT_MODE"
+fi
+
+# Simulate apply_env_overrides
+${envExport}
+if [[ -n "\${RALPH_PROMPT_MODE:-}" ]]; then
+  if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
+    echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+    exit 1
+  fi
+  PROMPT_MODE="$RALPH_PROMPT_MODE"
+fi
+
+# Simulate CLI flag parsing
+for arg in ${cliFlag}; do
+  case "$arg" in
+    --prompt-mode=*)
+      CLI_PROMPT_MODE="\${arg#--prompt-mode=}"
+      if [[ "$CLI_PROMPT_MODE" != "auto" && "$CLI_PROMPT_MODE" != "at-path" && "$CLI_PROMPT_MODE" != "inline" ]]; then
+        echo "ERROR: --prompt-mode must be 'auto', 'at-path', or 'inline', got '$CLI_PROMPT_MODE'"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# Simulate CLI override merge
+if [[ -n "$CLI_PROMPT_MODE" ]]; then
+  PROMPT_MODE="$CLI_PROMPT_MODE"
+fi
+
+echo "$PROMPT_MODE"
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralph-pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result.trim();
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("defaults to auto when no overrides", () => {
+        expect(resolvePromptMode({})).toBe("auto");
+      });
+
+      it("config file sets promptMode", () => {
+        expect(resolvePromptMode({ configValue: "inline" })).toBe("inline");
+      });
+
+      it("env var overrides config file", () => {
+        expect(
+          resolvePromptMode({
+            configValue: "inline",
+            envValue: "at-path",
+          }),
+        ).toBe("at-path");
+      });
+
+      it("CLI flag overrides env var", () => {
+        expect(
+          resolvePromptMode({
+            envValue: "at-path",
+            cliValue: "inline",
+          }),
+        ).toBe("inline");
+      });
+
+      it("CLI flag overrides config and env", () => {
+        expect(
+          resolvePromptMode({
+            configValue: "inline",
+            envValue: "at-path",
+            cliValue: "auto",
+          }),
+        ).toBe("auto");
+      });
+
+      it("rejects invalid config value", () => {
+        expect(() => resolvePromptMode({ configValue: "bad" })).toThrow();
+      });
+
+      it("rejects invalid env var value", () => {
+        expect(() => resolvePromptMode({ envValue: "bad" })).toThrow();
+      });
+
+      it("rejects invalid CLI flag value", () => {
+        expect(() => resolvePromptMode({ cliValue: "bad" })).toThrow();
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Run default iteration tests
   // -------------------------------------------------------------------------
 

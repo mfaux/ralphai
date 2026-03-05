@@ -67,12 +67,13 @@ CLI_ISSUE_IN_PROGRESS_LABEL=""
 CLI_ISSUE_REPO=""
 CLI_ISSUE_CLOSE_ON_COMPLETE=""
 CLI_ISSUE_COMMENT_PROGRESS=""
+CLI_PROMPT_MODE=""
 SHOW_CONFIG=false
 
 # --- Config file loader ---
 # Parses .ralph/ralph.config (key=value, comments, blank lines).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
-# CONFIG_MAX_STUCK, CONFIG_MODE when present.
+# CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
 load_config() {
   local config_path="$1"
@@ -199,6 +200,13 @@ load_config() {
         fi
         CONFIG_ITERATION_TIMEOUT="$value"
         ;;
+      promptMode)
+        if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+          echo "ERROR: $config_path:$line_num: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+          exit 1
+        fi
+        CONFIG_PROMPT_MODE="$value"
+        ;;
       *)
         echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
@@ -244,6 +252,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
     ITERATION_TIMEOUT="$CONFIG_ITERATION_TIMEOUT"
+  fi
+  if [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    PROMPT_MODE="$CONFIG_PROMPT_MODE"
   fi
 }
 
@@ -313,6 +324,13 @@ apply_env_overrides() {
       exit 1
     fi
     ISSUE_COMMENT_PROGRESS="$RALPH_ISSUE_COMMENT_PROGRESS"
+  fi
+  if [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
+      echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+      exit 1
+    fi
+    PROMPT_MODE="$RALPH_PROMPT_MODE"
   fi
 }
 
@@ -465,6 +483,7 @@ print_usage() {
   echo "  --pr                             PR mode (default): create branch and open PR"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
+  echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
   echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)"
@@ -476,13 +495,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, iterationTimeout,"
+  echo "                  mode, iterationTimeout, promptMode,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPH_AGENT_COMMAND, RALPH_FEEDBACK_COMMANDS,"
   echo "                   RALPH_BASE_BRANCH, RALPH_MAX_STUCK,"
   echo "                   RALPH_MODE, RALPH_ITERATION_TIMEOUT,"
+  echo "                   RALPH_PROMPT_MODE,"
   echo "                   RALPH_ISSUE_SOURCE,"
   echo "                   RALPH_ISSUE_LABEL, RALPH_ISSUE_IN_PROGRESS_LABEL,"
   echo "                   RALPH_ISSUE_REPO, RALPH_ISSUE_CLOSE_ON_COMPLETE,"
@@ -729,6 +749,13 @@ for arg in "$@"; do
     --pr)
       CLI_MODE="pr"
       ;;
+    --prompt-mode=*)
+      CLI_PROMPT_MODE="${arg#--prompt-mode=}"
+      if [[ "$CLI_PROMPT_MODE" != "auto" && "$CLI_PROMPT_MODE" != "at-path" && "$CLI_PROMPT_MODE" != "inline" ]]; then
+        echo "ERROR: --prompt-mode must be 'auto', 'at-path', or 'inline', got '$CLI_PROMPT_MODE'"
+        exit 1
+      fi
+      ;;
     --issue-source=*)
       CLI_ISSUE_SOURCE="${arg#--issue-source=}"
       if [[ "$CLI_ISSUE_SOURCE" != "none" && "$CLI_ISSUE_SOURCE" != "github" ]]; then
@@ -830,6 +857,9 @@ if [[ -n "$CLI_ISSUE_CLOSE_ON_COMPLETE" ]]; then
 fi
 if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
+fi
+if [[ -n "$CLI_PROMPT_MODE" ]]; then
+  PROMPT_MODE="$CLI_PROMPT_MODE"
 fi
 
 # --- Helper: check if a branch already has open work ---
@@ -1009,6 +1039,16 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     issue_comment_source="default"
   fi
 
+  if [[ -n "$CLI_PROMPT_MODE" ]]; then
+    prompt_mode_source="cli (--prompt-mode=$CLI_PROMPT_MODE)"
+  elif [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="env (RALPH_PROMPT_MODE=$RALPH_PROMPT_MODE)"
+  elif [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="config ($CONFIG_FILE)"
+  else
+    prompt_mode_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
@@ -1019,6 +1059,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   else
     echo "  iterationTimeout   = off  ($timeout_source)"
   fi
+  echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"
@@ -1026,6 +1067,26 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  issueRepo          = ${ISSUE_REPO:-<auto-detect>}  ($issue_repo_source)"
     echo "  issueCloseOnComplete = $ISSUE_CLOSE_ON_COMPLETE  ($issue_close_source)"
     echo "  issueCommentProgress = $ISSUE_COMMENT_PROGRESS  ($issue_comment_source)"
+  fi
+  echo ""
+  # Show detected agent type (informational)
+  if [[ -n "$AGENT_COMMAND" ]]; then
+    # Inline detection for --show-config (detect_agent_type is defined later in the script)
+    _sc_cmd=$(echo "$AGENT_COMMAND" | tr '[:upper:]' '[:lower:]')
+    _sc_agent_type="unknown"
+    case "$_sc_cmd" in
+      *claude*)   _sc_agent_type="claude" ;;
+      *opencode*) _sc_agent_type="opencode" ;;
+      *codex*)    _sc_agent_type="codex" ;;
+      *gemini*)   _sc_agent_type="gemini" ;;
+      *aider*)    _sc_agent_type="aider" ;;
+      *goose*)    _sc_agent_type="goose" ;;
+      *kiro*)     _sc_agent_type="kiro" ;;
+      *amp*)      _sc_agent_type="amp" ;;
+    esac
+    echo "  detectedAgentType  = $_sc_agent_type"
+  else
+    echo "  detectedAgentType  = <no agentCommand set>"
   fi
   echo ""
   if [[ -f "$CONFIG_FILE" ]]; then
