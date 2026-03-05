@@ -144,7 +144,8 @@ Init:
   --agent-command=CMD    Set the agent command
 
 Run:
-  Runs with sensible defaults. Pass args to ralph.sh via -- (e.g. -- 10 --resume).
+  Runs with sensible defaults (10 iterations per plan). Use -- to override
+  (e.g. -- 5 for 5 iterations, -- --dry-run for preview).
   In initialized repos, ./.ralph/ralph.sh is also available for direct invocation.
 ```
 

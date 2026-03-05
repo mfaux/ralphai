@@ -911,6 +911,9 @@ async function runRalphUpdate(
   await updateRalph(options, cwd);
 }
 
+/** Default iteration count when `npx ralphai run` is invoked without args. */
+const DEFAULT_ITERATIONS = "10";
+
 function runRalphRunner(options: RalphOptions, cwd: string): void {
   const ralphSh = join(cwd, ".ralph", "ralph.sh");
 
@@ -921,10 +924,14 @@ function runRalphRunner(options: RalphOptions, cwd: string): void {
     process.exit(1);
   }
 
-  const result = spawnSync(ralphSh, options.runArgs, {
+  const args =
+    options.runArgs.length > 0 ? options.runArgs : [DEFAULT_ITERATIONS];
+  const result = spawnSync(ralphSh, args, {
     cwd,
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
   });
 
+  if (result.stdout?.length) process.stdout.write(result.stdout);
+  if (result.stderr?.length) process.stderr.write(result.stderr);
   process.exit(result.status ?? 1);
 }
