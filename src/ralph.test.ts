@@ -1006,9 +1006,9 @@ describe("ralphai command", () => {
       chmodSync(join(testDir, ".ralph", "ralph.sh"), 0o755);
     });
 
-    it("run without args passes default iteration count (10) to ralph.sh", () => {
+    it("run without args passes default iteration count (5) to ralph.sh", () => {
       const result = runCli(["run"], testDir);
-      expect(result.stdout).toContain("ARGS:10");
+      expect(result.stdout).toContain("ARGS:5");
     });
 
     it("run -- 5 passes explicit iteration count to ralph.sh", () => {

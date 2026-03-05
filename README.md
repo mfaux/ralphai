@@ -2,13 +2,13 @@
 
 Put your AI coding agent on autopilot.
 
-Ralph takes plan files from a backlog and drives any CLI-based coding agent to implement them — with branch isolation, feedback loops, and stuck detection. You write the plans (or have your agent write them). Ralph does the rest.
+Ralph takes plan files from a backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralph does the rest.
 
 ## Why Ralph?
 
-AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages — so it forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-IT-WORKS.md#context-rot)
+AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-IT-WORKS.md#context-rot)
 
-Ralph avoids this by starting each iteration with a **fresh session** — just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
+Ralph avoids this by starting each iteration with a **fresh session**: just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
 
 - **No context rot** — iteration 50 is as sharp as iteration 1
 - **Grounded feedback** — real build errors every cycle, not stale memory
@@ -31,7 +31,7 @@ Ralph scaffolds a `.ralph/` directory into your project, detects your package ma
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLAN-GUIDE.md` for structure and examples, or roll your own format — Ralph just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLAN-GUIDE.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
 
 ```
 Create a plan in the ralph backlog for adding dark mode support.
@@ -44,22 +44,28 @@ Use PLAN-GUIDE.md as a guide.
 npx ralphai run
 ```
 
-Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops — build, test, lint after every iteration. When a plan is done, it merges or opens a PR and moves on to the next one. Pass args via `--` (e.g. `-- 5` for 5 iterations, `-- --resume` to recover).
+Or call the shell script directly:
+
+```bash
+./.ralph/ralph.sh
+```
+
+Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it merges or opens a PR and moves on to the next one. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `in-progress/` on the branch — just run again to resume.
 
 ### 3. Steer
 
 Not ready for Ralph to pick something up? Keep it in `.ralph/drafts/`. Move to `backlog/` when ready.
 
 ```
-drafts/      ← parked, ralph ignores
-backlog/     ← queued, ralph picks from here
-in-progress/ ← ralph is working on it
-out/         ← done, archived
+drafts/        ← parked, ralph ignores
+backlog/       ← queued, ralph picks from here
+in-progress/   ← ralph is working on it
+out/           ← done, archived
 ```
 
 ### 4. Pause and resume
 
-Stop mid-run any time — work stays in `in-progress/` on the `ralph/*` branch. Resume with `npx ralphai run` (auto-detects in-progress work). Preview what Ralph would do without touching anything: `./.ralph/ralph.sh --dry-run`.
+Stop mid-run any time. Work stays in `in-progress/` on the `ralph/*` branch. Resume with `npx ralphai run` (auto-detects in-progress work). Preview what Ralph would do without touching anything: `./.ralph/ralph.sh --dry-run`.
 
 ### 5. Close the learnings loop
 
@@ -128,7 +134,7 @@ Init:
   --agent-command=CMD    Set the agent command
 
 Run:
-  Runs with sensible defaults (10 iterations per plan). Use -- to override
+  Runs with sensible defaults (5 iterations per plan). Use -- to override
   (e.g. -- 5 for 5 iterations, -- --dry-run for preview).
   In initialized repos, ./.ralph/ralph.sh is also available for direct invocation.
 ```

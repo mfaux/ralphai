@@ -534,7 +534,7 @@ print_usage() {
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
   echo ""
   echo "Examples:"
-  echo "  $0 10                                        # 10 iterations per plan"
+  echo "  $0 10                                        # 10 iterations per plan (default: 5)"
   echo "  $0 0                                         # unlimited iterations per plan"
   echo "  $0 --dry-run                                 # preview only"
   echo "  $0 10 --dry-run                              # preview with explicit iterations"

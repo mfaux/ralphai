@@ -10,14 +10,19 @@ Back to the [README](../README.md) for setup and quickstart.
 
 When you use an AI coding agent in a long session, the conversation history
 grows. Every model has a fixed-size "context window" — the amount of text it
-can consider at once. Once the conversation exceeds that window, the model
-silently drops or summarizes older messages. Decisions you made early in the
-session get lost. The model forgets what it already tried, repeats mistakes, or
+can consider at once. Once the conversation exceeds that window, the agent may 
+apply **context compression** by automatically summarizing or condensing
+older messages to free up space for new ones. Unlike simple truncation,
+compression actively rewrites your earlier conversation into shorter summaries.
+Nuance gets lost. Specific decisions become vague references. Code you
+discussed in detail gets reduced to a one-line note.
+
+The result: the model forgets what it already tried, repeats mistakes, or
 invents things that contradict earlier work.
 
-This is **context rot**: the longer a session runs, the less reliable the agent
-becomes — not because the model is bad, but because it can no longer see the
-full picture.
+This is **context rot**. The longer a session runs, the less reliable the agent
+becomes — not because the model is bad, but because its view of the
+conversation has been quietly rewritten underneath it.
 
 Ralph avoids context rot by design. Each iteration starts a **fresh agent
 session** with only the information that matters:

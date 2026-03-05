@@ -912,7 +912,7 @@ async function runRalphUpdate(
 }
 
 /** Default iteration count when `npx ralphai run` is invoked without args. */
-const DEFAULT_ITERATIONS = "10";
+const DEFAULT_ITERATIONS = "5";
 
 function runRalphRunner(options: RalphOptions, cwd: string): void {
   const ralphSh = join(cwd, ".ralph", "ralph.sh");
