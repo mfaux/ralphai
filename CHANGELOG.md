@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.0
+
+### Features
+
+- **Group mode** — plans can now be grouped for coordinated execution with shared branch strategy, draft PR lifecycle, and failure handling (#15, #16, #17)
+- **Prompt adapter layer** — agent-specific formatting so each agent receives optimally structured prompts (#12)
+- **Safe by default** — PR mode is now the default instead of auto-merge (#10)
+- **Default iterations-per-plan** — defaults to 5 when omitted, so plans no longer require an explicit limit (#9)
+- **Modular `ralph.sh`** — split into sourced library modules for easier maintenance and extension (#21)
+
+### Fixes
+
+- Allow `ralph.sh` to run without arguments (#11)
+- Fix `npx ralphai run` to work without arguments (#6)
+- Add execute permission to `bin/cli.mjs` (#8)
+- Add jiti for Windows build compatibility (#5)
+
+### Refactors
+
+- Rename `plans/` to `plan-types/` and nest lifecycle dirs under `pipeline/` (#20)
+- Rename `drafts/` to `wip/` (#13)
+- Add `sync-ralph` script for dogfooding template changes (#19)
+- Refactor publish workflow for version bump handling (#4)
+
+### Docs
+
+- README DX overhaul — scannable for dual audience (#7)
+- Split plan templates and add TOC router (#18)
+- Add skateboarding principle and vertical-slice task ordering (#14)
+- Fix directory count and plan selection wording (#22)
+
 ## 0.1.0 — Initial Release
 
 Put your AI coding agent on autopilot.
