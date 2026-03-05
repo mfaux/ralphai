@@ -13,7 +13,7 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 - **8 agent presets** — OpenCode, Claude Code, Codex, Gemini CLI, Aider, Goose, Kiro, Amp
 - **Branch isolation** — every plan runs on a `ralph/<plan-name>` branch
 - **Stuck detection** — aborts after N iterations with no progress (default: 3)
-- **Auto-PR** — creates a branch and opens a PR via `gh` by default; use `--direct` to commit on your current branch instead
+- **Auto-PR** — opens PRs for protected branches, merges directly otherwise
 - **Resume support** — `--resume` picks up where you left off
 - **Dry-run mode** — `--dry-run` previews what Ralph would do without touching anything
 - **GitHub Issues integration** — optionally pulls labeled issues when the backlog is empty

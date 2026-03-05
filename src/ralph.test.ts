@@ -45,9 +45,7 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralph", "backlog", ".gitkeep"))).toBe(
       true,
     );
-    expect(existsSync(join(testDir, ".ralph", "drafts", ".gitkeep"))).toBe(
-      true,
-    );
+    expect(existsSync(join(testDir, ".ralph", "wip", ".gitkeep"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "in-progress", ".gitkeep"))).toBe(
       true,
     );
@@ -62,7 +60,7 @@ describe("ralphai command", () => {
       "utf-8",
     );
     expect(gitignore).toContain("backlog/*.md");
-    expect(gitignore).toContain("drafts/*.md");
+    expect(gitignore).toContain("wip/*.md");
     expect(gitignore).toContain("in-progress/*.md");
     expect(gitignore).toContain("in-progress/progress.txt");
     expect(gitignore).toContain("out/");
