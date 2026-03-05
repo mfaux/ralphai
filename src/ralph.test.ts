@@ -6,6 +6,7 @@ import {
   mkdirSync,
   writeFileSync,
   statSync,
+  chmodSync,
 } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -282,6 +283,19 @@ describe("ralphai command", () => {
     }
   });
 
+  it("scaffolded ralph.sh contains helpful hint in nothing-to-do messages", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Both "nothing to do" messages should include the hint
+    expect(ralphSh).toContain(
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/WRITING-PLANS.md",
+    );
+    expect(ralphSh).toContain(
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/WRITING-PLANS.md",
+    );
+  });
+
   it("scaffolded ralph.sh contains issue integration defaults", () => {
     runCliOutput(["init", "--yes"], testDir);
 
@@ -531,13 +545,16 @@ describe("ralphai command", () => {
     expect(script).toContain("ralph"); // should have real template content
   });
 
-  it.skipIf(process.platform === "win32")("update --yes keeps ralph.sh executable", () => {
-    runCliOutput(["init", "--yes"], testDir);
-    runCliOutput(["update", "--yes"], testDir);
+  it.skipIf(process.platform === "win32")(
+    "update --yes keeps ralph.sh executable",
+    () => {
+      runCliOutput(["init", "--yes"], testDir);
+      runCliOutput(["update", "--yes"], testDir);
 
-    const stats = statSync(join(testDir, ".ralph", "ralph.sh"));
-    expect(stats.mode & 0o100).toBeTruthy();
-  });
+      const stats = statSync(join(testDir, ".ralph", "ralph.sh"));
+      expect(stats.mode & 0o100).toBeTruthy();
+    },
+  );
 
   it("update --yes output lists updated and preserved files", () => {
     runCliOutput(["init", "--yes"], testDir);
@@ -918,7 +935,9 @@ describe("ralphai command", () => {
     const content = readFileSync(join(testDir, "LEARNINGS.md"), "utf-8");
     expect(content).toBe(existingContent);
     // Should not mention creating LEARNINGS.md since it already existed
-    expect(output).not.toMatch(/LEARNINGS\.md\s+.*Maintainer-curated learnings/);
+    expect(output).not.toMatch(
+      /LEARNINGS\.md\s+.*Maintainer-curated learnings/,
+    );
   });
 
   it("init --yes seeds LEARNINGS.md with minimal header", () => {
@@ -970,6 +989,42 @@ describe("ralphai command", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
+  });
+
+  // -------------------------------------------------------------------------
+  // Run default iteration tests
+  // -------------------------------------------------------------------------
+
+  describe("run default iterations", () => {
+    beforeEach(() => {
+      // Scaffold ralph, then replace ralph.sh with a stub that echoes args
+      runCliOutput(["init", "--yes"], testDir);
+      writeFileSync(
+        join(testDir, ".ralph", "ralph.sh"),
+        '#!/bin/bash\necho "ARGS:$*"\n',
+      );
+      chmodSync(join(testDir, ".ralph", "ralph.sh"), 0o755);
+    });
+
+    it("run without args passes default iteration count (10) to ralph.sh", () => {
+      const result = runCli(["run"], testDir);
+      expect(result.stdout).toContain("ARGS:10");
+    });
+
+    it("run -- 5 passes explicit iteration count to ralph.sh", () => {
+      const result = runCli(["run", "--", "5"], testDir);
+      expect(result.stdout).toContain("ARGS:5");
+    });
+
+    it("run -- --dry-run passes flags to ralph.sh", () => {
+      const result = runCli(["run", "--", "--dry-run"], testDir);
+      expect(result.stdout).toContain("ARGS:--dry-run");
+    });
+
+    it("run -- 5 --resume passes multiple args to ralph.sh", () => {
+      const result = runCli(["run", "--", "5", "--resume"], testDir);
+      expect(result.stdout).toContain("ARGS:5 --resume");
+    });
   });
 
   // -------------------------------------------------------------------------
