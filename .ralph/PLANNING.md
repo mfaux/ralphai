@@ -17,19 +17,17 @@ For full lifecycle behavior, read `docs/HOW-IT-WORKS.md`.
 
 ## Plan Type Router (TOC)
 
-- Feature PRD: `.ralph/plans/feature-prd.md`
-- Wiring PRD: `.ralph/plans/wiring-prd.md`
-- Bug Fix PRD: `.ralph/plans/bug-fix-prd.md`
-- Structural PRD: `.ralph/plans/structural-prd.md`
-- Implementation Plan (reference only): `.ralph/plans/implementation-plan.md`
+- Feature PRD: `.ralph/plans/FEATURE-PRD.md`
+- Wiring PRD: `.ralph/plans/WIRING-PRD.md`
+- Bug Fix PRD: `.ralph/plans/BUG-FIX-PRD.md`
+- Structural PRD: `.ralph/plans/STRUCTURAL-PRD.md`
 
 ## Quick Decision Tree
 
-1. New user-visible capability? Use `feature-prd.md`.
-2. Existing pieces already work but are disconnected? Use `wiring-prd.md`.
-3. Behavior is wrong and expected output is known? Use `bug-fix-prd.md`.
-4. Restructure/migrate/cleanup with stable behavior? Use `structural-prd.md`.
-5. Human repeatable process guide (not directly runnable)? Use `implementation-plan.md`.
+1. New user-visible capability? Use `FEATURE-PRD.md`.
+2. Existing pieces already work but are disconnected? Use `WIRING-PRD.md`.
+3. Behavior is wrong and expected output is known? Use `BUG-FIX-PRD.md`.
+4. Restructure/migrate/cleanup with stable behavior? Use `STRUCTURAL-PRD.md`.
 
 ## Core Principles
 
@@ -179,12 +177,12 @@ When using group mode, also verify:
 
 ## Iteration Sizing
 
-| Plan complexity | Recommended iterations (`ralph.sh`) |
-| --- | --- |
-| 3-5 small tasks | 5 |
-| 6-10 tasks with wiring | 10-15 |
-| Large feature (10+ tasks, new modules) | 15-25 |
-| Structural refactor | 10-15 |
+| Plan complexity                        | Recommended iterations (`ralph.sh`) |
+| -------------------------------------- | ----------------------------------- |
+| 3-5 small tasks                        | 5                                   |
+| 6-10 tasks with wiring                 | 10-15                               |
+| Large feature (10+ tasks, new modules) | 15-25                               |
+| Structural refactor                    | 10-15                               |
 
 Use `npx ralphai run -- --dry-run` to validate readiness before long runs.
 If a run stalls repeatedly, split tasks further before retrying.
