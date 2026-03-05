@@ -2363,6 +2363,17 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       archive_run
 
       if [[ -n "${GROUP_NAME:-}" ]]; then
+        # Group mode: create or update draft PR before advancing
+        if [[ "$MODE" == "pr" ]]; then
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            # First group plan completed — create draft PR
+            create_group_pr "$branch" "$GROUP_NAME"
+          else
+            # Subsequent plan completed — update PR body
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+          fi
+        fi
+
         # Group mode: try to advance to next plan
         if advance_group_plan; then
           echo ""
@@ -2377,8 +2388,14 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
           echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
           continue  # Continue the iteration loop with the new plan
         fi
-        # Group complete — PR creation handled by prd-group-mode-pr-lifecycle
-        echo "Group '$GROUP_NAME' finished. All plans completed."
+
+        # Group complete
+        if [[ "$MODE" == "pr" ]]; then
+          finalize_group_pr "$branch"
+        else
+          cleanup_group_state
+          echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
+        fi
       fi
 
       if [[ -z "${GROUP_NAME:-}" ]]; then
