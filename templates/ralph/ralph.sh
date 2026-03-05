@@ -2013,6 +2013,60 @@ ${commit_log:-_No commits._}
   }
 }
 
+# Mark the group draft PR as ready for review. Called when the last group plan completes.
+finalize_group_pr() {
+  local branch="$1"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Finalizing group PR..."
+
+  # Push final commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR not finalized."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build final completed plans list
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** Complete ($GROUP_PLANS_TOTAL/$GROUP_PLANS_TOTAL plans)
+
+### Completed Plans
+${completed_list:-_None._}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || true
+
+  # Mark PR as ready for review
+  if gh pr ready "$GROUP_PR_URL" 2>/dev/null; then
+    echo "PR marked as ready for review: $GROUP_PR_URL"
+  else
+    echo "WARNING: Failed to mark PR as ready. Mark it manually: gh pr ready $GROUP_PR_URL"
+  fi
+
+  cleanup_group_state
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
