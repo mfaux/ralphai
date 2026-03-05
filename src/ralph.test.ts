@@ -41,6 +41,20 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralph", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "LEARNINGS.md"))).toBe(true);
 
+    // lib/ directory with all sourced modules
+    expect(existsSync(join(testDir, ".ralph", "lib"))).toBe(true);
+    for (const lib of [
+      "defaults.sh",
+      "config.sh",
+      "git.sh",
+      "issues.sh",
+      "plans.sh",
+      "prompt.sh",
+      "pr.sh",
+    ]) {
+      expect(existsSync(join(testDir, ".ralph", "lib", lib))).toBe(true);
+    }
+
     // Subdirectories with .gitkeep
     expect(
       existsSync(join(testDir, ".ralph", "pipeline", "backlog", ".gitkeep")),
@@ -168,14 +182,21 @@ describe("ralphai command", () => {
     }).not.toThrow();
   });
 
-  it("ralph.sh contains issue integration functions and config", () => {
+  it("ralph.sh lib contains issue integration functions and config", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const script = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
-    expect(script).toContain("read_issue_frontmatter");
-    expect(script).toContain("check_gh_available");
-    expect(script).toContain("detect_repo_from_url");
-    expect(script).toContain("DEFAULT_ISSUE_CLOSE_ON_COMPLETE");
+    const issues = readFileSync(
+      join(testDir, ".ralph", "lib", "issues.sh"),
+      "utf-8",
+    );
+    expect(issues).toContain("read_issue_frontmatter");
+    expect(issues).toContain("check_gh_available");
+    expect(issues).toContain("detect_repo_from_url");
+    const defaults = readFileSync(
+      join(testDir, ".ralph", "lib", "defaults.sh"),
+      "utf-8",
+    );
+    expect(defaults).toContain("DEFAULT_ISSUE_CLOSE_ON_COMPLETE");
   });
 
   it("init --yes adds npm script when package.json exists", () => {
@@ -290,12 +311,15 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh contains helpful hint in nothing-to-do messages", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const plans = readFileSync(
+      join(testDir, ".ralph", "lib", "plans.sh"),
+      "utf-8",
+    );
     // Both "nothing to do" messages should include the hint
-    expect(ralphSh).toContain(
+    expect(plans).toContain(
       "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md",
     );
-    expect(ralphSh).toContain(
+    expect(plans).toContain(
       "Nothing to do — issue pull produced no plan file. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md",
     );
   });
@@ -303,11 +327,14 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh defaults to 5 iterations when none specified", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const config = readFileSync(
+      join(testDir, ".ralph", "lib", "config.sh"),
+      "utf-8",
+    );
     // Should default ITERATIONS to "5" when unset (no error, no conditional)
-    expect(ralphSh).toContain('ITERATIONS="5"');
+    expect(config).toContain('ITERATIONS="5"');
     // Should NOT contain the old error message for missing iterations
-    expect(ralphSh).not.toContain(
+    expect(config).not.toContain(
       "ERROR: Missing required <iterations-per-plan>",
     );
   });
@@ -315,37 +342,47 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh shows iterations-per-plan as optional in usage", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const config = readFileSync(
+      join(testDir, ".ralph", "lib", "config.sh"),
+      "utf-8",
+    );
     // Usage text should use square brackets (optional) not angle brackets (required)
-    expect(ralphSh).toContain("[iterations-per-plan]");
-    expect(ralphSh).not.toContain("<iterations-per-plan>");
+    expect(config).toContain("[iterations-per-plan]");
+    expect(config).not.toContain("<iterations-per-plan>");
     // Should mention the default
-    expect(ralphSh).toContain("Default: 5 iterations per plan.");
+    expect(config).toContain("Default: 5 iterations per plan.");
   });
 
   it("scaffolded ralph.sh contains gh preflight check for PR mode", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const gitSh = readFileSync(
+      join(testDir, ".ralph", "lib", "git.sh"),
+      "utf-8",
+    );
     // PR mode preflight: checks gh is installed and authenticated
-    expect(ralphSh).toContain('MODE" == "pr"');
-    expect(ralphSh).toContain("command -v gh");
-    expect(ralphSh).toContain("gh auth status");
-    expect(ralphSh).toContain("PR mode (the default) requires the GitHub CLI");
-    expect(ralphSh).toContain("gh is installed but not authenticated");
-    expect(ralphSh).toContain("--direct");
+    expect(gitSh).toContain('MODE" == "pr"');
+    expect(gitSh).toContain("command -v gh");
+    expect(gitSh).toContain("gh auth status");
+    expect(gitSh).toContain("PR mode (the default) requires the GitHub CLI");
+    expect(gitSh).toContain("gh is installed but not authenticated");
+    expect(gitSh).toContain("--direct");
   });
 
   it("scaffolded ralph.sh uses create_pr instead of merge_and_cleanup", () => {
     runCliOutput(["init", "--yes"], testDir);
 
+    const prSh = readFileSync(join(testDir, ".ralph", "lib", "pr.sh"), "utf-8");
+    // create_pr function exists in lib/pr.sh
+    expect(prSh).toContain("create_pr()");
     const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
-    // create_pr function exists and is called on completion
-    expect(ralphSh).toContain("create_pr()");
+    // create_pr is called on completion in the main loop
     expect(ralphSh).toContain('create_pr "$branch" "$PLAN_DESC"');
     // Old merge_and_cleanup and is_branch_protected are removed
     expect(ralphSh).not.toContain("merge_and_cleanup");
     expect(ralphSh).not.toContain("is_branch_protected");
+    expect(prSh).not.toContain("merge_and_cleanup");
+    expect(prSh).not.toContain("is_branch_protected");
     // No direct merge path (git merge --no-ff into base branch)
     expect(ralphSh).not.toContain("git merge");
     expect(ralphSh).not.toContain("git branch -d");
@@ -377,11 +414,14 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh warns on unknown config keys instead of erroring", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const config = readFileSync(
+      join(testDir, ".ralph", "lib", "config.sh"),
+      "utf-8",
+    );
     // Unknown config keys should produce a warning, not an error
-    expect(ralphSh).toContain("WARNING:");
-    expect(ralphSh).toContain("ignoring unknown config key");
-    expect(ralphSh).not.toContain(
+    expect(config).toContain("WARNING:");
+    expect(config).toContain("ignoring unknown config key");
+    expect(config).not.toContain(
       "unknown config key '$key'\"\n        echo \"Supported keys:",
     );
   });
@@ -389,28 +429,34 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh contains issue integration defaults", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const defaults = readFileSync(
+      join(testDir, ".ralph", "lib", "defaults.sh"),
+      "utf-8",
+    );
     // Config defaults
-    expect(ralphSh).toContain('DEFAULT_ISSUE_SOURCE="none"');
-    expect(ralphSh).toContain('DEFAULT_ISSUE_LABEL="ralphai"');
-    expect(ralphSh).toContain(
+    expect(defaults).toContain('DEFAULT_ISSUE_SOURCE="none"');
+    expect(defaults).toContain('DEFAULT_ISSUE_LABEL="ralphai"');
+    expect(defaults).toContain(
       'DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"',
     );
-    expect(ralphSh).toContain('DEFAULT_ISSUE_REPO=""');
-    expect(ralphSh).toContain('DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"');
-    expect(ralphSh).toContain('DEFAULT_ISSUE_COMMENT_PROGRESS="true"');
+    expect(defaults).toContain('DEFAULT_ISSUE_REPO=""');
+    expect(defaults).toContain('DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"');
+    expect(defaults).toContain('DEFAULT_ISSUE_COMMENT_PROGRESS="true"');
   });
 
   it("scaffolded ralph.sh contains issue integration functions", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const issues = readFileSync(
+      join(testDir, ".ralph", "lib", "issues.sh"),
+      "utf-8",
+    );
     // Core functions
-    expect(ralphSh).toContain("pull_github_issues()");
-    expect(ralphSh).toContain("read_issue_frontmatter()");
-    expect(ralphSh).toContain("check_gh_available()");
-    expect(ralphSh).toContain("detect_issue_repo()");
-    expect(ralphSh).toContain("slugify()");
+    expect(issues).toContain("pull_github_issues()");
+    expect(issues).toContain("read_issue_frontmatter()");
+    expect(issues).toContain("check_gh_available()");
+    expect(issues).toContain("detect_issue_repo()");
+    expect(issues).toContain("slugify()");
   });
 
   it("update --yes <target-dir> updates templates if .ralph/ already exists in target", () => {
@@ -655,6 +701,7 @@ describe("ralphai command", () => {
     expect(output).toContain("ralph.sh");
     expect(output).toContain("README.md");
     expect(output).toContain("PLANNING.md");
+    expect(output).toContain("lib/");
     expect(output).toContain("Preserved:");
     expect(output).toContain("ralph.config");
   });
@@ -1088,9 +1135,12 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh contains detect_agent_type function", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
-    expect(ralphSh).toContain("detect_agent_type()");
-    expect(ralphSh).toContain("DETECTED_AGENT_TYPE=");
+    const prompt = readFileSync(
+      join(testDir, ".ralph", "lib", "prompt.sh"),
+      "utf-8",
+    );
+    expect(prompt).toContain("detect_agent_type()");
+    expect(prompt).toContain("DETECTED_AGENT_TYPE=");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1164,11 +1214,18 @@ describe("ralphai command", () => {
   it("scaffolded ralph.sh contains format_file_ref and resolve_prompt_mode functions", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
-    expect(ralphSh).toContain("format_file_ref()");
-    expect(ralphSh).toContain("resolve_prompt_mode()");
-    expect(ralphSh).toContain("RESOLVED_PROMPT_MODE=");
-    expect(ralphSh).toContain('DEFAULT_PROMPT_MODE="auto"');
+    const prompt = readFileSync(
+      join(testDir, ".ralph", "lib", "prompt.sh"),
+      "utf-8",
+    );
+    expect(prompt).toContain("format_file_ref()");
+    expect(prompt).toContain("resolve_prompt_mode()");
+    expect(prompt).toContain("RESOLVED_PROMPT_MODE=");
+    const defaults = readFileSync(
+      join(testDir, ".ralph", "lib", "defaults.sh"),
+      "utf-8",
+    );
+    expect(defaults).toContain('DEFAULT_PROMPT_MODE="auto"');
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1350,15 +1407,18 @@ ${cleanupFile}
   it("scaffolded ralph.sh contains promptMode config infrastructure", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    const config = readFileSync(
+      join(testDir, ".ralph", "lib", "config.sh"),
+      "utf-8",
+    );
     // Config file loader case
-    expect(ralphSh).toContain("promptMode)");
-    expect(ralphSh).toContain("CONFIG_PROMPT_MODE=");
+    expect(config).toContain("promptMode)");
+    expect(config).toContain("CONFIG_PROMPT_MODE=");
     // Env var override
-    expect(ralphSh).toContain("RALPH_PROMPT_MODE");
+    expect(config).toContain("RALPH_PROMPT_MODE");
     // CLI flag
-    expect(ralphSh).toContain("--prompt-mode=");
-    expect(ralphSh).toContain("CLI_PROMPT_MODE=");
+    expect(config).toContain("--prompt-mode=");
+    expect(config).toContain("CLI_PROMPT_MODE=");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1518,18 +1578,26 @@ echo "$PROMPT_MODE"
   it("scaffolded ralph.sh wires format_file_ref into prompt construction and detect_plan", () => {
     runCliOutput(["init", "--yes"], testDir);
 
+    const plans = readFileSync(
+      join(testDir, ".ralph", "lib", "plans.sh"),
+      "utf-8",
+    );
+    const prompt = readFileSync(
+      join(testDir, ".ralph", "lib", "prompt.sh"),
+      "utf-8",
+    );
     const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
     // detect_plan: FILE_REFS uses format_file_ref
-    expect(ralphSh).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
+    expect(plans).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
     // detect_plan: dry-run chosen
-    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$chosen")"');
+    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$chosen")"');
     // detect_plan: normal chosen
-    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
+    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
     // LEARNINGS_REF uses format_file_ref
-    expect(ralphSh).toContain(
+    expect(prompt).toContain(
       'LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"',
     );
-    expect(ralphSh).toContain(
+    expect(prompt).toContain(
       'LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"',
     );
     // Prompt construction uses format_file_ref for progress file
@@ -1537,14 +1605,14 @@ echo "$PROMPT_MODE"
       '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
     );
     // Backlog selection refs use format_file_ref
-    expect(ralphSh).toContain(
+    expect(plans).toContain(
       'backlog_refs="$backlog_refs $(format_file_ref "$f")"',
     );
     // Should NOT have any hardcoded @$var or @${VAR} file references in
     // prompt construction or detect_plan FILE_REFS assignments
-    expect(ralphSh).not.toMatch(/FILE_REFS=.*@\$/);
-    expect(ralphSh).not.toContain('LEARNINGS_REF=" @LEARNINGS.md"');
-    expect(ralphSh).not.toContain('LEARNINGS_REF="$LEARNINGS_REF @$');
+    expect(plans).not.toMatch(/FILE_REFS=.*@\$/);
+    expect(prompt).not.toContain('LEARNINGS_REF=" @LEARNINGS.md"');
+    expect(prompt).not.toContain('LEARNINGS_REF="$LEARNINGS_REF @$');
   });
 
   // -------------------------------------------------------------------------
@@ -1649,13 +1717,20 @@ echo "$PROMPT_MODE"
   it("scaffolded ralph.sh contains group mode foundation functions", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
-    expect(ralphSh).toContain("extract_group()");
-    expect(ralphSh).toContain("write_group_state()");
-    expect(ralphSh).toContain("read_group_state()");
-    expect(ralphSh).toContain("cleanup_group_state()");
-    expect(ralphSh).toContain("collect_group_plans()");
-    expect(ralphSh).toContain("GROUP_STATE_FILE=");
+    const plans = readFileSync(
+      join(testDir, ".ralph", "lib", "plans.sh"),
+      "utf-8",
+    );
+    expect(plans).toContain("extract_group()");
+    expect(plans).toContain("write_group_state()");
+    expect(plans).toContain("read_group_state()");
+    expect(plans).toContain("cleanup_group_state()");
+    expect(plans).toContain("collect_group_plans()");
+    const defaults = readFileSync(
+      join(testDir, ".ralph", "lib", "defaults.sh"),
+      "utf-8",
+    );
+    expect(defaults).toContain("GROUP_STATE_FILE=");
   });
 
   describe.skipIf(process.platform === "win32")(

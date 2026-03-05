@@ -6,6 +6,7 @@ import {
   chmodSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
   rmSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
@@ -548,6 +549,16 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   copyFileSync(join(templatesDir, "ralph.sh"), join(ralphDir, "ralph.sh"));
   chmodSync(join(ralphDir, "ralph.sh"), 0o755);
 
+  // Copy lib/ directory (sourced by ralph.sh)
+  const libSrcDir = join(templatesDir, "lib");
+  const libDestDir = join(ralphDir, "lib");
+  mkdirSync(libDestDir, { recursive: true });
+  for (const file of readdirSync(libSrcDir)) {
+    if (file.endsWith(".sh")) {
+      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
+    }
+  }
+
   copyFileSync(join(templatesDir, "README.md"), join(ralphDir, "README.md"));
   copyFileSync(
     join(templatesDir, "PLANNING.md"),
@@ -643,6 +654,9 @@ LEARNINGS.md
     `  .ralph/ralph.sh          ${DIM}Autonomous task runner${RESET}`,
   );
   console.log(
+    `  .ralph/lib/              ${DIM}Library modules (sourced by ralph.sh)${RESET}`,
+  );
+  console.log(
     `  .ralph/ralph.config      ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralph/README.md         ${DIM}Operational docs${RESET}`);
@@ -718,7 +732,7 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
 
     const confirmed = await clack.confirm({
       message:
-        "This will overwrite ralph.sh, README.md, and PLANNING.md " +
+        "This will overwrite ralph.sh, lib/*.sh, README.md, and PLANNING.md " +
         "from the latest templates. Your config, LEARNINGS.md, and plan " +
         "files will be preserved. Continue?",
     });
@@ -741,6 +755,17 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
       chmodSync(dest, 0o755);
     }
     updated.push(file);
+  }
+
+  // Update lib/ directory
+  const libSrcDir = join(templatesDir, "lib");
+  const libDestDir = join(ralphDir, "lib");
+  mkdirSync(libDestDir, { recursive: true });
+  for (const file of readdirSync(libSrcDir)) {
+    if (file.endsWith(".sh")) {
+      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
+      updated.push(`lib/${file}`);
+    }
   }
 
   // Report what was preserved
