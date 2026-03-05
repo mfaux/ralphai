@@ -154,6 +154,7 @@ Settings resolve in this order: **CLI flags > env vars > `.ralph/ralph.config` >
 | `RALPH_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPH_BASE_BRANCH`             | `baseBranch`           |
 | `RALPH_MODE`                    | `mode`                 |
+| `RALPH_PROMPT_MODE`             | `promptMode`           |
 | `RALPH_MAX_STUCK`               | `maxStuck`             |
 | `RALPH_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPH_ISSUE_SOURCE`            | `issueSource`          |
