@@ -1154,6 +1154,192 @@ describe("ralphai command", () => {
   );
 
   // -------------------------------------------------------------------------
+  // Prompt formatting tests (format_file_ref + resolve_prompt_mode)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains format_file_ref and resolve_prompt_mode functions", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    expect(ralphSh).toContain("format_file_ref()");
+    expect(ralphSh).toContain("resolve_prompt_mode()");
+    expect(ralphSh).toContain("RESOLVED_PROMPT_MODE=");
+    expect(ralphSh).toContain('DEFAULT_PROMPT_MODE="auto"');
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "format_file_ref and resolve_prompt_mode",
+    () => {
+      /**
+       * Helper: run the resolve_prompt_mode + format_file_ref functions in bash
+       * with a given PROMPT_MODE, DETECTED_AGENT_TYPE, and filepath.
+       * Writes the script to a temp file to avoid newline escaping issues with bash -c.
+       */
+      function formatRef(opts: {
+        promptMode: string;
+        agentType: string;
+        filepath: string;
+        fileContent?: string;
+      }): string {
+        const setupFile =
+          opts.fileContent !== undefined
+            ? `printf '%s' ${JSON.stringify(opts.fileContent)} > ${JSON.stringify(opts.filepath)}`
+            : "";
+        const cleanupFile =
+          opts.fileContent !== undefined
+            ? `rm -f ${JSON.stringify(opts.filepath)}`
+            : "";
+
+        const script = `#!/bin/bash
+PROMPT_MODE=${JSON.stringify(opts.promptMode)}
+DETECTED_AGENT_TYPE=${JSON.stringify(opts.agentType)}
+RESOLVED_PROMPT_MODE=""
+resolve_prompt_mode() {
+  if [[ "$PROMPT_MODE" == "at-path" || "$PROMPT_MODE" == "inline" ]]; then
+    RESOLVED_PROMPT_MODE="$PROMPT_MODE"
+    return
+  fi
+  case "$DETECTED_AGENT_TYPE" in
+    claude|opencode) RESOLVED_PROMPT_MODE="at-path" ;;
+    *)               RESOLVED_PROMPT_MODE="at-path" ;;
+  esac
+}
+format_file_ref() {
+  local filepath="$1"
+  if [[ "$RESOLVED_PROMPT_MODE" == "inline" ]]; then
+    if [[ -f "$filepath" ]]; then
+      printf '<file path="%s">\\n%s\\n</file>' "$filepath" "$(cat "$filepath")"
+    else
+      printf '@%s' "$filepath"
+    fi
+  else
+    printf '@%s' "$filepath"
+  fi
+}
+resolve_prompt_mode
+${setupFile}
+format_file_ref ${JSON.stringify(opts.filepath)}
+${cleanupFile}
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralph-test-script-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result;
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("at-path mode returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "at-path",
+          agentType: "claude",
+          filepath: "plan.md",
+        });
+        expect(result).toBe("@plan.md");
+      });
+
+      it("auto mode with claude agent returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "claude",
+          filepath: ".ralph/in-progress/prd-foo.md",
+        });
+        expect(result).toBe("@.ralph/in-progress/prd-foo.md");
+      });
+
+      it("auto mode with opencode agent returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "opencode",
+          filepath: "LEARNINGS.md",
+        });
+        expect(result).toBe("@LEARNINGS.md");
+      });
+
+      it("auto mode with unknown agent returns @filepath (conservative default)", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "unknown",
+          filepath: "plan.md",
+        });
+        expect(result).toBe("@plan.md");
+      });
+
+      it("inline mode embeds file contents with <file> wrapper", () => {
+        const tmpFile = join(tmpdir(), `ralph-fmt-test-${Date.now()}.md`);
+        try {
+          writeFileSync(tmpFile, "# Test Plan\nDo stuff.");
+          const result = formatRef({
+            promptMode: "inline",
+            agentType: "claude",
+            filepath: tmpFile,
+          });
+          expect(result).toContain(`<file path="${tmpFile}">`);
+          expect(result).toContain("# Test Plan");
+          expect(result).toContain("Do stuff.");
+          expect(result).toContain("</file>");
+        } finally {
+          try {
+            rmSync(tmpFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+
+      it("inline mode falls back to @filepath for non-existent files", () => {
+        const result = formatRef({
+          promptMode: "inline",
+          agentType: "claude",
+          filepath: "/tmp/ralph-nonexistent-file-12345.md",
+        });
+        expect(result).toBe("@/tmp/ralph-nonexistent-file-12345.md");
+      });
+
+      it("resolve_prompt_mode caches explicit at-path regardless of agent", () => {
+        const result = formatRef({
+          promptMode: "at-path",
+          agentType: "aider",
+          filepath: "foo.md",
+        });
+        expect(result).toBe("@foo.md");
+      });
+
+      it("resolve_prompt_mode caches explicit inline regardless of agent", () => {
+        const tmpFile = join(tmpdir(), `ralph-fmt-inline-${Date.now()}.md`);
+        try {
+          writeFileSync(tmpFile, "content here");
+          const result = formatRef({
+            promptMode: "inline",
+            agentType: "opencode",
+            filepath: tmpFile,
+          });
+          expect(result).toContain('<file path="');
+          expect(result).toContain("content here");
+        } finally {
+          try {
+            rmSync(tmpFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Run default iteration tests
   // -------------------------------------------------------------------------
 

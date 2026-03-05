@@ -30,6 +30,7 @@ DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected fr
 DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on plan completion
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
 DEFAULT_ITERATION_TIMEOUT=0              # 0 = no timeout (seconds per agent invocation)
+DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -44,6 +45,7 @@ ISSUE_REPO="$DEFAULT_ISSUE_REPO"
 ISSUE_CLOSE_ON_COMPLETE="$DEFAULT_ISSUE_CLOSE_ON_COMPLETE"
 ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
+PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
 WIP_DIR=".ralph/in-progress"
 BACKLOG_DIR=".ralph/backlog"
@@ -1063,6 +1065,44 @@ detect_agent_type() {
   esac
 }
 detect_agent_type
+
+# --- Resolve prompt mode and format file references ---
+# Maps PROMPT_MODE + DETECTED_AGENT_TYPE to a concrete mode ("at-path" or "inline").
+# Called once after agent detection; result cached in RESOLVED_PROMPT_MODE.
+RESOLVED_PROMPT_MODE=""
+resolve_prompt_mode() {
+  if [[ "$PROMPT_MODE" == "at-path" || "$PROMPT_MODE" == "inline" ]]; then
+    RESOLVED_PROMPT_MODE="$PROMPT_MODE"
+    return
+  fi
+  # auto mode: pick based on detected agent type
+  # Conservative default: everything maps to at-path (current behavior).
+  # Agent-specific overrides can be added here as support is verified.
+  case "$DETECTED_AGENT_TYPE" in
+    claude|opencode) RESOLVED_PROMPT_MODE="at-path" ;;
+    *)               RESOLVED_PROMPT_MODE="at-path" ;;
+  esac
+}
+resolve_prompt_mode
+
+# Formats a file reference for the prompt based on the resolved prompt mode.
+# Usage: format_file_ref <filepath>
+# - at-path mode: echoes "@<filepath>"
+# - inline mode: reads the file and wraps contents in <file path="...">...</file>
+format_file_ref() {
+  local filepath="$1"
+  if [[ "$RESOLVED_PROMPT_MODE" == "inline" ]]; then
+    if [[ -f "$filepath" ]]; then
+      printf '<file path="%s">\n%s\n</file>' "$filepath" "$(cat "$filepath")"
+    else
+      # File doesn't exist yet — fall back to at-path reference
+      printf '@%s' "$filepath"
+    fi
+  else
+    # at-path mode (default)
+    printf '@%s' "$filepath"
+  fi
+}
 
 # --- PR mode preflight: validate gh CLI ---
 # In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
