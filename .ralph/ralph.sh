@@ -2,7 +2,7 @@
 # ralph.sh — Ralph (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: .ralph/ralph.sh <iterations-per-plan> [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: .ralph/ralph.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralph/in-progress/ has plan files → resume on the current ralph/* branch
@@ -662,11 +662,6 @@ plan_readiness() {
 }
 
 # --- Parse args ---
-if [[ $# -eq 0 ]]; then
-  print_usage
-  exit 1
-fi
-
 for arg in "$@"; do
   case "$arg" in
     --help|-h)
