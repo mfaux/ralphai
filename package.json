@@ -17,7 +17,8 @@
     "test": "vitest --run",
     "type-check": "tsc --noEmit",
     "format": "prettier --write 'src/**/*.ts'",
-    "ralph": ".ralph/ralph.sh"
+    "ralph": ".ralph/ralph.sh",
+    "sync-ralph": "cp templates/ralph/ralph.sh .ralph/ralph.sh && chmod +x .ralph/ralph.sh && ([ -d templates/ralph/lib ] && cp -r templates/ralph/lib .ralph/lib || true) && echo 'Synced templates/ralph/ → .ralph/'"
   },
   "keywords": [
     "cli",

@@ -30,6 +30,7 @@ DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected fr
 DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on plan completion
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
 DEFAULT_ITERATION_TIMEOUT=0              # 0 = no timeout (seconds per agent invocation)
+DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -44,12 +45,23 @@ ISSUE_REPO="$DEFAULT_ISSUE_REPO"
 ISSUE_CLOSE_ON_COMPLETE="$DEFAULT_ISSUE_CLOSE_ON_COMPLETE"
 ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
+PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
 WIP_DIR=".ralph/in-progress"
 BACKLOG_DIR=".ralph/backlog"
 ARCHIVE_DIR=".ralph/out"
 CONFIG_FILE=".ralph/ralph.config"
 PROGRESS_FILE="$WIP_DIR/progress.txt"
+GROUP_STATE_FILE="$WIP_DIR/.group-state"
+
+# --- Group mode state (populated by read_group_state / detect_plan) ---
+GROUP_NAME=""
+GROUP_BRANCH=""
+GROUP_PLANS_TOTAL=0
+GROUP_PLANS_COMPLETED=0
+GROUP_CURRENT_PLAN=""
+GROUP_PR_URL=""
+
 DRY_RUN=false
 RESUME=false
 ITERATIONS=""
@@ -65,12 +77,13 @@ CLI_ISSUE_IN_PROGRESS_LABEL=""
 CLI_ISSUE_REPO=""
 CLI_ISSUE_CLOSE_ON_COMPLETE=""
 CLI_ISSUE_COMMENT_PROGRESS=""
+CLI_PROMPT_MODE=""
 SHOW_CONFIG=false
 
 # --- Config file loader ---
 # Parses .ralph/ralph.config (key=value, comments, blank lines).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
-# CONFIG_MAX_STUCK, CONFIG_MODE when present.
+# CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
 load_config() {
   local config_path="$1"
@@ -197,6 +210,13 @@ load_config() {
         fi
         CONFIG_ITERATION_TIMEOUT="$value"
         ;;
+      promptMode)
+        if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+          echo "ERROR: $config_path:$line_num: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+          exit 1
+        fi
+        CONFIG_PROMPT_MODE="$value"
+        ;;
       *)
         echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
@@ -242,6 +262,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
     ITERATION_TIMEOUT="$CONFIG_ITERATION_TIMEOUT"
+  fi
+  if [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    PROMPT_MODE="$CONFIG_PROMPT_MODE"
   fi
 }
 
@@ -311,6 +334,13 @@ apply_env_overrides() {
       exit 1
     fi
     ISSUE_COMMENT_PROGRESS="$RALPH_ISSUE_COMMENT_PROGRESS"
+  fi
+  if [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
+      echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+      exit 1
+    fi
+    PROMPT_MODE="$RALPH_PROMPT_MODE"
   fi
 }
 
@@ -463,6 +493,7 @@ print_usage() {
   echo "  --pr                             PR mode (default): create branch and open PR"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
+  echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
   echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)"
@@ -474,13 +505,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, iterationTimeout,"
+  echo "                  mode, iterationTimeout, promptMode,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPH_AGENT_COMMAND, RALPH_FEEDBACK_COMMANDS,"
   echo "                   RALPH_BASE_BRANCH, RALPH_MAX_STUCK,"
   echo "                   RALPH_MODE, RALPH_ITERATION_TIMEOUT,"
+  echo "                   RALPH_PROMPT_MODE,"
   echo "                   RALPH_ISSUE_SOURCE,"
   echo "                   RALPH_ISSUE_LABEL, RALPH_ISSUE_IN_PROGRESS_LABEL,"
   echo "                   RALPH_ISSUE_REPO, RALPH_ISSUE_CLOSE_ON_COMPLETE,"
@@ -592,6 +624,152 @@ extract_depends_on() {
   ' "$file"
 }
 
+# Extract group name from YAML frontmatter (returns empty if not set)
+# Supported form: group: my-feature-name
+extract_group() {
+  local file="$1"
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm && match($0, /^[[:space:]]*group:[[:space:]]*(.+)/, arr) {
+      val=arr[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      gsub(/^"|"$/, "", val)
+      gsub(/^\047|\047$/, "", val)
+      if (val != "") print val
+      exit
+    }
+  ' "$file"
+}
+
+# Write group state (key=value file)
+# Usage: write_group_state "group=my-feature" "branch=ralph/my-feature" "plans_total=5" ...
+write_group_state() {
+  mkdir -p "$WIP_DIR"
+  printf '%s\n' "$@" > "$GROUP_STATE_FILE"
+}
+
+# Read group state into caller's scope. Sets variables like GROUP_NAME, GROUP_BRANCH, etc.
+# Returns 1 if no state file exists.
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+  local line key val
+  while IFS='=' read -r key val; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    case "$key" in
+      group)           GROUP_NAME="$val" ;;
+      branch)          GROUP_BRANCH="$val" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$val" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$val" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$val" ;;
+      pr_url)          GROUP_PR_URL="$val" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+
+# Remove group state file (called when group completes or is abandoned)
+cleanup_group_state() {
+  rm -f "$GROUP_STATE_FILE"
+}
+
+# Collect all backlog plans belonging to a group, in dependency order.
+# Outputs one plan path per line. Plans with no intra-group deps come first (stable filesystem order).
+# Usage: mapfile -t plans < <(collect_group_plans "my-feature")
+collect_group_plans() {
+  local group_name="$1"
+  local -a group_files=()
+  local -a ordered=()
+  local -A seen=()
+  local -A deps_map=()
+
+  # Scan backlog for matching group
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fg
+    fg=$(extract_group "$f")
+    if [[ "$fg" == "$group_name" ]]; then
+      group_files+=("$f")
+      local fb
+      fb=$(basename "$f")
+      # Store intra-group deps (only deps that are also in this group)
+      local dep_list
+      dep_list=$(extract_depends_on "$f")
+      deps_map["$fb"]="$dep_list"
+    fi
+  done
+
+  # Build set of group basenames for filtering
+  local -A group_basenames=()
+  for f in "${group_files[@]}"; do
+    group_basenames["$(basename "$f")"]=1
+  done
+
+  # Topological sort (Kahn's algorithm) on intra-group dependencies
+  # Ignore deps that point outside the group (they're handled by plan_readiness)
+  local -A in_degree=()
+  for f in "${group_files[@]}"; do
+    local fb
+    fb=$(basename "$f")
+    in_degree["$fb"]=0
+  done
+
+  for fb in "${!deps_map[@]}"; do
+    while IFS= read -r dep; do
+      [[ -z "$dep" ]] && continue
+      dep=$(basename "$dep")
+      # Only count intra-group deps
+      if [[ -n "${group_basenames[$dep]+x}" ]]; then
+        in_degree["$fb"]=$(( ${in_degree["$fb"]} + 1 ))
+      fi
+    done <<< "${deps_map[$fb]}"
+  done
+
+  # Process nodes with in_degree 0
+  local -a queue=()
+  for fb in "${!in_degree[@]}"; do
+    if [[ ${in_degree["$fb"]} -eq 0 ]]; then
+      queue+=("$fb")
+    fi
+  done
+  # Sort queue for stable ordering (filesystem alphabetical)
+  IFS=$'\n' queue=($(sort <<< "${queue[*]}")); unset IFS
+
+  while [[ ${#queue[@]} -gt 0 ]]; do
+    local current="${queue[0]}"
+    queue=("${queue[@]:1}")
+    ordered+=("$current")
+    seen["$current"]=1
+
+    # Find plans that depend on current
+    for fb in "${!deps_map[@]}"; do
+      [[ -n "${seen[$fb]+x}" ]] && continue
+      while IFS= read -r dep; do
+        [[ -z "$dep" ]] && continue
+        dep=$(basename "$dep")
+        if [[ "$dep" == "$current" ]]; then
+          in_degree["$fb"]=$(( ${in_degree["$fb"]} - 1 ))
+          if [[ ${in_degree["$fb"]} -eq 0 ]]; then
+            queue+=("$fb")
+          fi
+        fi
+      done <<< "${deps_map[$fb]}"
+    done
+    # Re-sort queue for stable ordering
+    if [[ ${#queue[@]} -gt 1 ]]; then
+      IFS=$'\n' queue=($(sort <<< "${queue[*]}")); unset IFS
+    fi
+  done
+
+  # Output full paths in topological order
+  for fb in "${ordered[@]}"; do
+    echo "$BACKLOG_DIR/$fb"
+  done
+}
+
 # Return dependency status for a plan basename:
 #   done    -> archived in out/
 #   pending -> present in backlog/ or in-progress/
@@ -657,6 +835,89 @@ plan_readiness() {
   local joined
   joined=$(IFS=','; echo "${blocked_reasons[*]}")
   echo "blocked:$joined"
+}
+
+# --- Group mode: frontmatter extraction and state management ---
+
+# Extract group name from plan file YAML frontmatter.
+# Prints the group name, or nothing if no group: key is present.
+extract_group() {
+  local file="$1"
+
+  # No frontmatter block
+  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
+    return 0
+  fi
+
+  awk '
+    BEGIN { in_fm=0 }
+    NR==1 && $0=="---" { in_fm=1; next }
+    in_fm && $0=="---" { exit }
+    in_fm {
+      # Match: group: <name>  (with optional quotes)
+      if (match($0, /^[[:space:]]*group:[[:space:]]*/)) {
+        val = substr($0, RLENGTH + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+        gsub(/^"|"$/, "", val)
+        gsub(/^\047|\047$/, "", val)
+        if (val != "") print val
+      }
+    }
+  ' "$file"
+}
+
+# Read .group-state file into GROUP_* variables.
+# File format: key=value, one per line.
+read_group_state() {
+  [[ -f "$GROUP_STATE_FILE" ]] || return 1
+
+  while IFS='=' read -r key value; do
+    case "$key" in
+      group)           GROUP_NAME="$value" ;;
+      branch)          GROUP_BRANCH="$value" ;;
+      plans_total)     GROUP_PLANS_TOTAL="$value" ;;
+      plans_completed) GROUP_PLANS_COMPLETED="$value" ;;
+      current_plan)    GROUP_CURRENT_PLAN="$value" ;;
+      pr_url)          GROUP_PR_URL="$value" ;;
+    esac
+  done < "$GROUP_STATE_FILE"
+}
+
+# Write .group-state file from key=value arguments.
+# Usage: write_group_state "group=foo" "branch=ralph/foo" ...
+write_group_state() {
+  mkdir -p "$(dirname "$GROUP_STATE_FILE")"
+  printf '%s\n' "$@" > "$GROUP_STATE_FILE"
+}
+
+# Remove .group-state file and reset GROUP_* variables.
+cleanup_group_state() {
+  rm -f "$GROUP_STATE_FILE"
+  GROUP_NAME=""
+  GROUP_BRANCH=""
+  GROUP_PLANS_TOTAL=0
+  GROUP_PLANS_COMPLETED=0
+  GROUP_CURRENT_PLAN=""
+  GROUP_PR_URL=""
+}
+
+# Collect all backlog plans belonging to a group, sorted by filename.
+# Prints one plan path per line. Only returns plans currently in $BACKLOG_DIR.
+collect_group_plans() {
+  local group_name="$1"
+  local plans=()
+
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fg
+    fg=$(extract_group "$f")
+    if [[ "$fg" == "$group_name" ]]; then
+      plans+=("$f")
+    fi
+  done
+
+  # Sort by filename for deterministic ordering
+  printf '%s\n' "${plans[@]}" | sort
 }
 
 # --- Parse args ---
@@ -726,6 +987,13 @@ for arg in "$@"; do
       ;;
     --pr)
       CLI_MODE="pr"
+      ;;
+    --prompt-mode=*)
+      CLI_PROMPT_MODE="${arg#--prompt-mode=}"
+      if [[ "$CLI_PROMPT_MODE" != "auto" && "$CLI_PROMPT_MODE" != "at-path" && "$CLI_PROMPT_MODE" != "inline" ]]; then
+        echo "ERROR: --prompt-mode must be 'auto', 'at-path', or 'inline', got '$CLI_PROMPT_MODE'"
+        exit 1
+      fi
       ;;
     --issue-source=*)
       CLI_ISSUE_SOURCE="${arg#--issue-source=}"
@@ -828,6 +1096,9 @@ if [[ -n "$CLI_ISSUE_CLOSE_ON_COMPLETE" ]]; then
 fi
 if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
+fi
+if [[ -n "$CLI_PROMPT_MODE" ]]; then
+  PROMPT_MODE="$CLI_PROMPT_MODE"
 fi
 
 # --- Helper: check if a branch already has open work ---
@@ -1007,6 +1278,16 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     issue_comment_source="default"
   fi
 
+  if [[ -n "$CLI_PROMPT_MODE" ]]; then
+    prompt_mode_source="cli (--prompt-mode=$CLI_PROMPT_MODE)"
+  elif [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="env (RALPH_PROMPT_MODE=$RALPH_PROMPT_MODE)"
+  elif [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="config ($CONFIG_FILE)"
+  else
+    prompt_mode_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
@@ -1017,6 +1298,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   else
     echo "  iterationTimeout   = off  ($timeout_source)"
   fi
+  echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"
@@ -1024,6 +1306,26 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  issueRepo          = ${ISSUE_REPO:-<auto-detect>}  ($issue_repo_source)"
     echo "  issueCloseOnComplete = $ISSUE_CLOSE_ON_COMPLETE  ($issue_close_source)"
     echo "  issueCommentProgress = $ISSUE_COMMENT_PROGRESS  ($issue_comment_source)"
+  fi
+  echo ""
+  # Show detected agent type (informational)
+  if [[ -n "$AGENT_COMMAND" ]]; then
+    # Inline detection for --show-config (detect_agent_type is defined later in the script)
+    _sc_cmd=$(echo "$AGENT_COMMAND" | tr '[:upper:]' '[:lower:]')
+    _sc_agent_type="unknown"
+    case "$_sc_cmd" in
+      *claude*)   _sc_agent_type="claude" ;;
+      *opencode*) _sc_agent_type="opencode" ;;
+      *codex*)    _sc_agent_type="codex" ;;
+      *gemini*)   _sc_agent_type="gemini" ;;
+      *aider*)    _sc_agent_type="aider" ;;
+      *goose*)    _sc_agent_type="goose" ;;
+      *kiro*)     _sc_agent_type="kiro" ;;
+      *amp*)      _sc_agent_type="amp" ;;
+    esac
+    echo "  detectedAgentType  = $_sc_agent_type"
+  else
+    echo "  detectedAgentType  = <no agentCommand set>"
   fi
   echo ""
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -1042,6 +1344,65 @@ if [[ -z "$AGENT_COMMAND" ]]; then
   echo "          agentCommand=codex exec"
   exit 1
 fi
+
+# --- Detect agent type from command string ---
+# Inspects $AGENT_COMMAND and sets DETECTED_AGENT_TYPE to a known identifier.
+# Used by prompt formatting to adjust file references per agent.
+DETECTED_AGENT_TYPE="unknown"
+detect_agent_type() {
+  local cmd
+  cmd=$(echo "$AGENT_COMMAND" | tr '[:upper:]' '[:lower:]')
+  case "$cmd" in
+    *claude*)   DETECTED_AGENT_TYPE="claude" ;;
+    *opencode*) DETECTED_AGENT_TYPE="opencode" ;;
+    *codex*)    DETECTED_AGENT_TYPE="codex" ;;
+    *gemini*)   DETECTED_AGENT_TYPE="gemini" ;;
+    *aider*)    DETECTED_AGENT_TYPE="aider" ;;
+    *goose*)    DETECTED_AGENT_TYPE="goose" ;;
+    *kiro*)     DETECTED_AGENT_TYPE="kiro" ;;
+    *amp*)      DETECTED_AGENT_TYPE="amp" ;;
+    *)          DETECTED_AGENT_TYPE="unknown" ;;
+  esac
+}
+detect_agent_type
+
+# --- Resolve prompt mode and format file references ---
+# Maps PROMPT_MODE + DETECTED_AGENT_TYPE to a concrete mode ("at-path" or "inline").
+# Called once after agent detection; result cached in RESOLVED_PROMPT_MODE.
+RESOLVED_PROMPT_MODE=""
+resolve_prompt_mode() {
+  if [[ "$PROMPT_MODE" == "at-path" || "$PROMPT_MODE" == "inline" ]]; then
+    RESOLVED_PROMPT_MODE="$PROMPT_MODE"
+    return
+  fi
+  # auto mode: pick based on detected agent type
+  # Conservative default: everything maps to at-path (current behavior).
+  # Agent-specific overrides can be added here as support is verified.
+  case "$DETECTED_AGENT_TYPE" in
+    claude|opencode) RESOLVED_PROMPT_MODE="at-path" ;;
+    *)               RESOLVED_PROMPT_MODE="at-path" ;;
+  esac
+}
+resolve_prompt_mode
+
+# Formats a file reference for the prompt based on the resolved prompt mode.
+# Usage: format_file_ref <filepath>
+# - at-path mode: echoes "@<filepath>"
+# - inline mode: reads the file and wraps contents in <file path="...">...</file>
+format_file_ref() {
+  local filepath="$1"
+  if [[ "$RESOLVED_PROMPT_MODE" == "inline" ]]; then
+    if [[ -f "$filepath" ]]; then
+      printf '<file path="%s">\n%s\n</file>' "$filepath" "$(cat "$filepath")"
+    else
+      # File doesn't exist yet — fall back to at-path reference
+      printf '@%s' "$filepath"
+    fi
+  else
+    # at-path mode (default)
+    printf '@%s' "$filepath"
+  fi
+}
 
 # --- PR mode preflight: validate gh CLI ---
 # In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
@@ -1075,11 +1436,11 @@ LEARNINGS_HINT=""
 LEARNINGS_STEP=""
 RALPH_LEARNINGS_FILE=".ralph/LEARNINGS.md"
 if [[ -f "LEARNINGS.md" ]]; then
-  LEARNINGS_REF=" @LEARNINGS.md"
+  LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"
   LEARNINGS_HINT=" Also read LEARNINGS.md to avoid repeating past mistakes."
 fi
 if [[ -f "$RALPH_LEARNINGS_FILE" ]]; then
-  LEARNINGS_REF="$LEARNINGS_REF @$RALPH_LEARNINGS_FILE"
+  LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"
   LEARNINGS_HINT="${LEARNINGS_HINT:- }Also read $RALPH_LEARNINGS_FILE to avoid repeating past mistakes."
 fi
 if [[ -f "LEARNINGS.md" || -f "$RALPH_LEARNINGS_FILE" ]]; then
@@ -1181,6 +1542,58 @@ archive_run() {
   fi
 }
 
+# Advance to the next plan in a group. Moves next plan from backlog to in-progress.
+# Returns 0 if next plan loaded, 1 if group is complete (no more plans).
+advance_group_plan() {
+  [[ -n "${GROUP_NAME:-}" ]] || return 1
+
+  GROUP_PLANS_COMPLETED=$((GROUP_PLANS_COMPLETED + 1))
+
+  # Find next ready group plan from backlog
+  local next_plan=""
+  local candidates
+  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
+
+  for f in "${candidates[@]}"; do
+    [[ -f "$f" ]] || continue
+    local readiness
+    readiness=$(plan_readiness "$f")
+    if [[ "$readiness" == "ready" ]]; then
+      next_plan="$f"
+      break
+    fi
+  done
+
+  if [[ -z "$next_plan" ]]; then
+    # No more group plans ready — group is complete
+    echo "Group '$GROUP_NAME' complete ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans)"
+    return 1
+  fi
+
+  # Move next plan to in-progress
+  local next_basename
+  next_basename=$(basename "$next_plan")
+  local dest="$WIP_DIR/$next_basename"
+  mv "$next_plan" "$dest"
+  echo "Advanced to next group plan: $next_basename"
+
+  # Update tracking
+  WIP_FILES=("$dest")
+  FILE_REFS=" $(format_file_ref "$dest")"
+  GROUP_CURRENT_PLAN="$next_basename"
+  PLAN_DESC=$(plan_description "$dest")
+
+  write_group_state \
+    "group=$GROUP_NAME" \
+    "branch=$GROUP_BRANCH" \
+    "plans_total=$GROUP_PLANS_TOTAL" \
+    "plans_completed=$GROUP_PLANS_COMPLETED" \
+    "current_plan=$GROUP_CURRENT_PLAN" \
+    "pr_url=${GROUP_PR_URL:-}"
+
+  return 0
+}
+
 # --- Detect plan: find in-progress work or pick from backlog ---
 # Sets: WIP_FILES, FILE_REFS, RESUMING
 detect_plan() {
@@ -1199,9 +1612,16 @@ detect_plan() {
     RESUMING=true
     WIP_FILES=("${wip_plans[@]}")
     for f in "${WIP_FILES[@]}"; do
-      FILE_REFS="$FILE_REFS @$f"
+      FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
     echo "Found in-progress plan(s): ${WIP_FILES[*]}"
+
+    # Check for group context alongside resume
+    if [[ -f "$GROUP_STATE_FILE" ]]; then
+      read_group_state
+      echo "Resuming group '$GROUP_NAME' (plan ${GROUP_PLANS_COMPLETED}/${GROUP_PLANS_TOTAL} completed)"
+    fi
+
     return 0
   fi
 
@@ -1286,7 +1706,7 @@ detect_plan() {
     # Build @file references for all dependency-ready backlog plans
     local backlog_refs=""
     for f in "${ready_plans[@]}"; do
-      backlog_refs="$backlog_refs @$f"
+      backlog_refs="$backlog_refs $(format_file_ref "$f")"
     done
 
     local selection_prompt="${backlog_refs}
@@ -1338,7 +1758,7 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     local chosen_base
     chosen_base=$(basename "$chosen")
     WIP_FILES=("$chosen")
-    FILE_REFS=" @$chosen"
+    FILE_REFS=" $(format_file_ref "$chosen")"
     RESUMING=false
     echo "[dry-run] Would move: $chosen -> $WIP_DIR/$chosen_base"
   else
@@ -1351,8 +1771,41 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     echo "Moved $chosen -> $dest"
 
     WIP_FILES=("$dest")
-    FILE_REFS=" @$dest"
+    FILE_REFS=" $(format_file_ref "$dest")"
     RESUMING=false
+
+    # Check if chosen plan is part of a group
+    local chosen_group
+    chosen_group=$(extract_group "$dest")
+    if [[ -n "$chosen_group" ]]; then
+      # Collect remaining group plans (still in backlog, excluding the one we just moved)
+      local remaining_group_plans
+      mapfile -t remaining_group_plans < <(collect_group_plans "$chosen_group")
+      local total_count=$(( ${#remaining_group_plans[@]} + 1 ))  # +1 for the one we moved
+
+      GROUP_NAME="$chosen_group"
+      GROUP_PLANS_TOTAL="$total_count"
+      GROUP_PLANS_COMPLETED=0
+      GROUP_CURRENT_PLAN="$dest_basename"
+      GROUP_PR_URL=""
+
+      write_group_state \
+        "group=$GROUP_NAME" \
+        "branch=" \
+        "plans_total=$GROUP_PLANS_TOTAL" \
+        "plans_completed=$GROUP_PLANS_COMPLETED" \
+        "current_plan=$GROUP_CURRENT_PLAN" \
+        "pr_url="
+
+      echo "Group '$GROUP_NAME' detected: $total_count plan(s) total"
+      echo "Plan order:"
+      echo "  1. $dest_basename (current)"
+      local n=2
+      for rp in "${remaining_group_plans[@]}"; do
+        echo "  $n. $(basename "$rp")"
+        n=$((n + 1))
+      done
+    fi
   fi
   return 0
 }
@@ -1428,6 +1881,192 @@ ${commit_log:-_No commits._}
   fi
 }
 
+# List remaining group plans from backlog (for PR body formatting).
+# Outputs markdown list items, one per line.
+list_remaining_group_plans() {
+  [[ -n "${GROUP_NAME:-}" ]] || return 0
+  local candidates
+  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
+  local f
+  for f in "${candidates[@]}"; do
+    [[ -f "$f" ]] || continue
+    echo "- $(basename "$f")"
+  done
+}
+
+# Create a draft PR for a group after the first plan completes.
+# Sets GROUP_PR_URL and updates .group-state.
+create_group_pr() {
+  local branch="$1"
+  local group_name="$2"
+
+  echo ""
+  echo "Creating draft PR for group '$group_name'..."
+
+  # Push branch
+  echo "Pushing $branch to origin..."
+  if ! git push -u origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
+    return 0
+  fi
+
+  local pr_title="feat: $group_name"
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $group_name
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+- $GROUP_CURRENT_PLAN ✅
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits yet._}
+\`\`\`"
+
+  local pr_url
+  pr_url=$(gh pr create \
+    --draft \
+    --base "$BASE_BRANCH" \
+    --head "$branch" \
+    --title "$pr_title" \
+    --body "$pr_body" 2>&1) || {
+    echo "WARNING: Failed to create draft PR: $pr_url"
+    echo "Branch '$branch' pushed to origin. Create PR manually."
+    return 0
+  }
+
+  echo "Draft PR created: $pr_url"
+  GROUP_PR_URL="$pr_url"
+
+  # Persist PR URL in group state
+  write_group_state \
+    "group=$GROUP_NAME" \
+    "branch=$GROUP_BRANCH" \
+    "plans_total=$GROUP_PLANS_TOTAL" \
+    "plans_completed=$GROUP_PLANS_COMPLETED" \
+    "current_plan=$GROUP_CURRENT_PLAN" \
+    "pr_url=$GROUP_PR_URL"
+}
+
+# Update the body of an existing group draft PR with current progress.
+update_group_pr() {
+  local branch="$1"
+  local completed_plan="$2"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Updating group PR with progress..."
+
+  # Push latest commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR body not updated."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build completed plans list from archive
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    # Skip progress files and non-plan files
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+${completed_list:-_None yet._}
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || {
+    echo "WARNING: Failed to update PR body."
+  }
+}
+
+# Mark the group draft PR as ready for review. Called when the last group plan completes.
+finalize_group_pr() {
+  local branch="$1"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Finalizing group PR..."
+
+  # Push final commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR not finalized."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build final completed plans list
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** Complete ($GROUP_PLANS_TOTAL/$GROUP_PLANS_TOTAL plans)
+
+### Completed Plans
+${completed_list:-_None._}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || true
+
+  # Mark PR as ready for review
+  if gh pr ready "$GROUP_PR_URL" 2>/dev/null; then
+    echo "PR marked as ready for review: $GROUP_PR_URL"
+  else
+    echo "WARNING: Failed to mark PR as ready. Mark it manually: gh pr ready $GROUP_PR_URL"
+  fi
+
+  cleanup_group_state
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
@@ -1460,6 +2099,21 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
 
+  dry_group=$(extract_group "${WIP_FILES[0]}")
+  if [[ -n "$dry_group" ]]; then
+    echo "[dry-run] Group: $dry_group"
+    echo "[dry-run] Branch would be: ralph/$dry_group"
+    dry_group_members=()
+    mapfile -t dry_group_members < <(collect_group_plans "$dry_group")
+    echo "[dry-run] Group plans (${#dry_group_members[@]} remaining in backlog + 1 selected):"
+    echo "[dry-run]   1. $(basename "${WIP_FILES[0]}") (selected)"
+    gn=2
+    for gm in "${dry_group_members[@]}"; do
+      echo "[dry-run]   $gn. $(basename "$gm")"
+      gn=$((gn + 1))
+    done
+  fi
+
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     echo "[dry-run] Mode: resume in-progress"
@@ -1476,9 +2130,13 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
-    branch="ralph/${slug}"
+    if [[ -n "${dry_group:-}" ]]; then
+      branch="ralph/${dry_group}"
+    else
+      slug="${plan_basename#prd-}"
+      slug="${slug%.md}"
+      branch="ralph/${slug}"
+    fi
     if git show-ref --verify --quiet "refs/heads/ralph"; then
       echo "[dry-run] WARNING: Branch 'ralph' exists and would block creation of '$branch'."
       echo "[dry-run] Fix: git branch -m ralph ralph-legacy  OR  git branch -D ralph"
@@ -1549,11 +2207,16 @@ while true; do
     echo "Initialized $PROGRESS_FILE"
   else
     git checkout "$BASE_BRANCH"
-    # Derive branch slug from plan file name (e.g. prd-add-dark-mode.md → add-dark-mode)
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
-    branch="ralph/${slug}"
+    if [[ -n "${GROUP_NAME:-}" ]]; then
+      # Group mode: branch named after the group
+      branch="ralph/${GROUP_NAME}"
+    else
+      # Normal mode: branch named after the plan
+      slug="${plan_basename#prd-}"
+      slug="${slug%.md}"
+      branch="ralph/${slug}"
+    fi
 
     # Guard: a bare "ralph" branch blocks all "ralph/*" branches (git ref hierarchy conflict)
     if git show-ref --verify --quiet "refs/heads/ralph"; then
@@ -1595,6 +2258,18 @@ while true; do
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
 
+    # Update group state with branch name
+    if [[ -n "${GROUP_NAME:-}" && -f "$GROUP_STATE_FILE" ]]; then
+      GROUP_BRANCH="$branch"
+      write_group_state \
+        "group=$GROUP_NAME" \
+        "branch=$GROUP_BRANCH" \
+        "plans_total=$GROUP_PLANS_TOTAL" \
+        "plans_completed=$GROUP_PLANS_COMPLETED" \
+        "current_plan=$GROUP_CURRENT_PLAN" \
+        "pr_url=${GROUP_PR_URL:-}"
+    fi
+
     # Initialize progress file
     mkdir -p "$WIP_DIR"
     echo "## Progress Log" > "$PROGRESS_FILE"
@@ -1617,7 +2292,7 @@ while true; do
       echo "=== Ralph iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
-    PROMPT="${FILE_REFS} @${PROGRESS_FILE}${LEARNINGS_REF}
+    PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
 1. Read the referenced files and the progress file.${LEARNINGS_HINT}
 2. Find the highest-priority incomplete task (see prioritization rules in the plan).
 3. Implement it with small, focused changes. Testing strategy depends on task type:
@@ -1666,7 +2341,31 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
         echo "ERROR: $MAX_STUCK consecutive iterations with no progress. Aborting."
         echo "Branch: $branch"
-        echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+          echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+          echo "Pushing partial work and creating/updating draft PR..."
+          git push origin "$branch" 2>/dev/null || true
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            create_group_pr "$branch" "$GROUP_NAME"
+            # Append failure note to PR body
+            if [[ -n "${GROUP_PR_URL:-}" ]]; then
+              fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+              gh pr edit "$GROUP_PR_URL" --body "${fail_body}
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+            fi
+          else
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+            gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+          fi
+          echo "Group state preserved in $GROUP_STATE_FILE for --resume."
+        else
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        fi
         exit 1
       fi
     else
@@ -1686,10 +2385,49 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo ""
       echo "Plan complete after $i iterations: $PLAN_DESC"
       archive_run
-      if [[ "$MODE" == "pr" ]]; then
-        create_pr "$branch" "$PLAN_DESC"
-      else
-        echo "Direct mode: commits are on branch '$branch'. No PR created."
+
+      if [[ -n "${GROUP_NAME:-}" ]]; then
+        # Group mode: create or update draft PR before advancing
+        if [[ "$MODE" == "pr" ]]; then
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            # First group plan completed — create draft PR
+            create_group_pr "$branch" "$GROUP_NAME"
+          else
+            # Subsequent plan completed — update PR body
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+          fi
+        fi
+
+        # Group mode: try to advance to next plan
+        if advance_group_plan; then
+          echo ""
+          echo "=== Continuing group '$GROUP_NAME': $(basename "${WIP_FILES[0]}") ==="
+          # Reset iteration tracking for next plan
+          i=0
+          stuck_count=0
+          last_hash=$(git rev-parse HEAD)
+          # Re-initialize progress file for the new plan
+          echo "## Progress Log" > "$PROGRESS_FILE"
+          echo "" >> "$PROGRESS_FILE"
+          echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
+          continue  # Continue the iteration loop with the new plan
+        fi
+
+        # Group complete
+        if [[ "$MODE" == "pr" ]]; then
+          finalize_group_pr "$branch"
+        else
+          cleanup_group_state
+          echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
+        fi
+      fi
+
+      if [[ -z "${GROUP_NAME:-}" ]]; then
+        if [[ "$MODE" == "pr" ]]; then
+          create_pr "$branch" "$PLAN_DESC"
+        else
+          echo "Direct mode: commits are on branch '$branch'. No PR created."
+        fi
       fi
       plans_completed=$((plans_completed + 1))
       completed=true
@@ -1700,7 +2438,18 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
   if [[ "$completed" == false ]]; then
     echo ""
     echo "Finished $ITERATIONS iterations without completing: $PLAN_DESC"
-    echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+      echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+      git push origin "$branch" 2>/dev/null || true
+      if [[ -z "${GROUP_PR_URL:-}" ]]; then
+        create_group_pr "$branch" "$GROUP_NAME"
+      else
+        update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+      fi
+      echo "Group state preserved for --resume."
+    else
+      echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    fi
     echo "Branch: $branch"
     exit 0
   fi
