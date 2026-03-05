@@ -31,11 +31,11 @@ Ralph scaffolds a `.ralph/` directory into your project, detects your package ma
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLAN-GUIDE.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLANNING.md` for structure and examples, or roll your own format. Ralph just needs markdown files with clear acceptance criteria.
 
 ```
 Create a plan in the ralph backlog for adding dark mode support.
-Use PLAN-GUIDE.md as a guide.
+Use PLANNING.md as a guide.
 ```
 
 ### 2. Run
@@ -50,7 +50,7 @@ Or call the shell script directly:
 ./.ralph/ralph.sh
 ```
 
-Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it merges or opens a PR and moves on to the next one. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `in-progress/` on the branch — just run again to resume.
+Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it pushes the branch and opens a PR. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `in-progress/` on the branch — just run again to resume.
 
 ### 3. Steer
 
@@ -76,7 +76,7 @@ Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a r
 - **Branch isolation** — every plan runs on a `ralph/<plan-name>` branch, never on main
 - **Feedback loops** — build, test, and lint run after each iteration (auto-detected or configured)
 - **Stuck detection** — if N iterations produce no commits, Ralph aborts (default: 3)
-- **Auto-PR** — protected branches get a PR via `gh`; unprotected branches merge directly
+- **Auto-PR** — creates a branch and opens a PR via `gh` by default; use `--direct` to commit on your current branch instead
 - **Plan dependencies** — plans can declare `depends-on` for ordering across a backlog
 - **GitHub Issues** — Ralph can pull labeled issues when the backlog is empty
 
@@ -87,7 +87,7 @@ See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
 After `ralphai init`, the good stuff lives in `.ralph/`:
 
 - [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
-- [`.ralph/PLAN-GUIDE.md`](.ralph/PLAN-GUIDE.md) — guide for writing plan files (give this to your agent)
+- [`.ralph/PLANNING.md`](.ralph/PLANNING.md) — guide for writing plan files (give this to your agent)
 - `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
 
 ## Supported Agents
@@ -153,8 +153,7 @@ Settings resolve in this order: **CLI flags > env vars > `.ralph/ralph.config` >
 | `RALPH_AGENT_COMMAND`           | `agentCommand`         |
 | `RALPH_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPH_BASE_BRANCH`             | `baseBranch`           |
-| `RALPH_MERGE_TARGET`            | `mergeTarget`          |
-| `RALPH_PROTECTED_BRANCHES`      | `protectedBranches`    |
+| `RALPH_MODE`                    | `mode`                 |
 | `RALPH_MAX_STUCK`               | `maxStuck`             |
 | `RALPH_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPH_ISSUE_SOURCE`            | `issueSource`          |

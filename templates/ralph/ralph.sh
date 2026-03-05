@@ -1225,11 +1225,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
       return 1
     fi
   fi

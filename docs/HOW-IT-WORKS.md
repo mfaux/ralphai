@@ -89,27 +89,26 @@ keeps automated work visually separate from human branches.
 already exists locally, on the remote, or has an open PR. If a collision is
 found, the plan is skipped and Ralph moves to the next one.
 
-**Merge strategy** depends on whether the target branch is protected:
+**On completion**, Ralph operates in one of two modes:
 
-- **Unprotected target** (default): Ralph merges the `ralph/*` branch directly
-  into the merge target and deletes the work branch.
-- **Protected target** (e.g. `main` is in `protectedBranches`): Ralph pushes
-  the branch and creates a PR via the `gh` CLI, with the plan content and
-  commit log in the PR body. If `gh` is not installed, the branch is left
-  intact with a hint.
+- **PR mode** (default): Ralph pushes the `ralph/*` branch and creates a PR
+  via the `gh` CLI, with the plan content and commit log in the PR body.
+  The `gh` CLI is validated at startup before any agent work begins.
+- **Direct mode** (`--direct`): Ralph commits on the current branch. No
+  branch creation, no PR. Refuses to run on `main`/`master` — you must
+  be on a feature branch.
 
-**Feature branch workflow:** For large features spanning multiple plans, set
-both `baseBranch` and `mergeTarget` to the same feature branch (e.g.
-`feature/big-thing`). Ralph creates `ralph/*` sub-branches from the feature
-branch and merges them back into it. When all plans are done, you manually
-open a PR from the feature branch to `main`.
+**Feature branch workflow:** For large features spanning multiple plans,
+use direct mode on a feature branch (`git checkout -b feature/big-thing`
+then `npx ralphai run -- 5 --direct`). When all plans are done, you
+manually open a PR from the feature branch to `main`.
 
 **Safety guards:**
 
 - Ralph blocks on dirty working state by default; `--resume` auto-commits
   dirty changes only on `ralph/*` branches
-- `--resume` refuses to auto-commit on `main`, `master`, or any branch listed
-  in `protectedBranches`
+- `--resume` refuses to auto-commit on `main` or `master`
+- Direct mode (`--direct`) refuses to run on `main` or `master`
 - Dry-run mode (`--dry-run`) is completely read-only — no file moves, branch
   creation, or agent execution
 

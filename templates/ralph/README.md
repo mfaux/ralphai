@@ -8,20 +8,20 @@ Primary (recommended): run through `npx`:
 
 ```bash
 npx ralphai run -- --dry-run
-npx ralphai run -- 10
-npx ralphai run -- 10 --resume
+npx ralphai run -- 5
+npx ralphai run -- 5 --resume
 npx ralphai run -- --help
 
-# Feature branch workflow (sub-branches merge into feature branch, not main)
-npx ralphai run -- 10 --base-branch=feature/big-thing --merge-target=feature/big-thing --protected-branches=main,master
+# Direct mode: commit on current branch, no PR (must be on a feature branch)
+npx ralphai run -- 5 --direct
 ```
 
 In initialized repos, `ralphai run` forwards arguments to `.ralph/ralph.sh`; direct invocation (`./.ralph/ralph.sh ...`) and package scripts are optional alternatives if you prefer.
 
 ```bash
 npx ralphai run -- --dry-run
-npx ralphai run -- 10
-npx ralphai run -- 10 --resume
+npx ralphai run -- 5
+npx ralphai run -- 5 --resume
 ```
 
 ## Lifecycle
@@ -46,22 +46,22 @@ Plan files in `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-o
 Looped autonomous runner. Auto-detects what to work on, runs up to N iterations per plan, with stuck detection.
 
 ```bash
-npx ralphai run -- 10
+npx ralphai run -- 5
 
 # Preview selection and readiness without moving files or creating branches
 npx ralphai run -- --dry-run
 
 # Recover dirty state and continue on current ralph/* branch
-npx ralphai run -- 10 --resume
+npx ralphai run -- 5 --resume
 
 # Override agent command, base branch, or stuck threshold
-npx ralphai run -- 10 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+npx ralphai run -- 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 
 # Override via env vars
-RALPH_AGENT_COMMAND='codex exec' npx ralphai run -- 10
+RALPH_AGENT_COMMAND='codex exec' npx ralphai run -- 5
 
-# Feature branch workflow: sub-branches off feature/big-thing, merge back into it
-npx ralphai run -- 10 --base-branch=feature/big-thing --merge-target=feature/big-thing --protected-branches=main,master
+# Direct mode: commit on current branch, no PR
+npx ralphai run -- 5 --direct
 ```
 
 No file arguments needed. The script auto-detects:
@@ -79,7 +79,7 @@ Aborts if N consecutive iterations produce no commits (stuck detection). The thr
 - whether there is runnable work
 - which plan would be selected
 - whether run would resume or create a branch
-- the merge target and whether it is protected
+- the current mode (PR or direct)
 
 Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
@@ -87,12 +87,13 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 - auto-commits dirty tracked/untracked changes on the current `ralph/*` branch
 - then continues normal execution
-- refuses to auto-commit on `main`/`master` or any branch listed in `protectedBranches`
+- refuses to auto-commit on `main`/`master`
 
-- **On completion** (`COMPLETE` signal): archives plan + progress to `out/`, then handles the branch based on the merge target:
-  - **Protected merge target**: pushes branch to remote and creates a PR via `gh` CLI (with plan content + commit log in the PR body). If `gh` is not installed, leaves the branch intact with a hint.
-  - **Unprotected merge target**: merges branch directly into the merge target, deletes the work branch.
-    After merge/PR, loops back to pick the next backlog item.
+**Two modes:**
+
+- **PR mode** (default): On completion, pushes the `ralph/*` branch and creates a PR via `gh` CLI (with plan content + commit log in the PR body). Then loops back to pick the next backlog item.
+- **Direct mode** (`--direct`): Commits on the current branch — no branch creation, no PR. Refuses to run on `main`/`master`. Use this when you're already on a feature branch.
+
 - **On iteration exhaustion or stuck abort**: leaves files in `in-progress/` so you can resume with another run on the same branch.
 
 ## Files
@@ -109,13 +110,13 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## How It Works
 
-1. `ralph.sh` loads `.ralph/ralph.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, merge target, protected branches, stuck threshold)
+1. `ralph.sh` loads `.ralph/ralph.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.txt`
 3. A `ralph/<plan-slug>` branch is created from the base branch (e.g. `ralph/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
 6. `progress.txt` is updated with what was done
-7. On completion (`COMPLETE` signal): plan + progress archived to `out/`, then the branch is either merged directly (unprotected target) or a PR is created via `gh` (protected target). The script then loops back to pick the next backlog item.
+7. On completion (`COMPLETE` signal): plan + progress archived to `out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
 8. On incomplete run: files stay in `in-progress/` for resumption
 
 ## Optional plan dependencies (`depends-on`)
@@ -163,7 +164,7 @@ issue-url: https://github.com/owner/repo/issues/42
 **What happens on completion:**
 
 1. **`archive_run()`** — posts a "completed" comment on the linked issue
-2. **`merge_and_cleanup()`** — closes the issue with a comment referencing the branch and merge target
+2. **`create_pr()`** — closes the issue with a comment referencing the branch and PR
 
 **Requirements:**
 
@@ -216,8 +217,9 @@ This separation keeps the repo-level `LEARNINGS.md` clean (no agent noise) and p
 ## Safety Guards
 
 - **Dirty state**: `ralph.sh` blocks by default; `--resume` auto-commits dirty state on `ralph/*` branches (dry-run is read-only)
-- **Branch isolation**: All work happens on `ralph/*` branches, never directly on `main`
-- **Protected branches**: Branches listed in `protectedBranches` trigger auto-PR instead of direct merge — Ralph pushes the branch and creates a PR via `gh` CLI. If `gh` is not available, the branch is left intact with a hint.
+- **Branch isolation**: All work happens on `ralph/*` branches (PR mode) or your current feature branch (direct mode), never directly on `main`
+- **PR mode by default**: Ralph creates a branch and opens a PR via `gh` CLI. The `gh` CLI is validated at startup before any agent work begins.
+- **Direct mode safety**: `--direct` refuses to run on `main`/`master` — you must be on a feature branch.
 - **Collision detection**: Before creating a new branch, Ralph checks for existing local/remote branches and open PRs. If a collision is found, the plan is skipped and the next one is tried.
 - **Plan files gitignored**: Plan files in `backlog/`, `in-progress/`, and `out/` are gitignored (local-only state). Only `.gitkeep` files are tracked.
 - **Stuck detection**: `ralph.sh` aborts after N iterations with no new commits (default 3, configurable)
@@ -241,8 +243,6 @@ A simple `key=value` file. Comments (`#`) and blank lines are allowed.
 agentCommand=opencode run --agent build
 feedbackCommands=npm run build,npm test,npm run lint
 baseBranch=main
-mergeTarget=main
-protectedBranches=main,master
 maxStuck=3
 ```
 
@@ -253,8 +253,7 @@ Supported keys:
 | `agentCommand`         | Full CLI invocation prefix for the AI agent                 | _(none)_            | Non-empty                             |
 | `feedbackCommands`     | Shell commands to run after each change (comma-separated)   | _(none)_            | Comma-separated, each entry non-empty |
 | `baseBranch`           | Branch to create work branches from                         | `main`              | Non-empty, single token               |
-| `mergeTarget`          | Branch to merge completed work into                         | `baseBranch`        | Non-empty, single token               |
-| `protectedBranches`    | Branches to auto-PR into instead of merge (comma-separated) | _(none)_            | Comma-separated branch names          |
+| `mode`                 | Run mode: `pr` (create branch + PR) or `direct` (commit on current branch) | `pr`    | `pr` or `direct`            |
 | `maxStuck`             | Consecutive no-progress iterations before aborting          | `3`                 | Positive integer                      |
 | `iterationTimeout`     | Seconds before killing a hung agent invocation              | `0` (off)           | Non-negative integer                  |
 | `issueSource`          | Issue source to pull from (`none` or `github`)              | `none`              | `none` or `github`                    |
@@ -292,8 +291,7 @@ Environment variables override config file values:
 | `RALPH_AGENT_COMMAND`           | `agentCommand`         |
 | `RALPH_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPH_BASE_BRANCH`             | `baseBranch`           |
-| `RALPH_MERGE_TARGET`            | `mergeTarget`          |
-| `RALPH_PROTECTED_BRANCHES`      | `protectedBranches`    |
+| `RALPH_MODE`                    | `mode`                 |
 | `RALPH_MAX_STUCK`               | `maxStuck`             |
 | `RALPH_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPH_ISSUE_SOURCE`            | `issueSource`          |
@@ -304,7 +302,7 @@ Environment variables override config file values:
 | `RALPH_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 
 ```bash
-RALPH_AGENT_COMMAND='claude -p' RALPH_MAX_STUCK=5 npx ralphai run -- 10
+RALPH_AGENT_COMMAND='claude -p' RALPH_MAX_STUCK=5 npx ralphai run -- 5
 ```
 
 ### CLI Flag Overrides
@@ -316,8 +314,8 @@ CLI flags have the highest priority:
 | `--agent-command=<command>`         | `agentCommand`         |
 | `--feedback-commands=<list>`        | `feedbackCommands`     |
 | `--base-branch=<branch>`            | `baseBranch`           |
-| `--merge-target=<branch>`           | `mergeTarget`          |
-| `--protected-branches=<list>`       | `protectedBranches`    |
+| `--direct`                          | `mode` (sets `direct`) |
+| `--pr`                              | `mode` (sets `pr`)     |
 | `--max-stuck=<n>`                   | `maxStuck`             |
 | `--iteration-timeout=<seconds>`     | `iterationTimeout`     |
 | `--issue-source=<source>`           | `issueSource`          |
@@ -328,7 +326,7 @@ CLI flags have the highest priority:
 | `--issue-comment-progress=<bool>`   | `issueCommentProgress` |
 
 ```bash
-npx ralphai run -- 10 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+npx ralphai run -- 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 ```
 
 ### Verifying Config (`--show-config`)
@@ -351,37 +349,30 @@ RALPH_AGENT_COMMAND='codex exec' npx ralphai run -- --show-config --agent-comman
 
 ### Feature Branch Workflow
 
-Ralph supports a hierarchical branching model where sub-branches merge into a feature branch instead of directly into `main`. This is useful for large features that require multiple plans/sub-tasks before they're ready for `main`.
+Ralph supports working on a feature branch using direct mode. This is useful for large features that require multiple plans/sub-tasks before they're ready for `main`.
 
 **Setup:**
 
 1. Create your feature branch manually: `git checkout -b feature/big-thing main`
-2. Configure Ralph to work within this feature branch:
+2. Run Ralph in direct mode on the feature branch:
 
 ```bash
-npx ralphai run -- 10 \
-  --base-branch=feature/big-thing \
-  --merge-target=feature/big-thing \
-  --protected-branches=main,master
+npx ralphai run -- 5 --direct
 ```
 
 Or via `.ralph/ralph.config`:
 
 ```txt
 baseBranch=feature/big-thing
-mergeTarget=feature/big-thing
-protectedBranches=main,master
+mode=direct
 ```
 
 **What happens:**
 
-1. Ralph creates `ralph/sub-task` branches FROM `feature/big-thing`
-2. Work is done on `ralph/sub-task`
-3. On completion, `ralph/sub-task` merges INTO `feature/big-thing` (allowed — not protected)
-4. If merge target were `main` (protected), Ralph would create a PR instead of merging directly
-5. When all plans are done, you manually open a PR from `feature/big-thing` to `main`
+1. Ralph commits directly on `feature/big-thing` (no sub-branches)
+2. When all plans are done, you manually open a PR from `feature/big-thing` to `main`
 
-**Important:** Set both `baseBranch` and `mergeTarget` to the same feature branch. `baseBranch` controls where work branches are created FROM, and `mergeTarget` controls where they merge TO.
+Alternatively, use the default PR mode with `--base-branch=feature/big-thing` to create `ralph/*` sub-branches that open PRs against the feature branch.
 
 ### GitHub Issues Integration
 
@@ -398,8 +389,8 @@ issueSource=github
 Or via env var or CLI flag:
 
 ```bash
-RALPH_ISSUE_SOURCE=github npx ralphai run -- 10
-npx ralphai run -- 10 --issue-source=github
+RALPH_ISSUE_SOURCE=github npx ralphai run -- 5
+npx ralphai run -- 5 --issue-source=github
 ```
 
 **How it works:**

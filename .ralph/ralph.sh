@@ -24,8 +24,8 @@ DEFAULT_BASE_BRANCH="main"
 DEFAULT_MAX_STUCK=3
 DEFAULT_MODE="pr"                    # "pr" (default) or "direct"
 DEFAULT_ISSUE_SOURCE="none"              # set to "github" to enable GitHub Issues integration
-DEFAULT_ISSUE_LABEL="ralph"              # label to filter issues by
-DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralph:in-progress"  # label applied when issue is picked up
+DEFAULT_ISSUE_LABEL="ralphai"             # label to filter issues by
+DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"  # label applied when issue is picked up
 DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected from git remote)
 DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on plan completion
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
@@ -448,6 +448,8 @@ read_issue_frontmatter() {
 print_usage() {
   echo "Usage: $0 [iterations-per-plan] [options]"
   echo ""
+  echo "  Recommended daily invocation from an initialized repo: ./.ralph/ralph.sh ..."
+  echo ""
   echo "  Auto-detects work: resumes in-progress plans, or picks from backlog."
   echo "  Iteration budget resets for each new plan (normal mode)."
   echo "  Pass 0 for unlimited iterations (runs until complete or stuck)."
@@ -464,8 +466,8 @@ print_usage() {
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
-  echo "  --issue-label=<label>            Label to filter issues by (default: ralph)"
-  echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralph:in-progress)"
+  echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
+  echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)"
   echo "  --issue-repo=<owner/repo>        Override repo for issue operations (default: auto-detect)"
   echo "  --issue-close-on-complete=<bool> Close issue on completion (default: true)"
   echo "  --issue-comment-progress=<bool>  Comment on issue during run (default: true)"
@@ -1089,7 +1091,7 @@ if [[ -f "$RALPH_LEARNINGS_FILE" ]]; then
 fi
 if [[ -f "LEARNINGS.md" || -f "$RALPH_LEARNINGS_FILE" ]]; then
   LEARNINGS_STEP="
-6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPH_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. Do NOT write to the repo-level LEARNINGS.md — that file is curated by the project maintainer."
+6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPH_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. Do NOT write to the repo-level LEARNINGS.md — that file is curated by the project maintainer. When useful, note high-value recurring patterns in progress.txt so the maintainer can compact and promote them into repo-level learnings and agent/skill docs."
 fi
 
 # --- Safety: handle dirty git state (normal mode only) ---
@@ -1223,11 +1225,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file."
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work."
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
       return 1
     fi
   fi
@@ -1252,13 +1254,31 @@ detect_plan() {
   done
 
   if [[ ${#ready_plans[@]} -eq 0 ]]; then
-    echo "Backlog has plans, but none are runnable."
-    echo "Blocked/skipped plans:"
+    echo "Backlog has ${#backlog_plans[@]} plan(s), but none are runnable yet."
+    echo ""
     for line in "${blocked_info[@]}"; do
-      echo "  - $line"
+      local plan_name="${line%% =>*}"
+      local reason="${line#*=> }"
+      if [[ "$reason" == "skipped (branch/PR already exists)" ]]; then
+        echo "  $plan_name — skipped: branch or PR already exists"
+      else
+        # Parse dependency reasons like "pending:dep-a.md,missing:dep-b.md"
+        echo "  $plan_name — waiting on dependencies:"
+        IFS=',' read -ra dep_entries <<< "$reason"
+        for entry in "${dep_entries[@]}"; do
+          local dep_status="${entry%%:*}"
+          local dep_name="${entry#*:}"
+          case "$dep_status" in
+            pending)  echo "    - $dep_name (still in backlog or in-progress)" ;;
+            missing)  echo "    - $dep_name (not found — never created or misnamed?)" ;;
+            self)     echo "    - $dep_name (depends on itself)" ;;
+            *)        echo "    - $entry" ;;
+          esac
+        done
+      fi
     done
     echo ""
-    echo "Waiting for dependencies to complete (archived in $ARCHIVE_DIR)."
+    echo "Plans become runnable when their dependencies are archived in $ARCHIVE_DIR/."
     return 1
   fi
 
@@ -1591,7 +1611,8 @@ while true; do
 5. Documentation: Review whether your changes affect any documentation. Update these files if they are outdated or incomplete:
    - README.md (commands, usage, feature descriptions)
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
-   - Project documentation files that describe architecture, conventions, or agent instructions — update only if your changes affect them.
+  - LEARNINGS.md docs: preserve the two-tier model (.ralph/LEARNINGS.md for Ralph logs, repo-level LEARNINGS.md for maintainer-curated durable guidance).
+  - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${LEARNINGS_STEP}
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.

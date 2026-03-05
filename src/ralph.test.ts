@@ -38,7 +38,7 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralph", "ralph.sh"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "ralph.config"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "README.md"))).toBe(true);
-    expect(existsSync(join(testDir, ".ralph", "PLAN-GUIDE.md"))).toBe(true);
+    expect(existsSync(join(testDir, ".ralph", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "LEARNINGS.md"))).toBe(true);
 
     // Subdirectories with .gitkeep
@@ -149,7 +149,7 @@ describe("ralphai command", () => {
     expect(output).toContain(".ralph/ralph.sh");
     expect(output).toContain("dry-run");
     expect(output).toContain(".ralph/ralph.config");
-    expect(output).toContain("PLAN-GUIDE.md");
+    expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
   });
 
@@ -289,10 +289,10 @@ describe("ralphai command", () => {
     const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(ralphSh).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md",
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
     );
     expect(ralphSh).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md",
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
     );
   });
 
@@ -618,7 +618,7 @@ describe("ralphai command", () => {
     expect(output).toContain("Updated:");
     expect(output).toContain("ralph.sh");
     expect(output).toContain("README.md");
-    expect(output).toContain("PLAN-GUIDE.md");
+    expect(output).toContain("PLANNING.md");
     expect(output).toContain("Preserved:");
     expect(output).toContain("ralph.config");
   });
