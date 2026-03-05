@@ -995,7 +995,7 @@ describe("ralphai command", () => {
   // Run default iteration tests
   // -------------------------------------------------------------------------
 
-  describe("run default iterations", () => {
+  describe.skipIf(process.platform === "win32")("run default iterations", () => {
     beforeEach(() => {
       // Scaffold ralph, then replace ralph.sh with a stub that echoes args
       runCliOutput(["init", "--yes"], testDir);
