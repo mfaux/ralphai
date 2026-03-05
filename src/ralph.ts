@@ -579,7 +579,7 @@ ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"
   writeFileSync(join(ralphDir, "ralph.config"), config);
 
   // Create subdirectories with .gitkeep
-  for (const subdir of ["backlog", "drafts", "in-progress", "out"]) {
+  for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
     const subdirPath = join(ralphDir, subdir);
     mkdirSync(subdirPath, { recursive: true });
     writeFileSync(join(subdirPath, ".gitkeep"), "");
@@ -611,7 +611,7 @@ Each entry should include:
   const gitignoreContent = `# Plan files are local-only state (not tracked by git).
 # Only the directory structure (.gitkeep) and config/scripts are committed.
 backlog/*.md
-drafts/*.md
+wip/*.md
 in-progress/*.md
 in-progress/progress.txt
 out/
@@ -652,7 +652,7 @@ LEARNINGS.md
   );
   console.log(`  .ralph/backlog/          ${DIM}Queue plans here${RESET}`);
   console.log(
-    `  .ralph/drafts/           ${DIM}Park unready plans here${RESET}`,
+    `  .ralph/wip/              ${DIM}Park unready plans here${RESET}`,
   );
   if (createdLearnings) {
     console.log(
@@ -747,7 +747,7 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
       skipped.push(file);
     }
   }
-  for (const subdir of ["backlog", "drafts", "in-progress", "out"]) {
+  for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
     if (existsSync(join(ralphDir, subdir))) {
       skipped.push(`${subdir}/`);
     }

@@ -29,10 +29,10 @@ npx ralphai run -- 5 --resume
 Plans flow through three directories:
 
 ```
-drafts/ (parked)     backlog/  -->  in-progress/  -->  out/
+wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
 ```
 
-1. **`drafts/`** — Parked plans not ready for execution. `ralph.sh` does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
+1. **`wip/`** (work in progress) — Parked plans not ready for execution. `ralph.sh` does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
 2. **`backlog/`** — Queue incoming plans here. `ralph.sh` picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
 3. **`in-progress/`** — Active work. Plan files and `progress.txt` live here while ralph is working. If a run is interrupted or exhausts its iterations, files stay here so work can be resumed.
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the agent signals `COMPLETE`.
@@ -103,7 +103,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 | `ralph.sh`            | Looped autonomous runner (+ `--dry-run`)                 |
 | `ralph.config`        | Optional repo-level config file (key=value format)       |
 | `.ralph/LEARNINGS.md` | Ralph-specific learnings — gitignored, local-only        |
-| `drafts/`             | Parked plans — not scanned by ralph                      |
+| `wip/`                | Work-in-progress plans — not scanned by ralph            |
 | `backlog/`            | Incoming plans queued for ralph to pick up               |
 | `in-progress/`        | Active plans and progress.txt — work in flight           |
 | `out/`                | Archived PRD files and progress logs from completed runs |
@@ -194,6 +194,10 @@ All commits use [Conventional Commits](https://www.conventionalcommits.org/). Th
 
 Only update `AGENTS.md` when a task produces knowledge that future coding agents need and cannot easily infer from the code itself — e.g. new CLI commands, non-obvious architectural constraints, or changed development workflows. Routine code changes (bug fixes, internal refactors, new tests) do not warrant an `AGENTS.md` update.
 
+### CHANGELOG.md
+
+Do **not** edit `CHANGELOG.md` unless explicitly asked. Changelog entries are maintained by humans.
+
 ## Learnings (Two-Tier)
 
 Ralph uses a two-tier learnings system:
@@ -248,20 +252,20 @@ maxStuck=3
 
 Supported keys:
 
-| Key                    | Description                                                 | Default             | Validation                            |
-| ---------------------- | ----------------------------------------------------------- | ------------------- | ------------------------------------- |
-| `agentCommand`         | Full CLI invocation prefix for the AI agent                 | _(none)_            | Non-empty                             |
-| `feedbackCommands`     | Shell commands to run after each change (comma-separated)   | _(none)_            | Comma-separated, each entry non-empty |
-| `baseBranch`           | Branch to create work branches from                         | `main`              | Non-empty, single token               |
-| `mode`                 | Run mode: `pr` (create branch + PR) or `direct` (commit on current branch) | `pr`    | `pr` or `direct`            |
-| `maxStuck`             | Consecutive no-progress iterations before aborting          | `3`                 | Positive integer                      |
-| `iterationTimeout`     | Seconds before killing a hung agent invocation              | `0` (off)           | Non-negative integer                  |
-| `issueSource`          | Issue source to pull from (`none` or `github`)              | `none`              | `none` or `github`                    |
-| `issueLabel`           | Label to filter GitHub issues by                            | `ralph`             | Non-empty                             |
-| `issueInProgressLabel` | Label applied when an issue is picked up                    | `ralph:in-progress` | Non-empty                             |
-| `issueRepo`            | `owner/repo` override (auto-detected from remote)           | _(auto-detect)_     | Any value                             |
-| `issueCloseOnComplete` | Close the issue when the plan completes                     | `true`              | `true` or `false`                     |
-| `issueCommentProgress` | Comment on the issue during the run                         | `true`              | `true` or `false`                     |
+| Key                    | Description                                                                | Default             | Validation                            |
+| ---------------------- | -------------------------------------------------------------------------- | ------------------- | ------------------------------------- |
+| `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_            | Non-empty                             |
+| `feedbackCommands`     | Shell commands to run after each change (comma-separated)                  | _(none)_            | Comma-separated, each entry non-empty |
+| `baseBranch`           | Branch to create work branches from                                        | `main`              | Non-empty, single token               |
+| `mode`                 | Run mode: `pr` (create branch + PR) or `direct` (commit on current branch) | `pr`                | `pr` or `direct`                      |
+| `maxStuck`             | Consecutive no-progress iterations before aborting                         | `3`                 | Positive integer                      |
+| `iterationTimeout`     | Seconds before killing a hung agent invocation                             | `0` (off)           | Non-negative integer                  |
+| `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`              | `none` or `github`                    |
+| `issueLabel`           | Label to filter GitHub issues by                                           | `ralph`             | Non-empty                             |
+| `issueInProgressLabel` | Label applied when an issue is picked up                                   | `ralph:in-progress` | Non-empty                             |
+| `issueRepo`            | `owner/repo` override (auto-detected from remote)                          | _(auto-detect)_     | Any value                             |
+| `issueCloseOnComplete` | Close the issue when the plan completes                                    | `true`              | `true` or `false`                     |
+| `issueCommentProgress` | Comment on the issue during the run                                        | `true`              | `true` or `false`                     |
 
 The `agentCommand` is the full CLI invocation prefix — Ralph appends the prompt as a quoted argument. Examples:
 

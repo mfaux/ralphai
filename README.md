@@ -54,10 +54,10 @@ Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands th
 
 ### 3. Steer
 
-Not ready for Ralph to pick something up? Keep it in `.ralph/drafts/`. Move to `backlog/` when ready.
+Not ready for Ralph to pick something up? Keep it in `.ralph/wip/`. Move to `backlog/` when ready.
 
 ```
-drafts/        ← parked, ralph ignores
+wip/           ← work in progress, ralph ignores
 backlog/       ← queued, ralph picks from here
 in-progress/   ← ralph is working on it
 out/           ← done, archived

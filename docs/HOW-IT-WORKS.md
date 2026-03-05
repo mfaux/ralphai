@@ -10,7 +10,7 @@ Back to the [README](../README.md) for setup and quickstart.
 
 When you use an AI coding agent in a long session, the conversation history
 grows. Every model has a fixed-size "context window" — the amount of text it
-can consider at once. Once the conversation exceeds that window, the agent may 
+can consider at once. Once the conversation exceeds that window, the agent may
 apply **context compression** by automatically summarizing or condensing
 older messages to free up space for new ones. Unlike simple truncation,
 compression actively rewrites your earlier conversation into shorter summaries.
@@ -117,11 +117,11 @@ manually open a PR from the feature branch to `main`.
 Plans flow through four directories inside `.ralph/`:
 
 ```
-drafts/     (parked, Ralph ignores these)
+wip/        (work in progress — Ralph ignores these)
 backlog/    --> in-progress/ --> out/
 ```
 
-1. **`drafts/`** — Plans that aren't ready yet. Ralph never looks here. Use it
+1. **`wip/`** (work in progress) — Plans that aren't ready yet. Ralph never looks here. Use it
    for ideas that need more thought, external prerequisites, or human review.
    Move to `backlog/` when ready.
 

@@ -1,7 +1,7 @@
 # Plan files are local-only state (not tracked by git).
 # Only the directory structure (.gitkeep) and config/scripts are committed.
 backlog/*.md
-drafts/*.md
+wip/*.md
 in-progress/*.md
 in-progress/progress.txt
 out/
