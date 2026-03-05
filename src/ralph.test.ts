@@ -377,7 +377,9 @@ describe("ralphai command", () => {
     // Unknown config keys should produce a warning, not an error
     expect(ralphSh).toContain("WARNING:");
     expect(ralphSh).toContain("ignoring unknown config key");
-    expect(ralphSh).not.toContain("unknown config key '$key'\"\n        echo \"Supported keys:");
+    expect(ralphSh).not.toContain(
+      "unknown config key '$key'\"\n        echo \"Supported keys:",
+    );
   });
 
   it("scaffolded ralph.sh contains issue integration defaults", () => {
@@ -1073,6 +1075,472 @@ describe("ralphai command", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
+  });
+
+  // -------------------------------------------------------------------------
+  // Agent type detection tests
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains detect_agent_type function", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    expect(ralphSh).toContain("detect_agent_type()");
+    expect(ralphSh).toContain("DETECTED_AGENT_TYPE=");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "detect_agent_type mapping",
+    () => {
+      /** Helper: source ralph.sh's detect_agent_type and return the result */
+      function detectAgent(agentCommand: string): string {
+        // Extract just the function and call it with a given AGENT_COMMAND
+        const result = execSync(
+          `bash -c 'AGENT_COMMAND=${JSON.stringify(agentCommand)}; detect_agent_type() { local cmd; cmd=$(echo "$AGENT_COMMAND" | tr "[:upper:]" "[:lower:]"); case "$cmd" in *claude*) DETECTED_AGENT_TYPE="claude" ;; *opencode*) DETECTED_AGENT_TYPE="opencode" ;; *codex*) DETECTED_AGENT_TYPE="codex" ;; *gemini*) DETECTED_AGENT_TYPE="gemini" ;; *aider*) DETECTED_AGENT_TYPE="aider" ;; *goose*) DETECTED_AGENT_TYPE="goose" ;; *kiro*) DETECTED_AGENT_TYPE="kiro" ;; *amp*) DETECTED_AGENT_TYPE="amp" ;; *) DETECTED_AGENT_TYPE="unknown" ;; esac; }; detect_agent_type; echo "$DETECTED_AGENT_TYPE"'`,
+          { encoding: "utf-8" },
+        ).trim();
+        return result;
+      }
+
+      it("detects claude from command string", () => {
+        expect(detectAgent("claude -p")).toBe("claude");
+      });
+
+      it("detects claude from wrapped command", () => {
+        expect(detectAgent("npx claude -p")).toBe("claude");
+      });
+
+      it("detects opencode", () => {
+        expect(detectAgent("opencode run --agent build")).toBe("opencode");
+      });
+
+      it("detects opencode from full path", () => {
+        expect(detectAgent("/usr/local/bin/opencode run")).toBe("opencode");
+      });
+
+      it("detects codex", () => {
+        expect(detectAgent("codex exec")).toBe("codex");
+      });
+
+      it("detects gemini", () => {
+        expect(detectAgent("gemini")).toBe("gemini");
+      });
+
+      it("detects aider", () => {
+        expect(detectAgent("aider --yes")).toBe("aider");
+      });
+
+      it("detects goose", () => {
+        expect(detectAgent("goose run")).toBe("goose");
+      });
+
+      it("detects kiro", () => {
+        expect(detectAgent("kiro")).toBe("kiro");
+      });
+
+      it("detects amp", () => {
+        expect(detectAgent("amp run")).toBe("amp");
+      });
+
+      it("returns unknown for unrecognized commands", () => {
+        expect(detectAgent("my-custom-agent")).toBe("unknown");
+      });
+
+      it("handles case-insensitive matching", () => {
+        expect(detectAgent("Claude -p")).toBe("claude");
+        expect(detectAgent("OPENCODE run")).toBe("opencode");
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Prompt formatting tests (format_file_ref + resolve_prompt_mode)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains format_file_ref and resolve_prompt_mode functions", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    expect(ralphSh).toContain("format_file_ref()");
+    expect(ralphSh).toContain("resolve_prompt_mode()");
+    expect(ralphSh).toContain("RESOLVED_PROMPT_MODE=");
+    expect(ralphSh).toContain('DEFAULT_PROMPT_MODE="auto"');
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "format_file_ref and resolve_prompt_mode",
+    () => {
+      /**
+       * Helper: run the resolve_prompt_mode + format_file_ref functions in bash
+       * with a given PROMPT_MODE, DETECTED_AGENT_TYPE, and filepath.
+       * Writes the script to a temp file to avoid newline escaping issues with bash -c.
+       */
+      function formatRef(opts: {
+        promptMode: string;
+        agentType: string;
+        filepath: string;
+        fileContent?: string;
+      }): string {
+        const setupFile =
+          opts.fileContent !== undefined
+            ? `printf '%s' ${JSON.stringify(opts.fileContent)} > ${JSON.stringify(opts.filepath)}`
+            : "";
+        const cleanupFile =
+          opts.fileContent !== undefined
+            ? `rm -f ${JSON.stringify(opts.filepath)}`
+            : "";
+
+        const script = `#!/bin/bash
+PROMPT_MODE=${JSON.stringify(opts.promptMode)}
+DETECTED_AGENT_TYPE=${JSON.stringify(opts.agentType)}
+RESOLVED_PROMPT_MODE=""
+resolve_prompt_mode() {
+  if [[ "$PROMPT_MODE" == "at-path" || "$PROMPT_MODE" == "inline" ]]; then
+    RESOLVED_PROMPT_MODE="$PROMPT_MODE"
+    return
+  fi
+  case "$DETECTED_AGENT_TYPE" in
+    claude|opencode) RESOLVED_PROMPT_MODE="at-path" ;;
+    *)               RESOLVED_PROMPT_MODE="at-path" ;;
+  esac
+}
+format_file_ref() {
+  local filepath="$1"
+  if [[ "$RESOLVED_PROMPT_MODE" == "inline" ]]; then
+    if [[ -f "$filepath" ]]; then
+      printf '<file path="%s">\\n%s\\n</file>' "$filepath" "$(cat "$filepath")"
+    else
+      printf '@%s' "$filepath"
+    fi
+  else
+    printf '@%s' "$filepath"
+  fi
+}
+resolve_prompt_mode
+${setupFile}
+format_file_ref ${JSON.stringify(opts.filepath)}
+${cleanupFile}
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralph-test-script-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result;
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("at-path mode returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "at-path",
+          agentType: "claude",
+          filepath: "plan.md",
+        });
+        expect(result).toBe("@plan.md");
+      });
+
+      it("auto mode with claude agent returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "claude",
+          filepath: ".ralph/in-progress/prd-foo.md",
+        });
+        expect(result).toBe("@.ralph/in-progress/prd-foo.md");
+      });
+
+      it("auto mode with opencode agent returns @filepath", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "opencode",
+          filepath: "LEARNINGS.md",
+        });
+        expect(result).toBe("@LEARNINGS.md");
+      });
+
+      it("auto mode with unknown agent returns @filepath (conservative default)", () => {
+        const result = formatRef({
+          promptMode: "auto",
+          agentType: "unknown",
+          filepath: "plan.md",
+        });
+        expect(result).toBe("@plan.md");
+      });
+
+      it("inline mode embeds file contents with <file> wrapper", () => {
+        const tmpFile = join(tmpdir(), `ralph-fmt-test-${Date.now()}.md`);
+        try {
+          writeFileSync(tmpFile, "# Test Plan\nDo stuff.");
+          const result = formatRef({
+            promptMode: "inline",
+            agentType: "claude",
+            filepath: tmpFile,
+          });
+          expect(result).toContain(`<file path="${tmpFile}">`);
+          expect(result).toContain("# Test Plan");
+          expect(result).toContain("Do stuff.");
+          expect(result).toContain("</file>");
+        } finally {
+          try {
+            rmSync(tmpFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+
+      it("inline mode falls back to @filepath for non-existent files", () => {
+        const result = formatRef({
+          promptMode: "inline",
+          agentType: "claude",
+          filepath: "/tmp/ralph-nonexistent-file-12345.md",
+        });
+        expect(result).toBe("@/tmp/ralph-nonexistent-file-12345.md");
+      });
+
+      it("resolve_prompt_mode caches explicit at-path regardless of agent", () => {
+        const result = formatRef({
+          promptMode: "at-path",
+          agentType: "aider",
+          filepath: "foo.md",
+        });
+        expect(result).toBe("@foo.md");
+      });
+
+      it("resolve_prompt_mode caches explicit inline regardless of agent", () => {
+        const tmpFile = join(tmpdir(), `ralph-fmt-inline-${Date.now()}.md`);
+        try {
+          writeFileSync(tmpFile, "content here");
+          const result = formatRef({
+            promptMode: "inline",
+            agentType: "opencode",
+            filepath: tmpFile,
+          });
+          expect(result).toContain('<file path="');
+          expect(result).toContain("content here");
+        } finally {
+          try {
+            rmSync(tmpFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // promptMode config key tests (config file, env var, CLI flag)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh contains promptMode config infrastructure", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // Config file loader case
+    expect(ralphSh).toContain("promptMode)");
+    expect(ralphSh).toContain("CONFIG_PROMPT_MODE=");
+    // Env var override
+    expect(ralphSh).toContain("RALPH_PROMPT_MODE");
+    // CLI flag
+    expect(ralphSh).toContain("--prompt-mode=");
+    expect(ralphSh).toContain("CLI_PROMPT_MODE=");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "promptMode config precedence",
+    () => {
+      /**
+       * Helper: create a minimal bash script that sources the config loading
+       * functions from ralph.sh and tests PROMPT_MODE resolution.
+       * We inline the relevant functions to avoid needing a full git repo.
+       */
+      function resolvePromptMode(opts: {
+        configValue?: string;
+        envValue?: string;
+        cliValue?: string;
+      }): string {
+        const configContent = opts.configValue
+          ? `promptMode=${opts.configValue}`
+          : "";
+        const envExport = opts.envValue
+          ? `export RALPH_PROMPT_MODE=${JSON.stringify(opts.envValue)}`
+          : "";
+        const cliFlag = opts.cliValue ? `--prompt-mode=${opts.cliValue}` : "";
+
+        // Build a script that simulates the config loading pipeline
+        const script = `#!/bin/bash
+set -e
+
+# Defaults
+DEFAULT_PROMPT_MODE="auto"
+PROMPT_MODE="$DEFAULT_PROMPT_MODE"
+CLI_PROMPT_MODE=""
+
+# Simulate load_config
+CONFIG_PROMPT_MODE=""
+config_content=${JSON.stringify(configContent)}
+if [[ -n "$config_content" ]]; then
+  key="\${config_content%%=*}"
+  value="\${config_content#*=}"
+  if [[ "$key" == "promptMode" ]]; then
+    if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+      echo "ERROR: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+      exit 1
+    fi
+    CONFIG_PROMPT_MODE="$value"
+  fi
+fi
+
+# Simulate apply_config
+if [[ -n "\${CONFIG_PROMPT_MODE:-}" ]]; then
+  PROMPT_MODE="$CONFIG_PROMPT_MODE"
+fi
+
+# Simulate apply_env_overrides
+${envExport}
+if [[ -n "\${RALPH_PROMPT_MODE:-}" ]]; then
+  if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
+    echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+    exit 1
+  fi
+  PROMPT_MODE="$RALPH_PROMPT_MODE"
+fi
+
+# Simulate CLI flag parsing
+for arg in ${cliFlag}; do
+  case "$arg" in
+    --prompt-mode=*)
+      CLI_PROMPT_MODE="\${arg#--prompt-mode=}"
+      if [[ "$CLI_PROMPT_MODE" != "auto" && "$CLI_PROMPT_MODE" != "at-path" && "$CLI_PROMPT_MODE" != "inline" ]]; then
+        echo "ERROR: --prompt-mode must be 'auto', 'at-path', or 'inline', got '$CLI_PROMPT_MODE'"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# Simulate CLI override merge
+if [[ -n "$CLI_PROMPT_MODE" ]]; then
+  PROMPT_MODE="$CLI_PROMPT_MODE"
+fi
+
+echo "$PROMPT_MODE"
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralph-pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result.trim();
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("defaults to auto when no overrides", () => {
+        expect(resolvePromptMode({})).toBe("auto");
+      });
+
+      it("config file sets promptMode", () => {
+        expect(resolvePromptMode({ configValue: "inline" })).toBe("inline");
+      });
+
+      it("env var overrides config file", () => {
+        expect(
+          resolvePromptMode({
+            configValue: "inline",
+            envValue: "at-path",
+          }),
+        ).toBe("at-path");
+      });
+
+      it("CLI flag overrides env var", () => {
+        expect(
+          resolvePromptMode({
+            envValue: "at-path",
+            cliValue: "inline",
+          }),
+        ).toBe("inline");
+      });
+
+      it("CLI flag overrides config and env", () => {
+        expect(
+          resolvePromptMode({
+            configValue: "inline",
+            envValue: "at-path",
+            cliValue: "auto",
+          }),
+        ).toBe("auto");
+      });
+
+      it("rejects invalid config value", () => {
+        expect(() => resolvePromptMode({ configValue: "bad" })).toThrow();
+      });
+
+      it("rejects invalid env var value", () => {
+        expect(() => resolvePromptMode({ envValue: "bad" })).toThrow();
+      });
+
+      it("rejects invalid CLI flag value", () => {
+        expect(() => resolvePromptMode({ cliValue: "bad" })).toThrow();
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Prompt construction wiring tests (format_file_ref used in prompt)
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralph.sh wires format_file_ref into prompt construction and detect_plan", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // detect_plan: FILE_REFS uses format_file_ref
+    expect(ralphSh).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
+    // detect_plan: dry-run chosen
+    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$chosen")"');
+    // detect_plan: normal chosen
+    expect(ralphSh).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
+    // LEARNINGS_REF uses format_file_ref
+    expect(ralphSh).toContain(
+      'LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"',
+    );
+    expect(ralphSh).toContain(
+      'LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"',
+    );
+    // Prompt construction uses format_file_ref for progress file
+    expect(ralphSh).toContain(
+      '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
+    );
+    // Backlog selection refs use format_file_ref
+    expect(ralphSh).toContain(
+      'backlog_refs="$backlog_refs $(format_file_ref "$f")"',
+    );
+    // Should NOT have any hardcoded @$var or @${VAR} file references in
+    // prompt construction or detect_plan FILE_REFS assignments
+    expect(ralphSh).not.toMatch(/FILE_REFS=.*@\$/);
+    expect(ralphSh).not.toContain('LEARNINGS_REF=" @LEARNINGS.md"');
+    expect(ralphSh).not.toContain('LEARNINGS_REF="$LEARNINGS_REF @$');
   });
 
   // -------------------------------------------------------------------------

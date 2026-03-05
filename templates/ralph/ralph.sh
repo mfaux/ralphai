@@ -30,6 +30,7 @@ DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected fr
 DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on plan completion
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
 DEFAULT_ITERATION_TIMEOUT=0              # 0 = no timeout (seconds per agent invocation)
+DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -44,6 +45,7 @@ ISSUE_REPO="$DEFAULT_ISSUE_REPO"
 ISSUE_CLOSE_ON_COMPLETE="$DEFAULT_ISSUE_CLOSE_ON_COMPLETE"
 ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
+PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
 WIP_DIR=".ralph/in-progress"
 BACKLOG_DIR=".ralph/backlog"
@@ -65,12 +67,13 @@ CLI_ISSUE_IN_PROGRESS_LABEL=""
 CLI_ISSUE_REPO=""
 CLI_ISSUE_CLOSE_ON_COMPLETE=""
 CLI_ISSUE_COMMENT_PROGRESS=""
+CLI_PROMPT_MODE=""
 SHOW_CONFIG=false
 
 # --- Config file loader ---
 # Parses .ralph/ralph.config (key=value, comments, blank lines).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
-# CONFIG_MAX_STUCK, CONFIG_MODE when present.
+# CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
 load_config() {
   local config_path="$1"
@@ -197,6 +200,13 @@ load_config() {
         fi
         CONFIG_ITERATION_TIMEOUT="$value"
         ;;
+      promptMode)
+        if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+          echo "ERROR: $config_path:$line_num: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+          exit 1
+        fi
+        CONFIG_PROMPT_MODE="$value"
+        ;;
       *)
         echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
@@ -242,6 +252,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
     ITERATION_TIMEOUT="$CONFIG_ITERATION_TIMEOUT"
+  fi
+  if [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    PROMPT_MODE="$CONFIG_PROMPT_MODE"
   fi
 }
 
@@ -311,6 +324,13 @@ apply_env_overrides() {
       exit 1
     fi
     ISSUE_COMMENT_PROGRESS="$RALPH_ISSUE_COMMENT_PROGRESS"
+  fi
+  if [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
+      echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+      exit 1
+    fi
+    PROMPT_MODE="$RALPH_PROMPT_MODE"
   fi
 }
 
@@ -463,6 +483,7 @@ print_usage() {
   echo "  --pr                             PR mode (default): create branch and open PR"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
+  echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
   echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)"
@@ -474,13 +495,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, iterationTimeout,"
+  echo "                  mode, iterationTimeout, promptMode,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPH_AGENT_COMMAND, RALPH_FEEDBACK_COMMANDS,"
   echo "                   RALPH_BASE_BRANCH, RALPH_MAX_STUCK,"
   echo "                   RALPH_MODE, RALPH_ITERATION_TIMEOUT,"
+  echo "                   RALPH_PROMPT_MODE,"
   echo "                   RALPH_ISSUE_SOURCE,"
   echo "                   RALPH_ISSUE_LABEL, RALPH_ISSUE_IN_PROGRESS_LABEL,"
   echo "                   RALPH_ISSUE_REPO, RALPH_ISSUE_CLOSE_ON_COMPLETE,"
@@ -727,6 +749,13 @@ for arg in "$@"; do
     --pr)
       CLI_MODE="pr"
       ;;
+    --prompt-mode=*)
+      CLI_PROMPT_MODE="${arg#--prompt-mode=}"
+      if [[ "$CLI_PROMPT_MODE" != "auto" && "$CLI_PROMPT_MODE" != "at-path" && "$CLI_PROMPT_MODE" != "inline" ]]; then
+        echo "ERROR: --prompt-mode must be 'auto', 'at-path', or 'inline', got '$CLI_PROMPT_MODE'"
+        exit 1
+      fi
+      ;;
     --issue-source=*)
       CLI_ISSUE_SOURCE="${arg#--issue-source=}"
       if [[ "$CLI_ISSUE_SOURCE" != "none" && "$CLI_ISSUE_SOURCE" != "github" ]]; then
@@ -828,6 +857,9 @@ if [[ -n "$CLI_ISSUE_CLOSE_ON_COMPLETE" ]]; then
 fi
 if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
+fi
+if [[ -n "$CLI_PROMPT_MODE" ]]; then
+  PROMPT_MODE="$CLI_PROMPT_MODE"
 fi
 
 # --- Helper: check if a branch already has open work ---
@@ -1007,6 +1039,16 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     issue_comment_source="default"
   fi
 
+  if [[ -n "$CLI_PROMPT_MODE" ]]; then
+    prompt_mode_source="cli (--prompt-mode=$CLI_PROMPT_MODE)"
+  elif [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="env (RALPH_PROMPT_MODE=$RALPH_PROMPT_MODE)"
+  elif [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="config ($CONFIG_FILE)"
+  else
+    prompt_mode_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
@@ -1017,6 +1059,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   else
     echo "  iterationTimeout   = off  ($timeout_source)"
   fi
+  echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"
@@ -1024,6 +1067,26 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  issueRepo          = ${ISSUE_REPO:-<auto-detect>}  ($issue_repo_source)"
     echo "  issueCloseOnComplete = $ISSUE_CLOSE_ON_COMPLETE  ($issue_close_source)"
     echo "  issueCommentProgress = $ISSUE_COMMENT_PROGRESS  ($issue_comment_source)"
+  fi
+  echo ""
+  # Show detected agent type (informational)
+  if [[ -n "$AGENT_COMMAND" ]]; then
+    # Inline detection for --show-config (detect_agent_type is defined later in the script)
+    _sc_cmd=$(echo "$AGENT_COMMAND" | tr '[:upper:]' '[:lower:]')
+    _sc_agent_type="unknown"
+    case "$_sc_cmd" in
+      *claude*)   _sc_agent_type="claude" ;;
+      *opencode*) _sc_agent_type="opencode" ;;
+      *codex*)    _sc_agent_type="codex" ;;
+      *gemini*)   _sc_agent_type="gemini" ;;
+      *aider*)    _sc_agent_type="aider" ;;
+      *goose*)    _sc_agent_type="goose" ;;
+      *kiro*)     _sc_agent_type="kiro" ;;
+      *amp*)      _sc_agent_type="amp" ;;
+    esac
+    echo "  detectedAgentType  = $_sc_agent_type"
+  else
+    echo "  detectedAgentType  = <no agentCommand set>"
   fi
   echo ""
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -1042,6 +1105,65 @@ if [[ -z "$AGENT_COMMAND" ]]; then
   echo "          agentCommand=codex exec"
   exit 1
 fi
+
+# --- Detect agent type from command string ---
+# Inspects $AGENT_COMMAND and sets DETECTED_AGENT_TYPE to a known identifier.
+# Used by prompt formatting to adjust file references per agent.
+DETECTED_AGENT_TYPE="unknown"
+detect_agent_type() {
+  local cmd
+  cmd=$(echo "$AGENT_COMMAND" | tr '[:upper:]' '[:lower:]')
+  case "$cmd" in
+    *claude*)   DETECTED_AGENT_TYPE="claude" ;;
+    *opencode*) DETECTED_AGENT_TYPE="opencode" ;;
+    *codex*)    DETECTED_AGENT_TYPE="codex" ;;
+    *gemini*)   DETECTED_AGENT_TYPE="gemini" ;;
+    *aider*)    DETECTED_AGENT_TYPE="aider" ;;
+    *goose*)    DETECTED_AGENT_TYPE="goose" ;;
+    *kiro*)     DETECTED_AGENT_TYPE="kiro" ;;
+    *amp*)      DETECTED_AGENT_TYPE="amp" ;;
+    *)          DETECTED_AGENT_TYPE="unknown" ;;
+  esac
+}
+detect_agent_type
+
+# --- Resolve prompt mode and format file references ---
+# Maps PROMPT_MODE + DETECTED_AGENT_TYPE to a concrete mode ("at-path" or "inline").
+# Called once after agent detection; result cached in RESOLVED_PROMPT_MODE.
+RESOLVED_PROMPT_MODE=""
+resolve_prompt_mode() {
+  if [[ "$PROMPT_MODE" == "at-path" || "$PROMPT_MODE" == "inline" ]]; then
+    RESOLVED_PROMPT_MODE="$PROMPT_MODE"
+    return
+  fi
+  # auto mode: pick based on detected agent type
+  # Conservative default: everything maps to at-path (current behavior).
+  # Agent-specific overrides can be added here as support is verified.
+  case "$DETECTED_AGENT_TYPE" in
+    claude|opencode) RESOLVED_PROMPT_MODE="at-path" ;;
+    *)               RESOLVED_PROMPT_MODE="at-path" ;;
+  esac
+}
+resolve_prompt_mode
+
+# Formats a file reference for the prompt based on the resolved prompt mode.
+# Usage: format_file_ref <filepath>
+# - at-path mode: echoes "@<filepath>"
+# - inline mode: reads the file and wraps contents in <file path="...">...</file>
+format_file_ref() {
+  local filepath="$1"
+  if [[ "$RESOLVED_PROMPT_MODE" == "inline" ]]; then
+    if [[ -f "$filepath" ]]; then
+      printf '<file path="%s">\n%s\n</file>' "$filepath" "$(cat "$filepath")"
+    else
+      # File doesn't exist yet — fall back to at-path reference
+      printf '@%s' "$filepath"
+    fi
+  else
+    # at-path mode (default)
+    printf '@%s' "$filepath"
+  fi
+}
 
 # --- PR mode preflight: validate gh CLI ---
 # In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
@@ -1075,11 +1197,11 @@ LEARNINGS_HINT=""
 LEARNINGS_STEP=""
 RALPH_LEARNINGS_FILE=".ralph/LEARNINGS.md"
 if [[ -f "LEARNINGS.md" ]]; then
-  LEARNINGS_REF=" @LEARNINGS.md"
+  LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"
   LEARNINGS_HINT=" Also read LEARNINGS.md to avoid repeating past mistakes."
 fi
 if [[ -f "$RALPH_LEARNINGS_FILE" ]]; then
-  LEARNINGS_REF="$LEARNINGS_REF @$RALPH_LEARNINGS_FILE"
+  LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"
   LEARNINGS_HINT="${LEARNINGS_HINT:- }Also read $RALPH_LEARNINGS_FILE to avoid repeating past mistakes."
 fi
 if [[ -f "LEARNINGS.md" || -f "$RALPH_LEARNINGS_FILE" ]]; then
@@ -1199,7 +1321,7 @@ detect_plan() {
     RESUMING=true
     WIP_FILES=("${wip_plans[@]}")
     for f in "${WIP_FILES[@]}"; do
-      FILE_REFS="$FILE_REFS @$f"
+      FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
     echo "Found in-progress plan(s): ${WIP_FILES[*]}"
     return 0
@@ -1286,7 +1408,7 @@ detect_plan() {
     # Build @file references for all dependency-ready backlog plans
     local backlog_refs=""
     for f in "${ready_plans[@]}"; do
-      backlog_refs="$backlog_refs @$f"
+      backlog_refs="$backlog_refs $(format_file_ref "$f")"
     done
 
     local selection_prompt="${backlog_refs}
@@ -1338,7 +1460,7 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     local chosen_base
     chosen_base=$(basename "$chosen")
     WIP_FILES=("$chosen")
-    FILE_REFS=" @$chosen"
+    FILE_REFS=" $(format_file_ref "$chosen")"
     RESUMING=false
     echo "[dry-run] Would move: $chosen -> $WIP_DIR/$chosen_base"
   else
@@ -1351,7 +1473,7 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     echo "Moved $chosen -> $dest"
 
     WIP_FILES=("$dest")
-    FILE_REFS=" @$dest"
+    FILE_REFS=" $(format_file_ref "$dest")"
     RESUMING=false
   fi
   return 0
@@ -1617,7 +1739,7 @@ while true; do
       echo "=== Ralph iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
-    PROMPT="${FILE_REFS} @${PROGRESS_FILE}${LEARNINGS_REF}
+    PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
 1. Read the referenced files and the progress file.${LEARNINGS_HINT}
 2. Find the highest-priority incomplete task (see prioritization rules in the plan).
 3. Implement it with small, focused changes. Testing strategy depends on task type:
