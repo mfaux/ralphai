@@ -1881,6 +1881,192 @@ ${commit_log:-_No commits._}
   fi
 }
 
+# List remaining group plans from backlog (for PR body formatting).
+# Outputs markdown list items, one per line.
+list_remaining_group_plans() {
+  [[ -n "${GROUP_NAME:-}" ]] || return 0
+  local candidates
+  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
+  local f
+  for f in "${candidates[@]}"; do
+    [[ -f "$f" ]] || continue
+    echo "- $(basename "$f")"
+  done
+}
+
+# Create a draft PR for a group after the first plan completes.
+# Sets GROUP_PR_URL and updates .group-state.
+create_group_pr() {
+  local branch="$1"
+  local group_name="$2"
+
+  echo ""
+  echo "Creating draft PR for group '$group_name'..."
+
+  # Push branch
+  echo "Pushing $branch to origin..."
+  if ! git push -u origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
+    return 0
+  fi
+
+  local pr_title="feat: $group_name"
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $group_name
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+- $GROUP_CURRENT_PLAN ✅
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits yet._}
+\`\`\`"
+
+  local pr_url
+  pr_url=$(gh pr create \
+    --draft \
+    --base "$BASE_BRANCH" \
+    --head "$branch" \
+    --title "$pr_title" \
+    --body "$pr_body" 2>&1) || {
+    echo "WARNING: Failed to create draft PR: $pr_url"
+    echo "Branch '$branch' pushed to origin. Create PR manually."
+    return 0
+  }
+
+  echo "Draft PR created: $pr_url"
+  GROUP_PR_URL="$pr_url"
+
+  # Persist PR URL in group state
+  write_group_state \
+    "group=$GROUP_NAME" \
+    "branch=$GROUP_BRANCH" \
+    "plans_total=$GROUP_PLANS_TOTAL" \
+    "plans_completed=$GROUP_PLANS_COMPLETED" \
+    "current_plan=$GROUP_CURRENT_PLAN" \
+    "pr_url=$GROUP_PR_URL"
+}
+
+# Update the body of an existing group draft PR with current progress.
+update_group_pr() {
+  local branch="$1"
+  local completed_plan="$2"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Updating group PR with progress..."
+
+  # Push latest commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR body not updated."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build completed plans list from archive
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    # Skip progress files and non-plan files
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local remaining
+  remaining=$(list_remaining_group_plans)
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
+
+### Completed Plans
+${completed_list:-_None yet._}
+
+### Remaining Plans
+${remaining:-_None — group complete!_}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || {
+    echo "WARNING: Failed to update PR body."
+  }
+}
+
+# Mark the group draft PR as ready for review. Called when the last group plan completes.
+finalize_group_pr() {
+  local branch="$1"
+
+  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
+
+  echo "Finalizing group PR..."
+
+  # Push final commits
+  if ! git push origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push. PR not finalized."
+    return 0
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+
+  # Build final completed plans list
+  local completed_list=""
+  local f
+  for f in "$ARCHIVE_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    local fb
+    fb=$(basename "$f")
+    [[ "$fb" == progress-* ]] && continue
+    completed_list="${completed_list}- ${fb} ✅
+"
+  done
+
+  local pr_body="## Group: $GROUP_NAME
+
+**Status:** Complete ($GROUP_PLANS_TOTAL/$GROUP_PLANS_TOTAL plans)
+
+### Completed Plans
+${completed_list:-_None._}
+
+## Commits
+
+\`\`\`
+${commit_log:-_No commits._}
+\`\`\`"
+
+  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || true
+
+  # Mark PR as ready for review
+  if gh pr ready "$GROUP_PR_URL" 2>/dev/null; then
+    echo "PR marked as ready for review: $GROUP_PR_URL"
+  else
+    echo "WARNING: Failed to mark PR as ready. Mark it manually: gh pr ready $GROUP_PR_URL"
+  fi
+
+  cleanup_group_state
+}
+
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
@@ -2155,7 +2341,31 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
         echo "ERROR: $MAX_STUCK consecutive iterations with no progress. Aborting."
         echo "Branch: $branch"
-        echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+          echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+          echo "Pushing partial work and creating/updating draft PR..."
+          git push origin "$branch" 2>/dev/null || true
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            create_group_pr "$branch" "$GROUP_NAME"
+            # Append failure note to PR body
+            if [[ -n "${GROUP_PR_URL:-}" ]]; then
+              fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+              gh pr edit "$GROUP_PR_URL" --body "${fail_body}
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+            fi
+          else
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+            gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+          fi
+          echo "Group state preserved in $GROUP_STATE_FILE for --resume."
+        else
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        fi
         exit 1
       fi
     else
@@ -2177,6 +2387,17 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       archive_run
 
       if [[ -n "${GROUP_NAME:-}" ]]; then
+        # Group mode: create or update draft PR before advancing
+        if [[ "$MODE" == "pr" ]]; then
+          if [[ -z "${GROUP_PR_URL:-}" ]]; then
+            # First group plan completed — create draft PR
+            create_group_pr "$branch" "$GROUP_NAME"
+          else
+            # Subsequent plan completed — update PR body
+            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+          fi
+        fi
+
         # Group mode: try to advance to next plan
         if advance_group_plan; then
           echo ""
@@ -2191,8 +2412,14 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
           echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
           continue  # Continue the iteration loop with the new plan
         fi
-        # Group complete — PR creation handled by prd-group-mode-pr-lifecycle
-        echo "Group '$GROUP_NAME' finished. All plans completed."
+
+        # Group complete
+        if [[ "$MODE" == "pr" ]]; then
+          finalize_group_pr "$branch"
+        else
+          cleanup_group_state
+          echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
+        fi
       fi
 
       if [[ -z "${GROUP_NAME:-}" ]]; then
@@ -2211,7 +2438,18 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
   if [[ "$completed" == false ]]; then
     echo ""
     echo "Finished $ITERATIONS iterations without completing: $PLAN_DESC"
-    echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+      echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+      git push origin "$branch" 2>/dev/null || true
+      if [[ -z "${GROUP_PR_URL:-}" ]]; then
+        create_group_pr "$branch" "$GROUP_NAME"
+      else
+        update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+      fi
+      echo "Group state preserved for --resume."
+    else
+      echo "Plan files remain in $WIP_DIR/ — resume with another run."
+    fi
     echo "Branch: $branch"
     exit 0
   fi
