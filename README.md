@@ -31,11 +31,11 @@ Ralph scaffolds a `.ralph/` directory into your project, detects your package ma
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/WRITING-PLANS.md` for structure and examples, or roll your own format — Ralph just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralph/backlog/`. Point it at `.ralph/PLAN-GUIDE.md` for structure and examples, or roll your own format — Ralph just needs markdown files with clear acceptance criteria.
 
 ```
-Create a plan in .ralph/backlog/ for adding dark mode support.
-Use .ralph/WRITING-PLANS.md as a guide.
+Create a plan in the ralph backlog for adding dark mode support.
+Use PLAN-GUIDE.md as a guide.
 ```
 
 ### 2. Run
@@ -81,7 +81,7 @@ See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
 After `ralphai init`, the good stuff lives in `.ralph/`:
 
 - [`.ralph/README.md`](.ralph/README.md) — full operational docs (lifecycle, scripts, config)
-- [`.ralph/WRITING-PLANS.md`](.ralph/WRITING-PLANS.md) — guide for writing plan files (give this to your agent)
+- [`.ralph/PLAN-GUIDE.md`](.ralph/PLAN-GUIDE.md) — guide for writing plan files (give this to your agent)
 - `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralph/LEARNINGS.md`
 
 ## Supported Agents
@@ -162,7 +162,8 @@ Settings resolve in this order: **CLI flags > env vars > `.ralph/ralph.config` >
 
 ## Acknowledgements
 
-Inspired by [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley.
+- [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley — the technique behind the loop
+- [Vercel CLI](https://github.com/vercel/vercel) — CLI DX inspiration
 
 ## License
 

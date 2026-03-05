@@ -566,8 +566,8 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
 
   copyFileSync(join(templatesDir, "README.md"), join(ralphDir, "README.md"));
   copyFileSync(
-    join(templatesDir, "WRITING-PLANS.md"),
-    join(ralphDir, "WRITING-PLANS.md"),
+    join(templatesDir, "PLAN-GUIDE.md"),
+    join(ralphDir, "PLAN-GUIDE.md"),
   );
 
   // Generate config
@@ -663,7 +663,7 @@ LEARNINGS.md
     `  .ralph/ralph.config      ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralph/README.md         ${DIM}Operational docs${RESET}`);
-  console.log(`  .ralph/WRITING-PLANS.md  ${DIM}How to write plans${RESET}`);
+  console.log(`  .ralph/PLAN-GUIDE.md  ${DIM}How to write plans${RESET}`);
   console.log(
     `  .ralph/LEARNINGS.md      ${DIM}Ralph-specific learnings (gitignored)${RESET}`,
   );
@@ -697,7 +697,7 @@ LEARNINGS.md
     `  1. Review ${TEXT}.ralph/ralph.config${RESET} and adjust settings`,
   );
   console.log(
-    `  2. Read ${TEXT}.ralph/WRITING-PLANS.md${RESET} for how to write plans`,
+    `  2. Read ${TEXT}.ralph/PLAN-GUIDE.md${RESET} for how to write plans`,
   );
   console.log(`  3. Create your first plan in ${TEXT}.ralph/backlog/${RESET}`);
   console.log(`  4. Preview:  ${TEXT}./.ralph/ralph.sh --dry-run${RESET}`);
@@ -721,7 +721,7 @@ LEARNINGS.md
 // ---------------------------------------------------------------------------
 
 /** Files that are copied from templates and safe to overwrite on update. */
-const TEMPLATE_FILES = ["ralph.sh", "README.md", "WRITING-PLANS.md"] as const;
+const TEMPLATE_FILES = ["ralph.sh", "README.md", "PLAN-GUIDE.md"] as const;
 
 async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
   const __dir = dirname(fileURLToPath(import.meta.url));
@@ -733,7 +733,7 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
 
     const confirmed = await clack.confirm({
       message:
-        "This will overwrite ralph.sh, README.md, and WRITING-PLANS.md " +
+        "This will overwrite ralph.sh, README.md, and PLAN-GUIDE.md " +
         "from the latest templates. Your config, LEARNINGS.md, and plan " +
         "files will be preserved. Continue?",
     });
