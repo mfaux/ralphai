@@ -2,16 +2,15 @@
 # ralph.sh — Ralph (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: .ralph/ralph.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--merge-target=<branch>] [--protected-branches=<list>] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: .ralph/ralph.sh <iterations-per-plan> [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralph/in-progress/ has plan files → resume on the current ralph/* branch
 #   2. Otherwise, pick the best plan from .ralph/backlog/ (LLM-selected if multiple)
 #
-# On completion of a plan: archives to out/, merges branch into the merge target
-# (default: base branch), deletes the branch, then loops back to pick the next
-# backlog item. Iteration budget resets for each new plan. Protected branches
-# trigger auto-PR via 'gh' CLI instead of direct merge.
+# On completion of a plan (PR mode, the default): pushes the branch and creates
+# a PR via 'gh' CLI. In direct mode (--direct): commits on the current branch
+# with no branch creation and no PR. Iteration budget resets for each new plan.
 #
 # On iteration exhaustion or stuck: exits, leaving files in in-progress/ for
 # resume on a subsequent run.
@@ -23,8 +22,7 @@ DEFAULT_AGENT_COMMAND=""
 DEFAULT_FEEDBACK_COMMANDS=""
 DEFAULT_BASE_BRANCH="main"
 DEFAULT_MAX_STUCK=3
-DEFAULT_MERGE_TARGET=""              # empty = same as BASE_BRANCH
-DEFAULT_PROTECTED_BRANCHES=""        # empty = no protection (comma-separated list)
+DEFAULT_MODE="pr"                    # "pr" (default) or "direct"
 DEFAULT_ISSUE_SOURCE="none"              # set to "github" to enable GitHub Issues integration
 DEFAULT_ISSUE_LABEL="ralphai"             # label to filter issues by
 DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"  # label applied when issue is picked up
@@ -38,8 +36,7 @@ AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
 FEEDBACK_COMMANDS="$DEFAULT_FEEDBACK_COMMANDS"
 MAX_STUCK="$DEFAULT_MAX_STUCK"
 BASE_BRANCH="$DEFAULT_BASE_BRANCH"
-MERGE_TARGET="$DEFAULT_MERGE_TARGET"
-PROTECTED_BRANCHES="$DEFAULT_PROTECTED_BRANCHES"
+MODE="$DEFAULT_MODE"
 ISSUE_SOURCE="$DEFAULT_ISSUE_SOURCE"
 ISSUE_LABEL="$DEFAULT_ISSUE_LABEL"
 ISSUE_IN_PROGRESS_LABEL="$DEFAULT_ISSUE_IN_PROGRESS_LABEL"
@@ -60,8 +57,7 @@ CLI_AGENT_COMMAND=""
 CLI_FEEDBACK_COMMANDS=""
 CLI_BASE_BRANCH=""
 CLI_MAX_STUCK=""
-CLI_MERGE_TARGET=""
-CLI_PROTECTED_BRANCHES=""
+CLI_MODE=""
 CLI_ITERATION_TIMEOUT=""
 CLI_ISSUE_SOURCE=""
 CLI_ISSUE_LABEL=""
@@ -74,7 +70,7 @@ SHOW_CONFIG=false
 # --- Config file loader ---
 # Parses .ralph/ralph.config (key=value, comments, blank lines).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
-# CONFIG_MAX_STUCK, CONFIG_MERGE_TARGET, CONFIG_PROTECTED_BRANCHES when present.
+# CONFIG_MAX_STUCK, CONFIG_MODE when present.
 # Fails fast on unknown keys or invalid values.
 load_config() {
   local config_path="$1"
@@ -149,36 +145,12 @@ load_config() {
         fi
         CONFIG_MAX_STUCK="$value"
         ;;
-      mergeTarget)
-        if [[ -z "$value" ]]; then
-          echo "ERROR: $config_path:$line_num: 'mergeTarget' must be a non-empty branch name"
+      mode)
+        if [[ "$value" != "pr" && "$value" != "direct" ]]; then
+          echo "ERROR: $config_path:$line_num: 'mode' must be 'pr' or 'direct', got '$value'"
           exit 1
         fi
-        if [[ "$value" =~ [[:space:]] ]]; then
-          echo "ERROR: $config_path:$line_num: 'mergeTarget' must be a single token without spaces, got '$value'"
-          exit 1
-        fi
-        CONFIG_MERGE_TARGET="$value"
-        ;;
-      protectedBranches)
-        # Comma-separated list of branch names; empty is valid (disables protection)
-        if [[ -n "$value" ]]; then
-          # Validate: no spaces within individual branch names
-          IFS=',' read -ra pb_parts <<< "$value"
-          for pb in "${pb_parts[@]}"; do
-            local trimmed_pb
-            trimmed_pb=$(echo "$pb" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -z "$trimmed_pb" ]]; then
-              echo "ERROR: $config_path:$line_num: 'protectedBranches' contains an empty entry in '$value'"
-              exit 1
-            fi
-            if [[ "$trimmed_pb" =~ [[:space:]] ]]; then
-              echo "ERROR: $config_path:$line_num: branch name '$trimmed_pb' in 'protectedBranches' must not contain spaces"
-              exit 1
-            fi
-          done
-        fi
-        CONFIG_PROTECTED_BRANCHES="$value"
+        CONFIG_MODE="$value"
         ;;
       issueCloseOnComplete)
         if [[ "$value" != "true" && "$value" != "false" ]]; then
@@ -227,7 +199,7 @@ load_config() {
         ;;
       *)
         echo "ERROR: $config_path:$line_num: unknown config key '$key'"
-        echo "Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck, mergeTarget, protectedBranches, issueSource, issueLabel, issueInProgressLabel, issueRepo, issueCloseOnComplete, issueCommentProgress, iterationTimeout"
+        echo "Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck, mode, issueSource, issueLabel, issueInProgressLabel, issueRepo, issueCloseOnComplete, issueCommentProgress, iterationTimeout"
         exit 1
         ;;
     esac
@@ -249,11 +221,8 @@ apply_config() {
   if [[ -n "${CONFIG_MAX_STUCK:-}" ]]; then
     MAX_STUCK="$CONFIG_MAX_STUCK"
   fi
-  if [[ -n "${CONFIG_MERGE_TARGET:-}" ]]; then
-    MERGE_TARGET="$CONFIG_MERGE_TARGET"
-  fi
-  if [[ -n "${CONFIG_PROTECTED_BRANCHES:-}" ]]; then
-    PROTECTED_BRANCHES="$CONFIG_PROTECTED_BRANCHES"
+  if [[ -n "${CONFIG_MODE:-}" ]]; then
+    MODE="$CONFIG_MODE"
   fi
   if [[ -n "${CONFIG_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
     ISSUE_CLOSE_ON_COMPLETE="$CONFIG_ISSUE_CLOSE_ON_COMPLETE"
@@ -301,25 +270,12 @@ apply_env_overrides() {
     fi
     MAX_STUCK="$RALPH_MAX_STUCK"
   fi
-  if [[ -n "${RALPH_MERGE_TARGET:-}" ]]; then
-    if [[ "$RALPH_MERGE_TARGET" =~ [[:space:]] ]]; then
-      echo "ERROR: RALPH_MERGE_TARGET must be a single token without spaces, got '$RALPH_MERGE_TARGET'"
+  if [[ -n "${RALPH_MODE:-}" ]]; then
+    if [[ "$RALPH_MODE" != "pr" && "$RALPH_MODE" != "direct" ]]; then
+      echo "ERROR: RALPH_MODE must be 'pr' or 'direct', got '$RALPH_MODE'"
       exit 1
     fi
-    MERGE_TARGET="$RALPH_MERGE_TARGET"
-  fi
-  if [[ -n "${RALPH_PROTECTED_BRANCHES:-}" ]]; then
-    # Validate: no spaces within individual branch names
-    IFS=',' read -ra pb_parts <<< "$RALPH_PROTECTED_BRANCHES"
-    for pb in "${pb_parts[@]}"; do
-      local trimmed_pb
-      trimmed_pb=$(echo "$pb" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      if [[ -n "$trimmed_pb" && "$trimmed_pb" =~ [[:space:]] ]]; then
-        echo "ERROR: RALPH_PROTECTED_BRANCHES branch name '$trimmed_pb' must not contain spaces"
-        exit 1
-      fi
-    done
-    PROTECTED_BRANCHES="$RALPH_PROTECTED_BRANCHES"
+    MODE="$RALPH_MODE"
   fi
   if [[ -n "${RALPH_ITERATION_TIMEOUT:-}" ]]; then
     if [[ ! "$RALPH_ITERATION_TIMEOUT" =~ ^[0-9]+$ ]]; then
@@ -505,8 +461,8 @@ print_usage() {
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
   echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
-  echo "  --merge-target=<branch>          Override merge target (default: base branch)"
-  echo "  --protected-branches=<list>      Comma-separated branches to auto-PR instead of merge into"
+  echo "  --direct                         Direct mode: commit on current branch, no PR"
+  echo "  --pr                             PR mode (default): create branch and open PR"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
@@ -520,14 +476,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mergeTarget, protectedBranches, iterationTimeout,"
+  echo "                  mode, iterationTimeout,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPH_AGENT_COMMAND, RALPH_FEEDBACK_COMMANDS,"
   echo "                   RALPH_BASE_BRANCH, RALPH_MAX_STUCK,"
-  echo "                   RALPH_MERGE_TARGET, RALPH_PROTECTED_BRANCHES,"
-  echo "                   RALPH_ITERATION_TIMEOUT, RALPH_ISSUE_SOURCE,"
+  echo "                   RALPH_MODE, RALPH_ITERATION_TIMEOUT,"
+  echo "                   RALPH_ISSUE_SOURCE,"
   echo "                   RALPH_ISSUE_LABEL, RALPH_ISSUE_IN_PROGRESS_LABEL,"
   echo "                   RALPH_ISSUE_REPO, RALPH_ISSUE_CLOSE_ON_COMPLETE,"
   echo "                   RALPH_ISSUE_COMMENT_PROGRESS"
@@ -542,11 +498,11 @@ print_usage() {
   echo "  $0 10 --resume                               # recover dirty state and continue"
   echo "  $0 10 --agent-command='claude -p'             # use Claude Code"
   echo "  $0 10 --agent-command='opencode run --agent build'  # use OpenCode"
-  echo "  $0 10 --base-branch=develop                  # use a different base branch"
+  echo "  $0 10 --direct                               # commit on current branch (no PR)"
   echo "  RALPH_AGENT_COMMAND='codex exec' $0 10       # override via env var"
   echo ""
   echo "Feature branch workflow:"
-  echo "  $0 10 --base-branch=feature/big-thing --merge-target=feature/big-thing --protected-branches=main,master"
+  echo "  $0 10 --direct --base-branch=feature/big-thing  # commit directly on a feature branch"
 }
 
 is_tree_dirty() {
@@ -772,30 +728,11 @@ for arg in "$@"; do
         exit 1
       fi
       ;;
-    --merge-target=*)
-      CLI_MERGE_TARGET="${arg#--merge-target=}"
-      if [[ -z "$CLI_MERGE_TARGET" ]]; then
-        echo "ERROR: --merge-target requires a non-empty value (e.g. --merge-target=feature/big-thing)"
-        exit 1
-      fi
-      if [[ "$CLI_MERGE_TARGET" =~ [[:space:]] ]]; then
-        echo "ERROR: --merge-target must be a single token without spaces, got '$CLI_MERGE_TARGET'"
-        exit 1
-      fi
+    --direct)
+      CLI_MODE="direct"
       ;;
-    --protected-branches=*)
-      CLI_PROTECTED_BRANCHES="${arg#--protected-branches=}"
-      # Empty value is valid (disables protection); validate branch names if non-empty
-      if [[ -n "$CLI_PROTECTED_BRANCHES" ]]; then
-        IFS=',' read -ra _pb_parts <<< "$CLI_PROTECTED_BRANCHES"
-        for _pb in "${_pb_parts[@]}"; do
-          _trimmed_pb=$(echo "$_pb" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          if [[ -n "$_trimmed_pb" && "$_trimmed_pb" =~ [[:space:]] ]]; then
-            echo "ERROR: --protected-branches branch name '$_trimmed_pb' must not contain spaces"
-            exit 1
-          fi
-        done
-      fi
+    --pr)
+      CLI_MODE="pr"
       ;;
     --issue-source=*)
       CLI_ISSUE_SOURCE="${arg#--issue-source=}"
@@ -875,11 +812,8 @@ fi
 if [[ -n "$CLI_MAX_STUCK" ]]; then
   MAX_STUCK="$CLI_MAX_STUCK"
 fi
-if [[ -n "$CLI_MERGE_TARGET" ]]; then
-  MERGE_TARGET="$CLI_MERGE_TARGET"
-fi
-if [[ -n "$CLI_PROTECTED_BRANCHES" ]]; then
-  PROTECTED_BRANCHES="$CLI_PROTECTED_BRANCHES"
+if [[ -n "$CLI_MODE" ]]; then
+  MODE="$CLI_MODE"
 fi
 if [[ -n "$CLI_ITERATION_TIMEOUT" ]]; then
   ITERATION_TIMEOUT="$CLI_ITERATION_TIMEOUT"
@@ -902,29 +836,6 @@ fi
 if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
 fi
-
-# --- Final resolution ---
-# If MERGE_TARGET is empty, default to BASE_BRANCH (backward compatible)
-if [[ -z "$MERGE_TARGET" ]]; then
-  MERGE_TARGET="$BASE_BRANCH"
-fi
-
-# --- Helper: check if a branch is protected ---
-is_branch_protected() {
-  local branch_to_check="$1"
-  if [[ -z "$PROTECTED_BRANCHES" ]]; then
-    return 1
-  fi
-  IFS=',' read -ra _protected_list <<< "$PROTECTED_BRANCHES"
-  for _pb in "${_protected_list[@]}"; do
-    local trimmed
-    trimmed=$(echo "$_pb" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    if [[ "$trimmed" == "$branch_to_check" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
 
 # --- Helper: check if a branch already has open work ---
 # Returns 0 (collision found) or 1 (clear). Sets COLLISION_REASON.
@@ -1023,24 +934,14 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     stuck_source="default"
   fi
 
-  if [[ -n "$CLI_MERGE_TARGET" ]]; then
-    merge_target_source="cli (--merge-target=$CLI_MERGE_TARGET)"
-  elif [[ -n "${RALPH_MERGE_TARGET:-}" ]]; then
-    merge_target_source="env (RALPH_MERGE_TARGET=$RALPH_MERGE_TARGET)"
-  elif [[ -n "${CONFIG_MERGE_TARGET:-}" ]]; then
-    merge_target_source="config ($CONFIG_FILE)"
+  if [[ -n "$CLI_MODE" ]]; then
+    mode_source="cli (--${MODE})"
+  elif [[ -n "${RALPH_MODE:-}" ]]; then
+    mode_source="env (RALPH_MODE=$RALPH_MODE)"
+  elif [[ -n "${CONFIG_MODE:-}" ]]; then
+    mode_source="config ($CONFIG_FILE)"
   else
-    merge_target_source="default (baseBranch)"
-  fi
-
-  if [[ -n "$CLI_PROTECTED_BRANCHES" ]]; then
-    protected_source="cli (--protected-branches=$CLI_PROTECTED_BRANCHES)"
-  elif [[ -n "${RALPH_PROTECTED_BRANCHES:-}" ]]; then
-    protected_source="env (RALPH_PROTECTED_BRANCHES=$RALPH_PROTECTED_BRANCHES)"
-  elif [[ -n "${CONFIG_PROTECTED_BRANCHES:-}" ]]; then
-    protected_source="config ($CONFIG_FILE)"
-  else
-    protected_source="default (none)"
+    mode_source="default"
   fi
 
   if [[ -n "$CLI_ITERATION_TIMEOUT" ]]; then
@@ -1116,8 +1017,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
-  echo "  mergeTarget        = $MERGE_TARGET  ($merge_target_source)"
-  echo "  protectedBranches  = ${PROTECTED_BRANCHES:-<none>}  ($protected_source)"
+  echo "  mode               = $MODE  ($mode_source)"
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
   if [[ "$ITERATION_TIMEOUT" -gt 0 ]]; then
     echo "  iterationTimeout   = ${ITERATION_TIMEOUT}s  ($timeout_source)"
@@ -1148,6 +1048,23 @@ if [[ -z "$AGENT_COMMAND" ]]; then
   echo "          agentCommand=claude -p"
   echo "          agentCommand=codex exec"
   exit 1
+fi
+
+# --- PR mode preflight: validate gh CLI ---
+# In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
+# Check early so the user finds out before the agent runs 10 iterations.
+if [[ "$MODE" == "pr" && "$DRY_RUN" != true ]]; then
+  if ! command -v gh &>/dev/null; then
+    echo "ERROR: PR mode (the default) requires the GitHub CLI (gh)."
+    echo "Install it: https://cli.github.com"
+    echo "Or use --direct to commit on the current branch instead."
+    exit 1
+  fi
+  if ! gh auth status &>/dev/null; then
+    echo "ERROR: gh is installed but not authenticated."
+    echo "Run 'gh auth login' first, or use --direct to skip PR creation."
+    exit 1
+  fi
 fi
 
 # --- Build feedback commands text for prompt ---
@@ -1182,8 +1099,8 @@ if [[ "$DRY_RUN" != true ]]; then
   if is_tree_dirty; then
     if [[ "$RESUME" == true ]]; then
       current_branch=$(git rev-parse --abbrev-ref HEAD)
-      if [[ "$current_branch" == "$BASE_BRANCH" ]] || is_branch_protected "$current_branch"; then
-        echo "ERROR: --resume refused on '$current_branch' branch (protected or base branch)."
+      if [[ "$current_branch" == "$BASE_BRANCH" ]]; then
+        echo "ERROR: --resume refused on '$current_branch' branch (base branch)."
         echo "Switch to your ralph/* branch first, then re-run with --resume."
         exit 1
       fi
@@ -1206,14 +1123,6 @@ fi
 if ! git show-ref --verify --quiet "refs/heads/$BASE_BRANCH"; then
   echo "ERROR: Base branch '$BASE_BRANCH' not found."
   exit 1
-fi
-
-# --- Verify merge target branch exists ---
-if [[ "$MERGE_TARGET" != "$BASE_BRANCH" ]]; then
-  if ! git show-ref --verify --quiet "refs/heads/$MERGE_TARGET"; then
-    echo "ERROR: Merge target branch '$MERGE_TARGET' not found."
-    exit 1
-  fi
 fi
 
 # --- Archive function: move PRD + progress from in-progress/ to out/ ---
@@ -1316,11 +1225,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md"
       return 1
     fi
   fi
@@ -1455,55 +1364,43 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
   return 0
 }
 
-# --- Merge and cleanup after completion ---
-merge_and_cleanup() {
+# --- Create PR after completion (PR mode only) ---
+create_pr() {
   local branch="$1"
   local plan_desc="$2"
 
-  # Check if merge target is protected
-  if is_branch_protected "$MERGE_TARGET"; then
-    echo ""
-    echo "Merge target '$MERGE_TARGET' is protected. Attempting to create PR..."
+  echo ""
+  echo "Creating PR for '$branch'..."
 
-    # Check if gh CLI is available
-    if ! command -v gh &>/dev/null; then
-      echo "WARNING: 'gh' CLI not found. Cannot create PR automatically."
-      echo "Install gh (https://cli.github.com) to enable auto-PR for protected branches."
-      echo ""
-      echo "Branch '$branch' left intact for manual merge/PR."
-      echo "To merge manually: git checkout $MERGE_TARGET && git merge $branch --no-ff"
-      return 0
+  # Push branch to remote
+  echo "Pushing $branch to origin..."
+  if ! git push -u origin "$branch" 2>&1; then
+    echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
+    return 0
+  fi
+
+  # Build PR body from plan content and commit log
+  local pr_body=""
+  local plan_content=""
+  for f in "${WIP_FILES[@]}"; do
+    if [[ -f "$f" ]]; then
+      plan_content=$(cat "$f")
+      break
     fi
-
-    # Push branch to remote
-    echo "Pushing $branch to origin..."
-    if ! git push -u origin "$branch" 2>&1; then
-      echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
-      return 0
+  done
+  # If plan was already archived, check out/ for the timestamped copy
+  if [[ -z "$plan_content" ]]; then
+    local latest_archived
+    latest_archived=$(ls -t "$ARCHIVE_DIR"/*.md 2>/dev/null | head -1)
+    if [[ -n "$latest_archived" ]]; then
+      plan_content=$(cat "$latest_archived")
     fi
+  fi
 
-    # Build PR body from plan content and commit log
-    local pr_body=""
-    local plan_content=""
-    for f in "${WIP_FILES[@]}"; do
-      if [[ -f "$f" ]]; then
-        plan_content=$(cat "$f")
-        break
-      fi
-    done
-    # If plan was already archived, check out/ for the timestamped copy
-    if [[ -z "$plan_content" ]]; then
-      local latest_archived
-      latest_archived=$(ls -t "$ARCHIVE_DIR"/*.md 2>/dev/null | head -1)
-      if [[ -n "$latest_archived" ]]; then
-        plan_content=$(cat "$latest_archived")
-      fi
-    fi
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
 
-    local commit_log
-    commit_log=$(git log "$MERGE_TARGET".."$branch" --oneline --no-decorate 2>/dev/null || true)
-
-    pr_body="## Plan
+  pr_body="## Plan
 
 ${plan_content:-_No plan content available._}
 
@@ -1513,51 +1410,28 @@ ${plan_content:-_No plan content available._}
 ${commit_log:-_No commits._}
 \`\`\`"
 
-    echo "Creating PR: $branch -> $MERGE_TARGET"
-    local pr_url
-    pr_url=$(gh pr create \
-      --base "$MERGE_TARGET" \
-      --head "$branch" \
-      --title "$plan_desc" \
-      --body "$pr_body" 2>&1) || {
-      echo "WARNING: Failed to create PR: $pr_url"
-      echo "Branch '$branch' pushed to origin. Create PR manually."
-      return 0
-    }
-
-    echo ""
-    echo "PR created: $pr_url"
-
-    # Comment on linked issue about the PR (but don't close — PR still needs review)
-    if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
-      local repo
-      repo=$(detect_issue_repo) && \
-      gh issue comment "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --body "Ralph created a PR for this issue: ${pr_url}" >/dev/null 2>&1
-    fi
-
+  echo "Creating PR: $branch -> $BASE_BRANCH"
+  local pr_url
+  pr_url=$(gh pr create \
+    --base "$BASE_BRANCH" \
+    --head "$branch" \
+    --title "$plan_desc" \
+    --body "$pr_body" 2>&1) || {
+    echo "WARNING: Failed to create PR: $pr_url"
+    echo "Branch '$branch' pushed to origin. Create PR manually."
     return 0
-  fi
+  }
 
-  echo "Merging $branch into $MERGE_TARGET..."
-  git checkout "$MERGE_TARGET"
-  git merge "$branch" --no-ff -m "Merge $branch: $plan_desc"
-  git branch -d "$branch"
-  echo "Merged to $MERGE_TARGET. Branch $branch deleted."
+  echo ""
+  echo "PR created: $pr_url"
 
-  # Close linked GitHub issue after successful merge
-  if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_CLOSE_ON_COMPLETE" == "true" ]]; then
+  # Comment on linked issue about the PR (but don't close — PR still needs review)
+  if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
     local repo
-    repo=$(detect_issue_repo) && {
-      gh issue close "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --comment "Completed by Ralph on branch \`${branch}\`. Merged to \`${MERGE_TARGET}\`." >/dev/null 2>&1
-      # Remove in-progress label (issue is now closed)
-      gh issue edit "$PLAN_ISSUE_NUMBER" \
-        --repo "$repo" \
-        --remove-label "$ISSUE_IN_PROGRESS_LABEL" >/dev/null 2>&1
-    }
+    repo=$(detect_issue_repo) && \
+    gh issue comment "$PLAN_ISSUE_NUMBER" \
+      --repo "$repo" \
+      --body "Ralph created a PR for this issue: ${pr_url}" >/dev/null 2>&1
   fi
 }
 
@@ -1616,14 +1490,10 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   fi
 
-  echo "[dry-run] Merge target: $MERGE_TARGET"
-  if is_branch_protected "$MERGE_TARGET"; then
-    echo "[dry-run] Merge target is PROTECTED — would create PR via 'gh' on completion"
+  if [[ "$MODE" == "direct" ]]; then
+    echo "[dry-run] Mode: direct — would commit on current branch (no PR)"
   else
-    echo "[dry-run] Merge target is not protected — would merge directly on completion"
-  fi
-  if [[ -n "$PROTECTED_BRANCHES" ]]; then
-    echo "[dry-run] Protected branches: $PROTECTED_BRANCHES"
+    echo "[dry-run] Mode: pr — would create PR via 'gh' on completion"
   fi
 
   echo "[dry-run] No files moved, no branches created, no agent run executed."
@@ -1799,7 +1669,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo ""
       echo "Plan complete after $i iterations: $PLAN_DESC"
       archive_run
-      merge_and_cleanup "$branch" "$PLAN_DESC"
+      create_pr "$branch" "$PLAN_DESC"
       plans_completed=$((plans_completed + 1))
       completed=true
       break

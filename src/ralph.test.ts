@@ -38,7 +38,7 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralph", "ralph.sh"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "ralph.config"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "README.md"))).toBe(true);
-    expect(existsSync(join(testDir, ".ralph", "PLAN-GUIDE.md"))).toBe(true);
+    expect(existsSync(join(testDir, ".ralph", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralph", "LEARNINGS.md"))).toBe(true);
 
     // Subdirectories with .gitkeep
@@ -149,7 +149,7 @@ describe("ralphai command", () => {
     expect(output).toContain(".ralph/ralph.sh");
     expect(output).toContain("dry-run");
     expect(output).toContain(".ralph/ralph.config");
-    expect(output).toContain("PLAN-GUIDE.md");
+    expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
   });
 
@@ -289,10 +289,10 @@ describe("ralphai command", () => {
     const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(ralphSh).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md",
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
     );
     expect(ralphSh).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLAN-GUIDE.md",
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralph/backlog/ — see .ralph/PLANNING.md",
     );
   });
 
@@ -317,6 +317,37 @@ describe("ralphai command", () => {
     expect(ralphSh).not.toContain("<iterations-per-plan>");
     // Should mention the default
     expect(ralphSh).toContain("Default: 5 iterations per plan.");
+  });
+
+  it("scaffolded ralph.sh contains gh preflight check for PR mode", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // PR mode preflight: checks gh is installed and authenticated
+    expect(ralphSh).toContain('MODE" == "pr"');
+    expect(ralphSh).toContain("command -v gh");
+    expect(ralphSh).toContain("gh auth status");
+    expect(ralphSh).toContain("PR mode (the default) requires the GitHub CLI");
+    expect(ralphSh).toContain("gh is installed but not authenticated");
+    expect(ralphSh).toContain("--direct");
+  });
+
+  it("scaffolded ralph.sh uses create_pr instead of merge_and_cleanup", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const ralphSh = readFileSync(join(testDir, ".ralph", "ralph.sh"), "utf-8");
+    // create_pr function exists and is called on completion
+    expect(ralphSh).toContain("create_pr()");
+    expect(ralphSh).toContain('create_pr "$branch" "$PLAN_DESC"');
+    // Old merge_and_cleanup and is_branch_protected are removed
+    expect(ralphSh).not.toContain("merge_and_cleanup");
+    expect(ralphSh).not.toContain("is_branch_protected");
+    // No direct merge path (git merge --no-ff into base branch)
+    expect(ralphSh).not.toContain("git merge");
+    expect(ralphSh).not.toContain("git branch -d");
+    // No MERGE_TARGET or PROTECTED_BRANCHES variables
+    expect(ralphSh).not.toContain("MERGE_TARGET");
+    expect(ralphSh).not.toContain("PROTECTED_BRANCHES");
   });
 
   it("scaffolded ralph.sh contains issue integration defaults", () => {
@@ -587,7 +618,7 @@ describe("ralphai command", () => {
     expect(output).toContain("Updated:");
     expect(output).toContain("ralph.sh");
     expect(output).toContain("README.md");
-    expect(output).toContain("PLAN-GUIDE.md");
+    expect(output).toContain("PLANNING.md");
     expect(output).toContain("Preserved:");
     expect(output).toContain("ralph.config");
   });

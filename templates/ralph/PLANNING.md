@@ -354,6 +354,9 @@ Every plan that changes user-facing behavior should include tasks for:
 
 - **AGENTS.md** — only when the work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
 - **README.md** — commands, options, examples, support matrices
+- **LEARNINGS.md / learnings flow** — when the work reveals recurring mistakes or durable operational patterns, add a task to compact findings and promote them appropriately:
+	- agent-instruction docs for immediate repo-specific behavior
+	- skill/reusable docs for stable patterns worth reusing across tasks/repos
 
 ### Standard verification block
 
@@ -383,6 +386,6 @@ Final verification:
 | Large feature (10+ tasks, new modules) | 15-25                               |
 | Structural refactor                    | 10-15                               |
 
-Use `ralph.sh --dry-run` to verify selection/readiness before launching long autonomous runs.
+Use `npx ralphai run -- --dry-run` to verify selection/readiness before launching long autonomous runs.
 
-If a run is interrupted and leaves a dirty tree, use `ralph.sh <iterations> --resume` on the current `ralph/*` branch to auto-commit recovery state and continue.
+If a run is interrupted and leaves a dirty tree, use `npx ralphai run -- <iterations> --resume` on the current `ralph/*` branch to auto-commit recovery state and continue.
