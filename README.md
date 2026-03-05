@@ -6,7 +6,7 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 
 ## Why Ralph?
 
-AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-IT-WORKS.md#context-rot)
+AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-RALPHAI-WORKS.md#context-rot)
 
 Ralph avoids this by starting each iteration with a **fresh session**: just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
 
@@ -69,7 +69,7 @@ Stop mid-run any time. Work stays in `in-progress/` on the `ralph/*` branch. Res
 
 ### 5. Close the learnings loop
 
-Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `LEARNINGS.md` (tracked) or `AGENTS.md`. [How the learnings system works →](docs/HOW-IT-WORKS.md#learnings-system)
+Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `LEARNINGS.md` (tracked) or `AGENTS.md`. [How the learnings system works →](docs/HOW-RALPHAI-WORKS.md#learnings-system)
 
 ## How `ralphai` Works
 
@@ -80,7 +80,7 @@ Ralph logs mistakes to `.ralph/LEARNINGS.md` (gitignored) during runs. After a r
 - **Plan dependencies** — plans can declare `depends-on` for ordering across a backlog
 - **GitHub Issues** — Ralph can pull labeled issues when the backlog is empty
 
-See [How It Works](docs/HOW-IT-WORKS.md) for the full picture.
+See [How ralphai Works](docs/HOW-RALPHAI-WORKS.md) for the full picture.
 
 ## Docs
 

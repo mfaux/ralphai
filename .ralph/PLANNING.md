@@ -1,273 +1,68 @@
 # Writing Ralph Plan Files
 
-Guide for writing plan files that ralph scripts consume. Plans go in `.ralph/backlog/` and are picked automatically by `ralph.sh`.
+This file is the router for Ralph plan authoring.
 
-Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralph/wip/`. `ralph.sh` does not scan `wip/` — move plans to `backlog/` when they're ready to be picked up.
+Use it to pick the correct plan type quickly. Detailed templates live in `.ralph/plans/`.
+This follows the same principle as "agents index + focused docs": short entrypoint, specialized guidance.
+
+## Lifecycle Quick Reference
+
+- `.ralph/wip/`: Draft or blocked plans. Ralph does not scan this directory.
+- `.ralph/backlog/`: Runnable plans. Ralph selects from here.
+- `.ralph/in-progress/`: Active work during a run.
+- `.ralph/out/`: Completed plans and progress logs.
+
+Move plans from `wip/` to `backlog/` only when they are runnable.
+For full lifecycle behavior, read `docs/HOW-RALPHAI-WORKS.md`.
+
+## Plan Type Router (TOC)
+
+- Feature PRD: `.ralph/plans/FEATURE-PRD.md`
+- Wiring PRD: `.ralph/plans/WIRING-PRD.md`
+- Bug Fix PRD: `.ralph/plans/BUG-FIX-PRD.md`
+- Structural PRD: `.ralph/plans/STRUCTURAL-PRD.md`
+
+## Quick Decision Tree
+
+1. New user-visible capability? Use `FEATURE-PRD.md`.
+2. Existing pieces already work but are disconnected? Use `WIRING-PRD.md`.
+3. Behavior is wrong and expected output is known? Use `BUG-FIX-PRD.md`.
+4. Restructure/migrate/cleanup with stable behavior? Use `STRUCTURAL-PRD.md`.
 
 ## Core Principles
 
-1. **Define the end state, not the journey.** Ralph picks tasks and figures out how. You specify what "done" looks like via acceptance criteria.
-2. **Small steps.** Each task should be one logical commit. If a task feels too large, break it into subtasks. Context rot degrades quality on long tasks.
-3. **Risky work first.** Architectural decisions, integration points, and unknowns go at the top. Polish and docs go last. Ralph will pick easy wins if you let it.
-4. **Explicit acceptance criteria.** Use checkboxes. Without them, ralph declares victory early or skips edge cases.
-5. **Feedback loops are guardrails.** Every task must pass your configured feedback commands (build, test, lint) before committing. The ralph prompt enforces this, but the plan should assume it.
-
-## Plan Types
-
-### Feature PRD (build something new)
-
-For new capabilities that span multiple files and require design decisions.
-
-**Use when:** Adding a new capability, a new CLI command, a new integration, a new module.
-
-**Structure:**
-
-```markdown
-# Plan: <Title>
-
-> <TL;DR — what this adds, what pattern it follows, why it matters. 2-4 sentences.>
-
-## Background
-
-<Current state of the codebase relevant to this work. What exists, what doesn't.
-Link to existing files and prior plans. Be specific — ralph explores the repo
-but specific pointers save tokens and reduce wrong turns.>
-
-## References
-
-- <Link to specs, prior PRDs, deferred items docs>
-- <Link to upstream patterns this mirrors>
-
-## <Domain-Specific Context> (optional)
-
-<Support matrices, canonical format specs, agent output tables — whatever
-ralph needs to make correct decisions without exploring the codebase.>
-
-## Acceptance Criteria
-
-- [ ] <Observable behavior that proves the feature works>
-- [ ] <Another observable behavior>
-- [ ] All existing tests continue to pass
-- [ ] New tests cover the new functionality
-- [ ] AGENTS.md updated if work created knowledge future agents need and can't easily infer
-- [ ] README.md updated if user-facing behavior changed
-
-## Implementation Tasks
-
-List tasks in dependency order — each task should leave a green build.
-Foundations first, wiring second, tests third, docs last.
-
-### Task 1: <Title>
-
-**File:** `src/<file>.ts`
-
-**What:** <Describe the change. Name specific functions, interfaces, line
-numbers. The more precise, the fewer tokens ralph spends exploring.>
-
-**Key insight:** <Call out non-obvious things — existing code that already
-handles this, functions that need renaming, integration points.>
-
-### Task 2: <Title>
-
-...
-
-## Verification
-
-<Final end-to-end checks after all tasks are done.>
-```
-
-### Wiring PRD (connect existing pieces)
-
-For work where the infrastructure exists but isn't exposed to users.
-
-**Use when:** Adding a CLI flag for existing functionality, extending an existing command to handle a new type, connecting modules that already work independently.
-
-**Structure:** Same as Feature PRD but with a shorter Background that emphasizes what's already built and what's missing. Tasks are typically smaller since they're wiring, not building.
-
-**Key difference:** Background section should explicitly list what's done vs what's missing, with file paths and line numbers. This prevents ralph from rebuilding existing infrastructure.
-
-### Bug Fix PRD (fix broken behavior)
-
-For fixing incorrect behavior where the expected outcome is clear.
-
-**Use when:** A command produces wrong output, a parser crashes on valid input, an edge case is mishandled.
-
-**Structure:**
-
-```markdown
-# Plan: Fix <Title>
-
-> <What's broken, what the correct behavior should be. 1-2 sentences.>
-
-## Reproduction
-
-**Input:** <Exact command, input file, or function call that triggers the bug>
-
-**Expected:** <What should happen>
-
-**Actual:** <What happens instead>
-
-## Root Cause (hypothesis)
-
-<Best guess at why this happens. Name specific files, functions, line numbers.
-If uncertain, say so — ralph will investigate.>
-
-## References
-
-- <Link to issue, error log, or related code>
-
-## Acceptance Criteria
-
-- [ ] Failing test reproduces the bug before the fix
-- [ ] Fix makes the test pass
-- [ ] No regressions — all existing tests continue to pass
-- [ ] AGENTS.md updated if fix created knowledge future agents need and can't easily infer
-- [ ] README.md updated if the fix changes documented behavior
-
-## Tasks
-
-### Task 1: Write failing test
-
-**File:** `src/<file>.test.ts` or `tests/<file>.test.ts`
-
-**What:** <Test that asserts the expected behavior and fails with the current code.
-Use the reproduction case above as the basis.>
-
-### Task 2: Fix the bug
-
-**File:** `src/<file>.ts`
-
-**What:** <Describe the fix. Be specific about which function/branch to change.>
-
-## Verification
-
-<Run the reproduction case manually and confirm correct behavior.>
-```
-
-**Key difference from other templates:** Task 1 is always "write failing test." The ralph prompt enforces test-first for bug fixes, and this template structure matches that expectation.
-
-### Structural PRD (refactor, cleanup, migration)
-
-For work that changes organization without adding features.
-
-**Use when:** Renaming modules, extracting shared code, migrating patterns, cleaning up dead code, improving test coverage.
-
-**Structure:**
-
-```markdown
-# Plan: <Title>
-
-> <What's being restructured and why. What stays the same from the user's perspective.>
-
-## Current State
-
-<Describe the problem: duplication, inconsistency, tech debt. Link to specific
-files and line numbers.>
-
-## Target State
-
-<Describe what the code should look like after. Be concrete about file names,
-module boundaries, export surfaces.>
-
-## Constraints
-
-- No user-facing behavior changes (unless explicitly noted)
-- All existing tests must continue to pass without modification
-- <Other invariants>
-
-## Acceptance Criteria
-
-- [ ] <Structural outcome — e.g. "X lives in its own module">
-- [ ] <Another structural outcome>
-- [ ] All existing tests pass without modification
-- [ ] Build, test, and lint all pass
-- [ ] AGENTS.md updated if restructuring created knowledge future agents need and can't easily infer
-
-## Tasks
-
-### Task 1: <Title>
-
-...
-
-## Verification
-
-- Build passes
-- Tests pass (same count, no skips)
-- Lint passes
-- <Specific behavioral invariants to verify>
-```
-
-### Implementation Plan (reference doc, not a ralph plan)
-
-For repeatable processes that different developers (or ralph runs) will follow multiple times. These are human reference docs, not plans ralph consumes directly.
-
-**Use when:** Documenting a cookbook process like adding a new module, onboarding a new integration, or any step-by-step guide.
-
-**Not for ralph:** If you want ralph to execute a cookbook process, write a Feature or Wiring PRD that references the implementation plan.
-
-**Structure:**
-
-```markdown
-# <Process Name>
-
-<When to use this plan. Prerequisites.>
-
-## Goal
-
-<What success looks like.>
-
-## Scope Decision (Step 0)
-
-<Decisions that must be made before starting.>
-
-## Phase 1 — <Name>
-
-### Step 1: <Action>
-
-<What to do, where, expected outcome.>
-
-### Step 2: <Action>
-
-...
-
-## Phase 2 — <Name>
-
-...
-```
-
-## Writing Guidelines
-
-### Frontmatter keys that are NOT supported
-
-`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPH_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how ralph.sh formats file references in prompts for the current agent, which applies uniformly to the entire run.
-
-### Optional `depends-on` frontmatter
-
-For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralph.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralph/out/`).
-
-Use basename references (not full paths):
+1. **Define outcomes, not implementation stories.**
+   Plans must describe observable done states via acceptance criteria.
+2. **One task, one logical commit.**
+   Treat this as a size rule: one coherent intent per commit.
+3. **Risk-first, but always green.**
+   Start with the highest-risk unknown that can still produce a compilable, testable increment.
+4. **Thin vertical slices over layer-first sequencing.**
+   Treat this as a shape rule: each task should deliver a small but complete path.
+5. **Explicit acceptance criteria are mandatory.**
+   Use machine-parseable checkboxes (`- [ ]`).
+6. **Feedback loops are hard gates.**
+   Every task must pass configured build/test/lint feedback before commit.
+
+## Global Writing Rules (Apply To All Runnable PRDs)
+
+### 1) Unsupported frontmatter
+
+- `promptMode` must not be set per plan.
+- `promptMode` is global/per-run via CLI, env var, or config.
+
+### 2) `depends-on` frontmatter
+
+- Use basename references only.
+- A plan is runnable only when all dependencies are in `.ralph/out/`.
 
 ```md
 ---
-depends-on: [prd-foundation.md, prd-wiring.md]
+depends-on: [prd-a.md, prd-b.md]
 ---
 ```
 
-or
-
-```md
----
-depends-on:
-	- prd-foundation.md
-	- prd-wiring.md
----
-```
-
-If omitted, the plan is treated as having no dependencies.
-
-### Optional `source` frontmatter (issue linking)
-
-Link a plan to an external issue tracker. When the plan completes, Ralph automatically comments on and closes the linked issue.
+### 3) `source` frontmatter (issue linkage)
 
 ```md
 ---
@@ -277,94 +72,74 @@ issue-url: https://github.com/owner/repo/issues/42
 ---
 ```
 
-Supported sources: `github`. Requires `gh` CLI to be installed and authenticated (`gh auth login`).
+- Supported source is `github`.
+- `gh` CLI must be installed and authenticated.
+- If `gh` is unavailable, issue hooks are skipped.
 
-Fields:
+### 4) `group` frontmatter (multi-plan shared branch mode)
 
-- `source` — tracker type (currently only `github`)
-- `issue` — issue number
-- `issue-url` — full URL to the issue (used for repo detection and human reference)
+Use `group` when multiple plans should execute on one shared branch and one PR lifecycle.
 
-If `gh` is not available, the hooks are silently skipped. To disable automatic issue closing while keeping comments, set `issueCloseOnComplete=false` in `.ralph/ralph.config`.
-
-### Be specific about locations
-
-Bad: "Update the types file to add prompt support."
-
-Good: "Add `'prompt'` to the `ConfigType` union in `src/types.ts` (line 106)."
-
-Ralph spends tokens exploring. Every line number, function name, and file path you provide is tokens saved and wrong turns avoided.
-
-### State what already works
-
-Ralph will rebuild things that already exist if you don't tell it they're done. List existing infrastructure explicitly:
-
-```
-The install pipeline (`src/installer.ts`) already handles this case —
-it checks `item.type === 'foo'` at line 104 and routes correctly.
-No changes needed here.
+```md
+---
+group: branch-merge-flow
+---
 ```
 
-### One task = one commit
+- Plans with the same `group` are candidates to run on `ralph/<group-name>`.
+- Grouped runs transition across multiple plans on the same branch.
+- In PR mode, grouped runs use a draft PR lifecycle (create, update, finalize).
+- Group members should still use `depends-on` where ordering matters.
+- Keep `group` names stable and lowercase-kebab-case.
 
-Each task should result in exactly one commit. If a task requires changes across 5 files, that's fine — but it should be one logical unit. If you need two logical units, make two tasks.
+### 5) Specificity requirements
 
-### Use conventional commits
+Plans must name concrete locations: files, functions, branches, and target lines when possible.
 
-All commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/):
+### 6) State what already works
 
-```
-<type>[optional scope]: <description>
-```
+Plans should explicitly mark existing infrastructure that must not be rebuilt.
 
-Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. Use a scope when it adds clarity (e.g. `feat(transpiler): ...`). The ralph prompt enforces this, but plan tasks should assume it when describing expected commits.
+### 7) Commit format requirements
 
-Examples:
+Each task maps to one logical commit.
+Commit messages must follow Conventional Commits.
 
-- `feat(parser): add support for new config format`
-- `fix(cli): handle missing arguments gracefully`
-- `refactor: extract shared validation logic`
-- `test(agent): add coverage for edge cases`
-- `docs: update README with new CLI command`
+### 8) Testing requirements by task type
 
-### Testing strategy by task type
+- Bug fix plans must include reproduction + failing-test intent.
+- Feature plans must specify new coverage expectations (happy path and edge/error path).
+- Refactor plans must state invariants and coverage expectations.
+- Docs/chore plans should explicitly state if tests are not required.
 
-The ralph prompt enforces different testing approaches depending on the nature of the task. Plan authors should be aware of this when writing tasks:
+### 9) Learning capture policy
 
-- **Bug fixes**: Ralph writes a failing test first, then fixes the code. Plans should describe the buggy behavior clearly enough for ralph to reproduce it in a test.
-- **New features**: Ralph implements first, then adds tests. Plans should include test expectations in the acceptance criteria so ralph knows what to cover.
-- **Refactoring**: Ralph relies on existing tests as the safety net. Plans should note if coverage gaps exist that need new tests.
-- **Docs/chore tasks**: No tests expected.
+- Add a learnings task only when recurring mistakes or durable patterns were discovered.
+- During runs, capture raw learnings in `.ralph/LEARNINGS.md`.
+- Promote durable guidance to `LEARNINGS.md` and agent instruction docs after review.
 
-When writing bug fix tasks, include the reproduction case (input, expected output, actual output) so ralph can translate it directly into a failing test. Without this, ralph may write a test that asserts the wrong thing.
+## Anti-Patterns (Avoid)
 
-### Order tasks for a green build
+### Critical
 
-Every task should leave the build and tests passing. This means:
+1. Tasks without acceptance criteria checkboxes.
+2. Layer-first sequencing that postpones end-to-end validation.
+3. Bug-fix plans without a concrete reproduction.
 
-1. Add types/interfaces first (no callers yet)
-2. Add functions next (no callers yet)
-3. Wire callers last (connects everything)
-4. Tests after wiring (exercises the full path)
-5. Docs last (describes the final state)
+### High
 
-### Include acceptance criteria with checkboxes
+4. Tasks too large to produce one logical commit.
+5. Vague tasks without file/function targets.
+6. Rebuilding existing code because "already works" context is missing.
 
-Ralph uses these to determine when it's done. Without them, it guesses. Use `- [ ]` checkboxes — they're both human-readable and machine-parseable.
+### Medium
 
-### Always include doc updates
+7. Omitting learnings updates when durable patterns were discovered.
+8. Grouped plans with inconsistent `group` values or unresolved dependency assumptions.
 
-Every plan that changes user-facing behavior should include tasks for:
+## Standard Verification Block
 
-- **AGENTS.md** — only when the work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
-- **README.md** — commands, options, examples, support matrices
-- **LEARNINGS.md / learnings flow** — when the work reveals recurring mistakes or durable operational patterns, add a task to compact findings and promote them appropriately:
-  - agent-instruction docs for immediate repo-specific behavior
-  - skill/reusable docs for stable patterns worth reusing across tasks/repos
-
-### Standard verification block
-
-Include at the bottom of every plan:
+Include this at the end of every runnable plan:
 
 ```markdown
 ## Verification
@@ -377,9 +152,28 @@ After each task:
 
 Final verification:
 
-- <end-to-end command that exercises the new feature>
-- <specific behavioral checks>
+- <end-to-end command>
+- <specific behavioral assertions>
+
+When using group mode, also verify:
+
+- `npx ralphai run -- --dry-run` shows grouped plans on the expected shared branch
+- grouped plan ordering matches dependency expectations
 ```
+
+## Quick Author Checklist (Before Moving to Backlog)
+
+- [ ] Correct plan type selected from `.ralph/plans/`
+- [ ] Plan is in `.ralph/wip/` until runnable
+- [ ] Dependencies are explicit (`depends-on`) or intentionally empty
+- [ ] Every acceptance criterion is observable and testable
+- [ ] Every task is one logical commit and leaves a green build
+- [ ] Verification includes runnable commands and concrete checks
+- [ ] Bug-fix plans include a minimal runnable reproduction when feasible
+- [ ] If grouped: `group` value is consistent across member plans and dependency order is explicit
+- [ ] Existing working infrastructure is called out explicitly
+- [ ] Learnings trigger was evaluated and captured when applicable
+- [ ] Stuck-risk is low (tasks are narrow enough to avoid repeated no-commit loops)
 
 ## Iteration Sizing
 
@@ -390,6 +184,6 @@ Final verification:
 | Large feature (10+ tasks, new modules) | 15-25                               |
 | Structural refactor                    | 10-15                               |
 
-Use `npx ralphai run -- --dry-run` to verify selection/readiness before launching long autonomous runs.
-
-If a run is interrupted and leaves a dirty tree, use `npx ralphai run -- <iterations> --resume` on the current `ralph/*` branch to auto-commit recovery state and continue.
+Use `npx ralphai run -- --dry-run` to validate readiness before long runs.
+If a run stalls repeatedly, split tasks further before retrying.
+Ralph may abort after consecutive non-commit iterations (`maxStuck`; see `docs/HOW-RALPHAI-WORKS.md`).
