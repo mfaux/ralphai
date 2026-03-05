@@ -50,7 +50,7 @@ Or call the shell script directly:
 ./.ralph/ralph.sh
 ```
 
-Ralph picks the best plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it pushes the branch and opens a pull request. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `pipeline/in-progress/` on the branch — just run again to resume.
+Ralph picks a plan from the backlog, creates a `ralph/*` branch, hands the plan to your agent, and loops: build, test, lint after every iteration. When a plan is done, it pushes the branch and opens a pull request. Defaults to 5 iterations per plan (e.g. `./.ralph/ralph.sh 3` for 3). If a plan isn't finished, it stays in `pipeline/in-progress/` on the branch — just run again to resume.
 
 ### 3. Steer
 
