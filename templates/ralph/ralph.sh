@@ -1913,6 +1913,21 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
 
+  dry_group=$(extract_group "${WIP_FILES[0]}")
+  if [[ -n "$dry_group" ]]; then
+    echo "[dry-run] Group: $dry_group"
+    echo "[dry-run] Branch would be: ralph/$dry_group"
+    dry_group_members=()
+    mapfile -t dry_group_members < <(collect_group_plans "$dry_group")
+    echo "[dry-run] Group plans (${#dry_group_members[@]} remaining in backlog + 1 selected):"
+    echo "[dry-run]   1. $(basename "${WIP_FILES[0]}") (selected)"
+    gn=2
+    for gm in "${dry_group_members[@]}"; do
+      echo "[dry-run]   $gn. $(basename "$gm")"
+      gn=$((gn + 1))
+    done
+  fi
+
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     echo "[dry-run] Mode: resume in-progress"
@@ -1929,9 +1944,13 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
-    branch="ralph/${slug}"
+    if [[ -n "${dry_group:-}" ]]; then
+      branch="ralph/${dry_group}"
+    else
+      slug="${plan_basename#prd-}"
+      slug="${slug%.md}"
+      branch="ralph/${slug}"
+    fi
     if git show-ref --verify --quiet "refs/heads/ralph"; then
       echo "[dry-run] WARNING: Branch 'ralph' exists and would block creation of '$branch'."
       echo "[dry-run] Fix: git branch -m ralph ralph-legacy  OR  git branch -D ralph"
@@ -2156,10 +2175,32 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo ""
       echo "Plan complete after $i iterations: $PLAN_DESC"
       archive_run
-      if [[ "$MODE" == "pr" ]]; then
-        create_pr "$branch" "$PLAN_DESC"
-      else
-        echo "Direct mode: commits are on branch '$branch'. No PR created."
+
+      if [[ -n "${GROUP_NAME:-}" ]]; then
+        # Group mode: try to advance to next plan
+        if advance_group_plan; then
+          echo ""
+          echo "=== Continuing group '$GROUP_NAME': $(basename "${WIP_FILES[0]}") ==="
+          # Reset iteration tracking for next plan
+          i=0
+          stuck_count=0
+          last_hash=$(git rev-parse HEAD)
+          # Re-initialize progress file for the new plan
+          echo "## Progress Log" > "$PROGRESS_FILE"
+          echo "" >> "$PROGRESS_FILE"
+          echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
+          continue  # Continue the iteration loop with the new plan
+        fi
+        # Group complete — PR creation handled by prd-group-mode-pr-lifecycle
+        echo "Group '$GROUP_NAME' finished. All plans completed."
+      fi
+
+      if [[ -z "${GROUP_NAME:-}" ]]; then
+        if [[ "$MODE" == "pr" ]]; then
+          create_pr "$branch" "$PLAN_DESC"
+        else
+          echo "Direct mode: commits are on branch '$branch'. No PR created."
+        fi
       fi
       plans_completed=$((plans_completed + 1))
       completed=true
