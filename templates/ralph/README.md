@@ -384,6 +384,47 @@ mode=direct
 
 Alternatively, use the default PR mode with `--base-branch=feature/big-thing` to create `ralph/*` sub-branches that open PRs against the feature branch.
 
+### Group Mode (Multi-Plan Branches)
+
+Group mode lets multiple plans execute sequentially on a single shared branch and produce a single PR. Add `group: <name>` to the YAML frontmatter of each plan in the group:
+
+```yaml
+---
+group: user-authentication
+---
+```
+
+All plans sharing the same `group:` value will:
+
+- Run sequentially on a single `ralph/<group-name>` branch (e.g. `ralph/user-authentication`)
+- Produce a single PR (created as **draft** after the first plan, marked **ready** when all plans complete)
+- Respect `depends-on` ordering within the group
+
+**PR lifecycle:**
+
+1. **First plan completes** — branch is pushed, draft PR created via `gh pr create --draft`
+2. **Each subsequent plan completes** — PR body updated with cumulative progress (completed/remaining plans, commit log)
+3. **Last plan completes** — PR marked ready for review via `gh pr ready`, `.group-state` cleaned up
+
+**Failure handling:**
+
+- If a group plan gets stuck or exhausts its iterations, the branch is pushed and a draft PR is created/updated with a failure note
+- `.group-state` is preserved so `--resume` can recover from where the group left off
+- Remaining group plans are not attempted after a failure
+
+**When to use groups:**
+
+- Feature work that naturally splits into sequential phases
+- When you want a single reviewable PR but small, focused plans for the AI agent
+- When you want to AFK while multiple plans are completed
+
+**When NOT to use groups:**
+
+- Independent plans that don't need to be on the same branch
+- Plans that can run in parallel (groups are sequential)
+
+See [PLANNING.md](PLANNING.md) for full `group:` frontmatter documentation and examples.
+
 ### GitHub Issues Integration
 
 Ralph can automatically pull work from GitHub Issues when the backlog is empty. Issues labeled with a configurable label are converted to plan files, executed, and then closed on completion.
