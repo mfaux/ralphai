@@ -267,6 +267,7 @@ export function spawnUpdateCheck(packageName: string, cacheDir?: string): void {
       detached: true,
       stdio: "ignore",
       windowsHide: true, // Prevent console window flash on Windows
+      cwd: dir, // Use cache dir as cwd so we don't hold a lock on the project dir (Windows)
     });
 
     // Let the parent process exit without waiting for the child
