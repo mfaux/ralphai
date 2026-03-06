@@ -999,6 +999,31 @@ describe("ralphai command", () => {
         true,
       );
     });
+
+    it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
+      // Initialize ralphai in the main repo (creates .ralphai/)
+      runCliOutput(["init", "--yes"], mainRepo);
+
+      // Create a stub runner script that just prints success
+      const stubScript = join(mainRepo, "stub-runner.sh");
+      writeFileSync(stubScript, '#!/bin/bash\necho "STUB_OK"\n');
+      chmodSync(stubScript, 0o755);
+
+      // Run from worktree — should find .ralphai/ in the main repo
+      const result = runCli(["run"], worktreeDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
+      expect(result.stdout).toContain("STUB_OK");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
+      // Do NOT init — .ralphai/ doesn't exist anywhere
+      const result = runCli(["run"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("not set up");
+      expect(result.stderr).toContain("ralphai init");
+    });
   });
 
   // -------------------------------------------------------------------------

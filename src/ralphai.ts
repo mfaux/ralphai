@@ -806,6 +806,34 @@ function isGitWorktree(dir: string): boolean {
   }
 }
 
+/**
+ * Resolve the directory containing `.ralphai/`. Returns `cwd` if it has
+ * `.ralphai/` directly, falls back to the main worktree root when running
+ * inside a git worktree, or `null` if `.ralphai/` cannot be found.
+ */
+function resolveRalphaiDir(cwd: string): string | null {
+  // Direct check first — covers the common (non-worktree) case
+  if (existsSync(join(cwd, ".ralphai"))) {
+    return cwd;
+  }
+  // Worktree fallback: resolve main worktree root
+  try {
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      cwd,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    // --git-common-dir may return a relative path; anchor to cwd
+    const mainRoot = resolve(cwd, commonDir, "..");
+    if (mainRoot !== cwd && existsSync(join(mainRoot, ".ralphai"))) {
+      return mainRoot;
+    }
+  } catch {
+    // Not in a git repo, or git not available
+  }
+  return null;
+}
+
 async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
@@ -976,8 +1004,11 @@ function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<never> {
-  // Check that ralphai has been initialized (config dir exists)
-  if (!existsSync(join(cwd, ".ralphai"))) {
+  // Check that ralphai has been initialized (config dir exists).
+  // In a worktree, .ralphai/ lives in the main repo — resolveRalphaiDir()
+  // handles the fallback transparently.
+  const ralphaiRoot = resolveRalphaiDir(cwd);
+  if (!ralphaiRoot) {
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
