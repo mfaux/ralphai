@@ -32,3 +32,6 @@ logs
 .DS_Store
 
 package-lock.json
+
+# pipeline runtime state
+.ralphai/pipeline/in-progress/

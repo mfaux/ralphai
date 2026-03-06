@@ -563,7 +563,7 @@ Each entry should include:
 pipeline/backlog/*.md
 pipeline/wip/*.md
 pipeline/in-progress/*.md
-pipeline/in-progress/progress.txt
+pipeline/in-progress/progress.md
 pipeline/out/
 LEARNINGS.md
 `;

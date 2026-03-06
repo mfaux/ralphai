@@ -79,7 +79,7 @@ describe("ralphai command", () => {
     expect(gitignore).toContain("pipeline/backlog/*.md");
     expect(gitignore).toContain("pipeline/wip/*.md");
     expect(gitignore).toContain("pipeline/in-progress/*.md");
-    expect(gitignore).toContain("pipeline/in-progress/progress.txt");
+    expect(gitignore).toContain("pipeline/in-progress/progress.md");
     expect(gitignore).toContain("pipeline/out/");
     expect(gitignore).toContain("LEARNINGS.md");
   });

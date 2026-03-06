@@ -19,8 +19,8 @@ archive_run() {
 
   # Move progress file
   if [[ -f "$PROGRESS_FILE" ]]; then
-    mv "$PROGRESS_FILE" "$ARCHIVE_DIR/progress-${timestamp}.txt"
-    echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${timestamp}.txt"
+    mv "$PROGRESS_FILE" "$ARCHIVE_DIR/progress-${timestamp}.md"
+    echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${timestamp}.md"
   fi
 
   # Move PRD/plan files from in-progress/ to out/
