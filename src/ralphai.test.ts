@@ -295,9 +295,10 @@ describe("ralphai command", () => {
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Direct mode refuses to run on main or master
     expect(ralphaiSh).toContain("Direct mode cannot run on");
-    expect(ralphaiSh).toContain("Switch to a feature branch, or use --pr mode");
-    expect(ralphaiSh).toContain("Create a branch for ralphai to work from:");
-    expect(ralphaiSh).toContain("git checkout -b ralphai/");
+    expect(ralphaiSh).toContain(
+      "Switch to a feature branch, or run in PR mode:",
+    );
+    expect(ralphaiSh).toContain("ralphai run --pr");
   });
 
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
@@ -1470,15 +1471,19 @@ echo "$PROMPT_MODE"
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      const output = execFileSync("node", [distCli, "run", "--dry-run"], {
-        cwd: testDir,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          RALPHAI_NO_UPDATE_CHECK: "1",
+      const output = execFileSync(
+        "node",
+        [distCli, "run", "--dry-run", "--pr"],
+        {
+          cwd: testDir,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            RALPHAI_NO_UPDATE_CHECK: "1",
+          },
         },
-      });
+      );
 
       expect(output).toContain("No runnable work found.");
     });

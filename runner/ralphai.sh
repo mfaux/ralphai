@@ -33,6 +33,18 @@ source "$RALPHAI_LIB_DIR/pr.sh"
 
 plans_completed=0
 
+# --- Early guard: direct mode cannot run on main/master ---
+if [[ "$MODE" == "direct" ]]; then
+  current_branch=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+    echo "ERROR: Direct mode cannot run on '$current_branch'."
+    echo ""
+    echo "Switch to a feature branch, or run in PR mode:"
+    echo "  ralphai run --pr"
+    exit 1
+  fi
+fi
+
 if [[ "$DRY_RUN" == true ]]; then
   echo ""
   echo "========================================"
@@ -70,18 +82,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would keep existing $PROGRESS_FILE"
   elif [[ "$MODE" == "direct" ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
-      echo "[dry-run] ERROR: Direct mode cannot run on '$current_branch'."
-      echo "[dry-run] Switch to a feature branch, or use --pr mode."
-      dry_slug=$(basename "${WIP_FILES[0]}")
-      dry_slug="${dry_slug#prd-}"
-      dry_slug="${dry_slug%.md}"
-      echo ""
-      echo "[dry-run] Create a branch for ralphai to work from:"
-      echo "[dry-run]   git checkout -b ralphai/${dry_slug}"
-    else
-      echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
-    fi
+    echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
@@ -141,23 +142,7 @@ while true; do
     echo "Resuming — keeping existing $PROGRESS_FILE"
   elif [[ "$MODE" == "direct" ]]; then
     # Direct mode: work on the current branch, no branch creation, no PR
-    current_branch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
-      echo "ERROR: Direct mode cannot run on '$current_branch'."
-      echo "Switch to a feature branch, or use --pr mode."
-      # Roll back: move plan file back to backlog
-      plan_basename=$(basename "${WIP_FILES[0]}")
-      rollback_dest="$BACKLOG_DIR/${plan_basename}"
-      mv "${WIP_FILES[0]}" "$rollback_dest"
-      echo "Rolled back: moved plan to $rollback_dest"
-      plan_slug="${plan_basename#prd-}"
-      plan_slug="${plan_slug%.md}"
-      echo ""
-      echo "Create a branch for ralphai to work from:"
-      echo "  git checkout -b ralphai/${plan_slug}"
-      exit 1
-    fi
-    branch="$current_branch"
+    branch=$(git rev-parse --abbrev-ref HEAD)
     echo "Direct mode: working on current branch '$branch' (no PR will be created)"
 
     # Initialize progress file
