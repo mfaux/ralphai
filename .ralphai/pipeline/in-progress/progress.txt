@@ -1,59 +1,21 @@
 ## Progress Log
 
-### 2026-03-06 — Task 1: Define the execution-mode contract in config and help text
+### Task 1: Add `extract_plan_agent()` function — DONE
 
-**Status:** Complete
+**Date:** 2026-03-06
 
-**What was done:**
-- Added `DEFAULT_CONTINUOUS="false"` and `CONTINUOUS` resolved setting to `runner/lib/defaults.sh`
-- Added `CLI_CONTINUOUS=""` variable declaration to `defaults.sh`
-- Added `continuous` config key to `load_config()` in `runner/lib/config.sh` with `true`/`false` validation
-- Added `CONFIG_CONTINUOUS` merge in `apply_config()`
-- Added `RALPHAI_CONTINUOUS` env var override in `apply_env_overrides()` with validation
-- Added `--continuous` CLI flag parsing (sets `CLI_CONTINUOUS="true"`)
-- Added `--continuous` to `print_usage()` help text, supported keys list, env vars list, and examples
-- Added `CLI_CONTINUOUS` merge in CLI override section
-- Added `continuous` source detection and display in `--show-config` block
-- Added string assertion test for continuous config infrastructure in `src/ralphai.test.ts`
-- Added `continuous config precedence` test suite (7 tests) covering default, config, env, CLI, and invalid value rejection
-
-**Files changed:**
-- `runner/lib/defaults.sh` — new default + CLI variable
-- `runner/lib/config.sh` — load_config, apply_config, apply_env_overrides, CLI parsing, print_usage, show-config
-- `src/ralphai.test.ts` — infrastructure assertion test + precedence tests
+**What:** Added `extract_plan_agent()` function to `runner/lib/plans.sh` that extracts the `agent` key from a plan file's YAML frontmatter.
 
 **Decisions:**
-- `--continuous` is a boolean flag (no value argument). It sets `CONTINUOUS="true"`. Without it, default is `"false"`.
-- Config file and env var use `"true"/"false"` string values, matching the existing pattern for other boolean settings (e.g. `issueCloseOnComplete`).
-- Precedence follows existing pattern: CLI > env > config > default.
-
-**Verification:**
-- `bash -n` passes on all shell scripts
-- `pnpm build` succeeds
-- `pnpm type-check` succeeds
-- `pnpm test` passes all 143 tests (including 8 new tests)
-
-### 2026-03-06 — Task 2: Update runner loop semantics for direct mode
-
-**Status:** Complete
-
-**What was done:**
-- Added a post-completion guard in the outer `while true` loop of `runner/ralphai.sh`
-- When `MODE == "direct"` and `CONTINUOUS != "true"`, the runner exits after completing one plan (or one grouped-plan unit) instead of looping back to `detect_plan`
-- The guard is placed between the turn-exhaustion check and the loop-back comment, so it only fires when `completed == true`
-- Grouped plans are unaffected: they continue within the inner turn loop via `advance_group_plan` / `continue`, never reaching the outer-loop guard until the entire group is done
-- PR mode is unaffected: the condition checks `MODE == "direct"` first
+- Used the same `sed` pattern as `read_issue_frontmatter()` in `runner/lib/issues.sh` for consistency
+- Function returns the full agent command string (e.g. `claude -p`), not just the agent name
+- Returns exit code 1 for missing file or no frontmatter block (consistent with the plan spec)
+- Placed the function before `extract_depends_on()` since it's a simpler frontmatter extraction
 
 **Files changed:**
-- `runner/ralphai.sh` — added single-plan stop guard (lines 418–424)
+- `runner/lib/plans.sh` — added `extract_plan_agent()` function (lines 4–16)
+- `src/ralphai.test.ts` — added 7 tests covering: extraction, absent key, no frontmatter, multi-key frontmatter, first key position, flags/arguments
 
-**Decisions:**
-- The exit message tells the user about `--continuous` so the opt-in is discoverable
-- Grouped plans completing as a unit and then stopping is correct: "one plan" in this context means "one unit of work"
-- Exit code 0 is used (successful completion, not an error)
+**Tests:** All 150 tests pass (6 new tests for extract_plan_agent + existing suite).
 
-**Verification:**
-- `bash -n runner/ralphai.sh` passes
-- `pnpm build` succeeds
-- `pnpm type-check` succeeds
-- `pnpm test` passes all 143 tests
+**Remaining tasks:** 2 (per-plan override in plan loop), 3 (dry-run output), 4 (PLANNING.md docs), 5 (override/revert behavior tests)
