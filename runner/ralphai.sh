@@ -77,19 +77,8 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
 
-  dry_group=$(extract_group "${WIP_FILES[0]}")
-  if [[ -n "$dry_group" ]]; then
-    echo "[dry-run] Group: $dry_group"
-    echo "[dry-run] Branch would be: ralphai/$dry_group"
-    dry_group_members=()
-    mapfile -t dry_group_members < <(collect_group_plans "$dry_group")
-    echo "[dry-run] Group plans (${#dry_group_members[@]} remaining in backlog + 1 selected):"
-    echo "[dry-run]   1. $(basename "${WIP_FILES[0]}") (selected)"
-    gn=2
-    for gm in "${dry_group_members[@]}"; do
-      echo "[dry-run]   $gn. $(basename "$gm")"
-      gn=$((gn + 1))
-    done
+  if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+    echo "[dry-run] Continuous+PR mode: all backlog plans will run on a single branch with one PR."
   fi
 
   if [[ "$RESUMING" == true ]]; then
@@ -103,13 +92,9 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    if [[ -n "${dry_group:-}" ]]; then
-      branch="ralphai/${dry_group}"
-    else
-      slug="${plan_basename#prd-}"
-      slug="${slug%.md}"
-      branch="ralphai/${slug}"
-    fi
+    slug="${plan_basename#prd-}"
+    slug="${slug%.md}"
+    branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
       echo "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai"
@@ -177,15 +162,9 @@ while true; do
   else
     git checkout "$BASE_BRANCH"
     plan_basename=$(basename "${WIP_FILES[0]}")
-    if [[ -n "${GROUP_NAME:-}" ]]; then
-      # Group mode: branch named after the group
-      branch="ralphai/${GROUP_NAME}"
-    else
-      # Normal mode: branch named after the plan
-      slug="${plan_basename#prd-}"
-      slug="${slug%.md}"
-      branch="ralphai/${slug}"
-    fi
+    slug="${plan_basename#prd-}"
+    slug="${slug%.md}"
+    branch="ralphai/${slug}"
 
     # Guard: a bare "ralphai" branch blocks all "ralphai/*" branches (git ref hierarchy conflict)
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
@@ -226,18 +205,6 @@ while true; do
       exit 1
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
-
-    # Update group state with branch name
-    if [[ -n "${GROUP_NAME:-}" && -f "$GROUP_STATE_FILE" ]]; then
-      GROUP_BRANCH="$branch"
-      write_group_state \
-        "group=$GROUP_NAME" \
-        "branch=$GROUP_BRANCH" \
-        "plans_total=$GROUP_PLANS_TOTAL" \
-        "plans_completed=$GROUP_PLANS_COMPLETED" \
-        "current_plan=$GROUP_CURRENT_PLAN" \
-        "pr_url=${GROUP_PR_URL:-}"
-    fi
 
     # Initialize progress file
     mkdir -p "$WIP_DIR"
@@ -358,31 +325,7 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
         else
           echo "ERROR: $MAX_STUCK consecutive turns with no progress. All fallback agents exhausted."
           echo "Branch: $branch"
-          if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
-            echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
-            echo "Pushing partial work and creating/updating draft PR..."
-            git push origin "$branch" 2>/dev/null || true
-            if [[ -z "${GROUP_PR_URL:-}" ]]; then
-              create_group_pr "$branch" "$GROUP_NAME"
-              # Append failure note to PR body
-              if [[ -n "${GROUP_PR_URL:-}" ]]; then
-                fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-                gh pr edit "$GROUP_PR_URL" --body "${fail_body}
-
----
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
-              fi
-            else
-              update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-              gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-
----
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
-            fi
-            echo "Group state preserved in $GROUP_STATE_FILE for --resume."
-          else
-            echo "Plan files remain in $WIP_DIR/ — resume with another run."
-          fi
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
           AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
           detect_agent_type
           resolve_prompt_mode
@@ -407,59 +350,11 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       echo "Plan complete after $i turns: $PLAN_DESC"
       archive_run
 
-      if [[ -n "${GROUP_NAME:-}" ]]; then
-        # Group mode: create or update draft PR before advancing
-        if [[ "$MODE" == "pr" ]]; then
-          if [[ -z "${GROUP_PR_URL:-}" ]]; then
-            # First group plan completed — create draft PR
-            create_group_pr "$branch" "$GROUP_NAME"
-          else
-            # Subsequent plan completed — update PR body
-            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-          fi
-        fi
-
-        # Group mode: try to advance to next plan
-        if advance_group_plan; then
-          echo ""
-          echo "=== Continuing group '$GROUP_NAME': $(basename "${WIP_FILES[0]}") ==="
-          # Reset turn tracking for next plan
-          i=0
-          stuck_count=0
-          last_hash=$(git rev-parse HEAD)
-          # Re-initialize progress file for the new plan
-          echo "## Progress Log" > "$PROGRESS_FILE"
-          echo "" >> "$PROGRESS_FILE"
-          echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
-          # Re-extract per-plan agent for the new plan
-          AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
-          plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
-          if [[ -n "$plan_agent" ]]; then
-            AGENT_COMMAND="$plan_agent"
-            echo "Using plan-specific agent: $plan_agent"
-          fi
-          detect_agent_type
-          resolve_prompt_mode
-          continue  # Continue the turn loop with the new plan
-        fi
-
-        # Group complete
-        if [[ "$MODE" == "pr" ]]; then
-          finalize_group_pr "$branch"
-        else
-          cleanup_group_state
-          echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
-          echo "Tip: use --pr to automatically create a branch and open a pull request."
-        fi
-      fi
-
-      if [[ -z "${GROUP_NAME:-}" ]]; then
-        if [[ "$MODE" == "pr" ]]; then
-          create_pr "$branch" "$PLAN_DESC"
-        else
-          echo "Direct mode: commits are on branch '$branch'. No PR created."
-          echo "Tip: use --pr to automatically create a branch and open a pull request."
-        fi
+      if [[ "$MODE" == "pr" ]]; then
+        create_pr "$branch" "$PLAN_DESC"
+      else
+        echo "Direct mode: commits are on branch '$branch'. No PR created."
+        echo "Tip: use --pr to automatically create a branch and open a pull request."
       fi
       plans_completed=$((plans_completed + 1))
       completed=true
@@ -475,18 +370,7 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
   if [[ "$completed" == false ]]; then
     echo ""
     echo "Finished $TURNS turns without completing: $PLAN_DESC"
-    if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
-      echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
-      git push origin "$branch" 2>/dev/null || true
-      if [[ -z "${GROUP_PR_URL:-}" ]]; then
-        create_group_pr "$branch" "$GROUP_NAME"
-      else
-        update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-      fi
-      echo "Group state preserved for --resume."
-    else
-      echo "Plan files remain in $WIP_DIR/ — resume with another run."
-    fi
+    echo "Plan files remain in $WIP_DIR/ — resume with another run."
     echo "Branch: $branch"
     exit 0
   fi
