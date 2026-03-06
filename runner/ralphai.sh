@@ -356,7 +356,8 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       echo "WARNING: Agent command exited with status $agent_exit."
     fi
 
-    # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---    current_hash=$(git rev-parse HEAD)
+    # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
+    current_hash=$(git rev-parse HEAD)
     if [[ "$current_hash" == "$last_hash" ]]; then
       stuck_count=$((stuck_count + 1))
       echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."

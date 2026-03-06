@@ -326,6 +326,20 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("Rolled back: moved plan to");
   });
 
+  it("scaffolded ralphai.sh has stuck detection current_hash on its own line", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // current_hash assignment must NOT be on the same line as a # comment,
+    // otherwise bash treats it as part of the comment and never executes it.
+    const lines = ralphaiSh.split("\n");
+    const assignLine = lines.find((l) =>
+      l.includes("current_hash=$(git rev-parse HEAD)"),
+    );
+    expect(assignLine).toBeDefined();
+    expect(assignLine!.trimStart().startsWith("#")).toBe(false);
+  });
+
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
     const templateDir = join(__dirname, "..", "runner");
 
