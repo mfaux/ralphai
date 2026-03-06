@@ -299,6 +299,66 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("git checkout -b ralphai/");
   });
 
+  it("scaffolded ralphai.sh has worktree-aware direct mode suggestion", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // When in a worktree, the direct mode guard suggests git worktree add
+    expect(ralphaiSh).toContain(
+      'if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then',
+    );
+    expect(ralphaiSh).toContain("git worktree add");
+    // In a worktree, the non-worktree "git checkout -b" suggestion is in the else branch
+    expect(ralphaiSh).toContain("Or create a worktree on a feature branch:");
+  });
+
+  it("scaffolded ralphai.sh has worktree-aware PR branch strategy", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // In worktree PR mode, the runner uses the existing branch without checkout
+    expect(ralphaiSh).toContain("Worktree mode: working on existing branch");
+    // Errors if running on the base branch in a worktree
+    expect(ralphaiSh).toContain(
+      "ERROR: Running in a worktree on the base branch",
+    );
+    // Rolls back the plan when erroring
+    expect(ralphaiSh).toContain("Rolled back: moved plan to");
+  });
+
+  it("scaffolded config.sh includes worktree status in --show-config output", () => {
+    const templateLib = join(__dirname, "..", "runner", "lib");
+
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
+    // When in a worktree, --show-config should display worktree info
+    expect(config).toContain("worktree           = true");
+    expect(config).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
+  });
+
+  it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // Dry-run should note when running in a worktree
+    expect(ralphaiSh).toContain(
+      "[dry-run] Running in worktree (main repo: $RALPHAI_MAIN_WORKTREE)",
+    );
+  });
+
+  it("scaffolded ralphai.sh has stuck detection current_hash on its own line", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // current_hash assignment must NOT be on the same line as a # comment,
+    // otherwise bash treats it as part of the comment and never executes it.
+    const lines = ralphaiSh.split("\n");
+    const assignLine = lines.find((l) =>
+      l.includes("current_hash=$(git rev-parse HEAD)"),
+    );
+    expect(assignLine).toBeDefined();
+    expect(assignLine!.trimStart().startsWith("#")).toBe(false);
+  });
+
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
     const templateDir = join(__dirname, "..", "runner");
 
@@ -910,6 +970,226 @@ describe("ralphai command", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
+  });
+
+  // -------------------------------------------------------------------------
+  // Worktree detection tests
+  // -------------------------------------------------------------------------
+
+  describe.skipIf(process.platform === "win32")("worktree detection", () => {
+    let mainRepo: string;
+    let worktreeDir: string;
+
+    beforeEach(() => {
+      // Create a main repo with at least one commit (worktrees need a commit)
+      mainRepo = join(
+        tmpdir(),
+        `ralphai-wt-main-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(mainRepo, { recursive: true });
+      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+      execSync("git config user.name 'Test'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git config user.email 'test@test.com'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git commit --allow-empty -m init", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+
+      // Create a worktree
+      worktreeDir = join(
+        tmpdir(),
+        `ralphai-wt-tree-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      execSync(
+        `git worktree add ${JSON.stringify(worktreeDir)} -b test-worktree`,
+        { cwd: mainRepo, stdio: "ignore" },
+      );
+    });
+
+    afterEach(() => {
+      // Remove worktree before removing main repo
+      try {
+        execSync(`git worktree remove ${JSON.stringify(worktreeDir)} --force`, {
+          cwd: mainRepo,
+          stdio: "ignore",
+        });
+      } catch {
+        /* ignore */
+      }
+      if (existsSync(mainRepo)) {
+        rmSync(mainRepo, { recursive: true, force: true });
+      }
+      if (existsSync(worktreeDir)) {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      }
+    });
+
+    it("init --yes fails inside a git worktree", () => {
+      const result = runCli(["init", "--yes"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(
+        "Cannot initialize ralphai inside a git worktree",
+      );
+      expect(result.stderr).toContain("ralphai init");
+      expect(result.stderr).toContain("main repository");
+    });
+
+    it("sync --yes fails inside a git worktree", () => {
+      // First init in main repo so sync has something to operate on
+      runCliOutput(["init", "--yes"], mainRepo);
+      const result = runCli(["sync", "--yes"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(
+        "Cannot sync ralphai inside a git worktree",
+      );
+      expect(result.stderr).toContain("ralphai sync");
+      expect(result.stderr).toContain("main repository");
+    });
+
+    it("init --yes succeeds in the main repo (not a worktree)", () => {
+      const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
+      expect(output).toContain("Ralphai initialized");
+      expect(existsSync(join(mainRepo, ".ralphai", "ralphai.config"))).toBe(
+        true,
+      );
+    });
+
+    it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
+      // Initialize ralphai in the main repo (creates .ralphai/)
+      runCliOutput(["init", "--yes"], mainRepo);
+
+      // Create a stub runner script that just prints success
+      const stubScript = join(mainRepo, "stub-runner.sh");
+      writeFileSync(stubScript, '#!/bin/bash\necho "STUB_OK"\n');
+      chmodSync(stubScript, 0o755);
+
+      // Run from worktree — should find .ralphai/ in the main repo
+      const result = runCli(["run"], worktreeDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
+      expect(result.stdout).toContain("STUB_OK");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
+      // Do NOT init — .ralphai/ doesn't exist anywhere
+      const result = runCli(["run"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("not set up");
+      expect(result.stderr).toContain("ralphai init");
+    });
+
+    it("defaults.sh resolves pipeline paths to main worktree when sourced inside a worktree", () => {
+      const defaultsPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "defaults.sh",
+      );
+      // Source defaults.sh from the worktree directory and print resolved variables
+      const script = `#!/bin/bash
+set -e
+source ${JSON.stringify(defaultsPath)}
+echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
+echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
+echo "WIP_DIR=$WIP_DIR"
+echo "BACKLOG_DIR=$BACKLOG_DIR"
+echo "ARCHIVE_DIR=$ARCHIVE_DIR"
+echo "CONFIG_FILE=$CONFIG_FILE"
+echo "PROGRESS_FILE=$PROGRESS_FILE"
+`;
+      const scriptFile = join(
+        tmpdir(),
+        `ralphai-defaults-wt-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+      );
+      try {
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+          cwd: worktreeDir,
+        });
+        expect(result).toContain("IS_WORKTREE=true");
+        expect(result).toContain(`MAIN_WORKTREE=${mainRepo}`);
+        expect(result).toContain(
+          `WIP_DIR=${mainRepo}/.ralphai/pipeline/in-progress`,
+        );
+        expect(result).toContain(
+          `BACKLOG_DIR=${mainRepo}/.ralphai/pipeline/backlog`,
+        );
+        expect(result).toContain(
+          `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
+        );
+        expect(result).toContain(
+          `CONFIG_FILE=${mainRepo}/.ralphai/ralphai.config`,
+        );
+        expect(result).toContain(
+          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
+        );
+      } finally {
+        try {
+          rmSync(scriptFile);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
+    it("defaults.sh keeps relative paths when sourced in the main repo (not a worktree)", () => {
+      const defaultsPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "defaults.sh",
+      );
+      const script = `#!/bin/bash
+set -e
+source ${JSON.stringify(defaultsPath)}
+echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
+echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
+echo "WIP_DIR=$WIP_DIR"
+echo "BACKLOG_DIR=$BACKLOG_DIR"
+echo "ARCHIVE_DIR=$ARCHIVE_DIR"
+echo "CONFIG_FILE=$CONFIG_FILE"
+echo "PROGRESS_FILE=$PROGRESS_FILE"
+`;
+      const scriptFile = join(
+        tmpdir(),
+        `ralphai-defaults-main-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+      );
+      try {
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+          cwd: mainRepo,
+        });
+        expect(result).toContain("IS_WORKTREE=false");
+        expect(result).toContain("MAIN_WORKTREE=");
+        // Verify MAIN_WORKTREE is empty (not set)
+        expect(result).toMatch(/MAIN_WORKTREE=\n/);
+        // Paths should remain relative
+        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
+        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
+        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
+        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config");
+        expect(result).toContain(
+          "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
+        );
+      } finally {
+        try {
+          rmSync(scriptFile);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
   });
 
   // -------------------------------------------------------------------------

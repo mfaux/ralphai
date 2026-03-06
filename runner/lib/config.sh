@@ -793,6 +793,12 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  detectedAgentType  = <no agentCommand set>"
   fi
   echo ""
+  if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+    echo "  worktree           = true"
+    echo "  mainWorktree       = $RALPHAI_MAIN_WORKTREE"
+    echo ""
+  fi
+
   if [[ -f "$CONFIG_FILE" ]]; then
     echo "Config file: $CONFIG_FILE (loaded)"
   else

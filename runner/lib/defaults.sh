@@ -40,6 +40,30 @@ BACKLOG_DIR=".ralphai/pipeline/backlog"
 ARCHIVE_DIR=".ralphai/pipeline/out"
 CONFIG_FILE=".ralphai/ralphai.config"
 PROGRESS_FILE="$WIP_DIR/progress.md"
+
+# --- Worktree detection ---
+RALPHAI_IS_WORKTREE=false
+RALPHAI_MAIN_WORKTREE=""
+
+# Canonicalize with cd+pwd because --git-common-dir may return a relative path
+# depending on git version and how the worktree was created.
+_git_common_dir=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd || echo "$(pwd)/.git")
+if [[ "$_git_common_dir" != "$(pwd)/.git" ]]; then
+  RALPHAI_IS_WORKTREE=true
+  # --git-common-dir returns e.g. /home/user/project/.git
+  # Strip trailing /.git to get the main worktree root
+  RALPHAI_MAIN_WORKTREE="${_git_common_dir%/.git}"
+fi
+unset _git_common_dir
+
+if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+  WIP_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/in-progress"
+  BACKLOG_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/backlog"
+  ARCHIVE_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/out"
+  CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/.ralphai/ralphai.config"
+  PROGRESS_FILE="$WIP_DIR/progress.md"
+fi
+
 DRY_RUN=false
 RESUME=false
 TURNS=""

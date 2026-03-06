@@ -776,10 +776,77 @@ export async function runRalphai(args: string[]): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Worktree detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns `true` when `dir` is inside a git worktree (as opposed to the main
+ * working tree). Uses the fact that in a worktree, `--git-common-dir` points
+ * to the main repo's `.git` while `--git-dir` points to
+ * `.git/worktrees/<name>`.
+ */
+function isGitWorktree(dir: string): boolean {
+  try {
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      cwd: dir,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    const gitDir = execSync("git rev-parse --git-dir", {
+      cwd: dir,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    // In a worktree, --git-common-dir points to the main repo's .git
+    // while --git-dir points to .git/worktrees/<name>
+    return commonDir !== gitDir;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the directory containing `.ralphai/`. Returns `cwd` if it has
+ * `.ralphai/` directly, falls back to the main worktree root when running
+ * inside a git worktree, or `null` if `.ralphai/` cannot be found.
+ */
+function resolveRalphaiDir(cwd: string): string | null {
+  // Direct check first — covers the common (non-worktree) case
+  if (existsSync(join(cwd, ".ralphai"))) {
+    return cwd;
+  }
+  // Worktree fallback: resolve main worktree root
+  try {
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      cwd,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    // --git-common-dir may return a relative path; anchor to cwd
+    const mainRoot = resolve(cwd, commonDir, "..");
+    if (mainRoot !== cwd && existsSync(join(mainRoot, ".ralphai"))) {
+      return mainRoot;
+    }
+  } catch {
+    // Not in a git repo, or git not available
+  }
+  return null;
+}
+
 async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
+  // Block init inside a git worktree — .ralphai/ must live in the main repo
+  if (isGitWorktree(cwd)) {
+    console.error(
+      `${TEXT}Error:${RESET} Cannot initialize ralphai inside a git worktree.\n` +
+        `${DIM}Run ${TEXT}ralphai init${DIM} in the main repository instead.${RESET}`,
+    );
+    process.exit(1);
+  }
+
   // Check if .ralphai/ already exists
   if (existsSync(join(cwd, ".ralphai"))) {
     if (options.force) {
@@ -838,6 +905,15 @@ async function runRalphaiSync(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
+  // Block sync inside a git worktree — .ralphai/ must live in the main repo
+  if (isGitWorktree(cwd)) {
+    console.error(
+      `${TEXT}Error:${RESET} Cannot sync ralphai inside a git worktree.\n` +
+        `${DIM}Run ${TEXT}ralphai sync${DIM} in the main repository instead.${RESET}`,
+    );
+    process.exit(1);
+  }
+
   if (!existsSync(join(cwd, ".ralphai"))) {
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
@@ -928,8 +1004,11 @@ function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<never> {
-  // Check that ralphai has been initialized (config dir exists)
-  if (!existsSync(join(cwd, ".ralphai"))) {
+  // Check that ralphai has been initialized (config dir exists).
+  // In a worktree, .ralphai/ lives in the main repo — resolveRalphaiDir()
+  // handles the fallback transparently.
+  const ralphaiRoot = resolveRalphaiDir(cwd);
+  if (!ralphaiRoot) {
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
