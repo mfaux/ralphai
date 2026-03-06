@@ -1939,6 +1939,107 @@ echo "$CONTINUOUS"
   });
 
   // -------------------------------------------------------------------------
+  // Per-plan agent override: extract_plan_agent
+  // -------------------------------------------------------------------------
+
+  it("scaffolded plans.sh contains extract_plan_agent function", () => {
+    const templateLib = join(__dirname, "..", "runner", "lib");
+
+    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
+    expect(plans).toContain("extract_plan_agent()");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "extract_plan_agent function",
+    () => {
+      /** Helper: run extract_plan_agent on a temp file with given content */
+      function extractPlanAgent(content: string): {
+        stdout: string;
+        exitCode: number;
+      } {
+        const planFile = join(
+          tmpdir(),
+          `ralphai-test-agent-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
+        );
+        const script = `#!/bin/bash
+extract_plan_agent() {
+  local plan_file="$1"
+  [[ -f "$plan_file" ]] || return 1
+  head -1 "$plan_file" | grep -q '^---$' || return 1
+  sed -n '/^---$/,/^---$/{ /^agent:[[:space:]]/{ s/^agent:[[:space:]]*//; p; } }' "$plan_file"
+}
+extract_plan_agent ${JSON.stringify(planFile)}
+echo "EXIT=$?"
+`;
+        const scriptFile = join(
+          tmpdir(),
+          `ralphai-test-script-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(planFile, content);
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          const lines = result.trimEnd().split("\n");
+          const exitLine = lines.pop()!;
+          const exitCode = parseInt(exitLine.replace("EXIT=", ""), 10);
+          return { stdout: lines.join("\n"), exitCode };
+        } finally {
+          try {
+            rmSync(planFile);
+          } catch {
+            /* ignore */
+          }
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("extracts agent command from frontmatter", () => {
+        const result = extractPlanAgent("---\nagent: claude -p\n---\n# Plan\n");
+        expect(result.stdout).toBe("claude -p");
+      });
+
+      it("returns empty string when no agent key present", () => {
+        const result = extractPlanAgent(
+          "---\ngroup: my-feature\n---\n# Plan\n",
+        );
+        expect(result.stdout).toBe("");
+      });
+
+      it("returns exit code 1 when no frontmatter block", () => {
+        const result = extractPlanAgent("# Just a plan\nNo frontmatter\n");
+        expect(result.exitCode).toBe(1);
+      });
+
+      it("extracts agent with other frontmatter keys present", () => {
+        const result = extractPlanAgent(
+          "---\ngroup: my-feature\nagent: opencode run --agent build\ndepends-on: [prd-a.md]\n---\n# Plan\n",
+        );
+        expect(result.stdout).toBe("opencode run --agent build");
+      });
+
+      it("handles agent as the first frontmatter key", () => {
+        const result = extractPlanAgent(
+          "---\nagent: codex exec\ngroup: test\n---\n# Plan\n",
+        );
+        expect(result.stdout).toBe("codex exec");
+      });
+
+      it("handles agent command with flags and arguments", () => {
+        const result = extractPlanAgent(
+          "---\nagent: claude --model opus -p\n---\n# Plan\n",
+        );
+        expect(result.stdout).toBe("claude --model opus -p");
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Group mode foundation: extract_group, group-state, collect_group_plans
   // -------------------------------------------------------------------------
 
