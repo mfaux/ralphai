@@ -66,20 +66,20 @@ fi
 
 # --- Conditional LEARNINGS.md references ---
 # Two-tier learnings: repo-level LEARNINGS.md is read-only context,
-# .ralph/LEARNINGS.md is where Ralph writes its own learnings (gitignored).
+# .ralphai/LEARNINGS.md is where Ralphai writes its own learnings (gitignored).
 LEARNINGS_REF=""
 LEARNINGS_HINT=""
 LEARNINGS_STEP=""
-RALPH_LEARNINGS_FILE=".ralph/LEARNINGS.md"
+RALPHAI_LEARNINGS_FILE=".ralphai/LEARNINGS.md"
 if [[ -f "LEARNINGS.md" ]]; then
   LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"
   LEARNINGS_HINT=" Also read LEARNINGS.md to avoid repeating past mistakes."
 fi
-if [[ -f "$RALPH_LEARNINGS_FILE" ]]; then
-  LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPH_LEARNINGS_FILE")"
-  LEARNINGS_HINT="${LEARNINGS_HINT:- }Also read $RALPH_LEARNINGS_FILE to avoid repeating past mistakes."
+if [[ -f "$RALPHAI_LEARNINGS_FILE" ]]; then
+  LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"
+  LEARNINGS_HINT="${LEARNINGS_HINT:- }Also read $RALPHAI_LEARNINGS_FILE to avoid repeating past mistakes."
 fi
-if [[ -f "LEARNINGS.md" || -f "$RALPH_LEARNINGS_FILE" ]]; then
+if [[ -f "LEARNINGS.md" || -f "$RALPHAI_LEARNINGS_FILE" ]]; then
   LEARNINGS_STEP="
-6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPH_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. Do NOT write to the repo-level LEARNINGS.md — that file is curated by the project maintainer. When useful, note high-value recurring patterns in progress.txt so the maintainer can compact and promote them into repo-level learnings and agent/skill docs."
+6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPHAI_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. Do NOT write to the repo-level LEARNINGS.md — that file is curated by the project maintainer. When useful, note high-value recurring patterns in progress.txt so the maintainer can compact and promote them into repo-level learnings and agent/skill docs."
 fi

@@ -2,7 +2,7 @@
 
 Use this template when infrastructure exists but is not exposed through the user flow.
 
-Global rules are defined in `.ralph/PLANNING.md` and apply here.
+Global rules are defined in `.ralphai/PLANNING.md` and apply here.
 
 ```markdown
 # Plan: <Title>

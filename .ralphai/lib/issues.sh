@@ -91,7 +91,7 @@ PLAN_EOF
   if [[ "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
     gh issue comment "$number" \
       --repo "$repo" \
-      --body "Ralph picked up this issue and created a plan file. Working on it now." >/dev/null 2>&1
+      --body "Ralphai picked up this issue and created a plan file. Working on it now." >/dev/null 2>&1
   fi
 
   log "Pulled GitHub issue #${number}: ${title} → ${filename}"

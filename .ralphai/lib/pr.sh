@@ -1,5 +1,5 @@
 # pr.sh — PR lifecycle: archive, create, group PR management
-# Sourced by ralph.sh — do not execute directly.
+# Sourced by ralphai.sh — do not execute directly.
 
 # --- Archive function: move PRD + progress from in-progress/ to out/ ---
 # Only called on actual completion (COMPLETE signal).
@@ -40,7 +40,7 @@ archive_run() {
     repo=$(detect_issue_repo) && \
     gh issue comment "$PLAN_ISSUE_NUMBER" \
       --repo "$repo" \
-      --body "Ralph completed this task. Archiving plan and preparing to merge." >/dev/null 2>&1
+      --body "Ralphai completed this task. Archiving plan and preparing to merge." >/dev/null 2>&1
   fi
 
   # Plan files are gitignored (local-only state), so no git operations needed.
@@ -58,7 +58,7 @@ archive_run() {
       if [[ -n "$repo" ]]; then
         gh issue comment "$PLAN_ISSUE_NUMBER" \
           --repo "$repo" \
-          --body "Ralph completed this task and is preparing to merge." >/dev/null 2>&1 || true
+          --body "Ralphai completed this task and is preparing to merge." >/dev/null 2>&1 || true
       fi
     fi
   fi
@@ -131,7 +131,7 @@ ${commit_log:-_No commits._}
     repo=$(detect_issue_repo) && \
     gh issue comment "$PLAN_ISSUE_NUMBER" \
       --repo "$repo" \
-      --body "Ralph created a PR for this issue: ${pr_url}" >/dev/null 2>&1
+      --body "Ralphai created a PR for this issue: ${pr_url}" >/dev/null 2>&1
   fi
 }
 

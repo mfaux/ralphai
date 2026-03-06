@@ -1,12 +1,12 @@
 #!/bin/bash
-# ralph.sh — Ralph (looped, autonomous)
+# ralphai.sh — Ralphai (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: .ralph/ralph.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: .ralphai/ralphai.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
-#   1. If .ralph/pipeline/in-progress/ has plan files → resume on the current ralph/* branch
-#   2. Otherwise, pick the best plan from .ralph/pipeline/backlog/ (LLM-selected if multiple)
+#   1. If .ralphai/pipeline/in-progress/ has plan files → resume on the current ralphai/* branch
+#   2. Otherwise, pick the best plan from .ralphai/pipeline/backlog/ (LLM-selected if multiple)
 #
 # On completion of a plan (PR mode, the default): pushes the branch and creates
 # a PR via 'gh' CLI. In direct mode (--direct): commits on the current branch
@@ -18,14 +18,14 @@
 set -e
 
 # --- Source library modules ---
-RALPH_LIB_DIR="$(dirname "$0")/lib"
-source "$RALPH_LIB_DIR/defaults.sh"
-source "$RALPH_LIB_DIR/config.sh"
-source "$RALPH_LIB_DIR/issues.sh"
-source "$RALPH_LIB_DIR/git.sh"
-source "$RALPH_LIB_DIR/plans.sh"
-source "$RALPH_LIB_DIR/prompt.sh"
-source "$RALPH_LIB_DIR/pr.sh"
+RALPHAI_LIB_DIR="$(dirname "$0")/lib"
+source "$RALPHAI_LIB_DIR/defaults.sh"
+source "$RALPHAI_LIB_DIR/config.sh"
+source "$RALPHAI_LIB_DIR/issues.sh"
+source "$RALPHAI_LIB_DIR/git.sh"
+source "$RALPHAI_LIB_DIR/plans.sh"
+source "$RALPHAI_LIB_DIR/prompt.sh"
+source "$RALPHAI_LIB_DIR/pr.sh"
 
 # ==========================================================================
 # MAIN LOOP — pick a plan, run iterations, merge on complete, repeat
@@ -36,7 +36,7 @@ plans_completed=0
 if [[ "$DRY_RUN" == true ]]; then
   echo ""
   echo "========================================"
-  echo "  Ralph dry-run — preview only"
+  echo "  Ralphai dry-run — preview only"
   echo "========================================"
 
   if ! detect_plan; then
@@ -51,7 +51,7 @@ if [[ "$DRY_RUN" == true ]]; then
   dry_group=$(extract_group "${WIP_FILES[0]}")
   if [[ -n "$dry_group" ]]; then
     echo "[dry-run] Group: $dry_group"
-    echo "[dry-run] Branch would be: ralph/$dry_group"
+    echo "[dry-run] Branch would be: ralphai/$dry_group"
     dry_group_members=()
     mapfile -t dry_group_members < <(collect_group_plans "$dry_group")
     echo "[dry-run] Group plans (${#dry_group_members[@]} remaining in backlog + 1 selected):"
@@ -80,15 +80,15 @@ if [[ "$DRY_RUN" == true ]]; then
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
     if [[ -n "${dry_group:-}" ]]; then
-      branch="ralph/${dry_group}"
+      branch="ralphai/${dry_group}"
     else
       slug="${plan_basename#prd-}"
       slug="${slug%.md}"
-      branch="ralph/${slug}"
+      branch="ralphai/${slug}"
     fi
-    if git show-ref --verify --quiet "refs/heads/ralph"; then
-      echo "[dry-run] WARNING: Branch 'ralph' exists and would block creation of '$branch'."
-      echo "[dry-run] Fix: git branch -m ralph ralph-legacy  OR  git branch -D ralph"
+    if git show-ref --verify --quiet "refs/heads/ralphai"; then
+      echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
+      echo "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai"
     fi
     if branch_has_open_work "$branch"; then
       echo "[dry-run] WARNING: $COLLISION_REASON"
@@ -106,7 +106,7 @@ fi
 while true; do
   echo ""
   echo "========================================"
-  echo "  Ralph — detecting next task..."
+  echo "  Ralphai — detecting next task..."
   echo "========================================"
 
   if ! detect_plan; then
@@ -124,7 +124,7 @@ while true; do
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$MODE" != "direct" && "$current_branch" == "$BASE_BRANCH" ]]; then
-      echo "ERROR: Resuming requires being on a ralph/* branch, not '$BASE_BRANCH'."
+      echo "ERROR: Resuming requires being on a ralphai/* branch, not '$BASE_BRANCH'."
       echo "Checkout the branch you want to resume, then run again."
       exit 1
     fi
@@ -159,23 +159,23 @@ while true; do
     plan_basename=$(basename "${WIP_FILES[0]}")
     if [[ -n "${GROUP_NAME:-}" ]]; then
       # Group mode: branch named after the group
-      branch="ralph/${GROUP_NAME}"
+      branch="ralphai/${GROUP_NAME}"
     else
       # Normal mode: branch named after the plan
       slug="${plan_basename#prd-}"
       slug="${slug%.md}"
-      branch="ralph/${slug}"
+      branch="ralphai/${slug}"
     fi
 
-    # Guard: a bare "ralph" branch blocks all "ralph/*" branches (git ref hierarchy conflict)
-    if git show-ref --verify --quiet "refs/heads/ralph"; then
+    # Guard: a bare "ralphai" branch blocks all "ralphai/*" branches (git ref hierarchy conflict)
+    if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo ""
-      echo "ERROR: Branch 'ralph' exists and blocks creation of '$branch'."
-      echo "Git cannot create 'ralph/<slug>' when a branch named 'ralph' already exists."
+      echo "ERROR: Branch 'ralphai' exists and blocks creation of '$branch'."
+      echo "Git cannot create 'ralphai/<slug>' when a branch named 'ralphai' already exists."
       echo ""
       echo "Fix: delete or rename the stale branch, then retry:"
-      echo "  git branch -m ralph ralph-legacy   # rename"
-      echo "  git branch -D ralph                # or delete"
+      echo "  git branch -m ralphai ralphai-legacy   # rename"
+      echo "  git branch -D ralphai                # or delete"
       # Roll back: move plan file back to backlog
       rollback_dest="$BACKLOG_DIR/${plan_basename}"
       mv "${WIP_FILES[0]}" "$rollback_dest"
@@ -236,9 +236,9 @@ while true; do
     i=$((i + 1))
     echo ""
     if [[ "$ITERATIONS" -eq 0 ]]; then
-      echo "=== Ralph iteration $i (unlimited) (plan: $(basename "${WIP_FILES[0]}")) ==="
+      echo "=== Ralphai iteration $i (unlimited) (plan: $(basename "${WIP_FILES[0]}")) ==="
     else
-      echo "=== Ralph iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
+      echo "=== Ralphai iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
     PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
@@ -252,7 +252,7 @@ while true; do
 5. Documentation: Review whether your changes affect any documentation. Update these files if they are outdated or incomplete:
    - README.md (commands, usage, feature descriptions)
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
-  - LEARNINGS.md docs: preserve the two-tier model (.ralph/LEARNINGS.md for Ralph logs, repo-level LEARNINGS.md for maintainer-curated durable guidance).
+  - LEARNINGS.md docs: preserve the two-tier model (.ralphai/LEARNINGS.md for Ralphai logs, repo-level LEARNINGS.md for maintainer-curated durable guidance).
   - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${LEARNINGS_STEP}
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
@@ -326,7 +326,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
     if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
       echo "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot."
       git add -A
-      git commit -m "chore(ralph): auto-commit uncommitted changes from iteration $i" || true
+      git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration $i" || true
     fi
 
     # --- Check for completion ---

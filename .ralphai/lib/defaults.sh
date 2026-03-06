@@ -1,5 +1,5 @@
 # defaults.sh — Built-in defaults, resolved settings, path constants, and runtime flags.
-# Sourced by ralph.sh. No functions — only variable declarations.
+# Sourced by ralphai.sh. No functions — only variable declarations.
 
 # --- Built-in defaults ---
 DEFAULT_AGENT_COMMAND=""
@@ -31,10 +31,10 @@ ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
 PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
-WIP_DIR=".ralph/pipeline/in-progress"
-BACKLOG_DIR=".ralph/pipeline/backlog"
-ARCHIVE_DIR=".ralph/pipeline/out"
-CONFIG_FILE=".ralph/ralph.config"
+WIP_DIR=".ralphai/pipeline/in-progress"
+BACKLOG_DIR=".ralphai/pipeline/backlog"
+ARCHIVE_DIR=".ralphai/pipeline/out"
+CONFIG_FILE=".ralphai/ralphai.config"
 PROGRESS_FILE="$WIP_DIR/progress.txt"
 GROUP_STATE_FILE="$WIP_DIR/.group-state"
 
