@@ -1,8 +1,8 @@
 # Writing Ralphai Plan Files
 
-Guide for writing plan files that ralphai scripts consume. Plans go in `.ralphai/pipeline/backlog/` and are picked automatically by `ralphai.sh`.
+Guide for writing plan files that Ralphai consumes. Plans go in `.ralphai/pipeline/backlog/` and are picked automatically by `ralphai run`.
 
-Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralphai/pipeline/wip/`. `ralphai.sh` does not scan `wip/` — move plans to `pipeline/backlog/` when they're ready to be picked up.
+Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralphai/pipeline/wip/`. `ralphai run` does not scan `wip/` — move plans to `pipeline/backlog/` when they're ready to be picked up.
 
 ## Core Principles
 
@@ -240,11 +240,11 @@ For repeatable processes that different developers (or ralphai runs) will follow
 
 ### Frontmatter keys that are NOT supported
 
-`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPHAI_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how ralphai.sh formats file references in prompts for the current agent, which applies uniformly to the entire run.
+`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPHAI_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how `ralphai run` formats file references in prompts for the current agent, which applies uniformly to the entire run.
 
 ### Optional `depends-on` frontmatter
 
-For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralphai.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralphai/pipeline/out/`).
+For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralphai run` only considers a plan runnable when all dependencies are complete (archived in `.ralphai/pipeline/out/`).
 
 Use basename references (not full paths):
 
@@ -442,12 +442,12 @@ Final verification:
 
 ## Turn Sizing
 
-| Plan complexity                        | Recommended turns (`ralphai.sh`) |
-| -------------------------------------- | -------------------------------- |
-| 3-5 small tasks                        | 5                                |
-| 6-10 tasks with wiring                 | 10-15                            |
-| Large feature (10+ tasks, new modules) | 15-25                            |
-| Structural refactor                    | 10-15                            |
+| Plan complexity                        | Recommended turns (`ralphai run`) |
+| -------------------------------------- | --------------------------------- |
+| 3-5 small tasks                        | 5                                 |
+| 6-10 tasks with wiring                 | 10-15                             |
+| Large feature (10+ tasks, new modules) | 15-25                             |
+| Structural refactor                    | 10-15                             |
 
 Use `ralphai run --dry-run` to verify selection/readiness before launching long autonomous runs.
 

@@ -270,7 +270,7 @@ apply_env_overrides() {
 print_usage() {
   echo "Usage: $0 [turns-per-plan] [options]"
   echo ""
-  echo "  Recommended daily invocation from an initialized repo: ./.ralphai/ralphai.sh ..."
+  echo "  Recommended daily invocation from an initialized repo: ralphai run ..."
   echo ""
   echo "  Auto-detects work: resumes in-progress plans, or picks from backlog."
   echo "  Turn budget resets for each new plan (normal mode)."

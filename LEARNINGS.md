@@ -6,4 +6,4 @@
 
 ## Windows CI has no bash
 
-Tests that spawn `.ralphai/ralphai.sh` (or any bash script) must be skipped on Windows. Use `describe.skipIf(process.platform === "win32")` — same pattern as the existing executable-permission tests.
+Tests that spawn bash scripts (e.g. the task runner via `RALPHAI_RUNNER_SCRIPT`) must be skipped on Windows. Use `describe.skipIf(process.platform === "win32")` — same pattern as the existing executable-permission tests.

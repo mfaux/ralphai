@@ -1,6 +1,6 @@
 # .ralphai/ — Autonomous Task Runner
 
-Ralphai is a set of shell scripts that drive an AI coding agent to autonomously implement tasks from plan files.
+Ralphai is an autonomous task runner that drives an AI coding agent to implement tasks from plan files.
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ ralphai run --pr         # create a ralphai/* branch and open a PR
 ralphai run --help       # show all options
 ```
 
-Arguments after `run` are forwarded directly to the underlying shell script.
+Arguments after `run` are forwarded directly to the task runner.
 
 ## Lifecycle
 
@@ -23,16 +23,16 @@ Plans flow through four directories:
 wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
 ```
 
-1. **`wip/`** (work in progress) — Parked plans not ready for execution. `ralphai.sh` does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
-2. **`backlog/`** — Queue incoming plans here. `ralphai.sh` picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
+1. **`wip/`** (work in progress) — Parked plans not ready for execution. Ralphai does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
+2. **`backlog/`** — Queue incoming plans here. Ralphai picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
 3. **`in-progress/`** — Active work. Plan files and `progress.txt` live here while ralphai is working. If a run is interrupted or exhausts its turns, files stay here so work can be resumed.
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the agent signals `COMPLETE`.
 
 Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-only state). Only directory structure (`.gitkeep` files) is tracked. This means moving files between lifecycle stages requires no git commits.
 
-## Scripts
+## Task Runner
 
-### `ralphai.sh [turns-per-plan] [options]`
+### `ralphai run [turns-per-plan] [options]`
 
 Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection.
 
@@ -91,7 +91,6 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 | File / Directory        | Purpose                                                    |
 | ----------------------- | ---------------------------------------------------------- |
-| `ralphai.sh`            | Looped autonomous runner (+ `--dry-run`)                   |
 | `ralphai.config`        | Optional repo-level config file (key=value format)         |
 | `README.md`             | This file — operational docs for the `.ralphai/` directory |
 | `PLANNING.md`           | Guide for writing plan files                               |
@@ -104,7 +103,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## How It Works
 
-1. `ralphai.sh` loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
+1. Ralphai loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.txt`
 3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
@@ -115,7 +114,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## Optional plan dependencies (`depends-on`)
 
-`ralphai.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralphai/pipeline/out/`.
+`ralphai` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralphai/pipeline/out/`.
 
 Supported forms:
 
@@ -214,13 +213,13 @@ This separation keeps the repo-level `LEARNINGS.md` clean (no agent noise) and p
 
 ## Safety Guards
 
-- **Dirty state**: `ralphai.sh` blocks by default; `--resume` auto-commits dirty state on any non-base branch (dry-run is read-only)
+- **Dirty state**: Ralphai blocks by default; `--resume` auto-commits dirty state on any non-base branch (dry-run is read-only)
 - **Branch isolation**: All work happens on `ralphai/*` branches (PR mode) or your current feature branch (direct mode), never directly on `main`
 - **Direct mode by default**: Ralphai commits on your current branch with no branch creation or PR. Refuses to run on `main`/`master`.
 - **Direct mode safety**: `--direct` refuses to run on `main`/`master` — you must be on a feature branch.
 - **Collision detection**: Before creating a new branch, Ralphai checks for existing local/remote branches and open PRs. If a collision is found, the plan is skipped and the next one is tried.
 - **Plan files gitignored**: Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are gitignored (local-only state). Only `.gitkeep` files are tracked.
-- **Stuck detection**: `ralphai.sh` aborts after N turns with no new commits (default 3, configurable)
+- **Stuck detection**: Ralphai aborts after N turns with no new commits (default 3, configurable)
 - **Turn timeout**: Optional per-invocation timeout (`turnTimeout` in seconds). When set, the agent command is killed if it exceeds the limit. Default is 0 (no timeout).
 - **Completion signal**: Agent outputs `<promise>COMPLETE</promise>` when all tasks are done
 
@@ -497,7 +496,7 @@ Issue created with label "ralphai"
 
 ### Smoke Checks
 
-Use these checks to verify config behavior after changes to `ralphai.sh` or `.ralphai/ralphai.config`:
+Use these checks to verify config behavior after changes to `.ralphai/ralphai.config`:
 
 1. **No config** — Remove or rename `.ralphai/ralphai.config`. Run `--show-config` and confirm all settings show `(default)`.
 
@@ -507,4 +506,4 @@ Use these checks to verify config behavior after changes to `ralphai.sh` or `.ra
 
 4. **CLI flag override** — Pass a CLI flag (e.g. `--agent-command='gemini -p'`) with both env var and config file set. Run `--show-config` and confirm the CLI flag wins.
 
-5. **Syntax check** — Run `bash -n .ralphai/ralphai.sh` to verify the script has no syntax errors.
+5. **Syntax check** — Run `bash -n $(npm root -g)/ralphai/templates/ralphai/ralphai.sh` to verify the runner script has no syntax errors (or `bash -n $(node -e "console.log(require.resolve('ralphai/templates/ralphai/ralphai.sh'))")`).

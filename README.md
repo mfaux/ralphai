@@ -17,11 +17,23 @@ Ralphai avoids this by starting each turn with a **fresh session**: just the pla
 
 ## Install
 
+**Global** (recommended for individual use):
+
 ```bash
 npm install -g ralphai
 ```
 
-Or run without installing via `npx ralphai`.
+**Local dev dependency** (for teams — pins the version in package.json):
+
+```bash
+npm install -D ralphai
+```
+
+**npx** (no install, runs latest):
+
+```bash
+npx ralphai
+```
 
 ## Get Started
 
@@ -31,7 +43,7 @@ In your project directory:
 ralphai init
 ```
 
-Ralphai scaffolds a `.ralphai/` directory into your project, detects your package manager and build scripts, and you're ready to go.
+Ralphai scaffolds a `.ralphai/` directory into your project with config, docs, and a plan pipeline. It detects your package manager and build scripts automatically.
 
 > Use `ralphai init --yes` to skip prompts and accept defaults.
 
@@ -88,7 +100,7 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After
 
 ### After you're set up
 
-1. **Commit the `.ralphai/` folder to git.** The shell scripts, config, and docs
+1. **Commit the `.ralphai/` folder to git.** The config and docs
    are designed to be shared with your team.
 
 2. **Review `.ralphai/ralphai.config`** and adjust settings (agent command,
@@ -109,7 +121,7 @@ See [How Ralphai Works](docs/HOW-RALPHAI-WORKS.md) for the full picture.
 
 After `ralphai init`, the good stuff lives in `.ralphai/`:
 
-- [`.ralphai/README.md`](.ralphai/README.md) — full operational docs (lifecycle, scripts, config)
+- [`.ralphai/README.md`](.ralphai/README.md) — full operational docs (lifecycle, config)
 - [`.ralphai/PLANNING.md`](.ralphai/PLANNING.md) — guide for writing plan files (give this to your agent)
 - `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralphai/LEARNINGS.md`
 

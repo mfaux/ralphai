@@ -5,13 +5,15 @@ import {
   readFileSync,
   mkdirSync,
   writeFileSync,
-  statSync,
   chmodSync,
 } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
+import { fileURLToPath } from "url";
 import { runCli, runCliOutput, stripLogo } from "./test-utils.ts";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("ralphai command", () => {
   let testDir: string;
@@ -34,26 +36,15 @@ describe("ralphai command", () => {
 
     expect(output).toContain("Ralphai initialized");
 
-    // Template files
-    expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(true);
+    // User-owned files (scripts are no longer scaffolded)
     expect(existsSync(join(testDir, ".ralphai", "ralphai.config"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "README.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "LEARNINGS.md"))).toBe(true);
 
-    // lib/ directory with all sourced modules
-    expect(existsSync(join(testDir, ".ralphai", "lib"))).toBe(true);
-    for (const lib of [
-      "defaults.sh",
-      "config.sh",
-      "git.sh",
-      "issues.sh",
-      "plans.sh",
-      "prompt.sh",
-      "pr.sh",
-    ]) {
-      expect(existsSync(join(testDir, ".ralphai", "lib", lib))).toBe(true);
-    }
+    // Shell scripts should NOT be scaffolded (they run from the package)
+    expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(false);
+    expect(existsSync(join(testDir, ".ralphai", "lib"))).toBe(false);
 
     // Subdirectories with .gitkeep
     expect(
@@ -155,19 +146,10 @@ describe("ralphai command", () => {
     expect(config).toBe(customConfig);
   });
 
-  it.skipIf(process.platform === "win32")("ralphai.sh is executable", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    const stats = statSync(join(testDir, ".ralphai", "ralphai.sh"));
-    // Check that at least owner execute bit is set
-    expect(stats.mode & 0o100).toBeTruthy();
-  });
-
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain(".ralphai/ralphai.sh");
     expect(output).toContain("dry-run");
     expect(output).toContain(".ralphai/ralphai.config");
     expect(output).toContain("PLANNING.md");
@@ -175,30 +157,31 @@ describe("ralphai command", () => {
   });
 
   it("ralphai.sh template passes bash syntax check", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    // Read directly from templates/ (scripts are no longer scaffolded)
+    const templateScript = join(
+      __dirname,
+      "..",
+      "templates",
+      "ralphai",
+      "ralphai.sh",
+    );
 
     // bash -n does a syntax check without executing
     expect(() => {
-      execSync(`bash -n "${join(testDir, ".ralphai", "ralphai.sh")}"`, {
+      execSync(`bash -n "${templateScript}"`, {
         stdio: "pipe",
       });
     }).not.toThrow();
   });
 
   it("ralphai.sh lib contains issue integration functions and config", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const issues = readFileSync(
-      join(testDir, ".ralphai", "lib", "issues.sh"),
-      "utf-8",
-    );
+    const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
     expect(issues).toContain("read_issue_frontmatter");
     expect(issues).toContain("check_gh_available");
     expect(issues).toContain("detect_repo_from_url");
-    const defaults = readFileSync(
-      join(testDir, ".ralphai", "lib", "defaults.sh"),
-      "utf-8",
-    );
+    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
     expect(defaults).toContain("DEFAULT_ISSUE_CLOSE_ON_COMPLETE");
   });
 
@@ -224,7 +207,6 @@ describe("ralphai command", () => {
       expect(output).toContain("Ralphai initialized");
 
       // .ralphai/ should exist in targetDir, NOT in testDir (cwd)
-      expect(existsSync(join(targetDir, ".ralphai", "ralphai.sh"))).toBe(true);
       expect(existsSync(join(targetDir, ".ralphai", "ralphai.config"))).toBe(
         true,
       );
@@ -238,12 +220,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains helpful hint in nothing-to-do messages", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const plans = readFileSync(
-      join(testDir, ".ralphai", "lib", "plans.sh"),
-      "utf-8",
-    );
+    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(plans).toContain(
       "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md",
@@ -254,12 +233,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh defaults to 5 turns when none specified", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "lib", "config.sh"),
-      "utf-8",
-    );
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Should default TURNS to "5" when unset (no error, no conditional)
     expect(config).toContain('TURNS="5"');
     // Should NOT contain the old error message for missing turns
@@ -267,12 +243,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh shows turns-per-plan as optional in usage", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "lib", "config.sh"),
-      "utf-8",
-    );
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Usage text should use square brackets (optional) not angle brackets (required)
     expect(config).toContain("[turns-per-plan]");
     expect(config).not.toContain("<turns-per-plan>");
@@ -281,12 +254,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains gh preflight check for PR mode", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const gitSh = readFileSync(
-      join(testDir, ".ralphai", "lib", "git.sh"),
-      "utf-8",
-    );
+    const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
     // PR mode preflight: checks gh is installed and authenticated
     expect(gitSh).toContain('MODE" == "pr"');
     expect(gitSh).toContain("command -v gh");
@@ -297,18 +267,13 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh uses create_pr instead of merge_and_cleanup", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateLib = join(templateDir, "lib");
 
-    const prSh = readFileSync(
-      join(testDir, ".ralphai", "lib", "pr.sh"),
-      "utf-8",
-    );
+    const prSh = readFileSync(join(templateLib, "pr.sh"), "utf-8");
     // create_pr function exists in lib/pr.sh
     expect(prSh).toContain("create_pr()");
-    const ralphaiSh = readFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "utf-8",
-    );
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // create_pr is called on completion in the main loop
     expect(ralphaiSh).toContain('create_pr "$branch" "$PLAN_DESC"');
     // Old merge_and_cleanup and is_branch_protected are removed
@@ -325,36 +290,27 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh has direct mode safety guard for main/master", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateDir = join(__dirname, "..", "templates", "ralphai");
 
-    const ralphaiSh = readFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "utf-8",
-    );
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Direct mode refuses to run on main or master
     expect(ralphaiSh).toContain("Direct mode cannot run on");
     expect(ralphaiSh).toContain("Switch to a feature branch, or use --pr mode");
   });
 
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateDir = join(__dirname, "..", "templates", "ralphai");
 
-    const ralphaiSh = readFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "utf-8",
-    );
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Completion handler should conditionally call create_pr only in PR mode
     expect(ralphaiSh).toContain('if [[ "$MODE" == "pr" ]]; then');
     expect(ralphaiSh).toContain("Direct mode: commits are on branch");
   });
 
   it("scaffolded ralphai.sh warns on unknown config keys instead of erroring", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "lib", "config.sh"),
-      "utf-8",
-    );
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Unknown config keys should produce a warning, not an error
     expect(config).toContain("WARNING:");
     expect(config).toContain("ignoring unknown config key");
@@ -364,12 +320,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains issue integration defaults", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const defaults = readFileSync(
-      join(testDir, ".ralphai", "lib", "defaults.sh"),
-      "utf-8",
-    );
+    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
     // Config defaults
     expect(defaults).toContain('DEFAULT_ISSUE_SOURCE="none"');
     expect(defaults).toContain('DEFAULT_ISSUE_LABEL="ralphai"');
@@ -382,12 +335,9 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains issue integration functions", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const issues = readFileSync(
-      join(testDir, ".ralphai", "lib", "issues.sh"),
-      "utf-8",
-    );
+    const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
     // Core functions
     expect(issues).toContain("pull_github_issues()");
     expect(issues).toContain("read_issue_frontmatter()");
@@ -534,36 +484,28 @@ describe("ralphai command", () => {
     expect(plan).toContain("Do something.");
   });
 
-  it("update --yes refreshes ralphai.sh from template", () => {
+  it("update --yes removes old scaffolded scripts (migration)", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    // Tamper with ralphai.sh
+    // Simulate old-style scaffolded scripts that should be cleaned up
     writeFileSync(
       join(testDir, ".ralphai", "ralphai.sh"),
-      "#!/bin/bash\necho old",
+      "#!/bin/bash\necho old-script",
     );
+    mkdirSync(join(testDir, ".ralphai", "lib"), { recursive: true });
+    writeFileSync(join(testDir, ".ralphai", "lib", "config.sh"), "# old lib");
 
     // Run update
-    runCliOutput(["update", "--yes"], testDir);
+    const output = stripLogo(runCliOutput(["update", "--yes"], testDir));
 
-    const script = readFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "utf-8",
-    );
-    expect(script).not.toContain("echo old");
-    expect(script).toContain("ralphai"); // should have real template content
+    // Old scripts should be removed
+    expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(false);
+    expect(existsSync(join(testDir, ".ralphai", "lib"))).toBe(false);
+
+    // Output should mention removal
+    expect(output).toContain("Removed");
+    expect(output).toContain("bundled in package");
   });
-
-  it.skipIf(process.platform === "win32")(
-    "update --yes keeps ralphai.sh executable",
-    () => {
-      runCliOutput(["init", "--yes"], testDir);
-      runCliOutput(["update", "--yes"], testDir);
-
-      const stats = statSync(join(testDir, ".ralphai", "ralphai.sh"));
-      expect(stats.mode & 0o100).toBeTruthy();
-    },
-  );
 
   it("update --yes output lists updated and preserved files", () => {
     runCliOutput(["init", "--yes"], testDir);
@@ -571,10 +513,8 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["update", "--yes"], testDir));
 
     expect(output).toContain("Updated:");
-    expect(output).toContain("ralphai.sh");
     expect(output).toContain("README.md");
     expect(output).toContain("PLANNING.md");
-    expect(output).toContain("lib/");
     expect(output).toContain("Preserved:");
     expect(output).toContain("ralphai.config");
   });
@@ -1008,12 +948,9 @@ describe("ralphai command", () => {
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains detect_agent_type function", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const prompt = readFileSync(
-      join(testDir, ".ralphai", "lib", "prompt.sh"),
-      "utf-8",
-    );
+    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
     expect(prompt).toContain("detect_agent_type()");
     expect(prompt).toContain("DETECTED_AGENT_TYPE=");
   });
@@ -1087,19 +1024,13 @@ describe("ralphai command", () => {
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains format_file_ref and resolve_prompt_mode functions", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const prompt = readFileSync(
-      join(testDir, ".ralphai", "lib", "prompt.sh"),
-      "utf-8",
-    );
+    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
     expect(prompt).toContain("format_file_ref()");
     expect(prompt).toContain("resolve_prompt_mode()");
     expect(prompt).toContain("RESOLVED_PROMPT_MODE=");
-    const defaults = readFileSync(
-      join(testDir, ".ralphai", "lib", "defaults.sh"),
-      "utf-8",
-    );
+    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
     expect(defaults).toContain('DEFAULT_PROMPT_MODE="auto"');
   });
 
@@ -1280,12 +1211,9 @@ ${cleanupFile}
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains promptMode config infrastructure", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "lib", "config.sh"),
-      "utf-8",
-    );
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Config file loader case
     expect(config).toContain("promptMode)");
     expect(config).toContain("CONFIG_PROMPT_MODE=");
@@ -1451,20 +1379,12 @@ echo "$PROMPT_MODE"
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh wires format_file_ref into prompt construction and detect_plan", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateLib = join(templateDir, "lib");
 
-    const plans = readFileSync(
-      join(testDir, ".ralphai", "lib", "plans.sh"),
-      "utf-8",
-    );
-    const prompt = readFileSync(
-      join(testDir, ".ralphai", "lib", "prompt.sh"),
-      "utf-8",
-    );
-    const ralphaiSh = readFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "utf-8",
-    );
+    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
+    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // detect_plan: FILE_REFS uses format_file_ref
     expect(plans).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
     // detect_plan: dry-run chosen
@@ -1498,48 +1418,63 @@ echo "$PROMPT_MODE"
   // -------------------------------------------------------------------------
 
   describe.skipIf(process.platform === "win32")("run default turns", () => {
+    let stubScript: string;
+
     beforeEach(() => {
-      // Scaffold ralph, then replace ralphai.sh with a stub that echoes args
+      // Scaffold ralphai (creates .ralphai/ directory)
       runCliOutput(["init", "--yes"], testDir);
-      writeFileSync(
-        join(testDir, ".ralphai", "ralphai.sh"),
-        '#!/bin/bash\necho "ARGS:$*"\n',
-      );
-      chmodSync(join(testDir, ".ralphai", "ralphai.sh"), 0o755);
+      // Create a stub script that echoes args (used via RALPHAI_RUNNER_SCRIPT env var)
+      stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, '#!/bin/bash\necho "ARGS:$*"\n');
+      chmodSync(stubScript, 0o755);
     });
 
     it("run without args passes default turn count (5) to ralphai.sh", () => {
-      const result = runCli(["run"], testDir);
+      const result = runCli(["run"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:5");
     });
 
     it("run -- 5 passes explicit turn count to ralphai.sh", () => {
-      const result = runCli(["run", "--", "5"], testDir);
+      const result = runCli(["run", "--", "5"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:5");
     });
 
     it("run -- --dry-run passes flags to ralphai.sh", () => {
-      const result = runCli(["run", "--", "--dry-run"], testDir);
+      const result = runCli(["run", "--", "--dry-run"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:--dry-run");
     });
 
     it("run -- 5 --resume passes multiple args to ralphai.sh", () => {
-      const result = runCli(["run", "--", "5", "--resume"], testDir);
+      const result = runCli(["run", "--", "5", "--resume"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:5 --resume");
     });
 
     it("run 3 passes turn count without -- separator", () => {
-      const result = runCli(["run", "3"], testDir);
+      const result = runCli(["run", "3"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:3");
     });
 
     it("run --dry-run passes flags without -- separator", () => {
-      const result = runCli(["run", "--dry-run"], testDir);
+      const result = runCli(["run", "--dry-run"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:--dry-run");
     });
 
     it("run 3 --resume passes multiple args without -- separator", () => {
-      const result = runCli(["run", "3", "--resume"], testDir);
+      const result = runCli(["run", "3", "--resume"], testDir, {
+        RALPHAI_RUNNER_SCRIPT: stubScript,
+      });
       expect(result.stdout).toContain("ARGS:3 --resume");
     });
   });
@@ -1605,21 +1540,15 @@ echo "$PROMPT_MODE"
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains group mode foundation functions", () => {
-    runCliOutput(["init", "--yes"], testDir);
+    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
 
-    const plans = readFileSync(
-      join(testDir, ".ralphai", "lib", "plans.sh"),
-      "utf-8",
-    );
+    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     expect(plans).toContain("extract_group()");
     expect(plans).toContain("write_group_state()");
     expect(plans).toContain("read_group_state()");
     expect(plans).toContain("cleanup_group_state()");
     expect(plans).toContain("collect_group_plans()");
-    const defaults = readFileSync(
-      join(testDir, ".ralphai", "lib", "defaults.sh"),
-      "utf-8",
-    );
+    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
     expect(defaults).toContain("GROUP_STATE_FILE=");
   });
 

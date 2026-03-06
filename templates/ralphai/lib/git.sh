@@ -98,7 +98,7 @@ if [[ "$DRY_RUN" != true ]]; then
       git commit -m "chore(ralphai): recover interrupted turn
 
 Interrupted mid-turn on branch $current_branch.
-Committing dirty state so ralphai.sh can resume." || true
+Committing dirty state so ralphai can resume." || true
     else
       echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."
       echo "Tip: re-run with --resume to auto-commit and continue."

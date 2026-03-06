@@ -3,10 +3,8 @@ import {
   existsSync,
   mkdirSync,
   copyFileSync,
-  chmodSync,
   writeFileSync,
   readFileSync,
-  readdirSync,
   rmSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
@@ -73,7 +71,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let collectingRunArgs = false;
 
   for (const arg of args) {
-    // After `run` subcommand or `--`, collect remaining args for ralphai.sh
+    // After `run` subcommand or `--`, collect remaining args for the task runner
     if (collectingRunArgs) {
       if (arg === "--") continue; // skip bare `--` separator (still supported)
       runArgs.push(arg);
@@ -95,7 +93,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       // First non-flag arg is the subcommand; second is targetDir
       if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
         subcommand = arg as RalphaiSubcommand;
-        // For `run`, everything after is forwarded to ralphai.sh
+        // For `run`, everything after is forwarded to the task runner
         if (subcommand === "run") {
           collectingRunArgs = true;
         }
@@ -497,23 +495,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   // Create .ralphai/ directory
   mkdirSync(ralphaiDir, { recursive: true });
 
-  // Copy template files
-  copyFileSync(
-    join(templatesDir, "ralphai.sh"),
-    join(ralphaiDir, "ralphai.sh"),
-  );
-  chmodSync(join(ralphaiDir, "ralphai.sh"), 0o755);
-
-  // Copy lib/ directory (sourced by ralphai.sh)
-  const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphaiDir, "lib");
-  mkdirSync(libDestDir, { recursive: true });
-  for (const file of readdirSync(libSrcDir)) {
-    if (file.endsWith(".sh")) {
-      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
-    }
-  }
-
+  // Copy docs from templates
   copyFileSync(join(templatesDir, "README.md"), join(ralphaiDir, "README.md"));
   copyFileSync(
     join(templatesDir, "PLANNING.md"),
@@ -575,7 +557,7 @@ Each entry should include:
 
   // Create .ralphai/.gitignore — plan files are local-only state, not tracked by git
   const gitignoreContent = `# Plan files are local-only state (not tracked by git).
-# Only the directory structure (.gitkeep) and config/scripts are committed.
+# Only the directory structure (.gitkeep), config, and docs are committed.
 pipeline/backlog/*.md
 pipeline/wip/*.md
 pipeline/in-progress/*.md
@@ -602,12 +584,6 @@ LEARNINGS.md
   console.log(`${TEXT}Ralphai initialized in .ralphai/${RESET}`);
   console.log();
   console.log(`${DIM}Created:${RESET}`);
-  console.log(
-    `  .ralphai/ralphai.sh          ${DIM}Autonomous task runner${RESET}`,
-  );
-  console.log(
-    `  .ralphai/lib/              ${DIM}Library modules (sourced by ralphai.sh)${RESET}`,
-  );
   console.log(
     `  .ralphai/ralphai.config      ${DIM}Configuration (edit to customize)${RESET}`,
   );
@@ -662,7 +638,7 @@ LEARNINGS.md
 // ---------------------------------------------------------------------------
 
 /** Files that are copied from templates and safe to overwrite on update. */
-const TEMPLATE_FILES = ["ralphai.sh", "README.md", "PLANNING.md"] as const;
+const TEMPLATE_FILES = ["README.md", "PLANNING.md"] as const;
 
 async function updateRalphai(
   options: RalphaiOptions,
@@ -677,7 +653,7 @@ async function updateRalphai(
 
     const confirmed = await clack.confirm({
       message:
-        "This will overwrite ralphai.sh, lib/*.sh, README.md, and PLANNING.md " +
+        "This will overwrite README.md and PLANNING.md " +
         "from the latest templates. Your config, LEARNINGS.md, and plan " +
         "files will be preserved. Continue?",
     });
@@ -689,28 +665,27 @@ async function updateRalphai(
   }
 
   const updated: string[] = [];
+  const removed: string[] = [];
   const skipped: string[] = [];
 
-  // Update template files
+  // Update template files (docs only — scripts now run from the package)
   for (const file of TEMPLATE_FILES) {
     const src = join(templatesDir, file);
     const dest = join(ralphaiDir, file);
     copyFileSync(src, dest);
-    if (file === "ralphai.sh") {
-      chmodSync(dest, 0o755);
-    }
     updated.push(file);
   }
 
-  // Update lib/ directory
-  const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphaiDir, "lib");
-  mkdirSync(libDestDir, { recursive: true });
-  for (const file of readdirSync(libSrcDir)) {
-    if (file.endsWith(".sh")) {
-      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
-      updated.push(`lib/${file}`);
-    }
+  // Migration: remove old scaffolded scripts (now bundled in the package)
+  const oldScript = join(ralphaiDir, "ralphai.sh");
+  if (existsSync(oldScript)) {
+    rmSync(oldScript);
+    removed.push("ralphai.sh");
+  }
+  const oldLibDir = join(ralphaiDir, "lib");
+  if (existsSync(oldLibDir)) {
+    rmSync(oldLibDir, { recursive: true });
+    removed.push("lib/");
   }
 
   // Report what was preserved
@@ -731,6 +706,12 @@ async function updateRalphai(
   if (updated.length > 0) {
     console.log(`${DIM}Updated:${RESET}`);
     for (const file of updated) {
+      console.log(`  .ralphai/${file}`);
+    }
+  }
+  if (removed.length > 0) {
+    console.log(`${DIM}Removed (now bundled in package):${RESET}`);
+    for (const file of removed) {
       console.log(`  .ralphai/${file}`);
     }
   }
@@ -926,14 +907,20 @@ function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<never> {
-  const ralphaiSh = join(cwd, ".ralphai", "ralphai.sh");
-
-  if (!existsSync(ralphaiSh)) {
+  // Check that ralphai has been initialized (config dir exists)
+  if (!existsSync(join(cwd, ".ralphai"))) {
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
+
+  // Resolve the runner script from the npm package (not the user's project).
+  // RALPHAI_RUNNER_SCRIPT env var allows overriding for tests.
+  const __dir = dirname(fileURLToPath(import.meta.url));
+  const ralphaiSh =
+    process.env.RALPHAI_RUNNER_SCRIPT ||
+    join(__dir, "..", "templates", "ralphai", "ralphai.sh");
 
   const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
 
