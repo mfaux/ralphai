@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Fixes
+
+- Use inherited stdio for `run` command to show real-time output (#25)
+- Grant `contents:write` permission so publish workflow can create GitHub releases (#24)
+
 ## 0.2.0
 
 ### Features
