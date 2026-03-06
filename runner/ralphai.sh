@@ -415,5 +415,13 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
     exit 0
   fi
 
+  # --- Direct mode single-plan default: stop unless --continuous ---
+  if [[ "$MODE" == "direct" && "$CONTINUOUS" != "true" ]]; then
+    echo ""
+    echo "Plan complete. Direct mode stops after one plan by default."
+    echo "Tip: use --continuous to keep processing backlog plans."
+    exit 0
+  fi
+
   # Loop back to pick the next plan (turn budget resets)
 done

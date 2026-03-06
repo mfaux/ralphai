@@ -32,3 +32,28 @@
 - `pnpm build` succeeds
 - `pnpm type-check` succeeds
 - `pnpm test` passes all 143 tests (including 8 new tests)
+
+### 2026-03-06 — Task 2: Update runner loop semantics for direct mode
+
+**Status:** Complete
+
+**What was done:**
+- Added a post-completion guard in the outer `while true` loop of `runner/ralphai.sh`
+- When `MODE == "direct"` and `CONTINUOUS != "true"`, the runner exits after completing one plan (or one grouped-plan unit) instead of looping back to `detect_plan`
+- The guard is placed between the turn-exhaustion check and the loop-back comment, so it only fires when `completed == true`
+- Grouped plans are unaffected: they continue within the inner turn loop via `advance_group_plan` / `continue`, never reaching the outer-loop guard until the entire group is done
+- PR mode is unaffected: the condition checks `MODE == "direct"` first
+
+**Files changed:**
+- `runner/ralphai.sh` — added single-plan stop guard (lines 418–424)
+
+**Decisions:**
+- The exit message tells the user about `--continuous` so the opt-in is discoverable
+- Grouped plans completing as a unit and then stopping is correct: "one plan" in this context means "one unit of work"
+- Exit code 0 is used (successful completion, not an error)
+
+**Verification:**
+- `bash -n runner/ralphai.sh` passes
+- `pnpm build` succeeds
+- `pnpm type-check` succeeds
+- `pnpm test` passes all 143 tests
