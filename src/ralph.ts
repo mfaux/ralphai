@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from "child_process";
+import { execSync, spawnSync, spawn } from "child_process";
 import {
   existsSync,
   mkdirSync,
@@ -843,7 +843,7 @@ export async function runRalph(args: string[]): Promise<void> {
       await uninstallRalph(options, cwd);
       break;
     case "run":
-      runRalphRunner(options, cwd);
+      await runRalphRunner(options, cwd);
       break;
     default:
       showRalphHelp();
@@ -923,7 +923,58 @@ async function runRalphUpdate(
 /** Default iteration count when `npx ralphai run` is invoked without args. */
 const DEFAULT_ITERATIONS = "5";
 
-function runRalphRunner(options: RalphOptions, cwd: string): void {
+/**
+ * Resolve the path to a bash executable.
+ *
+ * On Windows (Git Bash / MSYS2) `spawnSync` cannot execute `.sh` files
+ * directly and the mintty pty layer can swallow stdout from synchronously
+ * spawned child processes.  We therefore need to locate `bash.exe` so we
+ * can invoke the script explicitly.
+ *
+ * Search order:
+ *  1. `bash` on PATH (works when running *inside* Git Bash)
+ *  2. Common Git-for-Windows install locations
+ */
+function findBash(): string | null {
+  // Fast path: try `bash` on PATH
+  try {
+    execSync("bash --version", { stdio: "ignore" });
+    return "bash";
+  } catch {
+    // not on PATH
+  }
+
+  if (process.platform === "win32") {
+    const candidates = [
+      join(
+        process.env.PROGRAMFILES ?? "C:\\Program Files",
+        "Git",
+        "bin",
+        "bash.exe",
+      ),
+      join(
+        process.env["PROGRAMFILES(X86)"] ?? "C:\\Program Files (x86)",
+        "Git",
+        "bin",
+        "bash.exe",
+      ),
+      join(
+        process.env.LOCALAPPDATA ?? "",
+        "Programs",
+        "Git",
+        "bin",
+        "bash.exe",
+      ),
+    ];
+    for (const p of candidates) {
+      if (existsSync(p)) return p;
+    }
+  }
+
+  return null;
+}
+
+function runRalphRunner(options: RalphOptions, cwd: string): Promise<never> {
   const ralphSh = join(cwd, ".ralph", "ralph.sh");
 
   if (!existsSync(ralphSh)) {
@@ -935,10 +986,59 @@ function runRalphRunner(options: RalphOptions, cwd: string): void {
 
   const args =
     options.runArgs.length > 0 ? options.runArgs : [DEFAULT_ITERATIONS];
-  const result = spawnSync(ralphSh, args, {
-    cwd,
-    stdio: "inherit",
-  });
 
-  process.exit(result.status ?? 1);
+  const isWindows = process.platform === "win32";
+  // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set
+  // TERM_PROGRAM=mintty.  In these environments `spawnSync` with
+  // `stdio: "inherit"` silently drops output because Node's synchronous
+  // child-process implementation cannot write to the mintty pty.
+  const isMsys = !!(
+    process.env.MSYSTEM || process.env.TERM_PROGRAM === "mintty"
+  );
+
+  if (isWindows || isMsys) {
+    // On Windows / MSYS: use async spawn with explicit bash to avoid
+    // swallowed output.
+    const bash = findBash();
+    if (!bash) {
+      console.error(
+        `${TEXT}Error:${RESET} Could not find bash. ` +
+          `Install Git for Windows (https://git-scm.com) and ensure bash is on your PATH.`,
+      );
+      process.exit(1);
+    }
+
+    // Convert Windows path to a form bash understands (forward slashes)
+    const scriptPath = ralphSh.replace(/\\/g, "/");
+
+    const child = spawn(bash, [scriptPath, ...args], {
+      cwd,
+      stdio: ["inherit", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
+
+    return new Promise((_resolve, _reject) => {
+      child.on("close", (code) => {
+        process.exit(code ?? 1);
+      });
+
+      child.on("error", (err) => {
+        console.error(
+          `${TEXT}Error:${RESET} Failed to start bash: ${err.message}`,
+        );
+        process.exit(1);
+      });
+    });
+  } else {
+    // Unix: straightforward spawnSync with inherited stdio
+    const result = spawnSync(ralphSh, args, {
+      cwd,
+      stdio: "inherit",
+    });
+
+    process.exit(result.status ?? 1);
+  }
 }
