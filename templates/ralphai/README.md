@@ -25,7 +25,7 @@ wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
 
 1. **`wip/`** (work in progress) — Parked plans not ready for execution. Ralphai does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
 2. **`backlog/`** — Queue incoming plans here. Ralphai picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
-3. **`in-progress/`** — Active work. Plan files and `progress.txt` live here while ralphai is working. If a run is interrupted or exhausts its turns, files stay here so work can be resumed.
+3. **`in-progress/`** — Active work. Plan files and `progress.md` live here while ralphai is working. If a run is interrupted or exhausts its turns, files stay here so work can be resumed.
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the agent signals `COMPLETE`.
 
 Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-only state). Only directory structure (`.gitkeep` files) is tracked. This means moving files between lifecycle stages requires no git commits.
@@ -98,17 +98,17 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 | `.ralphai/LEARNINGS.md` | Ralphai-written learnings — gitignored, local-only         |
 | `wip/`                  | Work-in-progress plans — not scanned by ralphai            |
 | `backlog/`              | Incoming plans queued for ralphai to pick up               |
-| `in-progress/`          | Active plans and progress.txt — work in flight             |
+| `in-progress/`          | Active plans and progress.md — work in flight              |
 | `out/`                  | Archived PRD files and progress logs from completed runs   |
 
 ## How It Works
 
 1. Ralphai loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
-2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.txt`
+2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.md`
 3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
-4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
+4. The agent receives a prompt with `@file` references to the plan files + `progress.md`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
-6. `progress.txt` is updated with what was done
+6. `progress.md` is updated with what was done
 7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
 8. On incomplete run: files stay in `pipeline/in-progress/` for resumption
 

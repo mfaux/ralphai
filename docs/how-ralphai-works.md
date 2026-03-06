@@ -157,7 +157,7 @@ backlog/    --> in-progress/ --> out/
    When multiple plans are ready, an LLM call selects the best one based on
    dependencies, risk, and value. The chosen plan is moved to `in-progress/`.
 
-3. **`in-progress/`** — Active work. The plan file and `progress.txt` live here
+3. **`in-progress/`** — Active work. The plan file and `progress.md` live here
    while Ralphai is working. If a run is interrupted or exhausts its turns,
    files stay here so work can be resumed.
 

@@ -74,5 +74,5 @@ if [[ -f "$RALPHAI_LEARNINGS_FILE" ]]; then
   LEARNINGS_REF=" $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"
   LEARNINGS_HINT=" Also read $RALPHAI_LEARNINGS_FILE to avoid repeating past mistakes."
   LEARNINGS_STEP="
-6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPHAI_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. When useful, note high-value recurring patterns in progress.txt so the maintainer can promote them into AGENTS.md or skill docs."
+6. If you make a mistake (wrong assumption, broken build, misunderstood requirement, flawed approach), log it in $RALPHAI_LEARNINGS_FILE with the date, what went wrong, the root cause, and how to prevent it. When useful, note high-value recurring patterns in progress.md so the maintainer can promote them into AGENTS.md or skill docs."
 fi
