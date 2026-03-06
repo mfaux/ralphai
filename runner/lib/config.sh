@@ -140,6 +140,13 @@ load_config() {
         fi
         CONFIG_PROMPT_MODE="$value"
         ;;
+      continuous)
+        if [[ "$value" != "true" && "$value" != "false" ]]; then
+          echo "ERROR: $config_path:$line_num: 'continuous' must be 'true' or 'false', got '$value'"
+          exit 1
+        fi
+        CONFIG_CONTINUOUS="$value"
+        ;;
       *)
         echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
@@ -188,6 +195,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
     PROMPT_MODE="$CONFIG_PROMPT_MODE"
+  fi
+  if [[ -n "${CONFIG_CONTINUOUS:-}" ]]; then
+    CONTINUOUS="$CONFIG_CONTINUOUS"
   fi
 }
 
@@ -265,6 +275,13 @@ apply_env_overrides() {
     fi
     PROMPT_MODE="$RALPHAI_PROMPT_MODE"
   fi
+  if [[ -n "${RALPHAI_CONTINUOUS:-}" ]]; then
+    if [[ "$RALPHAI_CONTINUOUS" != "true" && "$RALPHAI_CONTINUOUS" != "false" ]]; then
+      echo "ERROR: RALPHAI_CONTINUOUS must be 'true' or 'false', got '$RALPHAI_CONTINUOUS'"
+      exit 1
+    fi
+    CONTINUOUS="$RALPHAI_CONTINUOUS"
+  fi
 }
 
 print_usage() {
@@ -285,6 +302,7 @@ print_usage() {
   echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
   echo "  --direct                         Direct mode (default): commit on current branch, no PR"
   echo "  --pr                             PR mode: create branch, push, and open PR"
+  echo "  --continuous                     Keep processing backlog plans after the first completes"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
@@ -299,13 +317,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, turnTimeout, promptMode,"
+  echo "                  mode, continuous, turnTimeout, promptMode,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
-  echo "                   RALPHAI_MODE, RALPHAI_TURN_TIMEOUT,"
+  echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
+  echo "                   RALPHAI_TURN_TIMEOUT,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
   echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
@@ -323,6 +342,7 @@ print_usage() {
   echo "  $0 10 --agent-command='claude -p'             # use Claude Code"
   echo "  $0 10 --agent-command='opencode run --agent build'  # use OpenCode"
   echo "  $0 10 --direct                               # commit on current branch (no PR)"
+  echo "  $0 10 --direct --continuous                  # keep draining backlog on current branch"
   echo "  RALPHAI_AGENT_COMMAND='codex exec' $0 10       # override via env var"
   echo ""
   echo "Feature branch workflow:"
@@ -396,6 +416,9 @@ for arg in "$@"; do
       ;;
     --pr)
       CLI_MODE="pr"
+      ;;
+    --continuous)
+      CLI_CONTINUOUS="true"
       ;;
     --prompt-mode=*)
       CLI_PROMPT_MODE="${arg#--prompt-mode=}"
@@ -485,6 +508,9 @@ fi
 if [[ -n "$CLI_MODE" ]]; then
   MODE="$CLI_MODE"
 fi
+if [[ -n "$CLI_CONTINUOUS" ]]; then
+  CONTINUOUS="$CLI_CONTINUOUS"
+fi
 if [[ -n "$CLI_TURN_TIMEOUT" ]]; then
   TURN_TIMEOUT="$CLI_TURN_TIMEOUT"
 fi
@@ -564,6 +590,16 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     mode_source="config ($CONFIG_FILE)"
   else
     mode_source="default"
+  fi
+
+  if [[ -n "$CLI_CONTINUOUS" ]]; then
+    continuous_source="cli (--continuous)"
+  elif [[ -n "${RALPHAI_CONTINUOUS:-}" ]]; then
+    continuous_source="env (RALPHAI_CONTINUOUS=$RALPHAI_CONTINUOUS)"
+  elif [[ -n "${CONFIG_CONTINUOUS:-}" ]]; then
+    continuous_source="config ($CONFIG_FILE)"
+  else
+    continuous_source="default"
   fi
 
   if [[ -n "$CLI_TURN_TIMEOUT" ]]; then
@@ -650,6 +686,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
   echo "  mode               = $MODE  ($mode_source)"
+  echo "  continuous         = $CONTINUOUS  ($continuous_source)"
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
   if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
     echo "  turnTimeout        = ${TURN_TIMEOUT}s  ($timeout_source)"
