@@ -1,4 +1,4 @@
-import { execSync, spawnSync, spawn } from "child_process";
+import { execSync, spawn } from "child_process";
 import {
   existsSync,
   mkdirSync,
@@ -952,16 +952,15 @@ function runRalphaiRunner(
 
   const isWindows = process.platform === "win32";
   // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set
-  // TERM_PROGRAM=mintty.  In these environments `spawnSync` with
-  // `stdio: "inherit"` silently drops output because Node's synchronous
-  // child-process implementation cannot write to the mintty pty.
+  // TERM_PROGRAM=mintty.  In these environments Node cannot directly
+  // execute `.sh` files, so we need to locate `bash.exe` explicitly.
   const isMsys = !!(
     process.env.MSYSTEM || process.env.TERM_PROGRAM === "mintty"
   );
 
   if (isWindows || isMsys) {
-    // On Windows / MSYS: use async spawn with explicit bash to avoid
-    // swallowed output.
+    // On Windows / MSYS: locate bash explicitly since Node cannot run
+    // `.sh` files directly on this platform.
     const bash = findBash();
     if (!bash) {
       console.error(
@@ -996,26 +995,27 @@ function runRalphaiRunner(
       });
     });
   } else {
-    // Unix: pipe output so parent processes can capture it in tests.
-    const result = spawnSync(ralphaiSh, args, {
+    // Unix: use async spawn with piped output so users see output in real
+    // time AND parent processes (e.g. test harness) can still capture it.
+    const child = spawn(ralphaiSh, args, {
       cwd,
       stdio: ["inherit", "pipe", "pipe"],
+      env: { ...process.env },
     });
 
-    if (result.stdout && result.stdout.length > 0) {
-      process.stdout.write(result.stdout);
-    }
-    if (result.stderr && result.stderr.length > 0) {
-      process.stderr.write(result.stderr);
-    }
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
 
-    if (result.error) {
-      console.error(
-        `${TEXT}Error:${RESET} Failed to start task runner ${ralphaiSh}: ${result.error.message}`,
-      );
-      process.exit(1);
-    }
-
-    process.exit(result.status ?? 1);
+    return new Promise((_resolve, _reject) => {
+      child.on("close", (code) => {
+        process.exit(code ?? 1);
+      });
+      child.on("error", (err) => {
+        console.error(
+          `${TEXT}Error:${RESET} Failed to start task runner ${ralphaiSh}: ${err.message}`,
+        );
+        process.exit(1);
+      });
+    });
   }
 }
