@@ -2057,10 +2057,13 @@ echo "EXIT=$?"
         backlogDir = join(prDir, "backlog");
         mkdirSync(backlogDir, { recursive: true });
         // Initialize a git repo so git log works
-        execSync("git init && git commit --allow-empty -m 'init'", {
-          cwd: prDir,
-          stdio: "ignore",
-        });
+        execSync(
+          "git init && git config user.email 'test@test.com' && git config user.name 'Test' && git commit --allow-empty -m 'init'",
+          {
+            cwd: prDir,
+            stdio: "ignore",
+          },
+        );
       });
 
       afterEach(() => {
