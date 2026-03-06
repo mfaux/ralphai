@@ -25,6 +25,7 @@ source "$RALPHAI_LIB_DIR/issues.sh"
 source "$RALPHAI_LIB_DIR/git.sh"
 source "$RALPHAI_LIB_DIR/plans.sh"
 source "$RALPHAI_LIB_DIR/prompt.sh"
+source "$RALPHAI_LIB_DIR/learnings.sh"
 source "$RALPHAI_LIB_DIR/pr.sh"
 
 # ==========================================================================
@@ -322,6 +323,9 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     set -e
     result=$(<"$agent_output_file")
     rm -f "$agent_output_file"
+
+    # --- Process learnings block (before completion check) ---
+    process_learnings "$result"
 
     if [[ $agent_exit -ne 0 && $agent_exit -ne 124 ]]; then
       echo ""
