@@ -202,61 +202,11 @@ describe("ralphai command", () => {
     expect(defaults).toContain("DEFAULT_ISSUE_CLOSE_ON_COMPLETE");
   });
 
-  it("init --yes adds npm script when package.json exists", () => {
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify({ name: "test", scripts: {} }, null, 2),
-    );
-
-    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
-
-    const pkg = JSON.parse(
-      readFileSync(join(testDir, "package.json"), "utf-8"),
-    );
-    expect(pkg.scripts.ralphai).toBe(".ralphai/ralphai.sh");
-    expect(output).toContain('Added "ralphai" script');
-    expect(output).toContain("npm run ralphai");
-    expect(output).toContain("./.ralphai/ralphai.sh 10");
-  });
-
-  it("init --yes does not overwrite existing ralphai script in package.json", () => {
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify(
-        { name: "test", scripts: { ralphai: "custom-command" } },
-        null,
-        2,
-      ),
-    );
-
-    runCliOutput(["init", "--yes"], testDir);
-
-    const pkg = JSON.parse(
-      readFileSync(join(testDir, "package.json"), "utf-8"),
-    );
-    expect(pkg.scripts.ralphai).toBe("custom-command");
-  });
-
   it("init --yes works without package.json", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).not.toContain('Added "ralphai" script');
-    expect(output).toContain("./.ralphai/ralphai.sh --dry-run");
-  });
-
-  it("init --yes creates scripts object if missing in package.json", () => {
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify({ name: "test" }, null, 2),
-    );
-
-    runCliOutput(["init", "--yes"], testDir);
-
-    const pkg = JSON.parse(
-      readFileSync(join(testDir, "package.json"), "utf-8"),
-    );
-    expect(pkg.scripts.ralphai).toBe(".ralphai/ralphai.sh");
+    expect(output).toContain("ralphai run --dry-run");
   });
 
   it("init --yes <target-dir> scaffolds into the target directory, not cwd", () => {
@@ -287,32 +237,6 @@ describe("ralphai command", () => {
     }
   });
 
-  it("init --yes <target-dir> adds npm script to target package.json", () => {
-    const targetDir = join(tmpdir(), `ralphai-target-npm-${Date.now()}`);
-    mkdirSync(targetDir, { recursive: true });
-    execSync("git init", { cwd: targetDir, stdio: "ignore" });
-    writeFileSync(
-      join(targetDir, "package.json"),
-      JSON.stringify({ name: "target-project", scripts: {} }, null, 2),
-    );
-
-    try {
-      const output = stripLogo(
-        runCliOutput(["init", "--yes", targetDir], testDir),
-      );
-
-      expect(output).toContain('Added "ralphai" script');
-      const pkg = JSON.parse(
-        readFileSync(join(targetDir, "package.json"), "utf-8"),
-      );
-      expect(pkg.scripts.ralphai).toBe(".ralphai/ralphai.sh");
-    } finally {
-      if (existsSync(targetDir)) {
-        rmSync(targetDir, { recursive: true, force: true });
-      }
-    }
-  });
-
   it("scaffolded ralphai.sh contains helpful hint in nothing-to-do messages", () => {
     runCliOutput(["init", "--yes"], testDir);
 
@@ -329,22 +253,20 @@ describe("ralphai command", () => {
     );
   });
 
-  it("scaffolded ralphai.sh defaults to 5 iterations when none specified", () => {
+  it("scaffolded ralphai.sh defaults to 5 turns when none specified", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const config = readFileSync(
       join(testDir, ".ralphai", "lib", "config.sh"),
       "utf-8",
     );
-    // Should default ITERATIONS to "5" when unset (no error, no conditional)
-    expect(config).toContain('ITERATIONS="5"');
-    // Should NOT contain the old error message for missing iterations
-    expect(config).not.toContain(
-      "ERROR: Missing required <iterations-per-plan>",
-    );
+    // Should default TURNS to "5" when unset (no error, no conditional)
+    expect(config).toContain('TURNS="5"');
+    // Should NOT contain the old error message for missing turns
+    expect(config).not.toContain("ERROR: Missing required <turns-per-plan>");
   });
 
-  it("scaffolded ralphai.sh shows iterations-per-plan as optional in usage", () => {
+  it("scaffolded ralphai.sh shows turns-per-plan as optional in usage", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const config = readFileSync(
@@ -352,10 +274,10 @@ describe("ralphai command", () => {
       "utf-8",
     );
     // Usage text should use square brackets (optional) not angle brackets (required)
-    expect(config).toContain("[iterations-per-plan]");
-    expect(config).not.toContain("<iterations-per-plan>");
+    expect(config).toContain("[turns-per-plan]");
+    expect(config).not.toContain("<turns-per-plan>");
     // Should mention the default
-    expect(config).toContain("Default: 5 iterations per plan.");
+    expect(config).toContain("Default: 5 turns per plan.");
   });
 
   it("scaffolded ralphai.sh contains gh preflight check for PR mode", () => {
@@ -369,7 +291,7 @@ describe("ralphai command", () => {
     expect(gitSh).toContain('MODE" == "pr"');
     expect(gitSh).toContain("command -v gh");
     expect(gitSh).toContain("gh auth status");
-    expect(gitSh).toContain("PR mode (the default) requires the GitHub CLI");
+    expect(gitSh).toContain("PR mode requires the GitHub CLI");
     expect(gitSh).toContain("gh is installed but not authenticated");
     expect(gitSh).toContain("--direct");
   });
@@ -411,9 +333,7 @@ describe("ralphai command", () => {
     );
     // Direct mode refuses to run on main or master
     expect(ralphaiSh).toContain("Direct mode cannot run on");
-    expect(ralphaiSh).toContain(
-      "Switch to a feature branch, or use PR mode (the default)",
-    );
+    expect(ralphaiSh).toContain("Switch to a feature branch, or use --pr mode");
   });
 
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
@@ -508,12 +428,8 @@ describe("ralphai command", () => {
   // Uninstall tests
   // -------------------------------------------------------------------------
 
-  it("uninstall --yes removes .ralphai/ dir and package.json script", () => {
+  it("uninstall --yes removes .ralphai/ dir", () => {
     // First, set up ralphai
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify({ name: "test", scripts: {} }, null, 2),
-    );
     runCliOutput(["init", "--yes"], testDir);
     expect(existsSync(join(testDir, ".ralphai"))).toBe(true);
 
@@ -521,13 +437,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["uninstall", "--yes"], testDir));
 
     expect(output).toContain("Ralphai uninstalled");
-    expect(output).toContain('Removed "ralphai" script');
     expect(existsSync(join(testDir, ".ralphai"))).toBe(false);
-
-    const pkg = JSON.parse(
-      readFileSync(join(testDir, "package.json"), "utf-8"),
-    );
-    expect(pkg.scripts?.ralphai).toBeUndefined();
   });
 
   it("uninstall --yes prints not set up when .ralphai/ does not exist", () => {
@@ -537,48 +447,10 @@ describe("ralphai command", () => {
     expect(output).toContain(".ralphai/ does not exist");
   });
 
-  it("uninstall --yes works without package.json", () => {
-    // Set up ralphai without package.json
-    runCliOutput(["init", "--yes"], testDir);
-    expect(existsSync(join(testDir, ".ralphai"))).toBe(true);
-
-    // Uninstall
-    const output = stripLogo(runCliOutput(["uninstall", "--yes"], testDir));
-
-    expect(output).toContain("Ralphai uninstalled");
-    expect(output).not.toContain('Removed "ralphai" script');
-    expect(existsSync(join(testDir, ".ralphai"))).toBe(false);
-  });
-
-  it("uninstall --yes handles package.json without ralphai script", () => {
-    // Set up ralphai without package.json, then add a package.json without ralphai script
-    runCliOutput(["init", "--yes"], testDir);
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify({ name: "test", scripts: { build: "tsc" } }, null, 2),
-    );
-
-    const output = stripLogo(runCliOutput(["uninstall", "--yes"], testDir));
-
-    expect(output).toContain("Ralphai uninstalled");
-    expect(output).not.toContain('Removed "ralphai" script');
-    expect(existsSync(join(testDir, ".ralphai"))).toBe(false);
-
-    // Other scripts should be preserved
-    const pkg = JSON.parse(
-      readFileSync(join(testDir, "package.json"), "utf-8"),
-    );
-    expect(pkg.scripts.build).toBe("tsc");
-  });
-
   it("uninstall --yes <target-dir> uninstalls from target directory", () => {
     const targetDir = join(tmpdir(), `ralphai-uninstall-target-${Date.now()}`);
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
-    writeFileSync(
-      join(targetDir, "package.json"),
-      JSON.stringify({ name: "target", scripts: {} }, null, 2),
-    );
 
     try {
       // Set up ralphai in target
@@ -592,35 +464,11 @@ describe("ralphai command", () => {
 
       expect(output).toContain("Ralphai uninstalled");
       expect(existsSync(join(targetDir, ".ralphai"))).toBe(false);
-
-      const pkg = JSON.parse(
-        readFileSync(join(targetDir, "package.json"), "utf-8"),
-      );
-      expect(pkg.scripts?.ralphai).toBeUndefined();
     } finally {
       if (existsSync(targetDir)) {
         rmSync(targetDir, { recursive: true, force: true });
       }
     }
-  });
-
-  it("uninstall --yes cleans up empty scripts object in package.json", () => {
-    // Set up with package.json that only has scripts.ralphai
-    writeFileSync(
-      join(testDir, "package.json"),
-      JSON.stringify({ name: "test", scripts: {} }, null, 2),
-    );
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Verify ralphai script was added
-    let pkg = JSON.parse(readFileSync(join(testDir, "package.json"), "utf-8"));
-    expect(pkg.scripts.ralphai).toBe(".ralphai/ralphai.sh");
-
-    // Uninstall
-    runCliOutput(["uninstall", "--yes"], testDir);
-
-    pkg = JSON.parse(readFileSync(join(testDir, "package.json"), "utf-8"));
-    expect(pkg.scripts).toBeUndefined();
   });
 
   // -------------------------------------------------------------------------
@@ -1646,43 +1494,55 @@ echo "$PROMPT_MODE"
   });
 
   // -------------------------------------------------------------------------
-  // Run default iteration tests
+  // Run default turn tests
   // -------------------------------------------------------------------------
 
-  describe.skipIf(process.platform === "win32")(
-    "run default iterations",
-    () => {
-      beforeEach(() => {
-        // Scaffold ralph, then replace ralphai.sh with a stub that echoes args
-        runCliOutput(["init", "--yes"], testDir);
-        writeFileSync(
-          join(testDir, ".ralphai", "ralphai.sh"),
-          '#!/bin/bash\necho "ARGS:$*"\n',
-        );
-        chmodSync(join(testDir, ".ralphai", "ralphai.sh"), 0o755);
-      });
+  describe.skipIf(process.platform === "win32")("run default turns", () => {
+    beforeEach(() => {
+      // Scaffold ralph, then replace ralphai.sh with a stub that echoes args
+      runCliOutput(["init", "--yes"], testDir);
+      writeFileSync(
+        join(testDir, ".ralphai", "ralphai.sh"),
+        '#!/bin/bash\necho "ARGS:$*"\n',
+      );
+      chmodSync(join(testDir, ".ralphai", "ralphai.sh"), 0o755);
+    });
 
-      it("run without args passes default iteration count (5) to ralphai.sh", () => {
-        const result = runCli(["run"], testDir);
-        expect(result.stdout).toContain("ARGS:5");
-      });
+    it("run without args passes default turn count (5) to ralphai.sh", () => {
+      const result = runCli(["run"], testDir);
+      expect(result.stdout).toContain("ARGS:5");
+    });
 
-      it("run -- 5 passes explicit iteration count to ralphai.sh", () => {
-        const result = runCli(["run", "--", "5"], testDir);
-        expect(result.stdout).toContain("ARGS:5");
-      });
+    it("run -- 5 passes explicit turn count to ralphai.sh", () => {
+      const result = runCli(["run", "--", "5"], testDir);
+      expect(result.stdout).toContain("ARGS:5");
+    });
 
-      it("run -- --dry-run passes flags to ralphai.sh", () => {
-        const result = runCli(["run", "--", "--dry-run"], testDir);
-        expect(result.stdout).toContain("ARGS:--dry-run");
-      });
+    it("run -- --dry-run passes flags to ralphai.sh", () => {
+      const result = runCli(["run", "--", "--dry-run"], testDir);
+      expect(result.stdout).toContain("ARGS:--dry-run");
+    });
 
-      it("run -- 5 --resume passes multiple args to ralphai.sh", () => {
-        const result = runCli(["run", "--", "5", "--resume"], testDir);
-        expect(result.stdout).toContain("ARGS:5 --resume");
-      });
-    },
-  );
+    it("run -- 5 --resume passes multiple args to ralphai.sh", () => {
+      const result = runCli(["run", "--", "5", "--resume"], testDir);
+      expect(result.stdout).toContain("ARGS:5 --resume");
+    });
+
+    it("run 3 passes turn count without -- separator", () => {
+      const result = runCli(["run", "3"], testDir);
+      expect(result.stdout).toContain("ARGS:3");
+    });
+
+    it("run --dry-run passes flags without -- separator", () => {
+      const result = runCli(["run", "--dry-run"], testDir);
+      expect(result.stdout).toContain("ARGS:--dry-run");
+    });
+
+    it("run 3 --resume passes multiple args without -- separator", () => {
+      const result = runCli(["run", "3", "--resume"], testDir);
+      expect(result.stdout).toContain("ARGS:3 --resume");
+    });
+  });
 
   // -------------------------------------------------------------------------
   // GitHub Issues integration tests

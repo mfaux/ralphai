@@ -38,17 +38,17 @@ ${BOLD}Init Options:${RESET}
   --agent-command=CMD    Set the agent command (default: opencode run --agent build)
 
 ${BOLD}Run Options:${RESET}
-  (no args)              Run with defaults (5 iterations per plan)
-  -- <args>              Override: pass arguments directly to ralphai.sh
+  All arguments after 'run' are forwarded directly to the task runner.
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} npx ralphai init                  ${DIM}# interactive setup${RESET}
-  ${DIM}$${RESET} npx ralphai init --yes             ${DIM}# setup with defaults${RESET}
-  ${DIM}$${RESET} npx ralphai run                    ${DIM}# run with defaults (5 iterations per plan)${RESET}
-  ${DIM}$${RESET} npx ralphai run -- 5               ${DIM}# override: 5 iterations per plan${RESET}
-  ${DIM}$${RESET} npx ralphai run -- --dry-run       ${DIM}# preview only${RESET}
-  ${DIM}$${RESET} npx ralphai update --yes           ${DIM}# update templates${RESET}
-  ${DIM}$${RESET} npx ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
+  ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
+  ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
+  ${DIM}$${RESET} ralphai run                    ${DIM}# run with defaults (5 turns per plan)${RESET}
+  ${DIM}$${RESET} ralphai run 3                  ${DIM}# 3 turns per plan${RESET}
+  ${DIM}$${RESET} ralphai run --dry-run          ${DIM}# preview only${RESET}
+  ${DIM}$${RESET} ralphai run --pr               ${DIM}# create branch and open PR${RESET}
+  ${DIM}$${RESET} ralphai update --yes           ${DIM}# update templates${RESET}
+  ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
 `);
 }
 

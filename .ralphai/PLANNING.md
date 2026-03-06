@@ -440,15 +440,15 @@ Final verification:
 - <specific behavioral checks>
 ```
 
-## Iteration Sizing
+## Turn Sizing
 
-| Plan complexity                        | Recommended iterations (`ralphai.sh`) |
-| -------------------------------------- | ------------------------------------- |
-| 3-5 small tasks                        | 5                                     |
-| 6-10 tasks with wiring                 | 10-15                                 |
-| Large feature (10+ tasks, new modules) | 15-25                                 |
-| Structural refactor                    | 10-15                                 |
+| Plan complexity                        | Recommended turns (`ralphai.sh`) |
+| -------------------------------------- | -------------------------------- |
+| 3-5 small tasks                        | 5                                |
+| 6-10 tasks with wiring                 | 10-15                            |
+| Large feature (10+ tasks, new modules) | 15-25                            |
+| Structural refactor                    | 10-15                            |
 
-Use `npx ralphai run -- --dry-run` to verify selection/readiness before launching long autonomous runs.
+Use `ralphai run --dry-run` to verify selection/readiness before launching long autonomous runs.
 
-If a run is interrupted and leaves a dirty tree, use `npx ralphai run -- <iterations> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.
+If a run is interrupted and leaves a dirty tree, use `ralphai run <turns> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.

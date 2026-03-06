@@ -73,8 +73,9 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let collectingRunArgs = false;
 
   for (const arg of args) {
-    // After `--`, collect remaining args for the `run` subcommand
+    // After `run` subcommand or `--`, collect remaining args for ralphai.sh
     if (collectingRunArgs) {
+      if (arg === "--") continue; // skip bare `--` separator (still supported)
       runArgs.push(arg);
       continue;
     }
@@ -94,6 +95,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       // First non-flag arg is the subcommand; second is targetDir
       if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
         subcommand = arg as RalphaiSubcommand;
+        // For `run`, everything after is forwarded to ralphai.sh
+        if (subcommand === "run") {
+          collectingRunArgs = true;
+        }
       } else {
         targetDir = arg;
       }
@@ -383,51 +388,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 }
 
 // ---------------------------------------------------------------------------
-// package.json script injection
-// ---------------------------------------------------------------------------
-
-function addNpmScript(cwd: string): boolean {
-  const pkgPath = join(cwd, "package.json");
-  if (!existsSync(pkgPath)) return false;
-
-  try {
-    const raw = readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    if (!pkg.scripts) pkg.scripts = {};
-    if (pkg.scripts.ralphai) return false; // already has a ralphai script
-    pkg.scripts.ralphai = ".ralphai/ralphai.sh";
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// package.json script removal
-// ---------------------------------------------------------------------------
-
-function removeNpmScript(cwd: string): boolean {
-  const pkgPath = join(cwd, "package.json");
-  if (!existsSync(pkgPath)) return false;
-
-  try {
-    const raw = readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    if (!pkg.scripts?.ralphai) return false;
-    delete pkg.scripts.ralphai;
-    // Clean up empty scripts object
-    if (Object.keys(pkg.scripts).length === 0) {
-      delete pkg.scripts;
-    }
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Uninstall logic
 // ---------------------------------------------------------------------------
 
@@ -448,7 +408,7 @@ async function uninstallRalphai(
     clack.intro("Uninstalling Ralphai");
     const confirmed = await clack.confirm({
       message:
-        "This will permanently delete .ralphai/ and remove the npm script. " +
+        "This will permanently delete .ralphai/. " +
         "Any plans and learnings in .ralphai/ will be lost. Continue?",
     });
 
@@ -461,18 +421,10 @@ async function uninstallRalphai(
   // Remove .ralphai/ directory
   rmSync(ralphaiDir, { recursive: true, force: true });
 
-  // Remove npm script
-  const removedScript = removeNpmScript(cwd);
-
   console.log(`${TEXT}Ralphai uninstalled.${RESET}`);
   console.log();
   console.log(`${DIM}Removed:${RESET}`);
   console.log(`  .ralphai/                  ${DIM}Entire directory${RESET}`);
-  if (removedScript) {
-    console.log(
-      `  package.json             ${DIM}Removed "ralphai" script${RESET}`,
-    );
-  }
   console.log();
 }
 
@@ -640,9 +592,6 @@ LEARNINGS.md
     writeFileSync(learningsPath, "# Learnings\n");
   }
 
-  // Inject npm script if package.json exists
-  const addedNpmScript = addNpmScript(cwd);
-
   // Create GitHub labels if issues integration is enabled
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -676,11 +625,6 @@ LEARNINGS.md
       `  LEARNINGS.md             ${DIM}Maintainer-curated learnings Ralphai reads for long-term guidance${RESET}`,
     );
   }
-  if (addedNpmScript) {
-    console.log(
-      `  package.json             ${DIM}Added "ralphai" script${RESET}`,
-    );
-  }
   if (labelResult) {
     if (labelResult.success) {
       console.log(
@@ -702,13 +646,8 @@ LEARNINGS.md
   console.log(
     `  3. Create your first plan in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
   );
-  console.log(`  4. Preview:  ${TEXT}./.ralphai/ralphai.sh --dry-run${RESET}`);
-  console.log(`  5. Run:      ${TEXT}./.ralphai/ralphai.sh 10${RESET}`);
-  if (addedNpmScript) {
-    console.log(
-      `     Alt:      ${TEXT}npm run ralphai -- 10${RESET} ${DIM}(or pass other args with --)${RESET}`,
-    );
-  }
+  console.log(`  4. Preview:  ${TEXT}ralphai run --dry-run${RESET}`);
+  console.log(`  5. Run:      ${TEXT}ralphai run${RESET}`);
   if (answers.issueSource === "github") {
     console.log();
     console.log(
@@ -929,8 +868,8 @@ async function runRalphaiUpdate(
   await updateRalphai(options, cwd);
 }
 
-/** Default iteration count when `npx ralphai run` is invoked without args. */
-const DEFAULT_ITERATIONS = "5";
+/** Default turn count when `ralphai run` is invoked without args. */
+const DEFAULT_TURNS = "5";
 
 /**
  * Resolve the path to a bash executable.
@@ -996,8 +935,7 @@ function runRalphaiRunner(
     process.exit(1);
   }
 
-  const args =
-    options.runArgs.length > 0 ? options.runArgs : [DEFAULT_ITERATIONS];
+  const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
 
   const isWindows = process.platform === "win32";
   // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set

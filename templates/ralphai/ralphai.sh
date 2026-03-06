@@ -2,17 +2,17 @@
 # ralphai.sh — Ralphai (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: .ralphai/ralphai.sh [iterations-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: .ralphai/ralphai.sh [turns-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralphai/pipeline/in-progress/ has plan files → resume on the current ralphai/* branch
 #   2. Otherwise, pick the best plan from .ralphai/pipeline/backlog/ (LLM-selected if multiple)
 #
-# On completion of a plan (PR mode, the default): pushes the branch and creates
-# a PR via 'gh' CLI. In direct mode (--direct): commits on the current branch
-# with no branch creation and no PR. Iteration budget resets for each new plan.
+# On completion of a plan (PR mode, --pr): pushes the branch and creates
+# a PR via 'gh' CLI. In direct mode (the default): commits on the current branch
+# with no branch creation and no PR. Turn budget resets for each new plan.
 #
-# On iteration exhaustion or stuck: exits, leaving files in in-progress/ for
+# On turn exhaustion or stuck: exits, leaving files in in-progress/ for
 # resume on a subsequent run.
 
 set -e
@@ -28,7 +28,7 @@ source "$RALPHAI_LIB_DIR/prompt.sh"
 source "$RALPHAI_LIB_DIR/pr.sh"
 
 # ==========================================================================
-# MAIN LOOP — pick a plan, run iterations, merge on complete, repeat
+# MAIN LOOP — pick a plan, run turns, merge on complete, repeat
 # ==========================================================================
 
 plans_completed=0
@@ -72,7 +72,7 @@ if [[ "$DRY_RUN" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
       echo "[dry-run] ERROR: Direct mode cannot run on '$current_branch'."
-      echo "[dry-run] Switch to a feature branch, or use PR mode (the default)."
+      echo "[dry-run] Switch to a feature branch, or use --pr mode."
     else
       echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
     fi
@@ -138,7 +138,7 @@ while true; do
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
       echo "ERROR: Direct mode cannot run on '$current_branch'."
-      echo "Switch to a feature branch, or use PR mode (the default)."
+      echo "Switch to a feature branch, or use --pr mode."
       # Roll back: move plan file back to backlog
       plan_basename=$(basename "${WIP_FILES[0]}")
       rollback_dest="$BACKLOG_DIR/${plan_basename}"
@@ -226,19 +226,19 @@ while true; do
     echo "Initialized $PROGRESS_FILE"
   fi
 
-  # --- Iteration loop (per-plan) ---
+  # --- Turn loop (per-plan) ---
   stuck_count=0
   last_hash=$(git rev-parse HEAD)
   completed=false
 
   i=0
-  while [[ "$ITERATIONS" -eq 0 ]] || [[ "$i" -lt "$ITERATIONS" ]]; do
+  while [[ "$TURNS" -eq 0 ]] || [[ "$i" -lt "$TURNS" ]]; do
     i=$((i + 1))
     echo ""
-    if [[ "$ITERATIONS" -eq 0 ]]; then
-      echo "=== Ralphai iteration $i (unlimited) (plan: $(basename "${WIP_FILES[0]}")) ==="
+    if [[ "$TURNS" -eq 0 ]]; then
+      echo "=== Ralphai turn $i (unlimited) (plan: $(basename "${WIP_FILES[0]}")) ==="
     else
-      echo "=== Ralphai iteration $i of $ITERATIONS (plan: $(basename "${WIP_FILES[0]}")) ==="
+      echo "=== Ralphai turn $i of $TURNS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
     PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
@@ -256,18 +256,18 @@ while true; do
   - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${LEARNINGS_STEP}
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
-$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.
+$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.
 ONLY WORK ON A SINGLE TASK.
 If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes."
 
     agent_output_file=$(mktemp)
     set +e
-    if [[ "$ITERATION_TIMEOUT" -gt 0 ]]; then
-      timeout "$ITERATION_TIMEOUT" $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
+    if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
+      timeout "$TURN_TIMEOUT" $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
       agent_exit=${PIPESTATUS[0]}
       if [[ $agent_exit -eq 124 ]]; then
         echo ""
-        echo "WARNING: Agent command timed out after ${ITERATION_TIMEOUT}s."
+        echo "WARNING: Agent command timed out after ${TURN_TIMEOUT}s."
       fi
     else
       $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
@@ -282,13 +282,12 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       echo "WARNING: Agent command exited with status $agent_exit."
     fi
 
-    # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
-    current_hash=$(git rev-parse HEAD)
+    # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---    current_hash=$(git rev-parse HEAD)
     if [[ "$current_hash" == "$last_hash" ]]; then
       stuck_count=$((stuck_count + 1))
-      echo "WARNING: No new commits this iteration ($stuck_count/$MAX_STUCK)."
+      echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
-        echo "ERROR: $MAX_STUCK consecutive iterations with no progress. Aborting."
+        echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
         echo "Branch: $branch"
         if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
           echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
@@ -302,14 +301,14 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
               gh pr edit "$GROUP_PR_URL" --body "${fail_body}
 
 ---
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
             fi
           else
             update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
             gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
 
 ---
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK iterations with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
           fi
           echo "Group state preserved in $GROUP_STATE_FILE for --resume."
         else
@@ -326,13 +325,13 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
     if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
       echo "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot."
       git add -A
-      git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration $i" || true
+      git commit -m "chore(ralphai): auto-commit uncommitted changes from turn $i" || true
     fi
 
     # --- Check for completion ---
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
       echo ""
-      echo "Plan complete after $i iterations: $PLAN_DESC"
+      echo "Plan complete after $i turns: $PLAN_DESC"
       archive_run
 
       if [[ -n "${GROUP_NAME:-}" ]]; then
@@ -351,7 +350,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
         if advance_group_plan; then
           echo ""
           echo "=== Continuing group '$GROUP_NAME': $(basename "${WIP_FILES[0]}") ==="
-          # Reset iteration tracking for next plan
+          # Reset turn tracking for next plan
           i=0
           stuck_count=0
           last_hash=$(git rev-parse HEAD)
@@ -359,7 +358,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
           echo "## Progress Log" > "$PROGRESS_FILE"
           echo "" >> "$PROGRESS_FILE"
           echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
-          continue  # Continue the iteration loop with the new plan
+          continue  # Continue the turn loop with the new plan
         fi
 
         # Group complete
@@ -368,6 +367,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
         else
           cleanup_group_state
           echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
+          echo "Tip: use --pr to automatically create a branch and open a pull request."
         fi
       fi
 
@@ -376,6 +376,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
           create_pr "$branch" "$PLAN_DESC"
         else
           echo "Direct mode: commits are on branch '$branch'. No PR created."
+          echo "Tip: use --pr to automatically create a branch and open a pull request."
         fi
       fi
       plans_completed=$((plans_completed + 1))
@@ -386,7 +387,7 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
 
   if [[ "$completed" == false ]]; then
     echo ""
-    echo "Finished $ITERATIONS iterations without completing: $PLAN_DESC"
+    echo "Finished $TURNS turns without completing: $PLAN_DESC"
     if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
       echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
       git push origin "$branch" 2>/dev/null || true
@@ -403,5 +404,5 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
     exit 0
   fi
 
-  # Loop back to pick the next plan (iteration budget resets)
+  # Loop back to pick the next plan (turn budget resets)
 done

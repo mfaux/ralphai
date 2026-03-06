@@ -24,28 +24,28 @@ This is **context rot**. The longer a session runs, the less reliable the agent
 becomes — not because the model is bad, but because its view of the
 conversation has been quietly rewritten underneath it.
 
-Ralphai avoids context rot by design. Each iteration starts a **fresh agent
+Ralphai avoids context rot by design. Each turn starts a **fresh agent
 session** with only the information that matters:
 
 - The plan file (what to build)
 - The current state of the repo (what exists right now)
-- Build/test/lint output from the previous iteration (what's broken)
+- Build/test/lint output from the previous turn (what's broken)
 - A progress log (what was already done)
 
-Iteration 50 gets exactly the same quality of context as iteration 1. No
+Turn 50 gets exactly the same quality of context as turn 1. No
 accumulated history, no summarization artifacts, no drift.
 
 ## Feedback Loop
 
-After every iteration, Ralphai runs your project's real build, test, and lint
+After every turn, Ralphai runs your project's real build, test, and lint
 commands — not cached results, not model-generated guesses.
 
-The output from these commands is fed back to the agent in the next iteration's
+The output from these commands is fed back to the agent in the next turn's
 prompt. This means the agent always works against ground truth:
 
 1. Agent makes changes and commits
 2. Ralphai runs the configured feedback commands (e.g. `npm run build`, `npm test`)
-3. Any errors become part of the next iteration's prompt
+3. Any errors become part of the next turn's prompt
 4. The agent reads the errors and fixes them
 
 This loop keeps the agent grounded. Instead of drifting based on stale
@@ -61,7 +61,7 @@ generic fallback: "Run your project's build, test, and lint commands."
 Sometimes an agent gets stuck — making changes that don't compile, going in
 circles, or producing empty commits. Ralphai watches for this.
 
-If **N consecutive iterations** produce no new commits, Ralphai aborts the run.
+If **N consecutive turns** produce no new commits, Ralphai aborts the run.
 The default threshold is 3, meaning: if the agent fails to commit anything
 useful three times in a row, Ralphai stops burning tokens and leaves the work
 in `in-progress/` for you to inspect.
@@ -73,7 +73,7 @@ The threshold is configurable:
 - **CLI flag:** `--max-stuck=5`
 
 When a run is aborted due to stuck detection, the plan and progress files stay
-in `.ralphai/pipeline/in-progress/`. You can resume with `npx ralphai run` after
+in `.ralphai/pipeline/in-progress/`. You can resume with `ralphai run` after
 investigating what went wrong — or adjust the plan and try again.
 
 ## Branch Isolation
@@ -91,16 +91,16 @@ found, the plan is skipped and Ralphai moves to the next one.
 
 **On completion**, Ralphai operates in one of two modes:
 
-- **PR mode** (default): Ralphai pushes the `ralphai/*` branch and creates a PR
-  via the `gh` CLI, with the plan content and commit log in the PR body.
-  The `gh` CLI is validated at startup before any agent work begins.
-- **Direct mode** (`--direct`): Ralphai commits on the current branch. No
+- **Direct mode** (default): Ralphai commits on the current branch. No
   branch creation, no PR. Refuses to run on `main`/`master` — you must
   be on a feature branch.
+- **PR mode** (`--pr`): Ralphai pushes the `ralphai/*` branch and creates a PR
+  via the `gh` CLI, with the plan content and commit log in the PR body.
+  The `gh` CLI is validated at startup before any agent work begins.
 
 **Feature branch workflow:** For large features spanning multiple plans,
 use direct mode on a feature branch (`git checkout -b feature/big-thing`
-then `npx ralphai run -- 5 --direct`). When all plans are done, you
+then `ralphai run 5`). When all plans are done, you
 manually open a PR from the feature branch to `main`.
 
 **Safety guards:**
@@ -131,7 +131,7 @@ backlog/    --> in-progress/ --> out/
    dependencies, risk, and value. The chosen plan is moved to `in-progress/`.
 
 3. **`in-progress/`** — Active work. The plan file and `progress.txt` live here
-   while Ralphai is working. If a run is interrupted or exhausts its iterations,
+   while Ralphai is working. If a run is interrupted or exhausts its turns,
    files stay here so work can be resumed.
 
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the
@@ -164,7 +164,7 @@ recurring — without polluting your commit history.
 **Tier 1: `.ralphai/LEARNINGS.md`** (gitignored, local-only)
 
 The agent writes mistakes and lessons here during autonomous runs. Ralphai reads
-this file at the start of each iteration so it doesn't repeat past errors.
+this file at the start of each turn so it doesn't repeat past errors.
 This file is never committed — it's ephemeral, per-machine state.
 
 **Tier 2: `LEARNINGS.md`** (repo root, tracked)

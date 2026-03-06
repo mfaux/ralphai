@@ -66,11 +66,11 @@ branch_has_open_work() {
 declare -A SKIPPED_PLANS
 
 # --- PR mode preflight: validate gh CLI ---
-# In PR mode (the default), ralphai needs 'gh' to push branches and create PRs.
-# Check early so the user finds out before the agent runs 10 iterations.
+# In PR mode, ralphai needs 'gh' to push branches and create PRs.
+# Check early so the user finds out before the agent runs 10 turns.
 if [[ "$MODE" == "pr" && "$DRY_RUN" != true ]]; then
   if ! command -v gh &>/dev/null; then
-    echo "ERROR: PR mode (the default) requires the GitHub CLI (gh)."
+    echo "ERROR: PR mode requires the GitHub CLI (gh)."
     echo "Install it: https://cli.github.com"
     echo "Or use --direct to commit on the current branch instead."
     exit 1
@@ -95,9 +95,9 @@ if [[ "$DRY_RUN" != true ]]; then
 
       echo "Detected dirty state on $current_branch. Auto-committing recovery snapshot (--resume)."
       git add -A
-      git commit -m "chore(ralphai): recover interrupted iteration
+      git commit -m "chore(ralphai): recover interrupted turn
 
-Interrupted mid-iteration on branch $current_branch.
+Interrupted mid-turn on branch $current_branch.
 Committing dirty state so ralphai.sh can resume." || true
     else
       echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."

@@ -6,14 +6,14 @@ DEFAULT_AGENT_COMMAND=""
 DEFAULT_FEEDBACK_COMMANDS=""
 DEFAULT_BASE_BRANCH="main"
 DEFAULT_MAX_STUCK=3
-DEFAULT_MODE="pr"                    # "pr" (default) or "direct"
+DEFAULT_MODE="direct"                # "direct" (default) or "pr"
 DEFAULT_ISSUE_SOURCE="none"              # set to "github" to enable GitHub Issues integration
 DEFAULT_ISSUE_LABEL="ralphai"             # label to filter issues by
 DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"  # label applied when issue is picked up
 DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected from git remote)
 DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on plan completion
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
-DEFAULT_ITERATION_TIMEOUT=0              # 0 = no timeout (seconds per agent invocation)
+DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent invocation)
 DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
@@ -28,7 +28,7 @@ ISSUE_IN_PROGRESS_LABEL="$DEFAULT_ISSUE_IN_PROGRESS_LABEL"
 ISSUE_REPO="$DEFAULT_ISSUE_REPO"
 ISSUE_CLOSE_ON_COMPLETE="$DEFAULT_ISSUE_CLOSE_ON_COMPLETE"
 ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
-ITERATION_TIMEOUT="$DEFAULT_ITERATION_TIMEOUT"
+TURN_TIMEOUT="$DEFAULT_TURN_TIMEOUT"
 PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 
 WIP_DIR=".ralphai/pipeline/in-progress"
@@ -48,13 +48,13 @@ GROUP_PR_URL=""
 
 DRY_RUN=false
 RESUME=false
-ITERATIONS=""
+TURNS=""
 CLI_AGENT_COMMAND=""
 CLI_FEEDBACK_COMMANDS=""
 CLI_BASE_BRANCH=""
 CLI_MAX_STUCK=""
 CLI_MODE=""
-CLI_ITERATION_TIMEOUT=""
+CLI_TURN_TIMEOUT=""
 CLI_ISSUE_SOURCE=""
 CLI_ISSUE_LABEL=""
 CLI_ISSUE_IN_PROGRESS_LABEL=""
