@@ -252,8 +252,7 @@ while true; do
 5. Documentation: Review whether your changes affect any documentation. Update these files if they are outdated or incomplete:
    - README.md (commands, usage, feature descriptions)
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
-  - LEARNINGS.md docs: preserve the two-tier model (.ralphai/LEARNINGS.md for Ralphai logs, repo-level LEARNINGS.md for maintainer-curated durable guidance).
-  - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
+   - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${LEARNINGS_STEP}
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.

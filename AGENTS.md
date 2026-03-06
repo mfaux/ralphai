@@ -1,4 +1,6 @@
-# Learnings
+# Agent Instructions
+
+Project-specific guidance for AI coding agents working in this codebase.
 
 ## Testing child process output capture
 

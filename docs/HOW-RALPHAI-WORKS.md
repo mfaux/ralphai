@@ -27,26 +27,53 @@ conversation has been quietly rewritten underneath it.
 Ralphai avoids context rot by design. Each turn starts a **fresh agent
 session** with only the information that matters:
 
-- The plan file (what to build)
-- The current state of the repo (what exists right now)
-- Build/test/lint output from the previous turn (what's broken)
+- The [plan file](../templates/ralphai/PLANNING.md) (what to build)
 - A progress log (what was already done)
+- Learnings from past mistakes (if any)
 
 Turn 50 gets exactly the same quality of context as turn 1. No
 accumulated history, no summarization artifacts, no drift.
 
 ## Feedback Loop
 
-After every turn, Ralphai runs your project's real build, test, and lint
-commands — not cached results, not model-generated guesses.
+Each turn, Ralphai instructs the agent to run your project's real build, test,
+and lint commands — not cached results, not model-generated guesses. The agent
+runs these commands itself and fixes any failures before committing.
 
-The output from these commands is fed back to the agent in the next turn's
-prompt. This means the agent always works against ground truth:
+```
+    ┌─────────────────────────────────────┐
+    │            Fresh session            │
+    │   plan + progress log + learnings   │
+    └──────────────────┬──────────────────┘
+                       ▼
+               ┌───────────────┐
+               │  Agent works  │
+               │ on next task  │
+               └───────┬───────┘
+                       ▼
+               ┌───────────────┐
+               │  Agent runs   │
+               │  build/test/  │◄──┐
+               │     lint      │   │
+               └───────┬───────┘   │
+                       ▼           │
+                 ┌───────────┐     │
+                 │  Errors?  │─yes─┘
+                 └─────┬─────┘
+                       │ no
+                       ▼
+                 ┌───────────┐
+                 │  Commit   │
+                 └─────┬─────┘
+                       ▼
+                   Next turn
+                (fresh session)
+```
 
-1. Agent makes changes and commits
-2. Ralphai runs the configured feedback commands (e.g. `npm run build`, `npm test`)
-3. Any errors become part of the next turn's prompt
-4. The agent reads the errors and fixes them
+1. Agent reads the plan and progress log
+2. Agent implements the next task
+3. Agent runs the configured feedback commands (e.g. `npm run build`, `npm test`)
+4. Agent fixes any errors and commits
 
 This loop keeps the agent grounded. Instead of drifting based on stale
 assumptions, it reacts to actual project state every cycle.
@@ -158,20 +185,9 @@ between lifecycle stages requires no git commits.
 
 ## Learnings System
 
-Ralphai uses a two-tier learnings flow to capture mistakes and prevent them from
-recurring — without polluting your commit history.
-
-**Tier 1: `.ralphai/LEARNINGS.md`** (gitignored, local-only)
-
-The agent writes mistakes and lessons here during autonomous runs. Ralphai reads
-this file at the start of each turn so it doesn't repeat past errors.
-This file is never committed — it's ephemeral, per-machine state.
-
-**Tier 2: `LEARNINGS.md`** (repo root, tracked)
-
-Human-curated learnings with lasting value. Ralphai reads this file for context
-but never writes to it. The project maintainer reviews `.ralphai/LEARNINGS.md`
-after runs and promotes useful entries here.
+Ralphai logs mistakes and lessons to `.ralphai/LEARNINGS.md` during autonomous
+runs. This file is **gitignored** (local-only, never committed). Ralphai reads
+it at the start of each turn so it doesn't repeat past errors.
 
 **Review workflow after runs:**
 
@@ -180,8 +196,6 @@ after runs and promotes useful entries here.
 3. Promote durable guidance to the appropriate place:
    - `AGENTS.md` (or equivalent) for immediate repo-specific agent behavior
    - Skill/reusable docs for stable patterns worth reusing across tasks or repos
-4. Add concise, high-signal takeaways to repo-level `LEARNINGS.md`
 
-This separation keeps the tracked `LEARNINGS.md` clean (no agent noise) and
-prevents auto-written entries from interfering with stuck detection (which
-counts commits).
+Keeping learnings gitignored prevents auto-written entries from interfering
+with stuck detection (which counts commits).

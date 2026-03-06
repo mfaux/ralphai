@@ -538,7 +538,7 @@ ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"
 
 Mistakes and lessons learned during autonomous runs. This file is **gitignored** —
 Ralphai reads and writes it automatically. Review periodically and promote useful
-entries to the repo-level \`LEARNINGS.md\` when they have lasting value.
+entries to \`AGENTS.md\` or skill docs when they have lasting value.
 
 ## Format
 
@@ -567,13 +567,6 @@ LEARNINGS.md
 `;
   writeFileSync(join(ralphaiDir, ".gitignore"), gitignoreContent);
 
-  // Seed repo-root LEARNINGS.md if it does not exist
-  const learningsPath = join(cwd, "LEARNINGS.md");
-  const createdLearnings = !existsSync(learningsPath);
-  if (createdLearnings) {
-    writeFileSync(learningsPath, "# Learnings\n");
-  }
-
   // Create GitHub labels if issues integration is enabled
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -596,11 +589,6 @@ LEARNINGS.md
   console.log(
     `  .ralphai/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
   );
-  if (createdLearnings) {
-    console.log(
-      `  LEARNINGS.md             ${DIM}Maintainer-curated learnings Ralphai reads for long-term guidance${RESET}`,
-    );
-  }
   if (labelResult) {
     if (labelResult.success) {
       console.log(
@@ -654,7 +642,7 @@ async function updateRalphai(
     const confirmed = await clack.confirm({
       message:
         "This will overwrite README.md and PLANNING.md " +
-        "from the latest templates. Your config, LEARNINGS.md, and plan " +
+        "from the latest templates. Your config and plan " +
         "files will be preserved. Continue?",
     });
 
@@ -689,7 +677,7 @@ async function updateRalphai(
   }
 
   // Report what was preserved
-  for (const file of ["ralphai.config", "LEARNINGS.md", ".gitignore"]) {
+  for (const file of ["ralphai.config", ".gitignore"]) {
     if (existsSync(join(ralphaiDir, file))) {
       skipped.push(file);
     }
@@ -791,7 +779,7 @@ async function runRalphaiInit(
         const confirmed = await clack.confirm({
           message:
             "This will DELETE .ralphai/ entirely and re-scaffold from scratch. " +
-            "Your config, LEARNINGS.md, and any plan files will be LOST. Continue?",
+            "Your config and any plan files will be LOST. Continue?",
         });
 
         if (clack.isCancel(confirmed) || !confirmed) {

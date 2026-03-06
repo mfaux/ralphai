@@ -95,7 +95,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 | `README.md`             | This file — operational docs for the `.ralphai/` directory |
 | `PLANNING.md`           | Guide for writing plan files                               |
 | `.gitignore`            | Keeps plan files local-only (not tracked by git)           |
-| `.ralphai/LEARNINGS.md` | Ralphai-specific learnings — gitignored, local-only        |
+| `.ralphai/LEARNINGS.md` | Ralphai-written learnings — gitignored, local-only         |
 | `wip/`                  | Work-in-progress plans — not scanned by ralphai            |
 | `backlog/`              | Incoming plans queued for ralphai to pick up               |
 | `in-progress/`          | Active plans and progress.txt — work in flight             |
@@ -191,25 +191,20 @@ Only update `AGENTS.md` when a task produces knowledge that future coding agents
 
 Do **not** edit `CHANGELOG.md` unless explicitly asked. Changelog entries are maintained by humans.
 
-## Learnings (Two-Tier)
+## Learnings
 
-Ralphai uses a two-tier learnings system:
-
-- **`.ralphai/LEARNINGS.md`** (gitignored) — Ralphai writes mistakes and lessons here during autonomous runs. This file is local-only and never committed. Ralphai reads it at the start of each turn to avoid repeating past mistakes.
-- **`LEARNINGS.md`** (repo-level, tracked) — Human-curated learnings. Ralphai reads this file for context but never writes to it. The project maintainer promotes useful entries from `.ralphai/LEARNINGS.md` to the repo-level file when they have lasting value.
+Ralphai logs mistakes and lessons to `.ralphai/LEARNINGS.md` during autonomous runs. This file is **gitignored** (local-only, never committed). Ralphai reads it at the start of each turn to avoid repeating past mistakes.
 
 Use a lightweight review loop after runs:
 
 1. Review `.ralphai/LEARNINGS.md` entries from the run.
 2. Compact findings by merging duplicates and removing one-off noise.
-3. Promote durable guidance:
+3. Promote durable guidance to the appropriate place:
 
 - `AGENTS.md` (or equivalent agent-instruction docs) for immediate repo-specific behavior
-- skill/reusable docs for stable patterns that should be reused across tasks/repos
+- Skill/reusable docs for stable patterns that should be reused across tasks/repos
 
-4. Add concise, high-signal takeaways to repo-level `LEARNINGS.md`.
-
-This separation keeps the repo-level `LEARNINGS.md` clean (no agent noise) and prevents auto-commit from interfering with stuck detection.
+Keeping learnings gitignored prevents auto-written entries from interfering with stuck detection (which counts commits).
 
 ## Safety Guards
 

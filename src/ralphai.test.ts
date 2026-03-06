@@ -87,7 +87,7 @@ describe("ralphai command", () => {
     );
     expect(learnings).toContain("# Ralphai Learnings");
     expect(learnings).toContain("gitignored");
-    expect(learnings).toContain("LEARNINGS.md");
+    expect(learnings).toContain("AGENTS.md");
   });
 
   it("init --yes generates config with default agent command", () => {
@@ -867,39 +867,6 @@ describe("ralphai command", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Repo-root LEARNINGS.md seeding tests
-  // -------------------------------------------------------------------------
-
-  it("init --yes creates LEARNINGS.md at repo root when missing", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
-
-    expect(existsSync(join(testDir, "LEARNINGS.md"))).toBe(true);
-    expect(output).toContain("LEARNINGS.md");
-    expect(output).toContain("Maintainer-curated learnings");
-  });
-
-  it("init --yes does not overwrite existing LEARNINGS.md at repo root", () => {
-    const existingContent = "# My Existing Learnings\n\nDo not overwrite.\n";
-    writeFileSync(join(testDir, "LEARNINGS.md"), existingContent);
-
-    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
-
-    const content = readFileSync(join(testDir, "LEARNINGS.md"), "utf-8");
-    expect(content).toBe(existingContent);
-    // Should not mention creating LEARNINGS.md since it already existed
-    expect(output).not.toMatch(
-      /LEARNINGS\.md\s+.*Maintainer-curated learnings/,
-    );
-  });
-
-  it("init --yes seeds LEARNINGS.md with minimal header", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    const content = readFileSync(join(testDir, "LEARNINGS.md"), "utf-8");
-    expect(content).toBe("# Learnings\n");
-  });
-
-  // -------------------------------------------------------------------------
   // Subcommand behavior tests
   // -------------------------------------------------------------------------
 
@@ -1393,10 +1360,7 @@ echo "$PROMPT_MODE"
     expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
     // LEARNINGS_REF uses format_file_ref
     expect(prompt).toContain(
-      'LEARNINGS_REF=" $(format_file_ref "LEARNINGS.md")"',
-    );
-    expect(prompt).toContain(
-      'LEARNINGS_REF="$LEARNINGS_REF $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"',
+      'LEARNINGS_REF=" $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"',
     );
     // Prompt construction uses format_file_ref for progress file
     expect(ralphaiSh).toContain(
@@ -1409,8 +1373,7 @@ echo "$PROMPT_MODE"
     // Should NOT have any hardcoded @$var or @${VAR} file references in
     // prompt construction or detect_plan FILE_REFS assignments
     expect(plans).not.toMatch(/FILE_REFS=.*@\$/);
-    expect(prompt).not.toContain('LEARNINGS_REF=" @LEARNINGS.md"');
-    expect(prompt).not.toContain('LEARNINGS_REF="$LEARNINGS_REF @$');
+    expect(prompt).not.toContain('LEARNINGS_REF=" @');
   });
 
   // -------------------------------------------------------------------------

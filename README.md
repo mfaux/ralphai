@@ -2,13 +2,13 @@
 
 Put your AI coding agent on autopilot.
 
-Ralphai takes plan files from a backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
+Ralphai takes [plan files](#1-write-plans) (markdown) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. Each plan contains tasks — like a todo list for the agent to work through. You write the plans (or have your agent write them). Ralphai does the rest.
 
 ## Why Ralphai?
 
 AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-RALPHAI-WORKS.md#context-rot)
 
-Ralphai avoids this by starting each turn with a **fresh session**: just the plan, current repo state, and build/test/lint results. No conversation history to lose, no drift.
+Ralphai avoids this by starting each **turn** with a **fresh session**: just the plan and a progress log. No conversation history to lose, no drift.
 
 - **No context rot** — turn 50 is as sharp as turn 1
 - **Grounded feedback** — real build errors every cycle, not stale memory
@@ -51,7 +51,7 @@ Ralphai scaffolds a `.ralphai/` directory into your project with config, docs, a
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples, or roll your own format. Ralphai just needs markdown files with clear acceptance criteria.
+Ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples, or roll your own format. Ralphai just needs markdown files with clear [**acceptance criteria**](templates/ralphai/PLANNING.md).
 
 > Plan files are **gitignored** — they're local-only state, not tracked by git.
 
@@ -62,14 +62,44 @@ Use PLANNING.md as a guide.
 
 ### 2. Run
 
-Ralphai commits on your current branch by default. It refuses to run on `main`/`master` — create or switch to a feature branch first.
+Ralphai commits on your **current branch** by default. It refuses to run on `main`/`master` — create or switch to a feature branch first.
 
 ```bash
 git checkout -b my-feature
 ralphai run
 ```
 
-Ralphai picks a plan from the backlog, hands it to your agent, and loops. Each turn, the agent works on one task, then ralphai runs build, test, and lint. When a plan is done, it commits the changes on your current branch.
+Ralphai picks a plan from the backlog, hands it to your agent, and loops. Each turn, the agent works on one task, then ralphai runs build, test, and lint. When all the tasks in a plan is done, it commits the changes on your current branch.
+
+```
+    ┌─────────────────────────────────────┐
+    │            Fresh session            │
+    │   plan + progress log + learnings   │
+    └──────────────────┬──────────────────┘
+                       ▼
+               ┌───────────────┐
+               │  Agent works  │
+               │ on next task  │
+               └───────┬───────┘
+                       ▼
+               ┌───────────────┐
+               │  Agent runs   │
+               │  build/test/  │◄──┐
+               │     lint      │   │
+               └───────┬───────┘   │
+                       ▼           │
+                 ┌───────────┐     │
+                 │  Errors?  │─yes─┘
+                 └─────┬─────┘
+                       │ no
+                       ▼
+                 ┌───────────┐
+                 │  Commit   │
+                 └─────┬─────┘
+                       ▼
+                   Next turn
+                (fresh session)
+```
 
 Common options:
 
@@ -96,7 +126,7 @@ Stop mid-run any time. Work stays in `in-progress/`. Resume by running `ralphai 
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `LEARNINGS.md` (tracked) or `AGENTS.md`. [How the learnings system works →](docs/HOW-RALPHAI-WORKS.md#learnings-system)
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `AGENTS.md` or skill docs. [How the learnings system works →](docs/HOW-RALPHAI-WORKS.md#learnings-system)
 
 ### After you're set up
 
@@ -123,7 +153,6 @@ After `ralphai init`, the good stuff lives in `.ralphai/`:
 
 - [`.ralphai/README.md`](.ralphai/README.md) — full operational docs (lifecycle, config)
 - [`.ralphai/PLANNING.md`](.ralphai/PLANNING.md) — guide for writing plan files (give this to your agent)
-- `LEARNINGS.md` (repo root) — curated long-term findings; compacted/promoted from `.ralphai/LEARNINGS.md`
 
 ## Supported Agents
 
