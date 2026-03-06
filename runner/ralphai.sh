@@ -238,6 +238,16 @@ while true; do
     echo "Initialized $PROGRESS_FILE"
   fi
 
+  # --- Per-plan agent override ---
+  GLOBAL_AGENT_COMMAND="$AGENT_COMMAND"
+  plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
+  if [[ -n "$plan_agent" ]]; then
+    AGENT_COMMAND="$plan_agent"
+    detect_agent_type
+    resolve_prompt_mode
+    echo "Using plan-specific agent: $plan_agent"
+  fi
+
   # --- Turn loop (per-plan) ---
   stuck_count=0
   last_hash=$(git rev-parse HEAD)
@@ -325,6 +335,9 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
         else
           echo "Plan files remain in $WIP_DIR/ — resume with another run."
         fi
+        AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
+        detect_agent_type
+        resolve_prompt_mode
         exit 1
       fi
     else
@@ -369,6 +382,15 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
           echo "## Progress Log" > "$PROGRESS_FILE"
           echo "" >> "$PROGRESS_FILE"
           echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
+          # Re-extract per-plan agent for the new plan
+          AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
+          plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
+          if [[ -n "$plan_agent" ]]; then
+            AGENT_COMMAND="$plan_agent"
+            echo "Using plan-specific agent: $plan_agent"
+          fi
+          detect_agent_type
+          resolve_prompt_mode
           continue  # Continue the turn loop with the new plan
         fi
 
@@ -395,6 +417,11 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       break
     fi
   done
+
+  # --- Restore global agent command after plan completes ---
+  AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
+  detect_agent_type
+  resolve_prompt_mode
 
   if [[ "$completed" == false ]]; then
     echo ""

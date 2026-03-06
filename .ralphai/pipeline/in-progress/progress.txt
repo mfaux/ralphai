@@ -19,3 +19,24 @@
 **Tests:** All 150 tests pass (6 new tests for extract_plan_agent + existing suite).
 
 **Remaining tasks:** 2 (per-plan override in plan loop), 3 (dry-run output), 4 (PLANNING.md docs), 5 (override/revert behavior tests)
+
+### Task 2: Apply per-plan agent override in the plan loop — DONE
+
+**Date:** 2026-03-06
+
+**What:** Modified `runner/ralphai.sh` to save `$AGENT_COMMAND` before the turn loop, extract the plan's `agent` frontmatter via `extract_plan_agent()`, and override `$AGENT_COMMAND` + re-run `detect_agent_type`/`resolve_prompt_mode` when present. The global agent command is restored in all exit paths.
+
+**Decisions:**
+- Save global agent command as `GLOBAL_AGENT_COMMAND` right before the turn loop (line 242)
+- `extract_plan_agent` is called with `2>/dev/null || true` to gracefully handle plans without frontmatter
+- Agent override applied at three points: (1) initial plan detection, (2) group plan advance, (3) restore after turn loop completes
+- `resolve_prompt_mode` is also re-run alongside `detect_agent_type` to ensure prompt formatting adapts
+- Restore happens after the turn loop's `done` (covers both completion `break` and turn exhaustion fall-through), and also before the stuck-abort `exit 1`
+- For group mode, when advancing to the next plan (`advance_group_plan`), the agent command is reset to global first, then re-extracted from the new plan
+
+**Files changed:**
+- `runner/ralphai.sh` — added per-plan agent override logic (save/extract/override before turn loop, restore in stuck-abort and after turn loop, re-extract on group advance)
+
+**Tests:** All 150 existing tests pass. Build, type-check, and bash syntax check all pass.
+
+**Remaining tasks:** 3 (dry-run output), 4 (PLANNING.md docs), 5 (override/revert behavior tests)
