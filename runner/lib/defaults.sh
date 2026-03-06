@@ -15,6 +15,7 @@ DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"   # auto-close linked GitHub issues on pl
 DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
 DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent invocation)
 DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
+DEFAULT_CONTINUOUS="false"               # "true" to keep draining backlog after first plan
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -22,6 +23,7 @@ FEEDBACK_COMMANDS="$DEFAULT_FEEDBACK_COMMANDS"
 MAX_STUCK="$DEFAULT_MAX_STUCK"
 BASE_BRANCH="$DEFAULT_BASE_BRANCH"
 MODE="$DEFAULT_MODE"
+CONTINUOUS="$DEFAULT_CONTINUOUS"
 ISSUE_SOURCE="$DEFAULT_ISSUE_SOURCE"
 ISSUE_LABEL="$DEFAULT_ISSUE_LABEL"
 ISSUE_IN_PROGRESS_LABEL="$DEFAULT_ISSUE_IN_PROGRESS_LABEL"
@@ -54,6 +56,7 @@ CLI_FEEDBACK_COMMANDS=""
 CLI_BASE_BRANCH=""
 CLI_MAX_STUCK=""
 CLI_MODE=""
+CLI_CONTINUOUS=""
 CLI_TURN_TIMEOUT=""
 CLI_ISSUE_SOURCE=""
 CLI_ISSUE_LABEL=""
