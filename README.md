@@ -11,7 +11,7 @@ AI coding agents get worse the longer they run. Every model can only "see" a lim
 Ralphai avoids this by starting each **turn** with a **fresh session**: just the plan and a progress log. No conversation history to lose, no drift.
 
 - **No context rot** — turn 50 is as sharp as turn 1
-- **Grounded feedback** — real build errors every cycle, not stale memory
+- **Fresh feedback** — real build output every cycle, never recalled from memory
 - **Stuck detection** — stops burning tokens when progress stalls
 - **Unattended** — write plans, walk away
 
