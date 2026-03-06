@@ -164,12 +164,7 @@ describe("ralphai command", () => {
 
   it("ralphai.sh template passes bash syntax check", () => {
     // Read directly from runner/ (scripts are bundled in the package)
-    const templateScript = join(
-      __dirname,
-      "..",
-      "runner",
-      "ralphai.sh",
-    );
+    const templateScript = join(__dirname, "..", "runner", "ralphai.sh");
 
     // bash -n does a syntax check without executing
     expect(() => {
@@ -301,6 +296,7 @@ describe("ralphai command", () => {
     // Direct mode refuses to run on main or master
     expect(ralphaiSh).toContain("Direct mode cannot run on");
     expect(ralphaiSh).toContain("Switch to a feature branch, or use --pr mode");
+    expect(ralphaiSh).toContain("git checkout -b ralphai/");
   });
 
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
@@ -1473,19 +1469,15 @@ echo "$PROMPT_MODE"
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      const output = execFileSync(
-        "node",
-        [distCli, "run", "--dry-run"],
-        {
-          cwd: testDir,
-          encoding: "utf-8",
-          stdio: ["pipe", "pipe", "pipe"],
-          env: {
-            ...process.env,
-            RALPHAI_NO_UPDATE_CHECK: "1",
-          },
+      const output = execFileSync("node", [distCli, "run", "--dry-run"], {
+        cwd: testDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          RALPHAI_NO_UPDATE_CHECK: "1",
         },
-      );
+      });
 
       expect(output).toContain("No runnable work found.");
     });

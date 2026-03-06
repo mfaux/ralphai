@@ -73,6 +73,10 @@ if [[ "$DRY_RUN" == true ]]; then
     if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
       echo "[dry-run] ERROR: Direct mode cannot run on '$current_branch'."
       echo "[dry-run] Switch to a feature branch, or use --pr mode."
+      dry_slug=$(basename "${WIP_FILES[0]}")
+      dry_slug="${dry_slug#prd-}"
+      dry_slug="${dry_slug%.md}"
+      echo "[dry-run] Run:  git checkout -b ralphai/${dry_slug}"
     else
       echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
     fi
@@ -139,6 +143,10 @@ while true; do
     if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
       echo "ERROR: Direct mode cannot run on '$current_branch'."
       echo "Switch to a feature branch, or use --pr mode."
+      plan_slug=$(basename "${WIP_FILES[0]}")
+      plan_slug="${plan_slug#prd-}"
+      plan_slug="${plan_slug%.md}"
+      echo "Run:  git checkout -b ralphai/${plan_slug}"
       # Roll back: move plan file back to backlog
       plan_basename=$(basename "${WIP_FILES[0]}")
       rollback_dest="$BACKLOG_DIR/${plan_basename}"
