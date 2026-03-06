@@ -122,6 +122,13 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   fi
 
+  if [[ ${#FALLBACK_CHAIN[@]} -gt 0 ]]; then
+    echo "[dry-run] Fallback chain (${#FALLBACK_CHAIN[@]} agent(s)):"
+    for fi_idx in "${!FALLBACK_CHAIN[@]}"; do
+      echo "[dry-run]   $((fi_idx + 1)). ${FALLBACK_CHAIN[$fi_idx]}"
+    done
+  fi
+
   echo "[dry-run] No files moved, no branches created, no agent run executed."
   exit 0
 fi

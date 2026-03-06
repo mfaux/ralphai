@@ -584,6 +584,17 @@ if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
   FALLBACK_AGENTS="$CLI_FALLBACK_AGENTS"
 fi
 
+# --- Parse fallback chain into array ---
+FALLBACK_CHAIN=()
+if [[ -n "$FALLBACK_AGENTS" ]]; then
+  IFS=',' read -ra FALLBACK_CHAIN <<< "$FALLBACK_AGENTS"
+  # Trim whitespace from each entry
+  for i in "${!FALLBACK_CHAIN[@]}"; do
+    FALLBACK_CHAIN[$i]=$(echo "${FALLBACK_CHAIN[$i]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  done
+fi
+FALLBACK_INDEX=0
+
 # --- Show resolved config and exit ---
 if [[ "$SHOW_CONFIG" == true ]]; then
   echo "Resolved settings (precedence: CLI > env > config > defaults):"
