@@ -286,7 +286,25 @@ while true; do
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.
 ONLY WORK ON A SINGLE TASK.
-If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes."
+If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes.
+REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
+<learnings>
+<entry>
+status: logged
+date: YYYY-MM-DD
+title: Short description
+what: What went wrong
+root_cause: Why it happened
+prevention: How to avoid it
+</entry>
+</learnings>
+If no learnings this turn, use:
+<learnings>
+<entry>
+status: none
+</entry>
+</learnings>
+The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically."
 
     agent_output_file=$(mktemp)
     set +e
