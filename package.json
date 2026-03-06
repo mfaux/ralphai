@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "bin",
+    "runner",
     "templates"
   ],
   "scripts": {

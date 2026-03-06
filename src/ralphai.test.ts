@@ -163,12 +163,11 @@ describe("ralphai command", () => {
   });
 
   it("ralphai.sh template passes bash syntax check", () => {
-    // Read directly from templates/ (scripts are no longer scaffolded)
+    // Read directly from runner/ (scripts are bundled in the package)
     const templateScript = join(
       __dirname,
       "..",
-      "templates",
-      "ralphai",
+      "runner",
       "ralphai.sh",
     );
 
@@ -181,7 +180,7 @@ describe("ralphai command", () => {
   });
 
   it("ralphai.sh lib contains issue integration functions and config", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
     expect(issues).toContain("read_issue_frontmatter");
@@ -226,7 +225,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains helpful hint in nothing-to-do messages", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
@@ -239,7 +238,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh defaults to 5 turns when none specified", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Should default TURNS to "5" when unset (no error, no conditional)
@@ -249,7 +248,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh shows turns-per-plan as optional in usage", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Usage text should use square brackets (optional) not angle brackets (required)
@@ -260,7 +259,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains gh preflight check for PR mode", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
     // PR mode preflight: checks gh is installed and authenticated
@@ -273,7 +272,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh uses create_pr instead of merge_and_cleanup", () => {
-    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateDir = join(__dirname, "..", "runner");
     const templateLib = join(templateDir, "lib");
 
     const prSh = readFileSync(join(templateLib, "pr.sh"), "utf-8");
@@ -296,7 +295,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh has direct mode safety guard for main/master", () => {
-    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateDir = join(__dirname, "..", "runner");
 
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Direct mode refuses to run on main or master
@@ -305,7 +304,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
-    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateDir = join(__dirname, "..", "runner");
 
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Completion handler should conditionally call create_pr only in PR mode
@@ -314,7 +313,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh warns on unknown config keys instead of erroring", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Unknown config keys should produce a warning, not an error
@@ -326,7 +325,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains issue integration defaults", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
     // Config defaults
@@ -341,7 +340,7 @@ describe("ralphai command", () => {
   });
 
   it("scaffolded ralphai.sh contains issue integration functions", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
     // Core functions
@@ -922,7 +921,7 @@ describe("ralphai command", () => {
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains detect_agent_type function", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
     expect(prompt).toContain("detect_agent_type()");
@@ -998,7 +997,7 @@ describe("ralphai command", () => {
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains format_file_ref and resolve_prompt_mode functions", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
     expect(prompt).toContain("format_file_ref()");
@@ -1185,7 +1184,7 @@ ${cleanupFile}
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains promptMode config infrastructure", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Config file loader case
@@ -1353,7 +1352,7 @@ echo "$PROMPT_MODE"
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh wires format_file_ref into prompt construction and detect_plan", () => {
-    const templateDir = join(__dirname, "..", "templates", "ralphai");
+    const templateDir = join(__dirname, "..", "runner");
     const templateLib = join(templateDir, "lib");
 
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
@@ -1734,7 +1733,7 @@ echo "$PROMPT_MODE"
   // -------------------------------------------------------------------------
 
   it("scaffolded ralphai.sh contains group mode foundation functions", () => {
-    const templateLib = join(__dirname, "..", "templates", "ralphai", "lib");
+    const templateLib = join(__dirname, "..", "runner", "lib");
 
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     expect(plans).toContain("extract_group()");

@@ -919,7 +919,7 @@ function runRalphaiRunner(
   const __dir = dirname(fileURLToPath(import.meta.url));
   const ralphaiSh =
     process.env.RALPHAI_RUNNER_SCRIPT ||
-    join(__dir, "..", "templates", "ralphai", "ralphai.sh");
+    join(__dir, "..", "runner", "ralphai.sh");
 
   const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
 
