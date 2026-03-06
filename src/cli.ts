@@ -5,6 +5,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { runRalphai } from "./ralphai.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
+import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,10 +24,11 @@ function showHelp(): void {
 ${BOLD}Usage:${RESET} ralphai <command> [options]
 
 ${BOLD}Commands:${RESET}
-  init        Set up Ralphai in your project (interactive wizard)
-  run         Start the Ralphai task runner
-  update      Refresh Ralphai template files (preserves config & state)
-  uninstall   Remove Ralphai from your project
+  init           Set up Ralphai in your project (interactive wizard)
+  run            Start the Ralphai task runner
+  update [tag]   Update ralphai to the latest (or specified) version
+  sync           Refresh .ralphai/ template files (preserves config & state)
+  uninstall      Remove Ralphai from your project
 
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
@@ -47,7 +49,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai run 3                  ${DIM}# 3 turns per plan${RESET}
   ${DIM}$${RESET} ralphai run --dry-run          ${DIM}# preview only${RESET}
   ${DIM}$${RESET} ralphai run --pr               ${DIM}# create branch and open PR${RESET}
-  ${DIM}$${RESET} ralphai update --yes           ${DIM}# update templates${RESET}
+  ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
+  ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
+  ${DIM}$${RESET} ralphai sync --yes             ${DIM}# refresh template files${RESET}
   ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
 `);
 }
@@ -75,6 +79,22 @@ async function main(): Promise<void> {
 
   // Dispatch directly to runRalphai — args are already the subcommands
   await runRalphai(args);
+
+  // Update notification (after command completes, so it doesn't interfere)
+  if (!process.env.RALPHAI_NO_UPDATE_CHECK) {
+    const currentVersion = getVersion();
+    const update = checkForUpdate("ralphai", currentVersion);
+    if (update) {
+      console.log(
+        `  ${DIM}Update available: ${update.current} \u2192 ${BOLD}${update.latest}${RESET}`,
+      );
+      console.log(
+        `  ${DIM}Run ${TEXT}ralphai update${RESET}${DIM} to upgrade${RESET}`,
+      );
+      console.log();
+    }
+    spawnUpdateCheck("ralphai");
+  }
 }
 
 main().catch((error: unknown) => {

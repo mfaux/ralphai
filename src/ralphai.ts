@@ -11,12 +11,13 @@ import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
+import { runSelfUpdate } from "./self-update.ts";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type RalphaiSubcommand = "init" | "update" | "run" | "uninstall";
+type RalphaiSubcommand = "init" | "update" | "sync" | "run" | "uninstall";
 
 interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
@@ -56,6 +57,7 @@ const AGENT_PRESETS: { label: string; command: string }[] = [
 const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
+  "sync",
   "run",
   "uninstall",
 ]);
@@ -622,13 +624,13 @@ LEARNINGS.md
 }
 
 // ---------------------------------------------------------------------------
-// Update logic — refresh template files while preserving user state
+// Sync logic — refresh template files while preserving user state
 // ---------------------------------------------------------------------------
 
-/** Files that are copied from templates and safe to overwrite on update. */
+/** Files that are copied from templates and safe to overwrite on sync. */
 const TEMPLATE_FILES = ["README.md", "PLANNING.md"] as const;
 
-async function updateRalphai(
+async function syncRalphaiTemplates(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
@@ -637,7 +639,7 @@ async function updateRalphai(
   const ralphaiDir = join(cwd, ".ralphai");
 
   if (!options.yes) {
-    clack.intro("Updating Ralphai — refreshing template files");
+    clack.intro("Syncing Ralphai — refreshing template files");
 
     const confirmed = await clack.confirm({
       message:
@@ -647,7 +649,7 @@ async function updateRalphai(
     });
 
     if (clack.isCancel(confirmed) || !confirmed) {
-      clack.cancel("Update cancelled.");
+      clack.cancel("Sync cancelled.");
       return;
     }
   }
@@ -689,7 +691,7 @@ async function updateRalphai(
   }
 
   // Print results
-  console.log(`${TEXT}Ralphai updated in .ralphai/${RESET}`);
+  console.log(`${TEXT}Ralphai synced in .ralphai/${RESET}`);
   console.log();
   if (updated.length > 0) {
     console.log(`${DIM}Updated:${RESET}`);
@@ -727,7 +729,10 @@ function showRalphaiHelp(): void {
     `  ${TEXT}run${RESET}         ${DIM}Start the Ralphai task runner${RESET}`,
   );
   console.log(
-    `  ${TEXT}update${RESET}      ${DIM}Refresh Ralphai template files (preserves config & state)${RESET}`,
+    `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}sync${RESET}        ${DIM}Refresh .ralphai/ template files from the installed version${RESET}`,
   );
   console.log(
     `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from your project${RESET}`,
@@ -751,7 +756,13 @@ export async function runRalphai(args: string[]): Promise<void> {
       await runRalphaiInit(options, cwd);
       break;
     case "update":
-      await runRalphaiUpdate(options, cwd);
+      runSelfUpdate({
+        packageName: "ralphai",
+        tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
+      });
+      break;
+    case "sync":
+      await runRalphaiSync(options, cwd);
       break;
     case "uninstall":
       await uninstallRalphai(options, cwd);
@@ -793,7 +804,7 @@ async function runRalphaiInit(
     } else {
       console.error(
         `${TEXT}Error:${RESET} Ralphai is already set up in this directory (.ralphai/ exists).\n` +
-          `${DIM}Use ${TEXT}ralphai update${DIM} to refresh templates, ` +
+          `${DIM}Use ${TEXT}ralphai sync${DIM} to refresh templates, ` +
           `or ${TEXT}ralphai init --force${DIM} to re-scaffold from scratch.${RESET}`,
       );
       process.exit(1);
@@ -823,7 +834,7 @@ async function runRalphaiInit(
   scaffold(answers, cwd);
 }
 
-async function runRalphaiUpdate(
+async function runRalphaiSync(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
@@ -834,7 +845,7 @@ async function runRalphaiUpdate(
     process.exit(1);
   }
 
-  await updateRalphai(options, cwd);
+  await syncRalphaiTemplates(options, cwd);
 }
 
 /** Default turn count when `ralphai run` is invoked without args. */
