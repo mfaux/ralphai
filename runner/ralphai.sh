@@ -37,10 +37,26 @@ plans_completed=0
 if [[ "$MODE" == "direct" ]]; then
   current_branch=$(git rev-parse --abbrev-ref HEAD)
   if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
-    echo "ERROR: Direct mode cannot run on '$current_branch'."
+    echo "Direct mode cannot run on '$current_branch'."
     echo ""
-    echo "Switch to a feature branch, or run in PR mode:"
+    echo "Either run in PR mode (a branch and pull request are created for you):"
     echo "  ralphai run --pr"
+    # Peek at backlog to suggest a branch name
+    _first_plan=""
+    for _f in "$BACKLOG_DIR"/*.md; do
+      [[ -f "$_f" ]] && _first_plan="$_f" && break
+    done
+    if [[ -n "$_first_plan" ]]; then
+      _slug=$(basename "$_first_plan")
+      _slug="${_slug#prd-}"
+      _slug="${_slug%.md}"
+      echo ""
+      echo "Or switch to a feature branch:"
+      echo "  git checkout -b ralphai/${_slug}"
+    else
+      echo ""
+      echo "Or switch to a feature branch first."
+    fi
     exit 1
   fi
 fi
