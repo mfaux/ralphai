@@ -1,28 +1,19 @@
 # .ralphai/ — Autonomous Task Runner
 
-Ralphai is a set of shell scripts that drive an AI coding agent to autonomously implement tasks from plan files.
+Ralphai is an autonomous task runner that drives an AI coding agent to implement tasks from plan files.
 
 ## Quick Start
 
-Primary (recommended): run through `npx`:
-
 ```bash
-npx ralphai run -- --dry-run
-npx ralphai run -- 5
-npx ralphai run -- 5 --resume
-npx ralphai run -- --help
-
-# Direct mode: commit on current branch, no PR (must be on a feature branch)
-npx ralphai run -- 5 --direct
+ralphai run              # run with defaults (5 turns per plan)
+ralphai run 3            # 3 turns per plan
+ralphai run --dry-run    # preview what ralphai would do
+ralphai run --resume     # recover dirty state and continue
+ralphai run --pr         # create a ralphai/* branch and open a PR
+ralphai run --help       # show all options
 ```
 
-In initialized repos, `ralphai run` forwards arguments to `.ralphai/ralphai.sh`; direct invocation (`./.ralphai/ralphai.sh ...`) and package scripts are optional alternatives if you prefer.
-
-```bash
-npx ralphai run -- --dry-run
-npx ralphai run -- 5
-npx ralphai run -- 5 --resume
-```
+Arguments after `run` are forwarded directly to the task runner.
 
 ## Lifecycle
 
@@ -32,36 +23,36 @@ Plans flow through four directories:
 wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
 ```
 
-1. **`wip/`** (work in progress) — Parked plans not ready for execution. `ralphai.sh` does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
-2. **`backlog/`** — Queue incoming plans here. `ralphai.sh` picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
-3. **`in-progress/`** — Active work. Plan files and `progress.txt` live here while ralphai is working. If a run is interrupted or exhausts its iterations, files stay here so work can be resumed.
+1. **`wip/`** (work in progress) — Parked plans not ready for execution. Ralphai does **not** scan this directory. Use it for plans that need further thought, external prerequisites, or human review before they're queued. Move to `backlog/` when ready.
+2. **`backlog/`** — Queue incoming plans here. Ralphai picks dependency-ready plans automatically (LLM-selected when multiple are ready) and moves them to `in-progress/`.
+3. **`in-progress/`** — Active work. Plan files and `progress.txt` live here while ralphai is working. If a run is interrupted or exhausts its turns, files stay here so work can be resumed.
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the agent signals `COMPLETE`.
 
 Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-only state). Only directory structure (`.gitkeep` files) is tracked. This means moving files between lifecycle stages requires no git commits.
 
-## Scripts
+## Task Runner
 
-### `ralphai.sh [iterations-per-plan] [options]`
+### `ralphai run [turns-per-plan] [options]`
 
-Looped autonomous runner. Auto-detects what to work on, runs up to N iterations per plan, with stuck detection.
+Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection.
 
 ```bash
-npx ralphai run -- 5
+ralphai run 5
 
 # Preview selection and readiness without moving files or creating branches
-npx ralphai run -- --dry-run
+ralphai run --dry-run
 
 # Recover dirty state and continue on current ralphai/* branch
-npx ralphai run -- 5 --resume
+ralphai run 5 --resume
 
 # Override agent command, base branch, or stuck threshold
-npx ralphai run -- 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+ralphai run 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 
 # Override via env vars
-RALPHAI_AGENT_COMMAND='codex exec' npx ralphai run -- 5
+RALPHAI_AGENT_COMMAND='codex exec' ralphai run 5
 
 # Direct mode: commit on current branch, no PR
-npx ralphai run -- 5 --direct
+ralphai run 5 --direct
 ```
 
 No file arguments needed. The script auto-detects:
@@ -70,9 +61,9 @@ No file arguments needed. The script auto-detects:
 2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralphai/pipeline/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
 3. **Nothing to do** — If both are empty and no GitHub issues are available, exits.
 
-The iteration budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
+The turn budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
 
-Aborts if N consecutive iterations produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `.ralphai/ralphai.config`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
+Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `.ralphai/ralphai.config`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
 
 `--dry-run` mode previews:
 
@@ -91,21 +82,20 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 **Two modes:**
 
-- **PR mode** (default): On completion, pushes the `ralphai/*` branch and creates a PR via `gh` CLI (with plan content + commit log in the PR body). Then loops back to pick the next backlog item.
-- **Direct mode** (`--direct`): Commits on the current branch — no branch creation, no PR. Refuses to run on `main`/`master`. Use this when you're already on a feature branch.
+- **Direct mode** (default): Commits on the current branch — no branch creation, no PR. Refuses to run on `main`/`master`. Use this when you're already on a feature branch.
+- **PR mode** (`--pr`): On completion, pushes the `ralphai/*` branch and creates a PR via `gh` CLI (with plan content + commit log in the PR body). Then loops back to pick the next backlog item.
 
-- **On iteration exhaustion or stuck abort**: leaves files in `in-progress/` so you can resume with another run on the same branch.
+- **On turn exhaustion or stuck abort**: leaves files in `in-progress/` so you can resume with another run on the same branch.
 
 ## Files
 
 | File / Directory        | Purpose                                                    |
 | ----------------------- | ---------------------------------------------------------- |
-| `ralphai.sh`            | Looped autonomous runner (+ `--dry-run`)                   |
 | `ralphai.config`        | Optional repo-level config file (key=value format)         |
 | `README.md`             | This file — operational docs for the `.ralphai/` directory |
 | `PLANNING.md`           | Guide for writing plan files                               |
 | `.gitignore`            | Keeps plan files local-only (not tracked by git)           |
-| `.ralphai/LEARNINGS.md` | Ralphai-specific learnings — gitignored, local-only        |
+| `.ralphai/LEARNINGS.md` | Ralphai-written learnings — gitignored, local-only         |
 | `wip/`                  | Work-in-progress plans — not scanned by ralphai            |
 | `backlog/`              | Incoming plans queued for ralphai to pick up               |
 | `in-progress/`          | Active plans and progress.txt — work in flight             |
@@ -113,7 +103,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## How It Works
 
-1. `ralphai.sh` loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
+1. Ralphai loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.txt`
 3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.txt`
@@ -124,7 +114,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## Optional plan dependencies (`depends-on`)
 
-`ralphai.sh` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralphai/pipeline/out/`.
+`ralphai` supports optional `depends-on` metadata in plan frontmatter. A plan is runnable only when **all** dependencies are archived in `.ralphai/pipeline/out/`.
 
 Supported forms:
 
@@ -201,36 +191,31 @@ Only update `AGENTS.md` when a task produces knowledge that future coding agents
 
 Do **not** edit `CHANGELOG.md` unless explicitly asked. Changelog entries are maintained by humans.
 
-## Learnings (Two-Tier)
+## Learnings
 
-Ralphai uses a two-tier learnings system:
-
-- **`.ralphai/LEARNINGS.md`** (gitignored) — Ralphai writes mistakes and lessons here during autonomous runs. This file is local-only and never committed. Ralphai reads it at the start of each iteration to avoid repeating past mistakes.
-- **`LEARNINGS.md`** (repo-level, tracked) — Human-curated learnings. Ralphai reads this file for context but never writes to it. The project maintainer promotes useful entries from `.ralphai/LEARNINGS.md` to the repo-level file when they have lasting value.
+Ralphai logs mistakes and lessons to `.ralphai/LEARNINGS.md` during autonomous runs. This file is **gitignored** (local-only, never committed). Ralphai reads it at the start of each turn to avoid repeating past mistakes.
 
 Use a lightweight review loop after runs:
 
 1. Review `.ralphai/LEARNINGS.md` entries from the run.
 2. Compact findings by merging duplicates and removing one-off noise.
-3. Promote durable guidance:
+3. Promote durable guidance to the appropriate place:
 
 - `AGENTS.md` (or equivalent agent-instruction docs) for immediate repo-specific behavior
-- skill/reusable docs for stable patterns that should be reused across tasks/repos
+- Skill/reusable docs for stable patterns that should be reused across tasks/repos
 
-4. Add concise, high-signal takeaways to repo-level `LEARNINGS.md`.
-
-This separation keeps the repo-level `LEARNINGS.md` clean (no agent noise) and prevents auto-commit from interfering with stuck detection.
+Keeping learnings gitignored prevents auto-written entries from interfering with stuck detection (which counts commits).
 
 ## Safety Guards
 
-- **Dirty state**: `ralphai.sh` blocks by default; `--resume` auto-commits dirty state on any non-base branch (dry-run is read-only)
+- **Dirty state**: Ralphai blocks by default; `--resume` auto-commits dirty state on any non-base branch (dry-run is read-only)
 - **Branch isolation**: All work happens on `ralphai/*` branches (PR mode) or your current feature branch (direct mode), never directly on `main`
-- **PR mode by default**: Ralphai creates a branch and opens a PR via `gh` CLI. The `gh` CLI is validated at startup before any agent work begins.
+- **Direct mode by default**: Ralphai commits on your current branch with no branch creation or PR. Refuses to run on `main`/`master`.
 - **Direct mode safety**: `--direct` refuses to run on `main`/`master` — you must be on a feature branch.
 - **Collision detection**: Before creating a new branch, Ralphai checks for existing local/remote branches and open PRs. If a collision is found, the plan is skipped and the next one is tried.
 - **Plan files gitignored**: Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are gitignored (local-only state). Only `.gitkeep` files are tracked.
-- **Stuck detection**: `ralphai.sh` aborts after N iterations with no new commits (default 3, configurable)
-- **Iteration timeout**: Optional per-invocation timeout (`iterationTimeout` in seconds). When set, the agent command is killed if it exceeds the limit. Default is 0 (no timeout).
+- **Stuck detection**: Ralphai aborts after N turns with no new commits (default 3, configurable)
+- **Turn timeout**: Optional per-invocation timeout (`turnTimeout` in seconds). When set, the agent command is killed if it exceeds the limit. Default is 0 (no timeout).
 - **Completion signal**: Agent outputs `<promise>COMPLETE</promise>` when all tasks are done
 
 ## Configuration
@@ -260,9 +245,9 @@ Supported keys:
 | `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_              | Non-empty                             |
 | `feedbackCommands`     | Shell commands to run after each change (comma-separated)                  | _(none)_              | Comma-separated, each entry non-empty |
 | `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token               |
-| `mode`                 | Run mode: `pr` (create branch + PR) or `direct` (commit on current branch) | `pr`                  | `pr` or `direct`                      |
-| `maxStuck`             | Consecutive no-progress iterations before aborting                         | `3`                   | Positive integer                      |
-| `iterationTimeout`     | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer                  |
+| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`                      |
+| `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer                      |
+| `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer                  |
 | `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline`        |
 | `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`                | `none` or `github`                    |
 | `issueLabel`           | Label to filter GitHub issues by                                           | `ralphai`             | Non-empty                             |
@@ -301,7 +286,7 @@ Environment variables override config file values:
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
-| `RALPHAI_ITERATION_TIMEOUT`       | `iterationTimeout`     |
+| `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
@@ -311,7 +296,7 @@ Environment variables override config file values:
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 
 ```bash
-RALPHAI_AGENT_COMMAND='claude -p' RALPHAI_MAX_STUCK=5 npx ralphai run -- 5
+RALPHAI_AGENT_COMMAND='claude -p' RALPHAI_MAX_STUCK=5 ralphai run 5
 ```
 
 ### CLI Flag Overrides
@@ -326,7 +311,7 @@ CLI flags have the highest priority:
 | `--direct`                          | `mode` (sets `direct`) |
 | `--pr`                              | `mode` (sets `pr`)     |
 | `--max-stuck=<n>`                   | `maxStuck`             |
-| `--iteration-timeout=<seconds>`     | `iterationTimeout`     |
+| `--turn-timeout=<seconds>`          | `turnTimeout`          |
 | `--prompt-mode=<mode>`              | `promptMode`           |
 | `--issue-source=<source>`           | `issueSource`          |
 | `--issue-label=<label>`             | `issueLabel`           |
@@ -336,7 +321,7 @@ CLI flags have the highest priority:
 | `--issue-comment-progress=<bool>`   | `issueCommentProgress` |
 
 ```bash
-npx ralphai run -- 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+ralphai run 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 ```
 
 ### Verifying Config (`--show-config`)
@@ -344,17 +329,17 @@ npx ralphai run -- 5 --agent-command='claude -p' --base-branch=develop --max-stu
 Use `--show-config` to inspect resolved settings and their sources without running anything:
 
 ```bash
-npx ralphai run -- --show-config
+ralphai run --show-config
 ```
 
 Output shows each setting's resolved value and where it came from (default, config file, env var, or CLI flag). This is useful for debugging precedence issues.
 
 ```bash
 # Verify env var overrides config file
-RALPHAI_AGENT_COMMAND='codex exec' npx ralphai run -- --show-config
+RALPHAI_AGENT_COMMAND='codex exec' ralphai run --show-config
 
 # Verify CLI overrides everything
-RALPHAI_AGENT_COMMAND='codex exec' npx ralphai run -- --show-config --agent-command='claude -p'
+RALPHAI_AGENT_COMMAND='codex exec' ralphai run --show-config --agent-command='claude -p'
 ```
 
 ### Feature Branch Workflow
@@ -367,7 +352,7 @@ Ralphai supports working on a feature branch using direct mode. This is useful f
 2. Run Ralphai in direct mode on the feature branch:
 
 ```bash
-npx ralphai run -- 5 --direct
+ralphai run 5 --direct
 ```
 
 Or via `.ralphai/ralphai.config`:
@@ -382,7 +367,7 @@ mode=direct
 1. Ralphai commits directly on `feature/big-thing` (no sub-branches)
 2. When all plans are done, you manually open a PR from `feature/big-thing` to `main`
 
-Alternatively, use the default PR mode with `--base-branch=feature/big-thing` to create `ralphai/*` sub-branches that open PRs against the feature branch.
+Alternatively, use PR mode with `--pr --base-branch=feature/big-thing` to create `ralphai/*` sub-branches that open PRs against the feature branch.
 
 ### Group Mode (Multi-Plan Branches)
 
@@ -408,7 +393,7 @@ All plans sharing the same `group:` value will:
 
 **Failure handling:**
 
-- If a group plan gets stuck or exhausts its iterations, the branch is pushed and a draft PR is created/updated with a failure note
+- If a group plan gets stuck or exhausts its turns, the branch is pushed and a draft PR is created/updated with a failure note
 - `.group-state` is preserved so `--resume` can recover from where the group left off
 - Remaining group plans are not attempted after a failure
 
@@ -440,8 +425,8 @@ issueSource=github
 Or via env var or CLI flag:
 
 ```bash
-RALPHAI_ISSUE_SOURCE=github npx ralphai run -- 5
-npx ralphai run -- 5 --issue-source=github
+RALPHAI_ISSUE_SOURCE=github ralphai run 5
+ralphai run 5 --issue-source=github
 ```
 
 **How it works:**
@@ -506,7 +491,7 @@ Issue created with label "ralphai"
 
 ### Smoke Checks
 
-Use these checks to verify config behavior after changes to `ralphai.sh` or `.ralphai/ralphai.config`:
+Use these checks to verify config behavior after changes to `.ralphai/ralphai.config`:
 
 1. **No config** — Remove or rename `.ralphai/ralphai.config`. Run `--show-config` and confirm all settings show `(default)`.
 
@@ -516,4 +501,4 @@ Use these checks to verify config behavior after changes to `ralphai.sh` or `.ra
 
 4. **CLI flag override** — Pass a CLI flag (e.g. `--agent-command='gemini -p'`) with both env var and config file set. Run `--show-config` and confirm the CLI flag wins.
 
-5. **Syntax check** — Run `bash -n .ralphai/ralphai.sh` to verify the script has no syntax errors.
+5. **Syntax check** — Run `bash -n $(npm root -g)/ralphai/templates/ralphai/ralphai.sh` to verify the runner script has no syntax errors (or `bash -n $(node -e "console.log(require.resolve('ralphai/templates/ralphai/ralphai.sh'))")`).

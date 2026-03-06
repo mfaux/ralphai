@@ -126,12 +126,12 @@ load_config() {
         fi
         CONFIG_ISSUE_COMMENT_PROGRESS="$value"
         ;;
-      iterationTimeout)
+      turnTimeout)
         if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-          echo "ERROR: $config_path:$line_num: 'iterationTimeout' must be a non-negative integer (seconds), got '$value'"
+          echo "ERROR: $config_path:$line_num: 'turnTimeout' must be a non-negative integer (seconds), got '$value'"
           exit 1
         fi
-        CONFIG_ITERATION_TIMEOUT="$value"
+        CONFIG_TURN_TIMEOUT="$value"
         ;;
       promptMode)
         if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
@@ -183,8 +183,8 @@ apply_config() {
   if [[ -n "${CONFIG_ISSUE_COMMENT_PROGRESS:-}" ]]; then
     ISSUE_COMMENT_PROGRESS="$CONFIG_ISSUE_COMMENT_PROGRESS"
   fi
-  if [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
-    ITERATION_TIMEOUT="$CONFIG_ITERATION_TIMEOUT"
+  if [[ -n "${CONFIG_TURN_TIMEOUT:-}" ]]; then
+    TURN_TIMEOUT="$CONFIG_TURN_TIMEOUT"
   fi
   if [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
     PROMPT_MODE="$CONFIG_PROMPT_MODE"
@@ -221,12 +221,12 @@ apply_env_overrides() {
     fi
     MODE="$RALPHAI_MODE"
   fi
-  if [[ -n "${RALPHAI_ITERATION_TIMEOUT:-}" ]]; then
-    if [[ ! "$RALPHAI_ITERATION_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: RALPHAI_ITERATION_TIMEOUT must be a non-negative integer (seconds), got '$RALPHAI_ITERATION_TIMEOUT'"
+  if [[ -n "${RALPHAI_TURN_TIMEOUT:-}" ]]; then
+    if [[ ! "$RALPHAI_TURN_TIMEOUT" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: RALPHAI_TURN_TIMEOUT must be a non-negative integer (seconds), got '$RALPHAI_TURN_TIMEOUT'"
       exit 1
     fi
-    ITERATION_TIMEOUT="$RALPHAI_ITERATION_TIMEOUT"
+    TURN_TIMEOUT="$RALPHAI_TURN_TIMEOUT"
   fi
   if [[ -n "${RALPHAI_ISSUE_SOURCE:-}" ]]; then
     if [[ "$RALPHAI_ISSUE_SOURCE" != "none" && "$RALPHAI_ISSUE_SOURCE" != "github" ]]; then
@@ -268,14 +268,14 @@ apply_env_overrides() {
 }
 
 print_usage() {
-  echo "Usage: $0 [iterations-per-plan] [options]"
+  echo "Usage: $0 [turns-per-plan] [options]"
   echo ""
-  echo "  Recommended daily invocation from an initialized repo: ./.ralphai/ralphai.sh ..."
+  echo "  Recommended daily invocation from an initialized repo: ralphai run ..."
   echo ""
   echo "  Auto-detects work: resumes in-progress plans, or picks from backlog."
-  echo "  Iteration budget resets for each new plan (normal mode)."
-  echo "  Pass 0 for unlimited iterations (runs until complete or stuck)."
-  echo "  Default: 5 iterations per plan."
+  echo "  Turn budget resets for each new plan (normal mode)."
+  echo "  Pass 0 for unlimited turns (runs until complete or stuck)."
+  echo "  Default: 5 turns per plan."
   echo ""
   echo "Options:"
   echo "  --dry-run, -n                    Preview what Ralphai would do without mutating state"
@@ -283,10 +283,10 @@ print_usage() {
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
   echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
-  echo "  --direct                         Direct mode: commit on current branch, no PR"
-  echo "  --pr                             PR mode (default): create branch and open PR"
+  echo "  --direct                         Direct mode (default): commit on current branch, no PR"
+  echo "  --pr                             PR mode: create branch, push, and open PR"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
-  echo "  --iteration-timeout=<seconds>    Timeout per agent invocation (default: 0 = no timeout)"
+  echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
@@ -299,13 +299,13 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, iterationTimeout, promptMode,"
+  echo "                  mode, turnTimeout, promptMode,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
-  echo "                   RALPHAI_MODE, RALPHAI_ITERATION_TIMEOUT,"
+  echo "                   RALPHAI_MODE, RALPHAI_TURN_TIMEOUT,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
   echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
@@ -315,10 +315,10 @@ print_usage() {
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
   echo ""
   echo "Examples:"
-  echo "  $0 10                                        # 10 iterations per plan (default: 5)"
-  echo "  $0 0                                         # unlimited iterations per plan"
+  echo "  $0 10                                        # 10 turns per plan (default: 5)"
+  echo "  $0 0                                         # unlimited turns per plan"
   echo "  $0 --dry-run                                 # preview only"
-  echo "  $0 10 --dry-run                              # preview with explicit iterations"
+  echo "  $0 10 --dry-run                              # preview with explicit turns"
   echo "  $0 10 --resume                               # recover dirty state and continue"
   echo "  $0 10 --agent-command='claude -p'             # use Claude Code"
   echo "  $0 10 --agent-command='opencode run --agent build'  # use OpenCode"
@@ -384,10 +384,10 @@ for arg in "$@"; do
         exit 1
       fi
       ;;
-    --iteration-timeout=*)
-      CLI_ITERATION_TIMEOUT="${arg#--iteration-timeout=}"
-      if [[ ! "$CLI_ITERATION_TIMEOUT" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: --iteration-timeout must be a non-negative integer (seconds), got '$CLI_ITERATION_TIMEOUT'"
+    --turn-timeout=*)
+      CLI_TURN_TIMEOUT="${arg#--turn-timeout=}"
+      if [[ ! "$CLI_TURN_TIMEOUT" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: --turn-timeout must be a non-negative integer (seconds), got '$CLI_TURN_TIMEOUT'"
         exit 1
       fi
       ;;
@@ -443,8 +443,8 @@ for arg in "$@"; do
       fi
       ;;
     *)
-      if [[ -z "$ITERATIONS" && "$arg" =~ ^[0-9]+$ ]]; then
-        ITERATIONS="$arg"
+      if [[ -z "$TURNS" && "$arg" =~ ^[0-9]+$ ]]; then
+        TURNS="$arg"
       else
         echo "ERROR: Unrecognized argument: $arg"
         print_usage
@@ -454,12 +454,12 @@ for arg in "$@"; do
   esac
 done
 
-if [[ -z "$ITERATIONS" ]]; then
-  ITERATIONS="5"
+if [[ -z "$TURNS" ]]; then
+  TURNS="5"
 fi
 
-if ! [[ "$ITERATIONS" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: iterations must be a non-negative integer, got '$ITERATIONS'"
+if ! [[ "$TURNS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: turns must be a non-negative integer, got '$TURNS'"
   exit 1
 fi
 
@@ -485,8 +485,8 @@ fi
 if [[ -n "$CLI_MODE" ]]; then
   MODE="$CLI_MODE"
 fi
-if [[ -n "$CLI_ITERATION_TIMEOUT" ]]; then
-  ITERATION_TIMEOUT="$CLI_ITERATION_TIMEOUT"
+if [[ -n "$CLI_TURN_TIMEOUT" ]]; then
+  TURN_TIMEOUT="$CLI_TURN_TIMEOUT"
 fi
 if [[ -n "$CLI_ISSUE_SOURCE" ]]; then
   ISSUE_SOURCE="$CLI_ISSUE_SOURCE"
@@ -566,11 +566,11 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     mode_source="default"
   fi
 
-  if [[ -n "$CLI_ITERATION_TIMEOUT" ]]; then
-    timeout_source="cli (--iteration-timeout=$CLI_ITERATION_TIMEOUT)"
-  elif [[ -n "${RALPHAI_ITERATION_TIMEOUT:-}" ]]; then
-    timeout_source="env (RALPHAI_ITERATION_TIMEOUT=$RALPHAI_ITERATION_TIMEOUT)"
-  elif [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
+  if [[ -n "$CLI_TURN_TIMEOUT" ]]; then
+    timeout_source="cli (--turn-timeout=$CLI_TURN_TIMEOUT)"
+  elif [[ -n "${RALPHAI_TURN_TIMEOUT:-}" ]]; then
+    timeout_source="env (RALPHAI_TURN_TIMEOUT=$RALPHAI_TURN_TIMEOUT)"
+  elif [[ -n "${CONFIG_TURN_TIMEOUT:-}" ]]; then
     timeout_source="config ($CONFIG_FILE)"
   else
     timeout_source="default"
@@ -651,10 +651,10 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
   echo "  mode               = $MODE  ($mode_source)"
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
-  if [[ "$ITERATION_TIMEOUT" -gt 0 ]]; then
-    echo "  iterationTimeout   = ${ITERATION_TIMEOUT}s  ($timeout_source)"
+  if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
+    echo "  turnTimeout        = ${TURN_TIMEOUT}s  ($timeout_source)"
   else
-    echo "  iterationTimeout   = off  ($timeout_source)"
+    echo "  turnTimeout        = off  ($timeout_source)"
   fi
   echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"

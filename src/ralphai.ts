@@ -3,10 +3,8 @@ import {
   existsSync,
   mkdirSync,
   copyFileSync,
-  chmodSync,
   writeFileSync,
   readFileSync,
-  readdirSync,
   rmSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
@@ -73,8 +71,9 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let collectingRunArgs = false;
 
   for (const arg of args) {
-    // After `--`, collect remaining args for the `run` subcommand
+    // After `run` subcommand or `--`, collect remaining args for the task runner
     if (collectingRunArgs) {
+      if (arg === "--") continue; // skip bare `--` separator (still supported)
       runArgs.push(arg);
       continue;
     }
@@ -94,6 +93,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       // First non-flag arg is the subcommand; second is targetDir
       if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
         subcommand = arg as RalphaiSubcommand;
+        // For `run`, everything after is forwarded to the task runner
+        if (subcommand === "run") {
+          collectingRunArgs = true;
+        }
       } else {
         targetDir = arg;
       }
@@ -383,51 +386,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 }
 
 // ---------------------------------------------------------------------------
-// package.json script injection
-// ---------------------------------------------------------------------------
-
-function addNpmScript(cwd: string): boolean {
-  const pkgPath = join(cwd, "package.json");
-  if (!existsSync(pkgPath)) return false;
-
-  try {
-    const raw = readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    if (!pkg.scripts) pkg.scripts = {};
-    if (pkg.scripts.ralphai) return false; // already has a ralphai script
-    pkg.scripts.ralphai = ".ralphai/ralphai.sh";
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// package.json script removal
-// ---------------------------------------------------------------------------
-
-function removeNpmScript(cwd: string): boolean {
-  const pkgPath = join(cwd, "package.json");
-  if (!existsSync(pkgPath)) return false;
-
-  try {
-    const raw = readFileSync(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    if (!pkg.scripts?.ralphai) return false;
-    delete pkg.scripts.ralphai;
-    // Clean up empty scripts object
-    if (Object.keys(pkg.scripts).length === 0) {
-      delete pkg.scripts;
-    }
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Uninstall logic
 // ---------------------------------------------------------------------------
 
@@ -448,7 +406,7 @@ async function uninstallRalphai(
     clack.intro("Uninstalling Ralphai");
     const confirmed = await clack.confirm({
       message:
-        "This will permanently delete .ralphai/ and remove the npm script. " +
+        "This will permanently delete .ralphai/. " +
         "Any plans and learnings in .ralphai/ will be lost. Continue?",
     });
 
@@ -461,18 +419,10 @@ async function uninstallRalphai(
   // Remove .ralphai/ directory
   rmSync(ralphaiDir, { recursive: true, force: true });
 
-  // Remove npm script
-  const removedScript = removeNpmScript(cwd);
-
   console.log(`${TEXT}Ralphai uninstalled.${RESET}`);
   console.log();
   console.log(`${DIM}Removed:${RESET}`);
   console.log(`  .ralphai/                  ${DIM}Entire directory${RESET}`);
-  if (removedScript) {
-    console.log(
-      `  package.json             ${DIM}Removed "ralphai" script${RESET}`,
-    );
-  }
   console.log();
 }
 
@@ -545,23 +495,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   // Create .ralphai/ directory
   mkdirSync(ralphaiDir, { recursive: true });
 
-  // Copy template files
-  copyFileSync(
-    join(templatesDir, "ralphai.sh"),
-    join(ralphaiDir, "ralphai.sh"),
-  );
-  chmodSync(join(ralphaiDir, "ralphai.sh"), 0o755);
-
-  // Copy lib/ directory (sourced by ralphai.sh)
-  const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphaiDir, "lib");
-  mkdirSync(libDestDir, { recursive: true });
-  for (const file of readdirSync(libSrcDir)) {
-    if (file.endsWith(".sh")) {
-      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
-    }
-  }
-
+  // Copy docs from templates
   copyFileSync(join(templatesDir, "README.md"), join(ralphaiDir, "README.md"));
   copyFileSync(
     join(templatesDir, "PLANNING.md"),
@@ -604,7 +538,7 @@ ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"
 
 Mistakes and lessons learned during autonomous runs. This file is **gitignored** —
 Ralphai reads and writes it automatically. Review periodically and promote useful
-entries to the repo-level \`LEARNINGS.md\` when they have lasting value.
+entries to \`AGENTS.md\` or skill docs when they have lasting value.
 
 ## Format
 
@@ -623,7 +557,7 @@ Each entry should include:
 
   // Create .ralphai/.gitignore — plan files are local-only state, not tracked by git
   const gitignoreContent = `# Plan files are local-only state (not tracked by git).
-# Only the directory structure (.gitkeep) and config/scripts are committed.
+# Only the directory structure (.gitkeep), config, and docs are committed.
 pipeline/backlog/*.md
 pipeline/wip/*.md
 pipeline/in-progress/*.md
@@ -632,16 +566,6 @@ pipeline/out/
 LEARNINGS.md
 `;
   writeFileSync(join(ralphaiDir, ".gitignore"), gitignoreContent);
-
-  // Seed repo-root LEARNINGS.md if it does not exist
-  const learningsPath = join(cwd, "LEARNINGS.md");
-  const createdLearnings = !existsSync(learningsPath);
-  if (createdLearnings) {
-    writeFileSync(learningsPath, "# Learnings\n");
-  }
-
-  // Inject npm script if package.json exists
-  const addedNpmScript = addNpmScript(cwd);
 
   // Create GitHub labels if issues integration is enabled
   let labelResult: LabelResult | null = null;
@@ -654,12 +578,6 @@ LEARNINGS.md
   console.log();
   console.log(`${DIM}Created:${RESET}`);
   console.log(
-    `  .ralphai/ralphai.sh          ${DIM}Autonomous task runner${RESET}`,
-  );
-  console.log(
-    `  .ralphai/lib/              ${DIM}Library modules (sourced by ralphai.sh)${RESET}`,
-  );
-  console.log(
     `  .ralphai/ralphai.config      ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
@@ -671,16 +589,6 @@ LEARNINGS.md
   console.log(
     `  .ralphai/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
   );
-  if (createdLearnings) {
-    console.log(
-      `  LEARNINGS.md             ${DIM}Maintainer-curated learnings Ralphai reads for long-term guidance${RESET}`,
-    );
-  }
-  if (addedNpmScript) {
-    console.log(
-      `  package.json             ${DIM}Added "ralphai" script${RESET}`,
-    );
-  }
   if (labelResult) {
     if (labelResult.success) {
       console.log(
@@ -702,13 +610,8 @@ LEARNINGS.md
   console.log(
     `  3. Create your first plan in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
   );
-  console.log(`  4. Preview:  ${TEXT}./.ralphai/ralphai.sh --dry-run${RESET}`);
-  console.log(`  5. Run:      ${TEXT}./.ralphai/ralphai.sh 10${RESET}`);
-  if (addedNpmScript) {
-    console.log(
-      `     Alt:      ${TEXT}npm run ralphai -- 10${RESET} ${DIM}(or pass other args with --)${RESET}`,
-    );
-  }
+  console.log(`  4. Preview:  ${TEXT}ralphai run --dry-run${RESET}`);
+  console.log(`  5. Run:      ${TEXT}ralphai run${RESET}`);
   if (answers.issueSource === "github") {
     console.log();
     console.log(
@@ -723,7 +626,7 @@ LEARNINGS.md
 // ---------------------------------------------------------------------------
 
 /** Files that are copied from templates and safe to overwrite on update. */
-const TEMPLATE_FILES = ["ralphai.sh", "README.md", "PLANNING.md"] as const;
+const TEMPLATE_FILES = ["README.md", "PLANNING.md"] as const;
 
 async function updateRalphai(
   options: RalphaiOptions,
@@ -738,8 +641,8 @@ async function updateRalphai(
 
     const confirmed = await clack.confirm({
       message:
-        "This will overwrite ralphai.sh, lib/*.sh, README.md, and PLANNING.md " +
-        "from the latest templates. Your config, LEARNINGS.md, and plan " +
+        "This will overwrite README.md and PLANNING.md " +
+        "from the latest templates. Your config and plan " +
         "files will be preserved. Continue?",
     });
 
@@ -750,32 +653,31 @@ async function updateRalphai(
   }
 
   const updated: string[] = [];
+  const removed: string[] = [];
   const skipped: string[] = [];
 
-  // Update template files
+  // Update template files (docs only — scripts now run from the package)
   for (const file of TEMPLATE_FILES) {
     const src = join(templatesDir, file);
     const dest = join(ralphaiDir, file);
     copyFileSync(src, dest);
-    if (file === "ralphai.sh") {
-      chmodSync(dest, 0o755);
-    }
     updated.push(file);
   }
 
-  // Update lib/ directory
-  const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphaiDir, "lib");
-  mkdirSync(libDestDir, { recursive: true });
-  for (const file of readdirSync(libSrcDir)) {
-    if (file.endsWith(".sh")) {
-      copyFileSync(join(libSrcDir, file), join(libDestDir, file));
-      updated.push(`lib/${file}`);
-    }
+  // Migration: remove old scaffolded scripts (now bundled in the package)
+  const oldScript = join(ralphaiDir, "ralphai.sh");
+  if (existsSync(oldScript)) {
+    rmSync(oldScript);
+    removed.push("ralphai.sh");
+  }
+  const oldLibDir = join(ralphaiDir, "lib");
+  if (existsSync(oldLibDir)) {
+    rmSync(oldLibDir, { recursive: true });
+    removed.push("lib/");
   }
 
   // Report what was preserved
-  for (const file of ["ralphai.config", "LEARNINGS.md", ".gitignore"]) {
+  for (const file of ["ralphai.config", ".gitignore"]) {
     if (existsSync(join(ralphaiDir, file))) {
       skipped.push(file);
     }
@@ -792,6 +694,12 @@ async function updateRalphai(
   if (updated.length > 0) {
     console.log(`${DIM}Updated:${RESET}`);
     for (const file of updated) {
+      console.log(`  .ralphai/${file}`);
+    }
+  }
+  if (removed.length > 0) {
+    console.log(`${DIM}Removed (now bundled in package):${RESET}`);
+    for (const file of removed) {
       console.log(`  .ralphai/${file}`);
     }
   }
@@ -871,7 +779,7 @@ async function runRalphaiInit(
         const confirmed = await clack.confirm({
           message:
             "This will DELETE .ralphai/ entirely and re-scaffold from scratch. " +
-            "Your config, LEARNINGS.md, and any plan files will be LOST. Continue?",
+            "Your config and any plan files will be LOST. Continue?",
         });
 
         if (clack.isCancel(confirmed) || !confirmed) {
@@ -929,8 +837,8 @@ async function runRalphaiUpdate(
   await updateRalphai(options, cwd);
 }
 
-/** Default iteration count when `npx ralphai run` is invoked without args. */
-const DEFAULT_ITERATIONS = "5";
+/** Default turn count when `ralphai run` is invoked without args. */
+const DEFAULT_TURNS = "5";
 
 /**
  * Resolve the path to a bash executable.
@@ -987,17 +895,22 @@ function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<never> {
-  const ralphaiSh = join(cwd, ".ralphai", "ralphai.sh");
-
-  if (!existsSync(ralphaiSh)) {
+  // Check that ralphai has been initialized (config dir exists)
+  if (!existsSync(join(cwd, ".ralphai"))) {
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
 
-  const args =
-    options.runArgs.length > 0 ? options.runArgs : [DEFAULT_ITERATIONS];
+  // Resolve the runner script from the npm package (not the user's project).
+  // RALPHAI_RUNNER_SCRIPT env var allows overriding for tests.
+  const __dir = dirname(fileURLToPath(import.meta.url));
+  const ralphaiSh =
+    process.env.RALPHAI_RUNNER_SCRIPT ||
+    join(__dir, "..", "templates", "ralphai", "ralphai.sh");
+
+  const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
 
   const isWindows = process.platform === "win32";
   // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set

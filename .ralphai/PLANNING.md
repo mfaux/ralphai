@@ -1,8 +1,8 @@
 # Writing Ralphai Plan Files
 
-Guide for writing plan files that ralphai scripts consume. Plans go in `.ralphai/pipeline/backlog/` and are picked automatically by `ralphai.sh`.
+Guide for writing plan files that Ralphai consumes. Plans go in `.ralphai/pipeline/backlog/` and are picked automatically by `ralphai run`.
 
-Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralphai/pipeline/wip/`. `ralphai.sh` does not scan `wip/` — move plans to `pipeline/backlog/` when they're ready to be picked up.
+Plans that aren't ready for execution (waiting on external prerequisites, need human review, or are still being drafted) go in `.ralphai/pipeline/wip/`. `ralphai run` does not scan `wip/` — move plans to `pipeline/backlog/` when they're ready to be picked up.
 
 ## Core Principles
 
@@ -240,11 +240,11 @@ For repeatable processes that different developers (or ralphai runs) will follow
 
 ### Frontmatter keys that are NOT supported
 
-`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPHAI_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how ralphai.sh formats file references in prompts for the current agent, which applies uniformly to the entire run.
+`promptMode` is a global/per-run setting (configured via CLI flag `--prompt-mode`, env var `RALPHAI_PROMPT_MODE`, or config key `promptMode`). It cannot be set per-plan in frontmatter — it controls how `ralphai run` formats file references in prompts for the current agent, which applies uniformly to the entire run.
 
 ### Optional `depends-on` frontmatter
 
-For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralphai.sh` only considers a plan runnable when all dependencies are complete (archived in `.ralphai/pipeline/out/`).
+For cross-plan ordering, you can declare dependencies in plan frontmatter. `ralphai run` only considers a plan runnable when all dependencies are complete (archived in `.ralphai/pipeline/out/`).
 
 Use basename references (not full paths):
 
@@ -417,8 +417,8 @@ Every plan that changes user-facing behavior should include tasks for:
 
 - **AGENTS.md** — only when the work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
 - **README.md** — commands, options, examples, support matrices
-- **LEARNINGS.md / learnings flow** — when the work reveals recurring mistakes or durable operational patterns, add a task to compact findings and promote them appropriately:
-  - agent-instruction docs for immediate repo-specific behavior
+- **Learnings** — when the work reveals recurring mistakes or durable operational patterns, review `.ralphai/LEARNINGS.md` and promote findings appropriately:
+  - `AGENTS.md` for immediate repo-specific behavior
   - skill/reusable docs for stable patterns worth reusing across tasks/repos
 
 ### Standard verification block
@@ -440,15 +440,15 @@ Final verification:
 - <specific behavioral checks>
 ```
 
-## Iteration Sizing
+## Turn Sizing
 
-| Plan complexity                        | Recommended iterations (`ralphai.sh`) |
-| -------------------------------------- | ------------------------------------- |
-| 3-5 small tasks                        | 5                                     |
-| 6-10 tasks with wiring                 | 10-15                                 |
-| Large feature (10+ tasks, new modules) | 15-25                                 |
-| Structural refactor                    | 10-15                                 |
+| Plan complexity                        | Recommended turns (`ralphai run`) |
+| -------------------------------------- | --------------------------------- |
+| 3-5 small tasks                        | 5                                 |
+| 6-10 tasks with wiring                 | 10-15                             |
+| Large feature (10+ tasks, new modules) | 15-25                             |
+| Structural refactor                    | 10-15                             |
 
-Use `npx ralphai run -- --dry-run` to verify selection/readiness before launching long autonomous runs.
+Use `ralphai run --dry-run` to verify selection/readiness before launching long autonomous runs.
 
-If a run is interrupted and leaves a dirty tree, use `npx ralphai run -- <iterations> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.
+If a run is interrupted and leaves a dirty tree, use `ralphai run <turns> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.
