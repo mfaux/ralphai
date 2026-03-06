@@ -33,6 +33,9 @@ source "$RALPHAI_LIB_DIR/pr.sh"
 # ==========================================================================
 
 plans_completed=0
+COMPLETED_PLANS=()
+CONTINUOUS_BRANCH=""
+CONTINUOUS_PR_URL=""
 
 # --- Early guard: direct mode cannot run on main/master ---
 if [[ "$MODE" == "direct" ]]; then
@@ -129,6 +132,10 @@ while true; do
     if [[ $plans_completed -gt 0 ]]; then
       echo ""
       echo "All done. Completed $plans_completed plan(s) this session."
+      # Finalize continuous PR when backlog is drained
+      if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_PR_URL" ]]; then
+        finalize_continuous_pr
+      fi
     fi
     exit 0
   fi
@@ -155,6 +162,16 @@ while true; do
     echo "Direct mode: working on current branch '$branch' (no PR will be created)"
 
     # Initialize progress file
+    mkdir -p "$WIP_DIR"
+    echo "## Progress Log" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+    echo "Initialized $PROGRESS_FILE"
+  elif [[ "$CONTINUOUS" == "true" && -n "$CONTINUOUS_BRANCH" ]]; then
+    # Continuous+PR mode, subsequent plan: reuse the existing branch
+    branch="$CONTINUOUS_BRANCH"
+    echo "Continuous mode: continuing on branch '$branch'"
+
+    # Re-initialize progress file for the new plan
     mkdir -p "$WIP_DIR"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
@@ -205,6 +222,11 @@ while true; do
       exit 1
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
+
+    # In continuous+PR mode, remember this branch for subsequent plans
+    if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+      CONTINUOUS_BRANCH="$branch"
+    fi
 
     # Initialize progress file
     mkdir -p "$WIP_DIR"
@@ -326,6 +348,11 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
           echo "ERROR: $MAX_STUCK consecutive turns with no progress. All fallback agents exhausted."
           echo "Branch: $branch"
           echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          # In continuous+PR mode, push partial work
+          if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
+            echo "Pushing partial work to continuous branch..."
+            git push origin "$branch" 2>&1 || true
+          fi
           AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
           detect_agent_type
           resolve_prompt_mode
@@ -348,9 +375,17 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
       echo ""
       echo "Plan complete after $i turns: $PLAN_DESC"
+      COMPLETED_PLANS+=("$(basename "${WIP_FILES[0]}")")
       archive_run
 
-      if [[ "$MODE" == "pr" ]]; then
+      if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+        # Continuous+PR mode: create draft PR on first plan, update on subsequent
+        if [[ -z "$CONTINUOUS_PR_URL" ]]; then
+          create_continuous_pr "$branch" "$PLAN_DESC"
+        else
+          update_continuous_pr "$branch"
+        fi
+      elif [[ "$MODE" == "pr" ]]; then
         create_pr "$branch" "$PLAN_DESC"
       else
         echo "Direct mode: commits are on branch '$branch'. No PR created."
@@ -372,16 +407,33 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     echo "Finished $TURNS turns without completing: $PLAN_DESC"
     echo "Plan files remain in $WIP_DIR/ — resume with another run."
     echo "Branch: $branch"
+    # In continuous+PR mode, push partial work and update PR
+    if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+      if [[ -n "$CONTINUOUS_PR_URL" ]]; then
+        echo "Pushing partial work to continuous PR..."
+        git push origin "$branch" 2>&1 || true
+      elif [[ $plans_completed -gt 0 ]]; then
+        echo "Pushing partial work..."
+        git push origin "$branch" 2>&1 || true
+      fi
+    fi
     exit 0
   fi
 
-  # --- Direct mode single-plan default: stop unless --continuous ---
-  if [[ "$MODE" == "direct" && "$CONTINUOUS" != "true" ]]; then
-    echo ""
-    echo "Plan complete. Direct mode stops after one plan by default."
-    echo "Tip: use --continuous to keep processing backlog plans."
+  # --- Non-continuous modes: stop after one plan ---
+  if [[ "$CONTINUOUS" != "true" ]]; then
+    if [[ "$MODE" == "direct" ]]; then
+      echo ""
+      echo "Plan complete. Direct mode stops after one plan by default."
+      echo "Tip: use --continuous to keep processing backlog plans."
+    fi
     exit 0
   fi
 
   # Loop back to pick the next plan (turn budget resets)
 done
+
+# --- Continuous mode: finalize PR when backlog is drained ---
+if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_PR_URL" ]]; then
+  finalize_continuous_pr
+fi
