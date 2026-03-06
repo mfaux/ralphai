@@ -147,6 +147,21 @@ load_config() {
         fi
         CONFIG_CONTINUOUS="$value"
         ;;
+      fallbackAgents)
+        # Comma-separated list of agent commands; empty is valid (disables fallback)
+        if [[ -n "$value" ]]; then
+          IFS=',' read -ra fa_parts <<< "$value"
+          for fa in "${fa_parts[@]}"; do
+            local trimmed_fa
+            trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ -z "$trimmed_fa" ]]; then
+              echo "ERROR: $config_path:$line_num: 'fallbackAgents' contains an empty entry in '$value'"
+              exit 1
+            fi
+          done
+        fi
+        CONFIG_FALLBACK_AGENTS="$value"
+        ;;
       *)
         echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
         ;;
@@ -198,6 +213,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_CONTINUOUS:-}" ]]; then
     CONTINUOUS="$CONFIG_CONTINUOUS"
+  fi
+  if [[ -n "${CONFIG_FALLBACK_AGENTS:-}" ]]; then
+    FALLBACK_AGENTS="$CONFIG_FALLBACK_AGENTS"
   fi
 }
 
@@ -282,6 +300,18 @@ apply_env_overrides() {
     fi
     CONTINUOUS="$RALPHAI_CONTINUOUS"
   fi
+  if [[ -n "${RALPHAI_FALLBACK_AGENTS:-}" ]]; then
+    # Validate: no empty entries between commas
+    IFS=',' read -ra _fa_env_parts <<< "$RALPHAI_FALLBACK_AGENTS"
+    for _fa_env in "${_fa_env_parts[@]}"; do
+      _trimmed_fa_env=$(echo "$_fa_env" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      if [[ -z "$_trimmed_fa_env" ]]; then
+        echo "ERROR: RALPHAI_FALLBACK_AGENTS contains an empty entry in '$RALPHAI_FALLBACK_AGENTS'"
+        exit 1
+      fi
+    done
+    FALLBACK_AGENTS="$RALPHAI_FALLBACK_AGENTS"
+  fi
 }
 
 print_usage() {
@@ -305,6 +335,7 @@ print_usage() {
   echo "  --continuous                     Keep processing backlog plans after the first completes"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
+  echo "  --fallback-agents=<list>         Comma-separated fallback agent commands (tried when stuck)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
@@ -317,14 +348,14 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, key=value format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, continuous, turnTimeout, promptMode,"
+  echo "                  mode, continuous, turnTimeout, promptMode, fallbackAgents,"
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
   echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
-  echo "                   RALPHAI_TURN_TIMEOUT,"
+  echo "                   RALPHAI_TURN_TIMEOUT, RALPHAI_FALLBACK_AGENTS,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
   echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
@@ -465,6 +496,20 @@ for arg in "$@"; do
         exit 1
       fi
       ;;
+    --fallback-agents=*)
+      CLI_FALLBACK_AGENTS="${arg#--fallback-agents=}"
+      # Empty value is valid (disables fallback); validate entries if non-empty
+      if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
+        IFS=',' read -ra _fa_cli_parts <<< "$CLI_FALLBACK_AGENTS"
+        for _fa_cli in "${_fa_cli_parts[@]}"; do
+          _trimmed_fa_cli=$(echo "$_fa_cli" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [[ -z "$_trimmed_fa_cli" ]]; then
+            echo "ERROR: --fallback-agents contains an empty entry"
+            exit 1
+          fi
+        done
+      fi
+      ;;
     *)
       if [[ -z "$TURNS" && "$arg" =~ ^[0-9]+$ ]]; then
         TURNS="$arg"
@@ -534,6 +579,9 @@ if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
 fi
 if [[ -n "$CLI_PROMPT_MODE" ]]; then
   PROMPT_MODE="$CLI_PROMPT_MODE"
+fi
+if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
+  FALLBACK_AGENTS="$CLI_FALLBACK_AGENTS"
 fi
 
 # --- Show resolved config and exit ---
@@ -682,6 +730,16 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     prompt_mode_source="default"
   fi
 
+  if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
+    fallback_agents_source="cli (--fallback-agents=$CLI_FALLBACK_AGENTS)"
+  elif [[ -n "${RALPHAI_FALLBACK_AGENTS:-}" ]]; then
+    fallback_agents_source="env (RALPHAI_FALLBACK_AGENTS=$RALPHAI_FALLBACK_AGENTS)"
+  elif [[ -n "${CONFIG_FALLBACK_AGENTS:-}" ]]; then
+    fallback_agents_source="config ($CONFIG_FILE)"
+  else
+    fallback_agents_source="default (none)"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
@@ -694,6 +752,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  turnTimeout        = off  ($timeout_source)"
   fi
   echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
+  echo "  fallbackAgents     = ${FALLBACK_AGENTS:-<none>}  ($fallback_agents_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"
