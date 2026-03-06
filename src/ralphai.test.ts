@@ -326,6 +326,25 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("Rolled back: moved plan to");
   });
 
+  it("scaffolded config.sh includes worktree status in --show-config output", () => {
+    const templateLib = join(__dirname, "..", "runner", "lib");
+
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
+    // When in a worktree, --show-config should display worktree info
+    expect(config).toContain("worktree           = true");
+    expect(config).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
+  });
+
+  it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // Dry-run should note when running in a worktree
+    expect(ralphaiSh).toContain(
+      "[dry-run] Running in worktree (main repo: $RALPHAI_MAIN_WORKTREE)",
+    );
+  });
+
   it("scaffolded ralphai.sh has stuck detection current_hash on its own line", () => {
     const templateDir = join(__dirname, "..", "runner");
 

@@ -81,6 +81,10 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "  Ralphai dry-run — preview only"
   echo "========================================"
 
+  if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+    echo "[dry-run] Running in worktree (main repo: $RALPHAI_MAIN_WORKTREE)"
+  fi
+
   if ! detect_plan; then
     echo "[dry-run] No runnable work found."
     exit 0
