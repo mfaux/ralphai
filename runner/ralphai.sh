@@ -315,37 +315,57 @@ If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after
       stuck_count=$((stuck_count + 1))
       echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
-        echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
-        echo "Branch: $branch"
-        if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
-          echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
-          echo "Pushing partial work and creating/updating draft PR..."
-          git push origin "$branch" 2>/dev/null || true
-          if [[ -z "${GROUP_PR_URL:-}" ]]; then
-            create_group_pr "$branch" "$GROUP_NAME"
-            # Append failure note to PR body
-            if [[ -n "${GROUP_PR_URL:-}" ]]; then
-              fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-              gh pr edit "$GROUP_PR_URL" --body "${fail_body}
+        # --- Fallback agent rotation ---
+        if [[ $FALLBACK_INDEX -lt ${#FALLBACK_CHAIN[@]} ]]; then
+          next_agent="${FALLBACK_CHAIN[$FALLBACK_INDEX]}"
+          FALLBACK_INDEX=$((FALLBACK_INDEX + 1))
+          echo ""
+          echo "Agent stuck after $MAX_STUCK iterations with no progress."
+          echo "Switching to fallback agent: $next_agent"
+          AGENT_COMMAND="$next_agent"
+          detect_agent_type
+          resolve_prompt_mode
+          stuck_count=0
+          # Log switch to progress file
+          if [[ -n "${PROGRESS_FILE:-}" && -f "$PROGRESS_FILE" ]]; then
+            echo "" >> "$PROGRESS_FILE"
+            echo "--- Agent switch (stuck after $MAX_STUCK iterations) ---" >> "$PROGRESS_FILE"
+            echo "Switched to fallback agent: $next_agent" >> "$PROGRESS_FILE"
+            echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$PROGRESS_FILE"
+          fi
+        else
+          echo "ERROR: $MAX_STUCK consecutive turns with no progress. All fallback agents exhausted."
+          echo "Branch: $branch"
+          if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
+            echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
+            echo "Pushing partial work and creating/updating draft PR..."
+            git push origin "$branch" 2>/dev/null || true
+            if [[ -z "${GROUP_PR_URL:-}" ]]; then
+              create_group_pr "$branch" "$GROUP_NAME"
+              # Append failure note to PR body
+              if [[ -n "${GROUP_PR_URL:-}" ]]; then
+                fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
+                gh pr edit "$GROUP_PR_URL" --body "${fail_body}
+
+---
+⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+              fi
+            else
+              update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
+              gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
 
 ---
 ⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
             fi
+            echo "Group state preserved in $GROUP_STATE_FILE for --resume."
           else
-            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-            gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-
----
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
+            echo "Plan files remain in $WIP_DIR/ — resume with another run."
           fi
-          echo "Group state preserved in $GROUP_STATE_FILE for --resume."
-        else
-          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
+          detect_agent_type
+          resolve_prompt_mode
+          exit 1
         fi
-        AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
-        detect_agent_type
-        resolve_prompt_mode
-        exit 1
       fi
     else
       stuck_count=0
