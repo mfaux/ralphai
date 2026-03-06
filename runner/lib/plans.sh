@@ -1,4 +1,4 @@
-# plans.sh — Plan dependency helpers, group state management, plan detection
+# plans.sh — Plan dependency helpers and plan detection
 # Sourced by ralphai.sh — do not execute directly.
 
 # --- Per-plan agent override (optional frontmatter: agent) ---
@@ -158,141 +158,6 @@ plan_readiness() {
   echo "blocked:$joined"
 }
 
-# --- Group mode: frontmatter extraction and state management ---
-
-# Extract group name from plan file YAML frontmatter.
-# Prints the group name, or nothing if no group: key is present.
-extract_group() {
-  local file="$1"
-
-  # No frontmatter block
-  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
-    return 0
-  fi
-
-  awk '
-    BEGIN { in_fm=0 }
-    NR==1 && $0=="---" { in_fm=1; next }
-    in_fm && $0=="---" { exit }
-    in_fm {
-      # Match: group: <name>  (with optional quotes)
-      if (match($0, /^[[:space:]]*group:[[:space:]]*/)) {
-        val = substr($0, RLENGTH + 1)
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
-        gsub(/^"|"$/, "", val)
-        gsub(/^\047|\047$/, "", val)
-        if (val != "") print val
-      }
-    }
-  ' "$file"
-}
-
-# Read .group-state file into GROUP_* variables.
-# File format: key=value, one per line.
-read_group_state() {
-  [[ -f "$GROUP_STATE_FILE" ]] || return 1
-
-  while IFS='=' read -r key value; do
-    case "$key" in
-      group)           GROUP_NAME="$value" ;;
-      branch)          GROUP_BRANCH="$value" ;;
-      plans_total)     GROUP_PLANS_TOTAL="$value" ;;
-      plans_completed) GROUP_PLANS_COMPLETED="$value" ;;
-      current_plan)    GROUP_CURRENT_PLAN="$value" ;;
-      pr_url)          GROUP_PR_URL="$value" ;;
-    esac
-  done < "$GROUP_STATE_FILE"
-}
-
-# Write .group-state file from key=value arguments.
-# Usage: write_group_state "group=foo" "branch=ralphai/foo" ...
-write_group_state() {
-  mkdir -p "$(dirname "$GROUP_STATE_FILE")"
-  printf '%s\n' "$@" > "$GROUP_STATE_FILE"
-}
-
-# Remove .group-state file and reset GROUP_* variables.
-cleanup_group_state() {
-  rm -f "$GROUP_STATE_FILE"
-  GROUP_NAME=""
-  GROUP_BRANCH=""
-  GROUP_PLANS_TOTAL=0
-  GROUP_PLANS_COMPLETED=0
-  GROUP_CURRENT_PLAN=""
-  GROUP_PR_URL=""
-}
-
-# Collect all backlog plans belonging to a group, sorted by filename.
-# Prints one plan path per line. Only returns plans currently in $BACKLOG_DIR.
-collect_group_plans() {
-  local group_name="$1"
-  local plans=()
-
-  for f in "$BACKLOG_DIR"/*.md; do
-    [[ -f "$f" ]] || continue
-    local fg
-    fg=$(extract_group "$f")
-    if [[ "$fg" == "$group_name" ]]; then
-      plans+=("$f")
-    fi
-  done
-
-  # Sort by filename for deterministic ordering
-  printf '%s\n' "${plans[@]}" | sort
-}
-
-# Advance to the next plan in a group. Moves next plan from backlog to in-progress.
-# Returns 0 if next plan loaded, 1 if group is complete (no more plans).
-advance_group_plan() {
-  [[ -n "${GROUP_NAME:-}" ]] || return 1
-
-  GROUP_PLANS_COMPLETED=$((GROUP_PLANS_COMPLETED + 1))
-
-  # Find next ready group plan from backlog
-  local next_plan=""
-  local candidates
-  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
-
-  for f in "${candidates[@]}"; do
-    [[ -f "$f" ]] || continue
-    local readiness
-    readiness=$(plan_readiness "$f")
-    if [[ "$readiness" == "ready" ]]; then
-      next_plan="$f"
-      break
-    fi
-  done
-
-  if [[ -z "$next_plan" ]]; then
-    # No more group plans ready — group is complete
-    echo "Group '$GROUP_NAME' complete ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans)"
-    return 1
-  fi
-
-  # Move next plan to in-progress
-  local next_basename
-  next_basename=$(basename "$next_plan")
-  local dest="$WIP_DIR/$next_basename"
-  mv "$next_plan" "$dest"
-  echo "Advanced to next group plan: $next_basename"
-
-  # Update tracking
-  WIP_FILES=("$dest")
-  FILE_REFS=" $(format_file_ref "$dest")"
-  GROUP_CURRENT_PLAN="$next_basename"
-  PLAN_DESC=$(plan_description "$dest")
-
-  write_group_state \
-    "group=$GROUP_NAME" \
-    "branch=$GROUP_BRANCH" \
-    "plans_total=$GROUP_PLANS_TOTAL" \
-    "plans_completed=$GROUP_PLANS_COMPLETED" \
-    "current_plan=$GROUP_CURRENT_PLAN" \
-    "pr_url=${GROUP_PR_URL:-}"
-
-  return 0
-}
-
 # --- Detect plan: find in-progress work or pick from backlog ---
 # Sets: WIP_FILES, FILE_REFS, RESUMING
 detect_plan() {
@@ -314,13 +179,6 @@ detect_plan() {
       FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
     echo "Found in-progress plan(s): ${WIP_FILES[*]}"
-
-    # Check for group context alongside resume
-    if [[ -f "$GROUP_STATE_FILE" ]]; then
-      read_group_state
-      echo "Resuming group '$GROUP_NAME' (plan ${GROUP_PLANS_COMPLETED}/${GROUP_PLANS_TOTAL} completed)"
-    fi
-
     return 0
   fi
 
@@ -472,39 +330,6 @@ Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else.
     WIP_FILES=("$dest")
     FILE_REFS=" $(format_file_ref "$dest")"
     RESUMING=false
-
-    # Check if chosen plan is part of a group
-    local chosen_group
-    chosen_group=$(extract_group "$dest")
-    if [[ -n "$chosen_group" ]]; then
-      # Collect remaining group plans (still in backlog, excluding the one we just moved)
-      local remaining_group_plans
-      mapfile -t remaining_group_plans < <(collect_group_plans "$chosen_group")
-      local total_count=$(( ${#remaining_group_plans[@]} + 1 ))  # +1 for the one we moved
-
-      GROUP_NAME="$chosen_group"
-      GROUP_PLANS_TOTAL="$total_count"
-      GROUP_PLANS_COMPLETED=0
-      GROUP_CURRENT_PLAN="$dest_basename"
-      GROUP_PR_URL=""
-
-      write_group_state \
-        "group=$GROUP_NAME" \
-        "branch=" \
-        "plans_total=$GROUP_PLANS_TOTAL" \
-        "plans_completed=$GROUP_PLANS_COMPLETED" \
-        "current_plan=$GROUP_CURRENT_PLAN" \
-        "pr_url="
-
-      echo "Group '$GROUP_NAME' detected: $total_count plan(s) total"
-      echo "Plan order:"
-      echo "  1. $dest_basename (current)"
-      local n=2
-      for rp in "${remaining_group_plans[@]}"; do
-        echo "  $n. $(basename "$rp")"
-        n=$((n + 1))
-      done
-    fi
   fi
   return 0
 }

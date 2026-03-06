@@ -33,6 +33,9 @@ source "$RALPHAI_LIB_DIR/pr.sh"
 # ==========================================================================
 
 plans_completed=0
+COMPLETED_PLANS=()
+CONTINUOUS_BRANCH=""
+CONTINUOUS_PR_URL=""
 
 # --- Early guard: direct mode cannot run on main/master ---
 if [[ "$MODE" == "direct" ]]; then
@@ -77,19 +80,8 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
 
-  dry_group=$(extract_group "${WIP_FILES[0]}")
-  if [[ -n "$dry_group" ]]; then
-    echo "[dry-run] Group: $dry_group"
-    echo "[dry-run] Branch would be: ralphai/$dry_group"
-    dry_group_members=()
-    mapfile -t dry_group_members < <(collect_group_plans "$dry_group")
-    echo "[dry-run] Group plans (${#dry_group_members[@]} remaining in backlog + 1 selected):"
-    echo "[dry-run]   1. $(basename "${WIP_FILES[0]}") (selected)"
-    gn=2
-    for gm in "${dry_group_members[@]}"; do
-      echo "[dry-run]   $gn. $(basename "$gm")"
-      gn=$((gn + 1))
-    done
+  if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+    echo "[dry-run] Continuous+PR mode: all backlog plans will run on a single branch with one PR."
   fi
 
   if [[ "$RESUMING" == true ]]; then
@@ -103,13 +95,9 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    if [[ -n "${dry_group:-}" ]]; then
-      branch="ralphai/${dry_group}"
-    else
-      slug="${plan_basename#prd-}"
-      slug="${slug%.md}"
-      branch="ralphai/${slug}"
-    fi
+    slug="${plan_basename#prd-}"
+    slug="${slug%.md}"
+    branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
       echo "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai"
@@ -144,6 +132,10 @@ while true; do
     if [[ $plans_completed -gt 0 ]]; then
       echo ""
       echo "All done. Completed $plans_completed plan(s) this session."
+      # Finalize continuous PR when backlog is drained
+      if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_PR_URL" ]]; then
+        finalize_continuous_pr
+      fi
     fi
     exit 0
   fi
@@ -174,18 +166,22 @@ while true; do
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
+  elif [[ "$CONTINUOUS" == "true" && -n "$CONTINUOUS_BRANCH" ]]; then
+    # Continuous+PR mode, subsequent plan: reuse the existing branch
+    branch="$CONTINUOUS_BRANCH"
+    echo "Continuous mode: continuing on branch '$branch'"
+
+    # Re-initialize progress file for the new plan
+    mkdir -p "$WIP_DIR"
+    echo "## Progress Log" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+    echo "Initialized $PROGRESS_FILE"
   else
     git checkout "$BASE_BRANCH"
     plan_basename=$(basename "${WIP_FILES[0]}")
-    if [[ -n "${GROUP_NAME:-}" ]]; then
-      # Group mode: branch named after the group
-      branch="ralphai/${GROUP_NAME}"
-    else
-      # Normal mode: branch named after the plan
-      slug="${plan_basename#prd-}"
-      slug="${slug%.md}"
-      branch="ralphai/${slug}"
-    fi
+    slug="${plan_basename#prd-}"
+    slug="${slug%.md}"
+    branch="ralphai/${slug}"
 
     # Guard: a bare "ralphai" branch blocks all "ralphai/*" branches (git ref hierarchy conflict)
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
@@ -227,16 +223,9 @@ while true; do
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
 
-    # Update group state with branch name
-    if [[ -n "${GROUP_NAME:-}" && -f "$GROUP_STATE_FILE" ]]; then
-      GROUP_BRANCH="$branch"
-      write_group_state \
-        "group=$GROUP_NAME" \
-        "branch=$GROUP_BRANCH" \
-        "plans_total=$GROUP_PLANS_TOTAL" \
-        "plans_completed=$GROUP_PLANS_COMPLETED" \
-        "current_plan=$GROUP_CURRENT_PLAN" \
-        "pr_url=${GROUP_PR_URL:-}"
+    # In continuous+PR mode, remember this branch for subsequent plans
+    if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+      CONTINUOUS_BRANCH="$branch"
     fi
 
     # Initialize progress file
@@ -358,30 +347,11 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
         else
           echo "ERROR: $MAX_STUCK consecutive turns with no progress. All fallback agents exhausted."
           echo "Branch: $branch"
-          if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
-            echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
-            echo "Pushing partial work and creating/updating draft PR..."
-            git push origin "$branch" 2>/dev/null || true
-            if [[ -z "${GROUP_PR_URL:-}" ]]; then
-              create_group_pr "$branch" "$GROUP_NAME"
-              # Append failure note to PR body
-              if [[ -n "${GROUP_PR_URL:-}" ]]; then
-                fail_body=$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-                gh pr edit "$GROUP_PR_URL" --body "${fail_body}
-
----
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
-              fi
-            else
-              update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-              gh pr edit "$GROUP_PR_URL" --body "$(gh pr view "$GROUP_PR_URL" --json body -q .body 2>/dev/null || true)
-
----
-⚠️ **Group halted:** Plan \`$GROUP_CURRENT_PLAN\` stuck after $MAX_STUCK turns with no commits. Remaining plans not attempted. Resume with \`--resume\` or investigate manually." 2>/dev/null || true
-            fi
-            echo "Group state preserved in $GROUP_STATE_FILE for --resume."
-          else
-            echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          # In continuous+PR mode, push partial work
+          if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
+            echo "Pushing partial work to continuous branch..."
+            git push origin "$branch" 2>&1 || true
           fi
           AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
           detect_agent_type
@@ -405,61 +375,21 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
       echo ""
       echo "Plan complete after $i turns: $PLAN_DESC"
+      COMPLETED_PLANS+=("$(basename "${WIP_FILES[0]}")")
       archive_run
 
-      if [[ -n "${GROUP_NAME:-}" ]]; then
-        # Group mode: create or update draft PR before advancing
-        if [[ "$MODE" == "pr" ]]; then
-          if [[ -z "${GROUP_PR_URL:-}" ]]; then
-            # First group plan completed — create draft PR
-            create_group_pr "$branch" "$GROUP_NAME"
-          else
-            # Subsequent plan completed — update PR body
-            update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-          fi
-        fi
-
-        # Group mode: try to advance to next plan
-        if advance_group_plan; then
-          echo ""
-          echo "=== Continuing group '$GROUP_NAME': $(basename "${WIP_FILES[0]}") ==="
-          # Reset turn tracking for next plan
-          i=0
-          stuck_count=0
-          last_hash=$(git rev-parse HEAD)
-          # Re-initialize progress file for the new plan
-          echo "## Progress Log" > "$PROGRESS_FILE"
-          echo "" >> "$PROGRESS_FILE"
-          echo "Initialized $PROGRESS_FILE for $(basename "${WIP_FILES[0]}")"
-          # Re-extract per-plan agent for the new plan
-          AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
-          plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
-          if [[ -n "$plan_agent" ]]; then
-            AGENT_COMMAND="$plan_agent"
-            echo "Using plan-specific agent: $plan_agent"
-          fi
-          detect_agent_type
-          resolve_prompt_mode
-          continue  # Continue the turn loop with the new plan
-        fi
-
-        # Group complete
-        if [[ "$MODE" == "pr" ]]; then
-          finalize_group_pr "$branch"
+      if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+        # Continuous+PR mode: create draft PR on first plan, update on subsequent
+        if [[ -z "$CONTINUOUS_PR_URL" ]]; then
+          create_continuous_pr "$branch" "$PLAN_DESC"
         else
-          cleanup_group_state
-          echo "Group '$GROUP_NAME' complete. Direct mode: commits are on branch '$branch'."
-          echo "Tip: use --pr to automatically create a branch and open a pull request."
+          update_continuous_pr "$branch"
         fi
-      fi
-
-      if [[ -z "${GROUP_NAME:-}" ]]; then
-        if [[ "$MODE" == "pr" ]]; then
-          create_pr "$branch" "$PLAN_DESC"
-        else
-          echo "Direct mode: commits are on branch '$branch'. No PR created."
-          echo "Tip: use --pr to automatically create a branch and open a pull request."
-        fi
+      elif [[ "$MODE" == "pr" ]]; then
+        create_pr "$branch" "$PLAN_DESC"
+      else
+        echo "Direct mode: commits are on branch '$branch'. No PR created."
+        echo "Tip: use --pr to automatically create a branch and open a pull request."
       fi
       plans_completed=$((plans_completed + 1))
       completed=true
@@ -475,29 +405,35 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
   if [[ "$completed" == false ]]; then
     echo ""
     echo "Finished $TURNS turns without completing: $PLAN_DESC"
-    if [[ -n "${GROUP_NAME:-}" && "$MODE" == "pr" ]]; then
-      echo "Group '$GROUP_NAME' halted at plan: $GROUP_CURRENT_PLAN"
-      git push origin "$branch" 2>/dev/null || true
-      if [[ -z "${GROUP_PR_URL:-}" ]]; then
-        create_group_pr "$branch" "$GROUP_NAME"
-      else
-        update_group_pr "$branch" "$GROUP_CURRENT_PLAN"
-      fi
-      echo "Group state preserved for --resume."
-    else
-      echo "Plan files remain in $WIP_DIR/ — resume with another run."
-    fi
+    echo "Plan files remain in $WIP_DIR/ — resume with another run."
     echo "Branch: $branch"
+    # In continuous+PR mode, push partial work and update PR
+    if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+      if [[ -n "$CONTINUOUS_PR_URL" ]]; then
+        echo "Pushing partial work to continuous PR..."
+        git push origin "$branch" 2>&1 || true
+      elif [[ $plans_completed -gt 0 ]]; then
+        echo "Pushing partial work..."
+        git push origin "$branch" 2>&1 || true
+      fi
+    fi
     exit 0
   fi
 
-  # --- Direct mode single-plan default: stop unless --continuous ---
-  if [[ "$MODE" == "direct" && "$CONTINUOUS" != "true" ]]; then
-    echo ""
-    echo "Plan complete. Direct mode stops after one plan by default."
-    echo "Tip: use --continuous to keep processing backlog plans."
+  # --- Non-continuous modes: stop after one plan ---
+  if [[ "$CONTINUOUS" != "true" ]]; then
+    if [[ "$MODE" == "direct" ]]; then
+      echo ""
+      echo "Plan complete. Direct mode stops after one plan by default."
+      echo "Tip: use --continuous to keep processing backlog plans."
+    fi
     exit 0
   fi
 
   # Loop back to pick the next plan (turn budget resets)
 done
+
+# --- Continuous mode: finalize PR when backlog is drained ---
+if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_PR_URL" ]]; then
+  finalize_continuous_pr
+fi

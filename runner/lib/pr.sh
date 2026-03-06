@@ -1,4 +1,4 @@
-# pr.sh — PR lifecycle: archive, create, group PR management
+# pr.sh — PR lifecycle: archive, create, continuous PR management
 # Sourced by ralphai.sh — do not execute directly.
 
 # --- Archive function: move PRD + progress from in-progress/ to out/ ---
@@ -135,188 +135,130 @@ ${commit_log:-_No commits._}
   fi
 }
 
-# List remaining group plans from backlog (for PR body formatting).
-# Outputs markdown list items, one per line.
-list_remaining_group_plans() {
-  [[ -n "${GROUP_NAME:-}" ]] || return 0
-  local candidates
-  mapfile -t candidates < <(collect_group_plans "$GROUP_NAME")
-  local f
-  for f in "${candidates[@]}"; do
-    [[ -f "$f" ]] || continue
-    echo "- $(basename "$f")"
+# --- Build PR body for continuous mode ---
+# Uses COMPLETED_PLANS array (set by caller) and scans backlog for remaining plans.
+build_continuous_pr_body() {
+  local body=""
+
+  # Completed plans section
+  body+="## Completed Plans"$'\n\n'
+  if [[ ${#COMPLETED_PLANS[@]} -gt 0 ]]; then
+    for p in "${COMPLETED_PLANS[@]}"; do
+      body+="- [x] $p"$'\n'
+    done
+  else
+    body+="_None yet._"$'\n'
+  fi
+
+  # Remaining plans section (scan backlog)
+  local remaining=()
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] && remaining+=("$(basename "$f")")
   done
+
+  body+=$'\n'"## Remaining Plans"$'\n\n'
+  if [[ ${#remaining[@]} -gt 0 ]]; then
+    for r in "${remaining[@]}"; do
+      body+="- [ ] $r"$'\n'
+    done
+  else
+    body+="_Backlog empty — all plans processed._"$'\n'
+  fi
+
+  # Commit log
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."$(git rev-parse --abbrev-ref HEAD)" --oneline --no-decorate 2>/dev/null || true)
+  body+=$'\n'"## Commits"$'\n\n'
+  body+='```'$'\n'
+  body+="${commit_log:-_No commits._}"$'\n'
+  body+='```'
+
+  echo "$body"
 }
 
-# Create a draft PR for a group after the first plan completes.
-# Sets GROUP_PR_URL and updates .group-state.
-create_group_pr() {
+# --- Create draft PR for continuous mode (after first plan completes) ---
+# Sets CONTINUOUS_PR_URL on success.
+create_continuous_pr() {
   local branch="$1"
-  local group_name="$2"
+  local first_plan_desc="$2"
 
   echo ""
-  echo "Creating draft PR for group '$group_name'..."
+  echo "Creating draft PR for continuous run on '$branch'..."
 
-  # Push branch
+  # Push branch to remote
   echo "Pushing $branch to origin..."
   if ! git push -u origin "$branch" 2>&1; then
     echo "WARNING: Failed to push branch. Branch left intact for manual push/PR."
     return 0
   fi
 
-  local pr_title="feat: $group_name"
-  local commit_log
-  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+  local pr_body
+  pr_body=$(build_continuous_pr_body)
 
-  local remaining
-  remaining=$(list_remaining_group_plans)
-
-  local pr_body="## Group: $group_name
-
-**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
-
-### Completed Plans
-- $GROUP_CURRENT_PLAN ✅
-
-### Remaining Plans
-${remaining:-_None — group complete!_}
-
-## Commits
-
-\`\`\`
-${commit_log:-_No commits yet._}
-\`\`\`"
-
+  local pr_title="ralphai: ${first_plan_desc}"
   local pr_url
   pr_url=$(gh pr create \
-    --draft \
     --base "$BASE_BRANCH" \
     --head "$branch" \
     --title "$pr_title" \
-    --body "$pr_body" 2>&1) || {
+    --body "$pr_body" \
+    --draft 2>&1) || {
     echo "WARNING: Failed to create draft PR: $pr_url"
     echo "Branch '$branch' pushed to origin. Create PR manually."
     return 0
   }
 
+  CONTINUOUS_PR_URL="$pr_url"
   echo "Draft PR created: $pr_url"
-  GROUP_PR_URL="$pr_url"
-
-  # Persist PR URL in group state
-  write_group_state \
-    "group=$GROUP_NAME" \
-    "branch=$GROUP_BRANCH" \
-    "plans_total=$GROUP_PLANS_TOTAL" \
-    "plans_completed=$GROUP_PLANS_COMPLETED" \
-    "current_plan=$GROUP_CURRENT_PLAN" \
-    "pr_url=$GROUP_PR_URL"
 }
 
-# Update the body of an existing group draft PR with current progress.
-update_group_pr() {
+# --- Update existing continuous PR (after subsequent plan completes) ---
+update_continuous_pr() {
   local branch="$1"
-  local completed_plan="$2"
 
-  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
-
-  echo "Updating group PR with progress..."
+  echo ""
+  echo "Updating continuous PR..."
 
   # Push latest commits
   if ! git push origin "$branch" 2>&1; then
-    echo "WARNING: Failed to push. PR body not updated."
+    echo "WARNING: Failed to push. Commits remain local."
     return 0
   fi
 
-  local commit_log
-  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+  if [[ -z "$CONTINUOUS_PR_URL" ]]; then
+    echo "WARNING: No PR URL to update."
+    return 0
+  fi
 
-  # Build completed plans list from archive
-  local completed_list=""
-  local f
-  for f in "$ARCHIVE_DIR"/*.md; do
-    [[ -f "$f" ]] || continue
-    local fb
-    fb=$(basename "$f")
-    # Skip progress files and non-plan files
-    [[ "$fb" == progress-* ]] && continue
-    completed_list="${completed_list}- ${fb} ✅
-"
-  done
+  local pr_body
+  pr_body=$(build_continuous_pr_body)
 
-  local remaining
-  remaining=$(list_remaining_group_plans)
-
-  local pr_body="## Group: $GROUP_NAME
-
-**Status:** In progress ($GROUP_PLANS_COMPLETED/$GROUP_PLANS_TOTAL plans completed)
-
-### Completed Plans
-${completed_list:-_None yet._}
-
-### Remaining Plans
-${remaining:-_None — group complete!_}
-
-## Commits
-
-\`\`\`
-${commit_log:-_No commits._}
-\`\`\`"
-
-  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || {
+  gh pr edit "$CONTINUOUS_PR_URL" --body "$pr_body" 2>&1 || {
     echo "WARNING: Failed to update PR body."
   }
+
+  echo "PR updated: $CONTINUOUS_PR_URL"
 }
 
-# Mark the group draft PR as ready for review. Called when the last group plan completes.
-finalize_group_pr() {
-  local branch="$1"
-
-  [[ -n "${GROUP_PR_URL:-}" ]] || return 0
-
-  echo "Finalizing group PR..."
-
-  # Push final commits
-  if ! git push origin "$branch" 2>&1; then
-    echo "WARNING: Failed to push. PR not finalized."
+# --- Finalize continuous PR: mark ready for review ---
+finalize_continuous_pr() {
+  if [[ -z "$CONTINUOUS_PR_URL" ]]; then
+    echo "WARNING: No continuous PR to finalize."
     return 0
   fi
 
-  local commit_log
-  commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
+  echo ""
+  echo "All plans complete. Marking PR as ready for review..."
 
-  # Build final completed plans list
-  local completed_list=""
-  local f
-  for f in "$ARCHIVE_DIR"/*.md; do
-    [[ -f "$f" ]] || continue
-    local fb
-    fb=$(basename "$f")
-    [[ "$fb" == progress-* ]] && continue
-    completed_list="${completed_list}- ${fb} ✅
-"
-  done
+  # Update body one final time (remaining should now be empty)
+  local pr_body
+  pr_body=$(build_continuous_pr_body)
 
-  local pr_body="## Group: $GROUP_NAME
+  gh pr edit "$CONTINUOUS_PR_URL" --body "$pr_body" 2>&1 || true
+  gh pr ready "$CONTINUOUS_PR_URL" 2>&1 || {
+    echo "WARNING: Failed to mark PR as ready."
+  }
 
-**Status:** Complete ($GROUP_PLANS_TOTAL/$GROUP_PLANS_TOTAL plans)
-
-### Completed Plans
-${completed_list:-_None._}
-
-## Commits
-
-\`\`\`
-${commit_log:-_No commits._}
-\`\`\`"
-
-  gh pr edit "$GROUP_PR_URL" --body "$pr_body" 2>/dev/null || true
-
-  # Mark PR as ready for review
-  if gh pr ready "$GROUP_PR_URL" 2>/dev/null; then
-    echo "PR marked as ready for review: $GROUP_PR_URL"
-  else
-    echo "WARNING: Failed to mark PR as ready. Mark it manually: gh pr ready $GROUP_PR_URL"
-  fi
-
-  cleanup_group_state
+  echo "PR ready for review: $CONTINUOUS_PR_URL"
 }
+
