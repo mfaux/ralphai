@@ -136,6 +136,44 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After
 2. **Review `.ralphai/ralphai.config`** and adjust settings (agent command,
    feedback commands, base branch, etc.).
 
+<details>
+<summary><strong>Advanced: Git Worktrees</strong></summary>
+
+Git worktrees let you work on multiple plans in parallel without stashing or
+switching branches. Each worktree is a separate directory with its own working
+tree and branch, sharing the same git history.
+
+**When worktrees are useful:**
+
+- Running multiple plans concurrently (each in its own worktree)
+- Keeping your main branch clean while Ralphai works in an isolated directory
+- Avoiding branch-switching interruptions in your main checkout
+
+**Workflow:**
+
+```bash
+# In your main repo (where you ran ralphai init):
+git worktree add ../feature-x -b ralphai/feature-x main
+
+# Switch to the worktree and run ralphai:
+cd ../feature-x
+ralphai run --pr
+```
+
+Ralphai auto-detects worktrees — no extra flags needed. Pipeline state
+(`.ralphai/pipeline/`) lives in the main worktree and is shared across all
+worktrees.
+
+**Important:**
+
+- `ralphai init` and `ralphai sync` must be run in the **main repository**, not
+  inside a worktree.
+- `ralphai run` works in both the main repo and any worktree.
+- Use `ralphai run --show-config` inside a worktree to verify it detected the
+  main repo correctly (`worktree = true`).
+
+</details>
+
 ## How Ralphai Works
 
 - **Direct mode by default** — commits on your current branch, no branch creation or PR
