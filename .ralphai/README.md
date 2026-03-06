@@ -501,4 +501,4 @@ Use these checks to verify config behavior after changes to `.ralphai/ralphai.co
 
 4. **CLI flag override** — Pass a CLI flag (e.g. `--agent-command='gemini -p'`) with both env var and config file set. Run `--show-config` and confirm the CLI flag wins.
 
-5. **Syntax check** — Run `bash -n $(npm root -g)/ralphai/templates/ralphai/ralphai.sh` to verify the runner script has no syntax errors (or `bash -n $(node -e "console.log(require.resolve('ralphai/templates/ralphai/ralphai.sh'))")`).
+5. **Syntax check** — Run `bash -n $(npm root -g)/ralphai/runner/ralphai.sh` to verify the runner script has no syntax errors (or `bash -n $(node -e "console.log(require.resolve('ralphai/runner/ralphai.sh'))")`).

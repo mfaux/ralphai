@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "bin",
+    "runner",
     "templates"
   ],
   "scripts": {
@@ -16,8 +17,7 @@
     "dev": "node --experimental-strip-types src/cli.ts",
     "test": "vitest --run",
     "type-check": "tsc --noEmit",
-    "format": "prettier --write 'src/**/*.ts'",
-    "sync-ralphai": "cp templates/ralphai/ralphai.sh .ralphai/ralphai.sh && chmod +x .ralphai/ralphai.sh && ([ -d templates/ralphai/lib ] && cp -r templates/ralphai/lib .ralphai/lib || true) && echo 'Synced templates/ralphai/ → .ralphai/'"
+    "format": "prettier --write 'src/**/*.ts'"
   },
   "keywords": [
     "cli",
