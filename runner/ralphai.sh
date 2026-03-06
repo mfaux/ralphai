@@ -55,11 +55,21 @@ if [[ "$MODE" == "direct" ]]; then
       _slug="${_slug#prd-}"
       _slug="${_slug%.md}"
       echo ""
-      echo "Or switch to a feature branch:"
-      echo "  git checkout -b ralphai/${_slug}"
+      if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+        echo "Or create a worktree on a feature branch:"
+        echo "  git worktree add ../<dir> -b ralphai/${_slug} $current_branch"
+      else
+        echo "Or switch to a feature branch:"
+        echo "  git checkout -b ralphai/${_slug}"
+      fi
     else
       echo ""
-      echo "Or switch to a feature branch first."
+      if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+        echo "Or create a worktree on a feature branch:"
+        echo "  git worktree add ../<dir> -b ralphai/<name> $current_branch"
+      else
+        echo "Or switch to a feature branch first."
+      fi
     fi
     exit 1
   fi
@@ -172,6 +182,31 @@ while true; do
     echo "Continuous mode: continuing on branch '$branch'"
 
     # Re-initialize progress file for the new plan
+    mkdir -p "$WIP_DIR"
+    echo "## Progress Log" > "$PROGRESS_FILE"
+    echo "" >> "$PROGRESS_FILE"
+    echo "Initialized $PROGRESS_FILE"
+  elif [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+    # Worktree mode: the user already created the worktree on the right branch.
+    # Do not create branches or switch — just validate.
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    plan_basename=$(basename "${WIP_FILES[0]}")
+
+    if [[ "$branch" == "$BASE_BRANCH" ]]; then
+      echo "ERROR: Running in a worktree on the base branch '$BASE_BRANCH'."
+      echo "Create a worktree on a feature branch instead:"
+      slug="${plan_basename#prd-}"
+      slug="${slug%.md}"
+      echo "  git worktree add ../<dir> -b ralphai/${slug} $BASE_BRANCH"
+      # Roll back plan
+      rollback_dest="$BACKLOG_DIR/${plan_basename}"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      echo "Rolled back: moved plan to $rollback_dest"
+      exit 1
+    fi
+    echo "Worktree mode: working on existing branch '$branch' (no checkout)"
+
+    # Initialize progress file
     mkdir -p "$WIP_DIR"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"

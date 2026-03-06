@@ -299,6 +299,33 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("git checkout -b ralphai/");
   });
 
+  it("scaffolded ralphai.sh has worktree-aware direct mode suggestion", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // When in a worktree, the direct mode guard suggests git worktree add
+    expect(ralphaiSh).toContain(
+      'if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then',
+    );
+    expect(ralphaiSh).toContain("git worktree add");
+    // In a worktree, the non-worktree "git checkout -b" suggestion is in the else branch
+    expect(ralphaiSh).toContain("Or create a worktree on a feature branch:");
+  });
+
+  it("scaffolded ralphai.sh has worktree-aware PR branch strategy", () => {
+    const templateDir = join(__dirname, "..", "runner");
+
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+    // In worktree PR mode, the runner uses the existing branch without checkout
+    expect(ralphaiSh).toContain("Worktree mode: working on existing branch");
+    // Errors if running on the base branch in a worktree
+    expect(ralphaiSh).toContain(
+      "ERROR: Running in a worktree on the base branch",
+    );
+    // Rolls back the plan when erroring
+    expect(ralphaiSh).toContain("Rolled back: moved plan to");
+  });
+
   it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
     const templateDir = join(__dirname, "..", "runner");
 
