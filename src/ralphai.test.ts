@@ -9,7 +9,7 @@ import {
 } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { fileURLToPath } from "url";
 import { runCli, runCliOutput, stripLogo } from "./test-utils.ts";
 import {
@@ -1445,6 +1445,49 @@ echo "$PROMPT_MODE"
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
       expect(result.stdout).toContain("ARGS:3 --resume");
+    });
+
+    it("built CLI can locate the bundled runner script", () => {
+      const repoRoot = join(__dirname, "..");
+      const distCli = join(repoRoot, "dist", "cli.mjs");
+
+      execSync("git checkout -b main", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      execSync("git config user.name 'Test User'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      execSync("git config user.email 'test@example.com'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      execSync("git commit --allow-empty -m init", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      execSync("pnpm build", {
+        cwd: repoRoot,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      const output = execFileSync(
+        "node",
+        [distCli, "run", "--dry-run"],
+        {
+          cwd: testDir,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            RALPHAI_NO_UPDATE_CHECK: "1",
+          },
+        },
+      );
+
+      expect(output).toContain("No runnable work found.");
     });
   });
 

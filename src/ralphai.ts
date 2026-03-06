@@ -902,6 +902,28 @@ function findBash(): string | null {
   return null;
 }
 
+function resolveBundledRunnerScript(moduleUrl: string): string {
+  if (process.env.RALPHAI_RUNNER_SCRIPT) {
+    return process.env.RALPHAI_RUNNER_SCRIPT;
+  }
+
+  const packageDir = join(dirname(fileURLToPath(moduleUrl)), "..");
+  const candidates = [
+    ["runner", "ralphai.sh"],
+    ["templates", "ralphai", "ralphai.sh"],
+  ].map((segments) => join(packageDir, ...segments));
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `Could not locate bundled runner script. Tried: ${candidates.join(", ")}`,
+  );
+}
+
 function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
@@ -916,10 +938,15 @@ function runRalphaiRunner(
 
   // Resolve the runner script from the npm package (not the user's project).
   // RALPHAI_RUNNER_SCRIPT env var allows overriding for tests.
-  const __dir = dirname(fileURLToPath(import.meta.url));
-  const ralphaiSh =
-    process.env.RALPHAI_RUNNER_SCRIPT ||
-    join(__dir, "..", "runner", "ralphai.sh");
+  let ralphaiSh: string;
+  try {
+    ralphaiSh = resolveBundledRunnerScript(import.meta.url);
+  } catch (error) {
+    console.error(
+      `${TEXT}Error:${RESET} ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(1);
+  }
 
   const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
 
@@ -969,11 +996,25 @@ function runRalphaiRunner(
       });
     });
   } else {
-    // Unix: straightforward spawnSync with inherited stdio
+    // Unix: pipe output so parent processes can capture it in tests.
     const result = spawnSync(ralphaiSh, args, {
       cwd,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     });
+
+    if (result.stdout && result.stdout.length > 0) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr && result.stderr.length > 0) {
+      process.stderr.write(result.stderr);
+    }
+
+    if (result.error) {
+      console.error(
+        `${TEXT}Error:${RESET} Failed to start task runner ${ralphaiSh}: ${result.error.message}`,
+      );
+      process.exit(1);
+    }
 
     process.exit(result.status ?? 1);
   }
