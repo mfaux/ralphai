@@ -23,7 +23,7 @@ Ralphai avoids this by starting each **turn** with a **fresh session**: just the
 npm install -g ralphai
 ```
 
-**Local dev dependency** (for teams — pins the version in package.json):
+**Local dev dependency** (pins the version in package.json):
 
 ```bash
 npm install -D ralphai
