@@ -913,6 +913,95 @@ describe("ralphai command", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Worktree detection tests
+  // -------------------------------------------------------------------------
+
+  describe.skipIf(process.platform === "win32")("worktree detection", () => {
+    let mainRepo: string;
+    let worktreeDir: string;
+
+    beforeEach(() => {
+      // Create a main repo with at least one commit (worktrees need a commit)
+      mainRepo = join(
+        tmpdir(),
+        `ralphai-wt-main-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(mainRepo, { recursive: true });
+      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+      execSync("git config user.name 'Test'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git config user.email 'test@test.com'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git commit --allow-empty -m init", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+
+      // Create a worktree
+      worktreeDir = join(
+        tmpdir(),
+        `ralphai-wt-tree-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      execSync(
+        `git worktree add ${JSON.stringify(worktreeDir)} -b test-worktree`,
+        { cwd: mainRepo, stdio: "ignore" },
+      );
+    });
+
+    afterEach(() => {
+      // Remove worktree before removing main repo
+      try {
+        execSync(`git worktree remove ${JSON.stringify(worktreeDir)} --force`, {
+          cwd: mainRepo,
+          stdio: "ignore",
+        });
+      } catch {
+        /* ignore */
+      }
+      if (existsSync(mainRepo)) {
+        rmSync(mainRepo, { recursive: true, force: true });
+      }
+      if (existsSync(worktreeDir)) {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      }
+    });
+
+    it("init --yes fails inside a git worktree", () => {
+      const result = runCli(["init", "--yes"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(
+        "Cannot initialize ralphai inside a git worktree",
+      );
+      expect(result.stderr).toContain("ralphai init");
+      expect(result.stderr).toContain("main repository");
+    });
+
+    it("sync --yes fails inside a git worktree", () => {
+      // First init in main repo so sync has something to operate on
+      runCliOutput(["init", "--yes"], mainRepo);
+      const result = runCli(["sync", "--yes"], worktreeDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain(
+        "Cannot sync ralphai inside a git worktree",
+      );
+      expect(result.stderr).toContain("ralphai sync");
+      expect(result.stderr).toContain("main repository");
+    });
+
+    it("init --yes succeeds in the main repo (not a worktree)", () => {
+      const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
+      expect(output).toContain("Ralphai initialized");
+      expect(existsSync(join(mainRepo, ".ralphai", "ralphai.config"))).toBe(
+        true,
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Agent type detection tests
   // -------------------------------------------------------------------------
 
