@@ -937,10 +937,8 @@ function runRalphRunner(options: RalphOptions, cwd: string): void {
     options.runArgs.length > 0 ? options.runArgs : [DEFAULT_ITERATIONS];
   const result = spawnSync(ralphSh, args, {
     cwd,
-    stdio: ["inherit", "pipe", "pipe"],
+    stdio: "inherit",
   });
 
-  if (result.stdout?.length) process.stdout.write(result.stdout);
-  if (result.stderr?.length) process.stderr.write(result.stderr);
   process.exit(result.status ?? 1);
 }
