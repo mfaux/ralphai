@@ -185,7 +185,8 @@ ralphai <command> [options]
 Commands:
   init        Set up Ralphai in your project
   run         Start the Ralphai task runner
-  update      Refresh template files (preserves config & state)
+  update      Update ralphai to the latest (or specified) version
+  sync        Refresh template files (preserves config & state)
   uninstall   Remove Ralphai from your project
 
 Options:
