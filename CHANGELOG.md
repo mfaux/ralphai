@@ -57,4 +57,4 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 - **GitHub Issues integration** — optionally pulls labeled issues when the backlog is empty
 - **Plan dependencies** — `depends-on` field for ordering across a backlog
 - **Learnings loop** — two-tier system for logging and curating lessons across runs
-- **Update & uninstall** — `ralphai update` refreshes templates; `ralphai uninstall` cleans up
+- **Update, sync & uninstall** — `ralphai update` self-updates the CLI; `ralphai sync` refreshes templates; `ralphai uninstall` cleans up

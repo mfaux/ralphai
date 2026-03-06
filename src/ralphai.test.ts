@@ -12,6 +12,12 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { runCli, runCliOutput, stripLogo } from "./test-utils.ts";
+import {
+  detectInstallerPM,
+  buildUpdateCommand,
+  checkForUpdate,
+} from "./self-update.ts";
+import { compareVersions } from "./utils.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -114,7 +120,7 @@ describe("ralphai command", () => {
     expect(config).toContain("agentCommand=claude -p");
   });
 
-  it("update --yes updates template files when .ralphai/ already exists", () => {
+  it("sync --yes updates template files when .ralphai/ already exists", () => {
     // First scaffold
     runCliOutput(["init", "--yes"], testDir);
 
@@ -125,10 +131,10 @@ describe("ralphai command", () => {
     const customConfig = "agentCommand=my-custom-agent\nbaseBranch=develop\n";
     writeFileSync(join(testDir, ".ralphai", "ralphai.config"), customConfig);
 
-    // Run update — should update, not skip
-    const output = stripLogo(runCliOutput(["update", "--yes"], testDir));
+    // Run sync — should update, not skip
+    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
 
-    expect(output).toContain("Ralphai updated");
+    expect(output).toContain("Ralphai synced");
     expect(output).not.toContain("already set up");
 
     // Template files should be refreshed
@@ -346,20 +352,20 @@ describe("ralphai command", () => {
     expect(issues).toContain("slugify()");
   });
 
-  it("update --yes <target-dir> updates templates if .ralphai/ already exists in target", () => {
+  it("sync --yes <target-dir> updates templates if .ralphai/ already exists in target", () => {
     const targetDir = join(tmpdir(), `ralphai-target-exists-${Date.now()}`);
     mkdirSync(join(targetDir, ".ralphai"), { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
 
-    // Write a template file so update has something to overwrite
+    // Write a template file so sync has something to overwrite
     writeFileSync(join(targetDir, ".ralphai", "README.md"), "old");
 
     try {
       const output = stripLogo(
-        runCliOutput(["update", "--yes", targetDir], testDir),
+        runCliOutput(["sync", "--yes", targetDir], testDir),
       );
 
-      expect(output).toContain("Ralphai updated");
+      expect(output).toContain("Ralphai synced");
 
       // README.md should be refreshed from template
       const readme = readFileSync(
@@ -422,18 +428,18 @@ describe("ralphai command", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Update mode tests
+  // Sync mode tests
   // -------------------------------------------------------------------------
 
-  it("update --yes preserves LEARNINGS.md", () => {
+  it("sync --yes preserves LEARNINGS.md", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Add custom content to LEARNINGS.md
     const customLearnings = "# My Custom Learnings\n\nDo not overwrite me.\n";
     writeFileSync(join(testDir, ".ralphai", "LEARNINGS.md"), customLearnings);
 
-    // Run update
-    runCliOutput(["update", "--yes"], testDir);
+    // Run sync
+    runCliOutput(["sync", "--yes"], testDir);
 
     const learnings = readFileSync(
       join(testDir, ".ralphai", "LEARNINGS.md"),
@@ -442,15 +448,15 @@ describe("ralphai command", () => {
     expect(learnings).toBe(customLearnings);
   });
 
-  it("update --yes preserves .gitignore", () => {
+  it("sync --yes preserves .gitignore", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Modify .gitignore
     const customGitignore = "# custom gitignore\n*.log\n";
     writeFileSync(join(testDir, ".ralphai", ".gitignore"), customGitignore);
 
-    // Run update
-    runCliOutput(["update", "--yes"], testDir);
+    // Run sync
+    runCliOutput(["sync", "--yes"], testDir);
 
     const gitignore = readFileSync(
       join(testDir, ".ralphai", ".gitignore"),
@@ -459,7 +465,7 @@ describe("ralphai command", () => {
     expect(gitignore).toBe(customGitignore);
   });
 
-  it("update --yes preserves plan directories and files", () => {
+  it("sync --yes preserves plan directories and files", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Add a plan file to backlog
@@ -468,8 +474,8 @@ describe("ralphai command", () => {
       "# Plan\nDo something.\n",
     );
 
-    // Run update
-    runCliOutput(["update", "--yes"], testDir);
+    // Run sync
+    runCliOutput(["sync", "--yes"], testDir);
 
     // Plan file should still be there
     expect(
@@ -484,7 +490,7 @@ describe("ralphai command", () => {
     expect(plan).toContain("Do something.");
   });
 
-  it("update --yes removes old scaffolded scripts (migration)", () => {
+  it("sync --yes removes old scaffolded scripts (migration)", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Simulate old-style scaffolded scripts that should be cleaned up
@@ -495,8 +501,8 @@ describe("ralphai command", () => {
     mkdirSync(join(testDir, ".ralphai", "lib"), { recursive: true });
     writeFileSync(join(testDir, ".ralphai", "lib", "config.sh"), "# old lib");
 
-    // Run update
-    const output = stripLogo(runCliOutput(["update", "--yes"], testDir));
+    // Run sync
+    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
 
     // Old scripts should be removed
     expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(false);
@@ -507,10 +513,10 @@ describe("ralphai command", () => {
     expect(output).toContain("bundled in package");
   });
 
-  it("update --yes output lists updated and preserved files", () => {
+  it("sync --yes output lists updated and preserved files", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const output = stripLogo(runCliOutput(["update", "--yes"], testDir));
+    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
 
     expect(output).toContain("Updated:");
     expect(output).toContain("README.md");
@@ -878,6 +884,7 @@ describe("ralphai command", () => {
     expect(output).toContain("init");
     expect(output).toContain("run");
     expect(output).toContain("update");
+    expect(output).toContain("sync");
     expect(output).toContain("uninstall");
   });
 
@@ -889,15 +896,15 @@ describe("ralphai command", () => {
     expect(result.stderr).toContain("already set up");
   });
 
-  it("init error message suggests update and init --force", () => {
+  it("init error message suggests sync and init --force", () => {
     runCliOutput(["init", "--yes"], testDir);
     const result = runCli(["init", "--yes"], testDir);
-    expect(result.stderr).toContain("ralphai update");
+    expect(result.stderr).toContain("ralphai sync");
     expect(result.stderr).toContain("ralphai init --force");
   });
 
-  it("update --yes errors when .ralphai/ does not exist", () => {
-    const result = runCli(["update", "--yes"], testDir);
+  it("sync --yes errors when .ralphai/ does not exist", () => {
+    const result = runCli(["sync", "--yes"], testDir);
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
@@ -1478,6 +1485,229 @@ echo "$PROMPT_MODE"
   });
 
   // -------------------------------------------------------------------------
+  // Self-update and update notification tests
+  // -------------------------------------------------------------------------
+
+  describe("self-update", () => {
+    it("detectInstallerPM returns pnpm for paths containing .pnpm", () => {
+      expect(
+        detectInstallerPM(
+          "/home/user/.local/share/pnpm/global/5/.pnpm/ralphai@0.2.1/node_modules/ralphai/dist/cli.mjs",
+        ),
+      ).toBe("pnpm");
+    });
+
+    it("detectInstallerPM returns pnpm for Windows paths containing .pnpm", () => {
+      expect(
+        detectInstallerPM(
+          "C:\\Users\\user\\AppData\\Local\\pnpm\\global\\5\\.pnpm\\ralphai@0.2.1\\node_modules\\ralphai\\dist\\cli.mjs",
+        ),
+      ).toBe("pnpm");
+    });
+
+    it("detectInstallerPM returns bun for paths containing .bun", () => {
+      expect(
+        detectInstallerPM(
+          "/home/user/.bun/install/global/node_modules/ralphai/dist/cli.mjs",
+        ),
+      ).toBe("bun");
+    });
+
+    it("detectInstallerPM returns yarn for paths containing yarn/global", () => {
+      expect(
+        detectInstallerPM(
+          "/home/user/.config/yarn/global/node_modules/ralphai/dist/cli.mjs",
+        ),
+      ).toBe("yarn");
+    });
+
+    it("detectInstallerPM returns npm as fallback", () => {
+      expect(
+        detectInstallerPM("/usr/local/lib/node_modules/ralphai/dist/cli.mjs"),
+      ).toBe("npm");
+    });
+
+    it("buildUpdateCommand builds correct command for each PM", () => {
+      expect(buildUpdateCommand("pnpm", "ralphai", "latest")).toBe(
+        "pnpm add -g ralphai@latest",
+      );
+      expect(buildUpdateCommand("npm", "ralphai", "latest")).toBe(
+        "npm install -g ralphai@latest",
+      );
+      expect(buildUpdateCommand("yarn", "ralphai", "latest")).toBe(
+        "yarn global add ralphai@latest",
+      );
+      expect(buildUpdateCommand("bun", "ralphai", "latest")).toBe(
+        "bun add -g ralphai@latest",
+      );
+    });
+
+    it("buildUpdateCommand includes tag in spec", () => {
+      expect(buildUpdateCommand("npm", "ralphai", "beta")).toBe(
+        "npm install -g ralphai@beta",
+      );
+      expect(buildUpdateCommand("pnpm", "ralphai", "next")).toBe(
+        "pnpm add -g ralphai@next",
+      );
+    });
+  });
+
+  describe("compareVersions", () => {
+    it("returns 0 for equal versions", () => {
+      expect(compareVersions("1.2.3", "1.2.3")).toBe(0);
+    });
+
+    it("returns positive when first is greater (major)", () => {
+      expect(compareVersions("2.0.0", "1.0.0")).toBeGreaterThan(0);
+    });
+
+    it("returns negative when first is less (minor)", () => {
+      expect(compareVersions("1.0.0", "1.1.0")).toBeLessThan(0);
+    });
+
+    it("returns positive when first is greater (patch)", () => {
+      expect(compareVersions("1.0.2", "1.0.1")).toBeGreaterThan(0);
+    });
+
+    it("handles versions with missing parts", () => {
+      expect(compareVersions("1.0", "1.0.0")).toBe(0);
+    });
+  });
+
+  describe("update check cache", () => {
+    let cacheDir: string;
+
+    beforeEach(() => {
+      cacheDir = join(
+        tmpdir(),
+        `ralphai-cache-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(cacheDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      if (existsSync(cacheDir)) {
+        rmSync(cacheDir, { recursive: true, force: true });
+      }
+    });
+
+    it("checkForUpdate returns null when no cache file exists", () => {
+      expect(checkForUpdate("ralphai", "1.0.0", cacheDir)).toBeNull();
+    });
+
+    it("checkForUpdate returns null when current version is latest", () => {
+      writeFileSync(
+        join(cacheDir, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now(), latestVersion: "1.0.0" }),
+      );
+      expect(checkForUpdate("ralphai", "1.0.0", cacheDir)).toBeNull();
+    });
+
+    it("checkForUpdate returns null when current version is newer", () => {
+      writeFileSync(
+        join(cacheDir, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now(), latestVersion: "1.0.0" }),
+      );
+      expect(checkForUpdate("ralphai", "2.0.0", cacheDir)).toBeNull();
+    });
+
+    it("checkForUpdate returns update info when newer version is available", () => {
+      writeFileSync(
+        join(cacheDir, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now(), latestVersion: "2.0.0" }),
+      );
+      const result = checkForUpdate("ralphai", "1.0.0", cacheDir);
+      expect(result).toEqual({ latest: "2.0.0", current: "1.0.0" });
+    });
+
+    it("checkForUpdate returns null for corrupt cache file", () => {
+      writeFileSync(join(cacheDir, "update-check.json"), "not json");
+      expect(checkForUpdate("ralphai", "1.0.0", cacheDir)).toBeNull();
+    });
+
+    it("checkForUpdate returns null when cache has no latestVersion", () => {
+      writeFileSync(
+        join(cacheDir, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now() }),
+      );
+      expect(checkForUpdate("ralphai", "1.0.0", cacheDir)).toBeNull();
+    });
+  });
+
+  describe("update notification banner", () => {
+    let cacheDir: string;
+
+    beforeEach(() => {
+      cacheDir = join(
+        tmpdir(),
+        `ralphai-notify-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(cacheDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      if (existsSync(cacheDir)) {
+        rmSync(cacheDir, { recursive: true, force: true });
+      }
+    });
+
+    it("shows update banner when newer version is cached", () => {
+      // Write a cache file indicating a newer version
+      const xdgBase = join(
+        tmpdir(),
+        `ralphai-xdg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      const xdgRalphai = join(xdgBase, "ralphai");
+      mkdirSync(xdgRalphai, { recursive: true });
+      writeFileSync(
+        join(xdgRalphai, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now(), latestVersion: "99.0.0" }),
+      );
+
+      try {
+        // Use "init --yes" which goes through runRalphai() and then hits
+        // the notification code path in main().
+        const result = runCli(["init", "--yes"], testDir, {
+          XDG_CACHE_HOME: xdgBase,
+        });
+        expect(result.stdout).toContain("Update available");
+        expect(result.stdout).toContain("99.0.0");
+        expect(result.stdout).toContain("ralphai update");
+      } finally {
+        if (existsSync(xdgBase)) {
+          rmSync(xdgBase, { recursive: true, force: true });
+        }
+      }
+    });
+
+    it("does not show banner when RALPHAI_NO_UPDATE_CHECK is set", () => {
+      const xdgBase = join(
+        tmpdir(),
+        `ralphai-xdg-nocheck-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      const xdgRalphai = join(xdgBase, "ralphai");
+      mkdirSync(xdgRalphai, { recursive: true });
+      writeFileSync(
+        join(xdgRalphai, "update-check.json"),
+        JSON.stringify({ lastCheck: Date.now(), latestVersion: "99.0.0" }),
+      );
+
+      try {
+        const result = runCli(["init", "--yes"], testDir, {
+          XDG_CACHE_HOME: xdgBase,
+          RALPHAI_NO_UPDATE_CHECK: "1",
+        });
+        expect(result.stdout).not.toContain("Update available");
+        expect(result.stdout).not.toContain("99.0.0");
+      } finally {
+        if (existsSync(xdgBase)) {
+          rmSync(xdgBase, { recursive: true, force: true });
+        }
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // --version and --help tests
   // -------------------------------------------------------------------------
 
@@ -1495,6 +1725,7 @@ echo "$PROMPT_MODE"
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("run");
     expect(result.stdout).toContain("update");
+    expect(result.stdout).toContain("sync");
     expect(result.stdout).toContain("uninstall");
   });
 
