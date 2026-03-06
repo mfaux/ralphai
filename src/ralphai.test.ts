@@ -1084,6 +1084,112 @@ describe("ralphai command", () => {
       expect(result.stderr).toContain("not set up");
       expect(result.stderr).toContain("ralphai init");
     });
+
+    it("defaults.sh resolves pipeline paths to main worktree when sourced inside a worktree", () => {
+      const defaultsPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "defaults.sh",
+      );
+      // Source defaults.sh from the worktree directory and print resolved variables
+      const script = `#!/bin/bash
+set -e
+source ${JSON.stringify(defaultsPath)}
+echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
+echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
+echo "WIP_DIR=$WIP_DIR"
+echo "BACKLOG_DIR=$BACKLOG_DIR"
+echo "ARCHIVE_DIR=$ARCHIVE_DIR"
+echo "CONFIG_FILE=$CONFIG_FILE"
+echo "PROGRESS_FILE=$PROGRESS_FILE"
+`;
+      const scriptFile = join(
+        tmpdir(),
+        `ralphai-defaults-wt-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+      );
+      try {
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+          cwd: worktreeDir,
+        });
+        expect(result).toContain("IS_WORKTREE=true");
+        expect(result).toContain(`MAIN_WORKTREE=${mainRepo}`);
+        expect(result).toContain(
+          `WIP_DIR=${mainRepo}/.ralphai/pipeline/in-progress`,
+        );
+        expect(result).toContain(
+          `BACKLOG_DIR=${mainRepo}/.ralphai/pipeline/backlog`,
+        );
+        expect(result).toContain(
+          `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
+        );
+        expect(result).toContain(
+          `CONFIG_FILE=${mainRepo}/.ralphai/ralphai.config`,
+        );
+        expect(result).toContain(
+          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
+        );
+      } finally {
+        try {
+          rmSync(scriptFile);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
+    it("defaults.sh keeps relative paths when sourced in the main repo (not a worktree)", () => {
+      const defaultsPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "defaults.sh",
+      );
+      const script = `#!/bin/bash
+set -e
+source ${JSON.stringify(defaultsPath)}
+echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
+echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
+echo "WIP_DIR=$WIP_DIR"
+echo "BACKLOG_DIR=$BACKLOG_DIR"
+echo "ARCHIVE_DIR=$ARCHIVE_DIR"
+echo "CONFIG_FILE=$CONFIG_FILE"
+echo "PROGRESS_FILE=$PROGRESS_FILE"
+`;
+      const scriptFile = join(
+        tmpdir(),
+        `ralphai-defaults-main-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+      );
+      try {
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+          cwd: mainRepo,
+        });
+        expect(result).toContain("IS_WORKTREE=false");
+        expect(result).toContain("MAIN_WORKTREE=");
+        // Verify MAIN_WORKTREE is empty (not set)
+        expect(result).toMatch(/MAIN_WORKTREE=\n/);
+        // Paths should remain relative
+        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
+        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
+        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
+        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config");
+        expect(result).toContain(
+          "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
+        );
+      } finally {
+        try {
+          rmSync(scriptFile);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
