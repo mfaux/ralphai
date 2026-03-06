@@ -296,6 +296,7 @@ describe("ralphai command", () => {
     // Direct mode refuses to run on main or master
     expect(ralphaiSh).toContain("Direct mode cannot run on");
     expect(ralphaiSh).toContain("Switch to a feature branch, or use --pr mode");
+    expect(ralphaiSh).toContain("Create a branch for ralphai to work from:");
     expect(ralphaiSh).toContain("git checkout -b ralphai/");
   });
 
