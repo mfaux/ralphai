@@ -2,7 +2,7 @@
 
 Use this template for refactors, migrations, and cleanup that should not change intended user-facing behavior.
 
-Global rules are defined in `.ralph/PLANNING.md` and apply here.
+Global rules are defined in `.ralphai/PLANNING.md` and apply here.
 
 ```markdown
 # Plan: <Title>

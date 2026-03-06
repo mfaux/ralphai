@@ -1,5 +1,5 @@
 # --- lib/git.sh — Git helpers: dirty state, branch collision, preflight ---
-# Sourced by ralph.sh. Do not execute directly.
+# Sourced by ralphai.sh. Do not execute directly.
 
 is_tree_dirty() {
   if ! git diff --quiet HEAD 2>/dev/null; then
@@ -66,7 +66,7 @@ branch_has_open_work() {
 declare -A SKIPPED_PLANS
 
 # --- PR mode preflight: validate gh CLI ---
-# In PR mode (the default), ralph needs 'gh' to push branches and create PRs.
+# In PR mode (the default), ralphai needs 'gh' to push branches and create PRs.
 # Check early so the user finds out before the agent runs 10 iterations.
 if [[ "$MODE" == "pr" && "$DRY_RUN" != true ]]; then
   if ! command -v gh &>/dev/null; then
@@ -89,18 +89,18 @@ if [[ "$DRY_RUN" != true ]]; then
       current_branch=$(git rev-parse --abbrev-ref HEAD)
       if [[ "$current_branch" == "$BASE_BRANCH" ]]; then
         echo "ERROR: --resume refused on '$current_branch' branch (base branch)."
-        echo "Switch to your ralph/* branch first, then re-run with --resume."
+        echo "Switch to your ralphai/* branch first, then re-run with --resume."
         exit 1
       fi
 
       echo "Detected dirty state on $current_branch. Auto-committing recovery snapshot (--resume)."
       git add -A
-      git commit -m "chore(ralph): recover interrupted iteration
+      git commit -m "chore(ralphai): recover interrupted iteration
 
 Interrupted mid-iteration on branch $current_branch.
-Committing dirty state so ralph.sh can resume." || true
+Committing dirty state so ralphai.sh can resume." || true
     else
-      echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralph."
+      echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."
       echo "Tip: re-run with --resume to auto-commit and continue."
       exit 1
     fi

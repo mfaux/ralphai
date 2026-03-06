@@ -1,10 +1,10 @@
 # config.sh — Configuration loading, CLI parsing, and --show-config.
-# Sourced by ralph.sh. Contains load_config(), apply_config(),
+# Sourced by ralphai.sh. Contains load_config(), apply_config(),
 # apply_env_overrides(), print_usage(), CLI arg parsing, --show-config block,
 # and agentCommand validation.
 
 # --- Config file loader ---
-# Parses .ralph/ralph.config (key=value, comments, blank lines).
+# Parses .ralphai/ralphai.config (key=value, comments, blank lines).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
 # CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
@@ -194,83 +194,83 @@ apply_config() {
 # --- Apply env var overrides ---
 # Env vars override config file values but are overridden by CLI flags.
 apply_env_overrides() {
-  if [[ -n "${RALPH_AGENT_COMMAND:-}" ]]; then
-    AGENT_COMMAND="$RALPH_AGENT_COMMAND"
+  if [[ -n "${RALPHAI_AGENT_COMMAND:-}" ]]; then
+    AGENT_COMMAND="$RALPHAI_AGENT_COMMAND"
   fi
-  if [[ -n "${RALPH_FEEDBACK_COMMANDS:-}" ]]; then
-    FEEDBACK_COMMANDS="$RALPH_FEEDBACK_COMMANDS"
+  if [[ -n "${RALPHAI_FEEDBACK_COMMANDS:-}" ]]; then
+    FEEDBACK_COMMANDS="$RALPHAI_FEEDBACK_COMMANDS"
   fi
-  if [[ -n "${RALPH_BASE_BRANCH:-}" ]]; then
-    if [[ "$RALPH_BASE_BRANCH" =~ [[:space:]] ]]; then
-      echo "ERROR: RALPH_BASE_BRANCH must be a single token without spaces, got '$RALPH_BASE_BRANCH'"
+  if [[ -n "${RALPHAI_BASE_BRANCH:-}" ]]; then
+    if [[ "$RALPHAI_BASE_BRANCH" =~ [[:space:]] ]]; then
+      echo "ERROR: RALPHAI_BASE_BRANCH must be a single token without spaces, got '$RALPHAI_BASE_BRANCH'"
       exit 1
     fi
-    BASE_BRANCH="$RALPH_BASE_BRANCH"
+    BASE_BRANCH="$RALPHAI_BASE_BRANCH"
   fi
-  if [[ -n "${RALPH_MAX_STUCK:-}" ]]; then
-    if [[ ! "$RALPH_MAX_STUCK" =~ ^[1-9][0-9]*$ ]]; then
-      echo "ERROR: RALPH_MAX_STUCK must be a positive integer, got '$RALPH_MAX_STUCK'"
+  if [[ -n "${RALPHAI_MAX_STUCK:-}" ]]; then
+    if [[ ! "$RALPHAI_MAX_STUCK" =~ ^[1-9][0-9]*$ ]]; then
+      echo "ERROR: RALPHAI_MAX_STUCK must be a positive integer, got '$RALPHAI_MAX_STUCK'"
       exit 1
     fi
-    MAX_STUCK="$RALPH_MAX_STUCK"
+    MAX_STUCK="$RALPHAI_MAX_STUCK"
   fi
-  if [[ -n "${RALPH_MODE:-}" ]]; then
-    if [[ "$RALPH_MODE" != "pr" && "$RALPH_MODE" != "direct" ]]; then
-      echo "ERROR: RALPH_MODE must be 'pr' or 'direct', got '$RALPH_MODE'"
+  if [[ -n "${RALPHAI_MODE:-}" ]]; then
+    if [[ "$RALPHAI_MODE" != "pr" && "$RALPHAI_MODE" != "direct" ]]; then
+      echo "ERROR: RALPHAI_MODE must be 'pr' or 'direct', got '$RALPHAI_MODE'"
       exit 1
     fi
-    MODE="$RALPH_MODE"
+    MODE="$RALPHAI_MODE"
   fi
-  if [[ -n "${RALPH_ITERATION_TIMEOUT:-}" ]]; then
-    if [[ ! "$RALPH_ITERATION_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: RALPH_ITERATION_TIMEOUT must be a non-negative integer (seconds), got '$RALPH_ITERATION_TIMEOUT'"
+  if [[ -n "${RALPHAI_ITERATION_TIMEOUT:-}" ]]; then
+    if [[ ! "$RALPHAI_ITERATION_TIMEOUT" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: RALPHAI_ITERATION_TIMEOUT must be a non-negative integer (seconds), got '$RALPHAI_ITERATION_TIMEOUT'"
       exit 1
     fi
-    ITERATION_TIMEOUT="$RALPH_ITERATION_TIMEOUT"
+    ITERATION_TIMEOUT="$RALPHAI_ITERATION_TIMEOUT"
   fi
-  if [[ -n "${RALPH_ISSUE_SOURCE:-}" ]]; then
-    if [[ "$RALPH_ISSUE_SOURCE" != "none" && "$RALPH_ISSUE_SOURCE" != "github" ]]; then
-      echo "ERROR: RALPH_ISSUE_SOURCE must be 'none' or 'github', got '$RALPH_ISSUE_SOURCE'"
+  if [[ -n "${RALPHAI_ISSUE_SOURCE:-}" ]]; then
+    if [[ "$RALPHAI_ISSUE_SOURCE" != "none" && "$RALPHAI_ISSUE_SOURCE" != "github" ]]; then
+      echo "ERROR: RALPHAI_ISSUE_SOURCE must be 'none' or 'github', got '$RALPHAI_ISSUE_SOURCE'"
       exit 1
     fi
-    ISSUE_SOURCE="$RALPH_ISSUE_SOURCE"
+    ISSUE_SOURCE="$RALPHAI_ISSUE_SOURCE"
   fi
-  if [[ -n "${RALPH_ISSUE_LABEL:-}" ]]; then
-    ISSUE_LABEL="$RALPH_ISSUE_LABEL"
+  if [[ -n "${RALPHAI_ISSUE_LABEL:-}" ]]; then
+    ISSUE_LABEL="$RALPHAI_ISSUE_LABEL"
   fi
-  if [[ -n "${RALPH_ISSUE_IN_PROGRESS_LABEL:-}" ]]; then
-    ISSUE_IN_PROGRESS_LABEL="$RALPH_ISSUE_IN_PROGRESS_LABEL"
+  if [[ -n "${RALPHAI_ISSUE_IN_PROGRESS_LABEL:-}" ]]; then
+    ISSUE_IN_PROGRESS_LABEL="$RALPHAI_ISSUE_IN_PROGRESS_LABEL"
   fi
-  if [[ -n "${RALPH_ISSUE_REPO:-}" ]]; then
-    ISSUE_REPO="$RALPH_ISSUE_REPO"
+  if [[ -n "${RALPHAI_ISSUE_REPO:-}" ]]; then
+    ISSUE_REPO="$RALPHAI_ISSUE_REPO"
   fi
-  if [[ -n "${RALPH_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
-    if [[ "$RALPH_ISSUE_CLOSE_ON_COMPLETE" != "true" && "$RALPH_ISSUE_CLOSE_ON_COMPLETE" != "false" ]]; then
-      echo "ERROR: RALPH_ISSUE_CLOSE_ON_COMPLETE must be 'true' or 'false', got '$RALPH_ISSUE_CLOSE_ON_COMPLETE'"
+  if [[ -n "${RALPHAI_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
+    if [[ "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" != "true" && "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" != "false" ]]; then
+      echo "ERROR: RALPHAI_ISSUE_CLOSE_ON_COMPLETE must be 'true' or 'false', got '$RALPHAI_ISSUE_CLOSE_ON_COMPLETE'"
       exit 1
     fi
-    ISSUE_CLOSE_ON_COMPLETE="$RALPH_ISSUE_CLOSE_ON_COMPLETE"
+    ISSUE_CLOSE_ON_COMPLETE="$RALPHAI_ISSUE_CLOSE_ON_COMPLETE"
   fi
-  if [[ -n "${RALPH_ISSUE_COMMENT_PROGRESS:-}" ]]; then
-    if [[ "$RALPH_ISSUE_COMMENT_PROGRESS" != "true" && "$RALPH_ISSUE_COMMENT_PROGRESS" != "false" ]]; then
-      echo "ERROR: RALPH_ISSUE_COMMENT_PROGRESS must be 'true' or 'false', got '$RALPH_ISSUE_COMMENT_PROGRESS'"
+  if [[ -n "${RALPHAI_ISSUE_COMMENT_PROGRESS:-}" ]]; then
+    if [[ "$RALPHAI_ISSUE_COMMENT_PROGRESS" != "true" && "$RALPHAI_ISSUE_COMMENT_PROGRESS" != "false" ]]; then
+      echo "ERROR: RALPHAI_ISSUE_COMMENT_PROGRESS must be 'true' or 'false', got '$RALPHAI_ISSUE_COMMENT_PROGRESS'"
       exit 1
     fi
-    ISSUE_COMMENT_PROGRESS="$RALPH_ISSUE_COMMENT_PROGRESS"
+    ISSUE_COMMENT_PROGRESS="$RALPHAI_ISSUE_COMMENT_PROGRESS"
   fi
-  if [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
-    if [[ "$RALPH_PROMPT_MODE" != "auto" && "$RALPH_PROMPT_MODE" != "at-path" && "$RALPH_PROMPT_MODE" != "inline" ]]; then
-      echo "ERROR: RALPH_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPH_PROMPT_MODE'"
+  if [[ -n "${RALPHAI_PROMPT_MODE:-}" ]]; then
+    if [[ "$RALPHAI_PROMPT_MODE" != "auto" && "$RALPHAI_PROMPT_MODE" != "at-path" && "$RALPHAI_PROMPT_MODE" != "inline" ]]; then
+      echo "ERROR: RALPHAI_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPHAI_PROMPT_MODE'"
       exit 1
     fi
-    PROMPT_MODE="$RALPH_PROMPT_MODE"
+    PROMPT_MODE="$RALPHAI_PROMPT_MODE"
   fi
 }
 
 print_usage() {
   echo "Usage: $0 [iterations-per-plan] [options]"
   echo ""
-  echo "  Recommended daily invocation from an initialized repo: ./.ralph/ralph.sh ..."
+  echo "  Recommended daily invocation from an initialized repo: ./.ralphai/ralphai.sh ..."
   echo ""
   echo "  Auto-detects work: resumes in-progress plans, or picks from backlog."
   echo "  Iteration budget resets for each new plan (normal mode)."
@@ -278,7 +278,7 @@ print_usage() {
   echo "  Default: 5 iterations per plan."
   echo ""
   echo "Options:"
-  echo "  --dry-run, -n                    Preview what Ralph would do without mutating state"
+  echo "  --dry-run, -n                    Preview what Ralphai would do without mutating state"
   echo "  --resume, -r                     Auto-commit dirty state and continue"
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
@@ -303,14 +303,14 @@ print_usage() {
   echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
-  echo "Env var overrides: RALPH_AGENT_COMMAND, RALPH_FEEDBACK_COMMANDS,"
-  echo "                   RALPH_BASE_BRANCH, RALPH_MAX_STUCK,"
-  echo "                   RALPH_MODE, RALPH_ITERATION_TIMEOUT,"
-  echo "                   RALPH_PROMPT_MODE,"
-  echo "                   RALPH_ISSUE_SOURCE,"
-  echo "                   RALPH_ISSUE_LABEL, RALPH_ISSUE_IN_PROGRESS_LABEL,"
-  echo "                   RALPH_ISSUE_REPO, RALPH_ISSUE_CLOSE_ON_COMPLETE,"
-  echo "                   RALPH_ISSUE_COMMENT_PROGRESS"
+  echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
+  echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
+  echo "                   RALPHAI_MODE, RALPHAI_ITERATION_TIMEOUT,"
+  echo "                   RALPHAI_PROMPT_MODE,"
+  echo "                   RALPHAI_ISSUE_SOURCE,"
+  echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
+  echo "                   RALPHAI_ISSUE_REPO, RALPHAI_ISSUE_CLOSE_ON_COMPLETE,"
+  echo "                   RALPHAI_ISSUE_COMMENT_PROGRESS"
   echo ""
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
   echo ""
@@ -323,7 +323,7 @@ print_usage() {
   echo "  $0 10 --agent-command='claude -p'             # use Claude Code"
   echo "  $0 10 --agent-command='opencode run --agent build'  # use OpenCode"
   echo "  $0 10 --direct                               # commit on current branch (no PR)"
-  echo "  RALPH_AGENT_COMMAND='codex exec' $0 10       # override via env var"
+  echo "  RALPHAI_AGENT_COMMAND='codex exec' $0 10       # override via env var"
   echo ""
   echo "Feature branch workflow:"
   echo "  $0 10 --direct --base-branch=feature/big-thing  # commit directly on a feature branch"
@@ -518,8 +518,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   # Determine source for each setting
   if [[ -n "$CLI_AGENT_COMMAND" ]]; then
     agent_command_source="cli (--agent-command=$CLI_AGENT_COMMAND)"
-  elif [[ -n "${RALPH_AGENT_COMMAND:-}" ]]; then
-    agent_command_source="env (RALPH_AGENT_COMMAND=$RALPH_AGENT_COMMAND)"
+  elif [[ -n "${RALPHAI_AGENT_COMMAND:-}" ]]; then
+    agent_command_source="env (RALPHAI_AGENT_COMMAND=$RALPHAI_AGENT_COMMAND)"
   elif [[ -n "${CONFIG_AGENT_COMMAND:-}" ]]; then
     agent_command_source="config ($CONFIG_FILE)"
   else
@@ -528,8 +528,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_FEEDBACK_COMMANDS" ]]; then
     feedback_commands_source="cli (--feedback-commands=$CLI_FEEDBACK_COMMANDS)"
-  elif [[ -n "${RALPH_FEEDBACK_COMMANDS:-}" ]]; then
-    feedback_commands_source="env (RALPH_FEEDBACK_COMMANDS=$RALPH_FEEDBACK_COMMANDS)"
+  elif [[ -n "${RALPHAI_FEEDBACK_COMMANDS:-}" ]]; then
+    feedback_commands_source="env (RALPHAI_FEEDBACK_COMMANDS=$RALPHAI_FEEDBACK_COMMANDS)"
   elif [[ -n "${CONFIG_FEEDBACK_COMMANDS:-}" ]]; then
     feedback_commands_source="config ($CONFIG_FILE)"
   else
@@ -538,8 +538,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_BASE_BRANCH" ]]; then
     branch_source="cli (--base-branch=$CLI_BASE_BRANCH)"
-  elif [[ -n "${RALPH_BASE_BRANCH:-}" ]]; then
-    branch_source="env (RALPH_BASE_BRANCH=$RALPH_BASE_BRANCH)"
+  elif [[ -n "${RALPHAI_BASE_BRANCH:-}" ]]; then
+    branch_source="env (RALPHAI_BASE_BRANCH=$RALPHAI_BASE_BRANCH)"
   elif [[ -n "${CONFIG_BASE_BRANCH:-}" ]]; then
     branch_source="config ($CONFIG_FILE)"
   else
@@ -548,8 +548,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_MAX_STUCK" ]]; then
     stuck_source="cli (--max-stuck=$CLI_MAX_STUCK)"
-  elif [[ -n "${RALPH_MAX_STUCK:-}" ]]; then
-    stuck_source="env (RALPH_MAX_STUCK=$RALPH_MAX_STUCK)"
+  elif [[ -n "${RALPHAI_MAX_STUCK:-}" ]]; then
+    stuck_source="env (RALPHAI_MAX_STUCK=$RALPHAI_MAX_STUCK)"
   elif [[ -n "${CONFIG_MAX_STUCK:-}" ]]; then
     stuck_source="config ($CONFIG_FILE)"
   else
@@ -558,8 +558,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_MODE" ]]; then
     mode_source="cli (--${MODE})"
-  elif [[ -n "${RALPH_MODE:-}" ]]; then
-    mode_source="env (RALPH_MODE=$RALPH_MODE)"
+  elif [[ -n "${RALPHAI_MODE:-}" ]]; then
+    mode_source="env (RALPHAI_MODE=$RALPHAI_MODE)"
   elif [[ -n "${CONFIG_MODE:-}" ]]; then
     mode_source="config ($CONFIG_FILE)"
   else
@@ -568,8 +568,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ITERATION_TIMEOUT" ]]; then
     timeout_source="cli (--iteration-timeout=$CLI_ITERATION_TIMEOUT)"
-  elif [[ -n "${RALPH_ITERATION_TIMEOUT:-}" ]]; then
-    timeout_source="env (RALPH_ITERATION_TIMEOUT=$RALPH_ITERATION_TIMEOUT)"
+  elif [[ -n "${RALPHAI_ITERATION_TIMEOUT:-}" ]]; then
+    timeout_source="env (RALPHAI_ITERATION_TIMEOUT=$RALPHAI_ITERATION_TIMEOUT)"
   elif [[ -n "${CONFIG_ITERATION_TIMEOUT:-}" ]]; then
     timeout_source="config ($CONFIG_FILE)"
   else
@@ -578,8 +578,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_SOURCE" ]]; then
     issue_source_source="cli (--issue-source=$CLI_ISSUE_SOURCE)"
-  elif [[ -n "${RALPH_ISSUE_SOURCE:-}" ]]; then
-    issue_source_source="env (RALPH_ISSUE_SOURCE=$RALPH_ISSUE_SOURCE)"
+  elif [[ -n "${RALPHAI_ISSUE_SOURCE:-}" ]]; then
+    issue_source_source="env (RALPHAI_ISSUE_SOURCE=$RALPHAI_ISSUE_SOURCE)"
   elif [[ -n "${CONFIG_ISSUE_SOURCE:-}" ]]; then
     issue_source_source="config ($CONFIG_FILE)"
   else
@@ -588,8 +588,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_LABEL" ]]; then
     issue_label_source="cli (--issue-label=$CLI_ISSUE_LABEL)"
-  elif [[ -n "${RALPH_ISSUE_LABEL:-}" ]]; then
-    issue_label_source="env (RALPH_ISSUE_LABEL=$RALPH_ISSUE_LABEL)"
+  elif [[ -n "${RALPHAI_ISSUE_LABEL:-}" ]]; then
+    issue_label_source="env (RALPHAI_ISSUE_LABEL=$RALPHAI_ISSUE_LABEL)"
   elif [[ -n "${CONFIG_ISSUE_LABEL:-}" ]]; then
     issue_label_source="config ($CONFIG_FILE)"
   else
@@ -598,8 +598,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_IN_PROGRESS_LABEL" ]]; then
     issue_ip_label_source="cli (--issue-in-progress-label=$CLI_ISSUE_IN_PROGRESS_LABEL)"
-  elif [[ -n "${RALPH_ISSUE_IN_PROGRESS_LABEL:-}" ]]; then
-    issue_ip_label_source="env (RALPH_ISSUE_IN_PROGRESS_LABEL=$RALPH_ISSUE_IN_PROGRESS_LABEL)"
+  elif [[ -n "${RALPHAI_ISSUE_IN_PROGRESS_LABEL:-}" ]]; then
+    issue_ip_label_source="env (RALPHAI_ISSUE_IN_PROGRESS_LABEL=$RALPHAI_ISSUE_IN_PROGRESS_LABEL)"
   elif [[ -n "${CONFIG_ISSUE_IN_PROGRESS_LABEL:-}" ]]; then
     issue_ip_label_source="config ($CONFIG_FILE)"
   else
@@ -608,8 +608,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_REPO" ]]; then
     issue_repo_source="cli (--issue-repo=$CLI_ISSUE_REPO)"
-  elif [[ -n "${RALPH_ISSUE_REPO:-}" ]]; then
-    issue_repo_source="env (RALPH_ISSUE_REPO=$RALPH_ISSUE_REPO)"
+  elif [[ -n "${RALPHAI_ISSUE_REPO:-}" ]]; then
+    issue_repo_source="env (RALPHAI_ISSUE_REPO=$RALPHAI_ISSUE_REPO)"
   elif [[ -n "${CONFIG_ISSUE_REPO:-}" ]]; then
     issue_repo_source="config ($CONFIG_FILE)"
   else
@@ -618,8 +618,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_CLOSE_ON_COMPLETE" ]]; then
     issue_close_source="cli (--issue-close-on-complete=$CLI_ISSUE_CLOSE_ON_COMPLETE)"
-  elif [[ -n "${RALPH_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
-    issue_close_source="env (RALPH_ISSUE_CLOSE_ON_COMPLETE=$RALPH_ISSUE_CLOSE_ON_COMPLETE)"
+  elif [[ -n "${RALPHAI_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
+    issue_close_source="env (RALPHAI_ISSUE_CLOSE_ON_COMPLETE=$RALPHAI_ISSUE_CLOSE_ON_COMPLETE)"
   elif [[ -n "${CONFIG_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
     issue_close_source="config ($CONFIG_FILE)"
   else
@@ -628,8 +628,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
     issue_comment_source="cli (--issue-comment-progress=$CLI_ISSUE_COMMENT_PROGRESS)"
-  elif [[ -n "${RALPH_ISSUE_COMMENT_PROGRESS:-}" ]]; then
-    issue_comment_source="env (RALPH_ISSUE_COMMENT_PROGRESS=$RALPH_ISSUE_COMMENT_PROGRESS)"
+  elif [[ -n "${RALPHAI_ISSUE_COMMENT_PROGRESS:-}" ]]; then
+    issue_comment_source="env (RALPHAI_ISSUE_COMMENT_PROGRESS=$RALPHAI_ISSUE_COMMENT_PROGRESS)"
   elif [[ -n "${CONFIG_ISSUE_COMMENT_PROGRESS:-}" ]]; then
     issue_comment_source="config ($CONFIG_FILE)"
   else
@@ -638,8 +638,8 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -n "$CLI_PROMPT_MODE" ]]; then
     prompt_mode_source="cli (--prompt-mode=$CLI_PROMPT_MODE)"
-  elif [[ -n "${RALPH_PROMPT_MODE:-}" ]]; then
-    prompt_mode_source="env (RALPH_PROMPT_MODE=$RALPH_PROMPT_MODE)"
+  elif [[ -n "${RALPHAI_PROMPT_MODE:-}" ]]; then
+    prompt_mode_source="env (RALPHAI_PROMPT_MODE=$RALPHAI_PROMPT_MODE)"
   elif [[ -n "${CONFIG_PROMPT_MODE:-}" ]]; then
     prompt_mode_source="config ($CONFIG_FILE)"
   else
@@ -696,7 +696,7 @@ fi
 
 # --- Validate agentCommand is set ---
 if [[ -z "$AGENT_COMMAND" ]]; then
-  echo "ERROR: agentCommand is required. Set it in .ralph/ralph.config, RALPH_AGENT_COMMAND env var, or --agent-command= flag."
+  echo "ERROR: agentCommand is required. Set it in .ralphai/ralphai.config, RALPHAI_AGENT_COMMAND env var, or --agent-command= flag."
   echo "Examples: agentCommand=opencode run --agent build"
   echo "          agentCommand=claude -p"
   echo "          agentCommand=codex exec"

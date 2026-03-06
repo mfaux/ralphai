@@ -2,7 +2,7 @@
 
 Use this template when expected behavior is known and current behavior is wrong.
 
-Global rules are defined in `.ralph/PLANNING.md` and apply here.
+Global rules are defined in `.ralphai/PLANNING.md` and apply here.
 
 ```markdown
 # Plan: Fix <Title>

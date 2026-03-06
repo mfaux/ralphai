@@ -18,10 +18,10 @@ import { RESET, DIM, TEXT } from "./utils.ts";
 // Types
 // ---------------------------------------------------------------------------
 
-type RalphSubcommand = "init" | "update" | "run" | "uninstall";
+type RalphaiSubcommand = "init" | "update" | "run" | "uninstall";
 
-interface RalphOptions {
-  subcommand: RalphSubcommand | undefined;
+interface RalphaiOptions {
+  subcommand: RalphaiSubcommand | undefined;
   yes: boolean;
   force: boolean;
   agentCommand?: string;
@@ -55,15 +55,15 @@ const AGENT_PRESETS: { label: string; command: string }[] = [
 // Options parsing
 // ---------------------------------------------------------------------------
 
-const SUBCOMMANDS = new Set<RalphSubcommand>([
+const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
   "run",
   "uninstall",
 ]);
 
-function parseRalphOptions(args: string[]): RalphOptions {
-  let subcommand: RalphSubcommand | undefined;
+function parseRalphaiOptions(args: string[]): RalphaiOptions {
+  let subcommand: RalphaiSubcommand | undefined;
   let yes = false;
   let force = false;
   let agentCommand: string | undefined;
@@ -92,8 +92,8 @@ function parseRalphOptions(args: string[]): RalphOptions {
       agentCommand = arg.slice("--agent-command=".length);
     } else if (!arg.startsWith("-")) {
       // First non-flag arg is the subcommand; second is targetDir
-      if (!subcommand && SUBCOMMANDS.has(arg as RalphSubcommand)) {
-        subcommand = arg as RalphSubcommand;
+      if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
+        subcommand = arg as RalphaiSubcommand;
       } else {
         targetDir = arg;
       }
@@ -274,13 +274,13 @@ function detectBaseBranch(): string {
 // ---------------------------------------------------------------------------
 
 async function runWizard(cwd: string): Promise<WizardAnswers | null> {
-  clack.intro("Setting up Ralph — autonomous task runner");
+  clack.intro("Setting up Ralphai — autonomous task runner");
 
   clack.note(
-    "Ralph picks up plan files from .ralph/pipeline/backlog/ and drives an AI\n" +
+    "Ralphai picks up plan files from .ralphai/pipeline/backlog/ and drives an AI\n" +
       "coding agent to implement them autonomously, with built-in\n" +
       "feedback loops, git hygiene, and safety rails.",
-    "What is Ralph?",
+    "What is Ralphai?",
   );
 
   // 1. Agent CLI tool
@@ -368,7 +368,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   if (enableIssues) {
     clack.note(
-      "When Ralph's backlog is empty, it will automatically pull the oldest\n" +
+      "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
         'open issue labeled "ralphai" and convert it to a plan.',
       "GitHub Issues",
     );
@@ -394,8 +394,8 @@ function addNpmScript(cwd: string): boolean {
     const raw = readFileSync(pkgPath, "utf-8");
     const pkg = JSON.parse(raw);
     if (!pkg.scripts) pkg.scripts = {};
-    if (pkg.scripts.ralph) return false; // already has a ralph script
-    pkg.scripts.ralph = ".ralph/ralph.sh";
+    if (pkg.scripts.ralphai) return false; // already has a ralphai script
+    pkg.scripts.ralphai = ".ralphai/ralphai.sh";
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
     return true;
   } catch {
@@ -414,8 +414,8 @@ function removeNpmScript(cwd: string): boolean {
   try {
     const raw = readFileSync(pkgPath, "utf-8");
     const pkg = JSON.parse(raw);
-    if (!pkg.scripts?.ralph) return false;
-    delete pkg.scripts.ralph;
+    if (!pkg.scripts?.ralphai) return false;
+    delete pkg.scripts.ralphai;
     // Clean up empty scripts object
     if (Object.keys(pkg.scripts).length === 0) {
       delete pkg.scripts;
@@ -431,25 +431,25 @@ function removeNpmScript(cwd: string): boolean {
 // Uninstall logic
 // ---------------------------------------------------------------------------
 
-async function uninstallRalph(
-  options: RalphOptions,
+async function uninstallRalphai(
+  options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  const ralphDir = join(cwd, ".ralph");
+  const ralphaiDir = join(cwd, ".ralphai");
 
-  if (!existsSync(ralphDir)) {
+  if (!existsSync(ralphaiDir)) {
     console.log(
-      `${TEXT}Ralph is not set up in this project (.ralph/ does not exist).${RESET}`,
+      `${TEXT}Ralphai is not set up in this project (.ralphai/ does not exist).${RESET}`,
     );
     return;
   }
 
   if (!options.yes) {
-    clack.intro("Uninstalling Ralph");
+    clack.intro("Uninstalling Ralphai");
     const confirmed = await clack.confirm({
       message:
-        "This will permanently delete .ralph/ and remove the npm script. " +
-        "Any plans and learnings in .ralph/ will be lost. Continue?",
+        "This will permanently delete .ralphai/ and remove the npm script. " +
+        "Any plans and learnings in .ralphai/ will be lost. Continue?",
     });
 
     if (clack.isCancel(confirmed) || !confirmed) {
@@ -458,19 +458,19 @@ async function uninstallRalph(
     }
   }
 
-  // Remove .ralph/ directory
-  rmSync(ralphDir, { recursive: true, force: true });
+  // Remove .ralphai/ directory
+  rmSync(ralphaiDir, { recursive: true, force: true });
 
   // Remove npm script
   const removedScript = removeNpmScript(cwd);
 
-  console.log(`${TEXT}Ralph uninstalled.${RESET}`);
+  console.log(`${TEXT}Ralphai uninstalled.${RESET}`);
   console.log();
   console.log(`${DIM}Removed:${RESET}`);
-  console.log(`  .ralph/                  ${DIM}Entire directory${RESET}`);
+  console.log(`  .ralphai/                  ${DIM}Entire directory${RESET}`);
   if (removedScript) {
     console.log(
-      `  package.json             ${DIM}Removed "ralph" script${RESET}`,
+      `  package.json             ${DIM}Removed "ralphai" script${RESET}`,
     );
   }
   console.log();
@@ -538,20 +538,23 @@ function ensureGitHubLabels(cwd: string): LabelResult {
 
 function scaffold(answers: WizardAnswers, cwd: string): void {
   const __dir = dirname(fileURLToPath(import.meta.url));
-  const templatesDir = join(__dir, "..", "templates", "ralph");
+  const templatesDir = join(__dir, "..", "templates", "ralphai");
 
-  const ralphDir = join(cwd, ".ralph");
+  const ralphaiDir = join(cwd, ".ralphai");
 
-  // Create .ralph/ directory
-  mkdirSync(ralphDir, { recursive: true });
+  // Create .ralphai/ directory
+  mkdirSync(ralphaiDir, { recursive: true });
 
   // Copy template files
-  copyFileSync(join(templatesDir, "ralph.sh"), join(ralphDir, "ralph.sh"));
-  chmodSync(join(ralphDir, "ralph.sh"), 0o755);
+  copyFileSync(
+    join(templatesDir, "ralphai.sh"),
+    join(ralphaiDir, "ralphai.sh"),
+  );
+  chmodSync(join(ralphaiDir, "ralphai.sh"), 0o755);
 
-  // Copy lib/ directory (sourced by ralph.sh)
+  // Copy lib/ directory (sourced by ralphai.sh)
   const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphDir, "lib");
+  const libDestDir = join(ralphaiDir, "lib");
   mkdirSync(libDestDir, { recursive: true });
   for (const file of readdirSync(libSrcDir)) {
     if (file.endsWith(".sh")) {
@@ -559,10 +562,10 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     }
   }
 
-  copyFileSync(join(templatesDir, "README.md"), join(ralphDir, "README.md"));
+  copyFileSync(join(templatesDir, "README.md"), join(ralphaiDir, "README.md"));
   copyFileSync(
     join(templatesDir, "PLANNING.md"),
-    join(ralphDir, "PLANNING.md"),
+    join(ralphaiDir, "PLANNING.md"),
   );
 
   // Generate config
@@ -579,7 +582,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
         return `# feedbackCommands=${prefix} build,${pm.manager} test,${prefix} lint`;
       })();
 
-  const config = `# .ralph/ralph.config — repo-level defaults
+  const config = `# .ralphai/ralphai.config — repo-level defaults
 # Precedence: CLI flags > env vars > config file > built-in defaults
 agentCommand=${answers.agentCommand}
 baseBranch=${answers.baseBranch}
@@ -587,20 +590,20 @@ ${feedbackLine}
 ${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"}
 `;
 
-  writeFileSync(join(ralphDir, "ralph.config"), config);
+  writeFileSync(join(ralphaiDir, "ralphai.config"), config);
 
   // Create subdirectories with .gitkeep
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    const subdirPath = join(ralphDir, "pipeline", subdir);
+    const subdirPath = join(ralphaiDir, "pipeline", subdir);
     mkdirSync(subdirPath, { recursive: true });
     writeFileSync(join(subdirPath, ".gitkeep"), "");
   }
 
-  // Create .ralph/LEARNINGS.md — Ralph-specific learnings (gitignored, local-only)
-  const learningsContent = `# Ralph Learnings
+  // Create .ralphai/LEARNINGS.md — Ralphai-specific learnings (gitignored, local-only)
+  const learningsContent = `# Ralphai Learnings
 
 Mistakes and lessons learned during autonomous runs. This file is **gitignored** —
-Ralph reads and writes it automatically. Review periodically and promote useful
+Ralphai reads and writes it automatically. Review periodically and promote useful
 entries to the repo-level \`LEARNINGS.md\` when they have lasting value.
 
 ## Format
@@ -614,11 +617,11 @@ Each entry should include:
 
 ---
 
-<!-- Entries are added automatically by Ralph during autonomous runs -->
+<!-- Entries are added automatically by Ralphai during autonomous runs -->
 `;
-  writeFileSync(join(ralphDir, "LEARNINGS.md"), learningsContent);
+  writeFileSync(join(ralphaiDir, "LEARNINGS.md"), learningsContent);
 
-  // Create .ralph/.gitignore — plan files are local-only state, not tracked by git
+  // Create .ralphai/.gitignore — plan files are local-only state, not tracked by git
   const gitignoreContent = `# Plan files are local-only state (not tracked by git).
 # Only the directory structure (.gitkeep) and config/scripts are committed.
 pipeline/backlog/*.md
@@ -628,7 +631,7 @@ pipeline/in-progress/progress.txt
 pipeline/out/
 LEARNINGS.md
 `;
-  writeFileSync(join(ralphDir, ".gitignore"), gitignoreContent);
+  writeFileSync(join(ralphaiDir, ".gitignore"), gitignoreContent);
 
   // Seed repo-root LEARNINGS.md if it does not exist
   const learningsPath = join(cwd, "LEARNINGS.md");
@@ -647,35 +650,35 @@ LEARNINGS.md
   }
 
   // Print success output
-  console.log(`${TEXT}Ralph initialized in .ralph/${RESET}`);
+  console.log(`${TEXT}Ralphai initialized in .ralphai/${RESET}`);
   console.log();
   console.log(`${DIM}Created:${RESET}`);
   console.log(
-    `  .ralph/ralph.sh          ${DIM}Autonomous task runner${RESET}`,
+    `  .ralphai/ralphai.sh          ${DIM}Autonomous task runner${RESET}`,
   );
   console.log(
-    `  .ralph/lib/              ${DIM}Library modules (sourced by ralph.sh)${RESET}`,
+    `  .ralphai/lib/              ${DIM}Library modules (sourced by ralphai.sh)${RESET}`,
   );
   console.log(
-    `  .ralph/ralph.config      ${DIM}Configuration (edit to customize)${RESET}`,
+    `  .ralphai/ralphai.config      ${DIM}Configuration (edit to customize)${RESET}`,
   );
-  console.log(`  .ralph/README.md         ${DIM}Operational docs${RESET}`);
-  console.log(`  .ralph/PLANNING.md   ${DIM}How to write plans${RESET}`);
+  console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
+  console.log(`  .ralphai/PLANNING.md   ${DIM}How to write plans${RESET}`);
   console.log(
-    `  .ralph/LEARNINGS.md      ${DIM}Ralph-specific learnings (gitignored)${RESET}`,
+    `  .ralphai/LEARNINGS.md      ${DIM}Ralphai-specific learnings (gitignored)${RESET}`,
   );
-  console.log(`  .ralph/pipeline/backlog/ ${DIM}Queue plans here${RESET}`);
+  console.log(`  .ralphai/pipeline/backlog/ ${DIM}Queue plans here${RESET}`);
   console.log(
-    `  .ralph/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
+    `  .ralphai/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
   );
   if (createdLearnings) {
     console.log(
-      `  LEARNINGS.md             ${DIM}Maintainer-curated learnings Ralph reads for long-term guidance${RESET}`,
+      `  LEARNINGS.md             ${DIM}Maintainer-curated learnings Ralphai reads for long-term guidance${RESET}`,
     );
   }
   if (addedNpmScript) {
     console.log(
-      `  package.json             ${DIM}Added "ralph" script${RESET}`,
+      `  package.json             ${DIM}Added "ralphai" script${RESET}`,
     );
   }
   if (labelResult) {
@@ -691,25 +694,25 @@ LEARNINGS.md
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
   console.log(
-    `  1. Review ${TEXT}.ralph/ralph.config${RESET} and adjust settings`,
+    `  1. Review ${TEXT}.ralphai/ralphai.config${RESET} and adjust settings`,
   );
   console.log(
-    `  2. Read ${TEXT}.ralph/PLANNING.md${RESET} for how to write plans`,
+    `  2. Read ${TEXT}.ralphai/PLANNING.md${RESET} for how to write plans`,
   );
   console.log(
-    `  3. Create your first plan in ${TEXT}.ralph/pipeline/backlog/${RESET}`,
+    `  3. Create your first plan in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
   );
-  console.log(`  4. Preview:  ${TEXT}./.ralph/ralph.sh --dry-run${RESET}`);
-  console.log(`  5. Run:      ${TEXT}./.ralph/ralph.sh 10${RESET}`);
+  console.log(`  4. Preview:  ${TEXT}./.ralphai/ralphai.sh --dry-run${RESET}`);
+  console.log(`  5. Run:      ${TEXT}./.ralphai/ralphai.sh 10${RESET}`);
   if (addedNpmScript) {
     console.log(
-      `     Alt:      ${TEXT}npm run ralph -- 10${RESET} ${DIM}(or pass other args with --)${RESET}`,
+      `     Alt:      ${TEXT}npm run ralphai -- 10${RESET} ${DIM}(or pass other args with --)${RESET}`,
     );
   }
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "ralphai" and Ralph will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "ralphai" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();
@@ -720,19 +723,22 @@ LEARNINGS.md
 // ---------------------------------------------------------------------------
 
 /** Files that are copied from templates and safe to overwrite on update. */
-const TEMPLATE_FILES = ["ralph.sh", "README.md", "PLANNING.md"] as const;
+const TEMPLATE_FILES = ["ralphai.sh", "README.md", "PLANNING.md"] as const;
 
-async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
+async function updateRalphai(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
   const __dir = dirname(fileURLToPath(import.meta.url));
-  const templatesDir = join(__dir, "..", "templates", "ralph");
-  const ralphDir = join(cwd, ".ralph");
+  const templatesDir = join(__dir, "..", "templates", "ralphai");
+  const ralphaiDir = join(cwd, ".ralphai");
 
   if (!options.yes) {
-    clack.intro("Updating Ralph — refreshing template files");
+    clack.intro("Updating Ralphai — refreshing template files");
 
     const confirmed = await clack.confirm({
       message:
-        "This will overwrite ralph.sh, lib/*.sh, README.md, and PLANNING.md " +
+        "This will overwrite ralphai.sh, lib/*.sh, README.md, and PLANNING.md " +
         "from the latest templates. Your config, LEARNINGS.md, and plan " +
         "files will be preserved. Continue?",
     });
@@ -749,9 +755,9 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
   // Update template files
   for (const file of TEMPLATE_FILES) {
     const src = join(templatesDir, file);
-    const dest = join(ralphDir, file);
+    const dest = join(ralphaiDir, file);
     copyFileSync(src, dest);
-    if (file === "ralph.sh") {
+    if (file === "ralphai.sh") {
       chmodSync(dest, 0o755);
     }
     updated.push(file);
@@ -759,7 +765,7 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
 
   // Update lib/ directory
   const libSrcDir = join(templatesDir, "lib");
-  const libDestDir = join(ralphDir, "lib");
+  const libDestDir = join(ralphaiDir, "lib");
   mkdirSync(libDestDir, { recursive: true });
   for (const file of readdirSync(libSrcDir)) {
     if (file.endsWith(".sh")) {
@@ -769,30 +775,30 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
   }
 
   // Report what was preserved
-  for (const file of ["ralph.config", "LEARNINGS.md", ".gitignore"]) {
-    if (existsSync(join(ralphDir, file))) {
+  for (const file of ["ralphai.config", "LEARNINGS.md", ".gitignore"]) {
+    if (existsSync(join(ralphaiDir, file))) {
       skipped.push(file);
     }
   }
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    if (existsSync(join(ralphDir, "pipeline", subdir))) {
+    if (existsSync(join(ralphaiDir, "pipeline", subdir))) {
       skipped.push(`pipeline/${subdir}/`);
     }
   }
 
   // Print results
-  console.log(`${TEXT}Ralph updated in .ralph/${RESET}`);
+  console.log(`${TEXT}Ralphai updated in .ralphai/${RESET}`);
   console.log();
   if (updated.length > 0) {
     console.log(`${DIM}Updated:${RESET}`);
     for (const file of updated) {
-      console.log(`  .ralph/${file}`);
+      console.log(`  .ralphai/${file}`);
     }
   }
   if (skipped.length > 0) {
     console.log(`${DIM}Preserved:${RESET}`);
     for (const file of skipped) {
-      console.log(`  .ralph/${file}`);
+      console.log(`  .ralphai/${file}`);
     }
   }
   console.log();
@@ -802,21 +808,21 @@ async function updateRalph(options: RalphOptions, cwd: string): Promise<void> {
 // Help text
 // ---------------------------------------------------------------------------
 
-function showRalphHelp(): void {
+function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
   console.log();
   console.log(`${TEXT}Commands:${RESET}`);
   console.log(
-    `  ${TEXT}init${RESET}        ${DIM}Set up Ralph in your project (interactive wizard)${RESET}`,
+    `  ${TEXT}init${RESET}        ${DIM}Set up Ralphai in your project (interactive wizard)${RESET}`,
   );
   console.log(
-    `  ${TEXT}run${RESET}         ${DIM}Start the Ralph task runner${RESET}`,
+    `  ${TEXT}run${RESET}         ${DIM}Start the Ralphai task runner${RESET}`,
   );
   console.log(
-    `  ${TEXT}update${RESET}      ${DIM}Refresh Ralph template files (preserves config & state)${RESET}`,
+    `  ${TEXT}update${RESET}      ${DIM}Refresh Ralphai template files (preserves config & state)${RESET}`,
   );
   console.log(
-    `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralph from your project${RESET}`,
+    `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from your project${RESET}`,
   );
   console.log();
   console.log(
@@ -828,40 +834,43 @@ function showRalphHelp(): void {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function runRalph(args: string[]): Promise<void> {
-  const options = parseRalphOptions(args);
+export async function runRalphai(args: string[]): Promise<void> {
+  const options = parseRalphaiOptions(args);
   const cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
 
   switch (options.subcommand) {
     case "init":
-      await runRalphInit(options, cwd);
+      await runRalphaiInit(options, cwd);
       break;
     case "update":
-      await runRalphUpdate(options, cwd);
+      await runRalphaiUpdate(options, cwd);
       break;
     case "uninstall":
-      await uninstallRalph(options, cwd);
+      await uninstallRalphai(options, cwd);
       break;
     case "run":
-      await runRalphRunner(options, cwd);
+      await runRalphaiRunner(options, cwd);
       break;
     default:
-      showRalphHelp();
+      showRalphaiHelp();
       break;
   }
 }
 
-async function runRalphInit(options: RalphOptions, cwd: string): Promise<void> {
-  // Check if .ralph/ already exists
-  if (existsSync(join(cwd, ".ralph"))) {
+async function runRalphaiInit(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  // Check if .ralphai/ already exists
+  if (existsSync(join(cwd, ".ralphai"))) {
     if (options.force) {
       // --force: remove everything and re-scaffold from scratch
       if (!options.yes) {
-        clack.intro("Force re-scaffolding Ralph");
+        clack.intro("Force re-scaffolding Ralphai");
 
         const confirmed = await clack.confirm({
           message:
-            "This will DELETE .ralph/ entirely and re-scaffold from scratch. " +
+            "This will DELETE .ralphai/ entirely and re-scaffold from scratch. " +
             "Your config, LEARNINGS.md, and any plan files will be LOST. Continue?",
         });
 
@@ -871,11 +880,11 @@ async function runRalphInit(options: RalphOptions, cwd: string): Promise<void> {
         }
       }
 
-      rmSync(join(cwd, ".ralph"), { recursive: true, force: true });
+      rmSync(join(cwd, ".ralphai"), { recursive: true, force: true });
       // Fall through to normal scaffold below
     } else {
       console.error(
-        `${TEXT}Error:${RESET} Ralph is already set up in this directory (.ralph/ exists).\n` +
+        `${TEXT}Error:${RESET} Ralphai is already set up in this directory (.ralphai/ exists).\n` +
           `${DIM}Use ${TEXT}ralphai update${DIM} to refresh templates, ` +
           `or ${TEXT}ralphai init --force${DIM} to re-scaffold from scratch.${RESET}`,
       );
@@ -906,18 +915,18 @@ async function runRalphInit(options: RalphOptions, cwd: string): Promise<void> {
   scaffold(answers, cwd);
 }
 
-async function runRalphUpdate(
-  options: RalphOptions,
+async function runRalphaiUpdate(
+  options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  if (!existsSync(join(cwd, ".ralph"))) {
+  if (!existsSync(join(cwd, ".ralphai"))) {
     console.error(
-      `${TEXT}Error:${RESET} Ralph is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
 
-  await updateRalph(options, cwd);
+  await updateRalphai(options, cwd);
 }
 
 /** Default iteration count when `npx ralphai run` is invoked without args. */
@@ -974,12 +983,15 @@ function findBash(): string | null {
   return null;
 }
 
-function runRalphRunner(options: RalphOptions, cwd: string): Promise<never> {
-  const ralphSh = join(cwd, ".ralph", "ralph.sh");
+function runRalphaiRunner(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<never> {
+  const ralphaiSh = join(cwd, ".ralphai", "ralphai.sh");
 
-  if (!existsSync(ralphSh)) {
+  if (!existsSync(ralphaiSh)) {
     console.error(
-      `${TEXT}Error:${RESET} Ralph is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
@@ -1009,7 +1021,7 @@ function runRalphRunner(options: RalphOptions, cwd: string): Promise<never> {
     }
 
     // Convert Windows path to a form bash understands (forward slashes)
-    const scriptPath = ralphSh.replace(/\\/g, "/");
+    const scriptPath = ralphaiSh.replace(/\\/g, "/");
 
     const child = spawn(bash, [scriptPath, ...args], {
       cwd,
@@ -1034,7 +1046,7 @@ function runRalphRunner(options: RalphOptions, cwd: string): Promise<never> {
     });
   } else {
     // Unix: straightforward spawnSync with inherited stdio
-    const result = spawnSync(ralphSh, args, {
+    const result = spawnSync(ralphaiSh, args, {
       cwd,
       stdio: "inherit",
     });

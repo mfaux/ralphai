@@ -2,7 +2,7 @@
 
 Use this template for new capabilities (new command, integration, module, or other user-visible behavior).
 
-Global rules are defined in `.ralph/PLANNING.md` and apply here.
+Global rules are defined in `.ralphai/PLANNING.md` and apply here.
 
 ```markdown
 # Plan: <Title>

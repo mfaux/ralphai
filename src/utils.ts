@@ -1,4 +1,4 @@
-// ANSI color constants used by ralph output
+// ANSI color constants used by ralphai output
 export const RESET = "\x1b[0m";
 export const BOLD = "\x1b[1m";
 /** Darker gray for secondary text (256-color). */

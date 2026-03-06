@@ -1,5 +1,5 @@
 # plans.sh — Plan dependency helpers, group state management, plan detection
-# Sourced by ralph.sh — do not execute directly.
+# Sourced by ralphai.sh — do not execute directly.
 
 # --- Plan dependency helpers (optional frontmatter: depends-on) ---
 # Supported forms in markdown frontmatter:
@@ -191,7 +191,7 @@ read_group_state() {
 }
 
 # Write .group-state file from key=value arguments.
-# Usage: write_group_state "group=foo" "branch=ralph/foo" ...
+# Usage: write_group_state "group=foo" "branch=ralphai/foo" ...
 write_group_state() {
   mkdir -p "$(dirname "$GROUP_STATE_FILE")"
   printf '%s\n' "$@" > "$GROUP_STATE_FILE"
@@ -323,11 +323,11 @@ detect_plan() {
         [[ -f "$f" ]] && backlog_plans+=("$f")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralph/pipeline/backlog/ — see .ralph/PLANNING.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md"
       return 1
     fi
   fi
@@ -502,6 +502,6 @@ plan_description() {
     # Get the first markdown heading, strip the # prefix
     sed -n 's/^#\+ *//p' "$file" | head -1
   else
-    echo "ralph task"
+    echo "ralphai task"
   fi
 }
