@@ -40,16 +40,6 @@ BACKLOG_DIR=".ralphai/pipeline/backlog"
 ARCHIVE_DIR=".ralphai/pipeline/out"
 CONFIG_FILE=".ralphai/ralphai.config"
 PROGRESS_FILE="$WIP_DIR/progress.md"
-GROUP_STATE_FILE="$WIP_DIR/.group-state"
-
-# --- Group mode state (populated by read_group_state / detect_plan) ---
-GROUP_NAME=""
-GROUP_BRANCH=""
-GROUP_PLANS_TOTAL=0
-GROUP_PLANS_COMPLETED=0
-GROUP_CURRENT_PLAN=""
-GROUP_PR_URL=""
-
 DRY_RUN=false
 RESUME=false
 TURNS=""

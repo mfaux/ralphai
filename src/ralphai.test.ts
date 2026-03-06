@@ -2040,22 +2040,6 @@ echo "EXIT=$?"
   );
 
   // -------------------------------------------------------------------------
-  // Group mode foundation: extract_group, group-state, collect_group_plans
-  // -------------------------------------------------------------------------
-
-  it("scaffolded ralphai.sh contains group mode foundation functions", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
-    expect(plans).toContain("extract_group()");
-    expect(plans).toContain("write_group_state()");
-    expect(plans).toContain("read_group_state()");
-    expect(plans).toContain("cleanup_group_state()");
-    expect(plans).toContain("collect_group_plans()");
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain("GROUP_STATE_FILE=");
-  });
-
   describe.skipIf(process.platform === "win32")(
     "extract_group function",
     () => {
