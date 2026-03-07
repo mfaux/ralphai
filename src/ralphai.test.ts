@@ -4102,6 +4102,149 @@ build_continuous_pr_body
       expect(output).toContain("prd-auth.md");
       expect(output).toContain("prd-search.md");
     });
+
+    it("status pairs non-prd plan with receipt via plan_file field", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan without prd- prefix (e.g. hand-named plan)
+      writeFileSync(
+        join(ipDir, "remove-fallback-agents.md"),
+        "# Remove Fallback Agents\n\n### Task 1: Remove\n### Task 2: Test\n### Task 3: Docs\n",
+      );
+
+      // Receipt with plan_file field pointing to the non-prd plan
+      writeFileSync(
+        join(ipDir, "receipt-remove-fallback-agents.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/remove-fallback-agents",
+          "slug=remove-fallback-agents",
+          "plan_file=remove-fallback-agents.md",
+          "agent=claude -p",
+          "turns_completed=2",
+          "tasks_completed=2",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      // Plan shows up in in-progress with correct task progress
+      expect(output).toContain("remove-fallback-agents.md");
+      expect(output).toContain("2 of 3 tasks");
+      // No orphaned receipt warning
+      expect(output).not.toContain("Problems");
+      expect(output).not.toContain("Orphaned");
+    });
+
+    it("status pairs gh-prefixed plan with receipt via plan_file field", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan from issue intake (gh- prefix)
+      writeFileSync(
+        join(ipDir, "gh-42-search.md"),
+        "# Search Feature\n\n### Task 1: Index\n### Task 2: Query\n",
+      );
+
+      // Receipt with plan_file field for the gh-prefixed plan
+      writeFileSync(
+        join(ipDir, "receipt-gh-42-search.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=worktree",
+          "worktree_path=/tmp/wt-gh-42-search",
+          "branch=ralphai/gh-42-search",
+          "slug=gh-42-search",
+          "plan_file=gh-42-search.md",
+          "agent=claude -p",
+          "turns_completed=1",
+          "tasks_completed=1",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("gh-42-search.md");
+      expect(output).toContain("1 of 2 tasks");
+      expect(output).toContain("worktree: gh-42-search");
+      expect(output).not.toContain("Problems");
+      expect(output).not.toContain("Orphaned");
+    });
+
+    it("status backward compat: old receipt without plan_file matches prd-prefixed plan", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan with prd- prefix (existing convention)
+      writeFileSync(
+        join(ipDir, "prd-auth.md"),
+        "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
+      );
+
+      // Old receipt WITHOUT plan_file field — should fall back to prd-<slug>.md
+      writeFileSync(
+        join(ipDir, "receipt-auth.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/auth",
+          "slug=auth",
+          "agent=claude -p",
+          "turns_completed=3",
+          "tasks_completed=1",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("prd-auth.md");
+      expect(output).toContain("1 of 2 tasks");
+      // No orphaned receipt — backward compat fallback works
+      expect(output).not.toContain("Problems");
+      expect(output).not.toContain("Orphaned");
+    });
+
+    it("status counts completed non-prd plans from archive", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const outDir = join(testDir, ".ralphai", "pipeline", "out");
+      mkdirSync(outDir, { recursive: true });
+
+      // Archived plans with various naming conventions
+      writeFileSync(
+        join(outDir, "remove-fallback-agents-20260306-120000.md"),
+        "# Remove Fallback Agents\n",
+      );
+      writeFileSync(
+        join(outDir, "gh-42-search-20260306-130000.md"),
+        "# Search\n",
+      );
+      writeFileSync(join(outDir, "prd-auth-20260306-140000.md"), "# Auth\n");
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("Completed");
+      expect(output).toContain("3 plans");
+      expect(output).toContain("remove-fallback-agents.md");
+      expect(output).toContain("gh-42-search.md");
+      expect(output).toContain("prd-auth.md");
+    });
   });
 
   describe.skipIf(process.platform === "win32")(
