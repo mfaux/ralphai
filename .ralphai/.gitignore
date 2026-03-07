@@ -4,5 +4,6 @@ pipeline/backlog/*.md
 pipeline/wip/*.md
 pipeline/in-progress/*.md
 pipeline/in-progress/progress.md
+pipeline/in-progress/receipt-*.txt
 pipeline/out/
 LEARNINGS.md

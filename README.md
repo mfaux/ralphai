@@ -118,7 +118,7 @@ ralphai worktree                          # auto-pick next backlog plan
 ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
 ```
 
-The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved so you can inspect or resume.
+The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved. Re-run `ralphai worktree` from the main repo to reuse it, or `cd` into the worktree and run `ralphai run --resume` directly.
 
 ```bash
 ralphai worktree list    # show active ralphai-managed worktrees
@@ -140,7 +140,9 @@ pipeline/wip/           ← parked, ralphai ignores
 
 ### 4. Pause and resume
 
-Stop mid-run any time. Work stays in `in-progress/`. Resume by running `ralphai run` again — it auto-detects in-progress work.
+Stop mid-run any time. Work stays in `in-progress/`. Resume by running `ralphai run` again — it auto-detects in-progress work. For worktree runs, re-run `ralphai worktree` from the main repo to reuse the existing managed worktree, or resume inside the worktree with `ralphai run --resume`.
+
+Use `ralphai status` to see what's in the backlog, what's in progress (with task counts), active worktrees, and any problems.
 
 ### 5. Close the learnings loop
 
@@ -213,6 +215,7 @@ Commands:
   init        Set up Ralphai in your project
   run         Start the Ralphai task runner
   worktree    Run in an isolated git worktree
+  status      Show pipeline and worktree status
   update      Update ralphai to the latest (or specified) version
   uninstall   Remove Ralphai from your project
 

@@ -8,6 +8,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  renameSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -24,7 +25,8 @@ type RalphaiSubcommand =
   | "update"
   | "run"
   | "uninstall"
-  | "worktree";
+  | "worktree"
+  | "status";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -77,6 +79,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "run",
   "uninstall",
   "worktree",
+  "status",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -702,6 +705,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}worktree${RESET}    ${DIM}Run in an isolated git worktree${RESET}`,
   );
   console.log(
+    `  ${TEXT}status${RESET}      ${DIM}Show pipeline and worktree status${RESET}`,
+  );
+  console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
   );
   console.log(
@@ -739,6 +745,9 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "worktree":
       await runRalphaiWorktree(options, cwd);
+      break;
+    case "status":
+      runRalphaiStatus(cwd);
       break;
     default:
       showRalphaiHelp();
@@ -881,6 +890,92 @@ interface WorktreeEntry {
   bare: boolean;
 }
 
+interface SelectedWorktreePlan {
+  planFile: string;
+  slug: string;
+  source: "backlog" | "in-progress";
+}
+
+interface Receipt {
+  started_at: string;
+  source: "main" | "worktree";
+  worktree_path?: string;
+  branch: string;
+  slug: string;
+  agent: string;
+  turns_completed: number;
+}
+
+function parseReceipt(filePath: string): Receipt | null {
+  if (!existsSync(filePath)) return null;
+  const content = readFileSync(filePath, "utf-8");
+  const fields: Record<string, string> = {};
+  for (const line of content.split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) {
+      fields[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+  }
+  return {
+    started_at: fields.started_at ?? "",
+    source: (fields.source as "main" | "worktree") ?? "main",
+    worktree_path: fields.worktree_path,
+    branch: fields.branch ?? "",
+    slug: fields.slug ?? "",
+    agent: fields.agent ?? "",
+    turns_completed: parseInt(fields.turns_completed ?? "0", 10),
+  };
+}
+
+/**
+ * Check receipt for cross-source conflicts. Called from runRalphaiRunner
+ * to provide early TypeScript-level blocking before the bash runner runs.
+ * Returns true if the run should proceed, false (with error output) if blocked.
+ */
+function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
+  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  if (!existsSync(inProgressDir)) return true;
+
+  const receiptFiles = readdirSync(inProgressDir).filter(
+    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  );
+  for (const receiptFile of receiptFiles) {
+    const receipt = parseReceipt(join(inProgressDir, receiptFile));
+    if (!receipt) continue;
+
+    if (receipt.source === "worktree" && !isWorktree) {
+      console.error();
+      console.error(
+        `${TEXT}Error:${RESET} Plan "${receipt.slug}" is running in a worktree.`,
+      );
+      console.error();
+      console.error(`  Worktree: ${receipt.worktree_path ?? "unknown"}`);
+      console.error(`  Branch:   ${receipt.branch || "unknown"}`);
+      console.error(`  Started:  ${receipt.started_at || "unknown"}`);
+      console.error();
+      console.error(`  To resume:  ralphai worktree`);
+      console.error(`  To discard: ralphai worktree clean`);
+      return false;
+    }
+
+    if (receipt.source === "main" && isWorktree) {
+      console.error();
+      console.error(
+        `${TEXT}Error:${RESET} Plan "${receipt.slug}" is already running in the main repository.`,
+      );
+      console.error();
+      console.error(`  Branch:  ${receipt.branch || "unknown"}`);
+      console.error(`  Started: ${receipt.started_at || "unknown"}`);
+      console.error();
+      console.error(
+        `  Finish or interrupt the main-repo run first, then retry.`,
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
 function parseWorktreeList(output: string): WorktreeEntry[] {
   const entries: WorktreeEntry[] = [];
   let current: Partial<WorktreeEntry> = {};
@@ -924,8 +1019,37 @@ function parseWorktreeList(output: string): WorktreeEntry[] {
 function selectPlanForWorktree(
   ralphaiDir: string,
   specificPlan?: string,
-): { planFile: string; slug: string } | null {
+): SelectedWorktreePlan | null {
   const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+
+  if (specificPlan) {
+    const inProgressPath = join(inProgressDir, specificPlan);
+    if (existsSync(inProgressPath)) {
+      const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+      return { planFile: specificPlan, slug, source: "in-progress" };
+    }
+  }
+
+  const inProgressPlans = existsSync(inProgressDir)
+    ? readdirSync(inProgressDir).filter((f) => f.endsWith(".md"))
+    : [];
+
+  if (!specificPlan && inProgressPlans.length === 1) {
+    const planFile = inProgressPlans[0]!;
+    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    return { planFile, slug, source: "in-progress" };
+  }
+
+  if (!specificPlan && inProgressPlans.length > 1) {
+    console.error(
+      `${TEXT}Error:${RESET} Multiple plans are already in progress. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
+    );
+    for (const planFile of inProgressPlans) {
+      console.error(`  ${planFile}`);
+    }
+    return null;
+  }
 
   if (!existsSync(backlogDir)) {
     console.error(
@@ -943,7 +1067,7 @@ function selectPlanForWorktree(
       return null;
     }
     const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
-    return { planFile: specificPlan, slug };
+    return { planFile: specificPlan, slug, source: "backlog" };
   }
 
   // Find any .md file in backlog
@@ -959,7 +1083,19 @@ function selectPlanForWorktree(
   // Use the first plan (actual prioritization happens in the bash runner)
   const firstPlan = plans[0]!;
   const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
-  return { planFile: firstPlan, slug };
+  return { planFile: firstPlan, slug, source: "backlog" };
+}
+
+function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
+  const output = execSync("git worktree list --porcelain", {
+    cwd,
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  return parseWorktreeList(output).filter((wt) =>
+    wt.branch.startsWith("ralphai/"),
+  );
 }
 
 function showWorktreeHelp(): void {
@@ -967,7 +1103,7 @@ function showWorktreeHelp(): void {
   console.log();
   console.log(`${TEXT}Commands:${RESET}`);
   console.log(
-    `  ${DIM}(default)${RESET}   ${DIM}Create a worktree, run a plan, and clean up on completion${RESET}`,
+    `  ${DIM}(default)${RESET}   ${DIM}Create or reuse a worktree and run a plan in PR mode${RESET}`,
   );
   console.log(
     `  ${TEXT}list${RESET}        ${DIM}Show active ralphai-managed worktrees${RESET}`,
@@ -990,15 +1126,7 @@ function showWorktreeHelp(): void {
 }
 
 function listWorktrees(cwd: string): void {
-  const output = execSync("git worktree list --porcelain", {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  const worktrees = parseWorktreeList(output).filter((wt) =>
-    wt.branch.startsWith("ralphai/"),
-  );
+  const worktrees = listRalphaiWorktrees(cwd);
 
   if (worktrees.length === 0) {
     console.log("No active ralphai worktrees.");
@@ -1020,15 +1148,7 @@ function cleanWorktrees(cwd: string): void {
   // Prune stale worktree entries first
   execSync("git worktree prune", { cwd, stdio: "inherit" });
 
-  const output = execSync("git worktree list --porcelain", {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  const worktrees = parseWorktreeList(output).filter((wt) =>
-    wt.branch.startsWith("ralphai/"),
-  );
+  const worktrees = listRalphaiWorktrees(cwd);
 
   if (worktrees.length === 0) {
     console.log("No ralphai worktrees to clean.");
@@ -1037,6 +1157,7 @@ function cleanWorktrees(cwd: string): void {
 
   const ralphaiDir = join(cwd, ".ralphai");
   const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  const archiveDir = join(ralphaiDir, "pipeline", "out");
   let cleaned = 0;
 
   for (const wt of worktrees) {
@@ -1059,6 +1180,20 @@ function cleanWorktrees(cwd: string): void {
         } catch {
           // Branch deletion failure is not critical
         }
+
+        // Archive receipt if one exists for this slug
+        const receiptFile = join(inProgressDir, `receipt-${slug}.txt`);
+        if (existsSync(receiptFile)) {
+          mkdirSync(archiveDir, { recursive: true });
+          const timestamp = new Date()
+            .toISOString()
+            .replace(/[T:]/g, "-")
+            .replace(/\.\d+Z$/, "");
+          const dest = join(archiveDir, `receipt-${slug}-${timestamp}.txt`);
+          renameSync(receiptFile, dest);
+          console.log(`  Archived receipt: receipt-${slug}.txt`);
+        }
+
         cleaned++;
       } catch {
         console.log(`  Warning: Could not remove ${wt.path}. Remove manually.`);
@@ -1071,6 +1206,221 @@ function cleanWorktrees(cwd: string): void {
   }
 
   console.log(`\nCleaned ${cleaned} worktree(s).`);
+}
+
+// ---------------------------------------------------------------------------
+// Status command
+// ---------------------------------------------------------------------------
+
+/**
+ * Count total tasks in a plan file by counting `### Task N:` headings.
+ */
+function countPlanTasks(planPath: string): number {
+  if (!existsSync(planPath)) return 0;
+  const content = readFileSync(planPath, "utf-8");
+  const matches = content.match(/^### Task \d+/gm);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Count completed tasks in a progress file. Handles two patterns:
+ * 1. Individual: `### Task N:` followed by `**Status:** Complete`
+ * 2. Batch: `### ... Tasks X–Y:` or `### ... Tasks X-Y:` headings
+ */
+function countCompletedTasks(progressPath: string): number {
+  if (!existsSync(progressPath)) return 0;
+  const content = readFileSync(progressPath, "utf-8");
+
+  // Count individual `**Status:** Complete` entries
+  const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
+  let count = completeMatches ? completeMatches.length : 0;
+
+  // Count batch entries: `Tasks X–Y` or `Tasks X-Y`
+  const batchMatches = content.matchAll(/Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gi);
+  for (const match of batchMatches) {
+    const start = parseInt(match[1]!, 10);
+    const end = parseInt(match[2]!, 10);
+    if (end > start) {
+      count += end - start + 1;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * Extract depends-on filenames from YAML frontmatter.
+ * Supports: `depends-on: [a.md, b.md]` (inline array).
+ */
+function extractDependsOn(planPath: string): string[] {
+  if (!existsSync(planPath)) return [];
+  const content = readFileSync(planPath, "utf-8");
+  if (!content.startsWith("---\n")) return [];
+
+  const endIdx = content.indexOf("\n---", 4);
+  if (endIdx === -1) return [];
+  const frontmatter = content.slice(4, endIdx);
+
+  const match = frontmatter.match(/^\s*depends-on:\s*\[([^\]]*)\]/m);
+  if (!match) return [];
+
+  return match[1]!
+    .split(",")
+    .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+function runRalphaiStatus(cwd: string): void {
+  // Resolve .ralphai/ — works from main repo or worktree
+  const ralphaiRoot = resolveRalphaiDir(cwd);
+  if (!ralphaiRoot) {
+    console.error(
+      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  const ralphaiDir = join(ralphaiRoot, ".ralphai");
+  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  const archiveDir = join(ralphaiDir, "pipeline", "out");
+
+  // --- Collect data ---
+  const backlogPlans = existsSync(backlogDir)
+    ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
+    : [];
+
+  const inProgressFiles = existsSync(inProgressDir)
+    ? readdirSync(inProgressDir)
+    : [];
+  const inProgressPlans = inProgressFiles.filter(
+    (f) => f.endsWith(".md") && f !== "progress.md",
+  );
+  const receiptFiles = inProgressFiles.filter(
+    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  );
+
+  const completedFiles = existsSync(archiveDir)
+    ? readdirSync(archiveDir).filter(
+        (f) => f.startsWith("prd-") && f.endsWith(".md"),
+      )
+    : [];
+  // Deduplicate completed plans by removing timestamps
+  const completedSlugs = new Set(
+    completedFiles.map((f) => f.replace(/-\d{8}-\d{6}\.md$/, "")),
+  );
+
+  // Build receipt lookup: slug → Receipt
+  const receiptsBySlug = new Map<string, Receipt>();
+  for (const rf of receiptFiles) {
+    const slug = rf.replace(/^receipt-/, "").replace(/\.txt$/, "");
+    const receipt = parseReceipt(join(inProgressDir, rf));
+    if (receipt) receiptsBySlug.set(slug, receipt);
+  }
+
+  // --- Pipeline section ---
+  console.log();
+  console.log(`${TEXT}Pipeline${RESET}`);
+
+  // Backlog
+  console.log();
+  console.log(
+    `  ${TEXT}Backlog${RESET}      ${DIM}${backlogPlans.length} plan${backlogPlans.length !== 1 ? "s" : ""}${RESET}`,
+  );
+  for (const plan of backlogPlans) {
+    let suffix = "";
+    const deps = extractDependsOn(join(backlogDir, plan));
+    if (deps.length > 0) {
+      suffix = `${DIM}waiting on ${deps.join(", ")}${RESET}`;
+    }
+    console.log(`    ${DIM}${plan}${RESET}${suffix ? "  " + suffix : ""}`);
+  }
+
+  // In Progress
+  console.log();
+  console.log(
+    `  ${TEXT}In Progress${RESET}  ${DIM}${inProgressPlans.length} plan${inProgressPlans.length !== 1 ? "s" : ""}${RESET}`,
+  );
+  for (const plan of inProgressPlans) {
+    const slug = plan.replace(/^prd-/, "").replace(/\.md$/, "");
+    const receipt = receiptsBySlug.get(slug);
+    const parts: string[] = [];
+
+    // Task progress
+    const totalTasks = countPlanTasks(join(inProgressDir, plan));
+    if (totalTasks > 0) {
+      const progressFile = join(inProgressDir, "progress.md");
+      const completed = countCompletedTasks(progressFile);
+      parts.push(`${completed} of ${totalTasks} tasks`);
+    }
+
+    // Worktree info from receipt
+    if (receipt?.source === "worktree") {
+      parts.push(`worktree: ${slug}`);
+    }
+
+    const suffix =
+      parts.length > 0 ? `${DIM}${parts.join("    ")}${RESET}` : "";
+    console.log(`    ${DIM}${plan}${RESET}${suffix ? "  " + suffix : ""}`);
+  }
+
+  // Completed
+  console.log();
+  console.log(
+    `  ${TEXT}Completed${RESET}   ${DIM}${completedSlugs.size} plan${completedSlugs.size !== 1 ? "s" : ""}${RESET}`,
+  );
+
+  // --- Worktrees section ---
+  let worktrees: WorktreeEntry[] = [];
+  try {
+    worktrees = listRalphaiWorktrees(ralphaiRoot);
+  } catch {
+    // Not in a git repo or git not available
+  }
+
+  if (worktrees.length > 0) {
+    console.log();
+    console.log(`${TEXT}Worktrees${RESET}`);
+    console.log();
+    for (const wt of worktrees) {
+      const slug = wt.branch.replace("ralphai/", "");
+      const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+      const state = hasActivePlan ? "in-progress" : "idle";
+      console.log(
+        `  ${DIM}${wt.branch}${RESET}  ${DIM}${wt.path}${RESET}  ${DIM}[${state}]${RESET}`,
+      );
+    }
+  }
+
+  // --- Problems section ---
+  const problems: string[] = [];
+
+  // Orphaned receipts: receipt exists but no matching plan file
+  for (const [slug, _receipt] of receiptsBySlug) {
+    if (!existsSync(join(inProgressDir, `prd-${slug}.md`))) {
+      problems.push(
+        `Orphaned receipt: receipt-${slug}.txt (no matching plan file)`,
+      );
+    }
+  }
+
+  // Stale worktree entries: worktree listed but directory missing
+  for (const wt of worktrees) {
+    if (!existsSync(wt.path)) {
+      problems.push(`Missing worktree directory: ${wt.path} (${wt.branch})`);
+    }
+  }
+
+  if (problems.length > 0) {
+    console.log();
+    console.log(`${TEXT}Problems${RESET}`);
+    console.log();
+    for (const p of problems) {
+      console.log(`  ${DIM}${p}${RESET}`);
+    }
+  }
+
+  console.log();
 }
 
 async function runRalphaiWorktree(
@@ -1121,13 +1471,38 @@ async function runRalphaiWorktree(
     process.exit(1);
   }
 
-  // Select plan
+  // Select plan (in-progress first, then backlog)
   const plan = selectPlanForWorktree(join(cwd, ".ralphai"), wtOpts.plan);
   if (!plan) process.exit(1);
+
+  // Check receipt for cross-source conflicts: block if plan is running in main repo
+  const receiptPath = join(
+    cwd,
+    ".ralphai",
+    "pipeline",
+    "in-progress",
+    `receipt-${plan.slug}.txt`,
+  );
+  const receipt = parseReceipt(receiptPath);
+  if (receipt && receipt.source === "main") {
+    console.error();
+    console.error(
+      `${TEXT}Error:${RESET} Plan "${plan.slug}" is already running in the main repository.`,
+    );
+    console.error();
+    console.error(`  Branch:  ${receipt.branch || "unknown"}`);
+    console.error(`  Started: ${receipt.started_at || "unknown"}`);
+    console.error();
+    console.error(`  Finish or interrupt the main-repo run first, then retry.`);
+    process.exit(1);
+  }
 
   // Determine base branch
   const baseBranch = detectBaseBranch();
   const branch = `ralphai/${plan.slug}`;
+  const activeWorktree = listRalphaiWorktrees(cwd).find(
+    (wt) => wt.branch === branch,
+  );
 
   // Determine worktree directory
   const worktreeBase = wtOpts.dir
@@ -1140,33 +1515,80 @@ async function runRalphaiWorktree(
     mkdirSync(worktreeBase, { recursive: true });
   }
 
-  // Create worktree
-  console.log(`Creating worktree: ${worktreeDir}`);
-  console.log(`Branch: ${branch} (from ${baseBranch})`);
-  try {
-    execSync(
-      `git worktree add "${worktreeDir}" -b "${branch}" "${baseBranch}"`,
-      { cwd, stdio: "inherit" },
-    );
-  } catch {
-    console.error(
-      `${TEXT}Error:${RESET} Failed to create worktree. The branch '${branch}' may already exist.`,
-    );
-    process.exit(1);
+  let resolvedWorktreeDir = worktreeDir;
+
+  if (activeWorktree) {
+    resolvedWorktreeDir = activeWorktree.path;
+    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
+    console.log(`Branch: ${branch}`);
+    if (wtOpts.dir && resolvedWorktreeDir !== worktreeDir) {
+      console.log(
+        `${DIM}Ignoring --dir because branch ${branch} is already active at ${resolvedWorktreeDir}.${RESET}`,
+      );
+    }
+  } else {
+    let branchExists = false;
+    try {
+      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
+        cwd,
+        stdio: "ignore",
+      });
+      branchExists = true;
+    } catch {
+      branchExists = false;
+    }
+
+    if (branchExists) {
+      console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
+      console.log(`Branch: ${branch}`);
+      try {
+        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
+          cwd,
+          stdio: "inherit",
+        });
+      } catch {
+        console.error(
+          `${TEXT}Error:${RESET} Failed to attach existing branch '${branch}' to a worktree.`,
+        );
+        process.exit(1);
+      }
+    } else {
+      console.log(`Creating worktree: ${resolvedWorktreeDir}`);
+      console.log(`Branch: ${branch} (from ${baseBranch})`);
+      try {
+        execSync(
+          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
+          { cwd, stdio: "inherit" },
+        );
+      } catch {
+        console.error(
+          `${TEXT}Error:${RESET} Failed to create worktree. The branch '${branch}' may already exist.`,
+        );
+        process.exit(1);
+      }
+    }
   }
 
   // Symlink .ralphai/ from worktree → main repo so the agent can access
   // pipeline files as relative paths. Without this, agents with directory
   // sandboxing (OpenCode, Claude Code, Codex) reject reads/writes to the
   // main repo's .ralphai/ as "external directory" access.
-  const worktreeRalphaiLink = join(worktreeDir, ".ralphai");
+  const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
   if (!existsSync(worktreeRalphaiLink)) {
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 
   // Spawn ralphai runner in the worktree
   console.log("Running ralphai in worktree...");
-  const runnerArgs = ["--pr", ...wtOpts.runArgs];
+  const shouldResume =
+    plan.source === "in-progress" || activeWorktree !== undefined;
+  const hasResumeFlag =
+    wtOpts.runArgs.includes("--resume") || wtOpts.runArgs.includes("-r");
+  const runnerArgs = [
+    "--pr",
+    ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+    ...wtOpts.runArgs,
+  ];
 
   // Reuse runRalphaiRunner by constructing options with the worktree as cwd
   const worktreeRunOptions: RalphaiOptions = {
@@ -1176,7 +1598,7 @@ async function runRalphaiWorktree(
   };
 
   try {
-    await runRalphaiRunner(worktreeRunOptions, worktreeDir);
+    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
   } catch {
     // runRalphaiRunner calls process.exit() internally, so this catch
     // handles edge cases where it throws instead
@@ -1276,6 +1698,13 @@ function runRalphaiRunner(
     console.error(
       `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
+    process.exit(1);
+  }
+
+  // Check receipt files for cross-source conflicts before spawning the runner.
+  // This provides early TypeScript-level blocking; the bash runner also checks.
+  const ralphaiDir = join(ralphaiRoot, ".ralphai");
+  if (!checkReceiptSource(ralphaiDir, isGitWorktree(cwd))) {
     process.exit(1);
   }
 

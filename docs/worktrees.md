@@ -22,8 +22,9 @@ ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
 ```
 
 The lifecycle: create worktree → run plan (in PR mode) → create PR → clean up.
-If the agent gets stuck or times out, the worktree is preserved so you can
-inspect or resume.
+If the agent gets stuck or times out, the worktree is preserved. Re-run
+`ralphai worktree` from the main repo to reuse it, or resume inside the
+worktree with `ralphai run --resume`.
 
 `ralphai worktree` must be run from the **main repository**, not from inside a
 worktree. All runner options (`--turns`, `--agent`, `--feedback-commands`, etc.)
@@ -55,6 +56,8 @@ active plans are preserved.
 
 1. `ralphai worktree` creates a git worktree (a separate working directory
    sharing the same `.git` history) and a new `ralphai/<plan-slug>` branch.
+   If that plan is already in progress, it reuses the existing managed
+   worktree instead of creating a second one.
 2. A **symlink** is created from the worktree's `.ralphai/` to the main repo's
    `.ralphai/` directory. This is critical for agent compatibility (see below).
 3. The runner is spawned with the worktree as its working directory.
