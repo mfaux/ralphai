@@ -76,12 +76,12 @@ if [[ "$MODE" == "pr" && "$DRY_RUN" != true ]]; then
   if ! command -v gh &>/dev/null; then
     echo "ERROR: PR mode requires the GitHub CLI (gh)."
     echo "Install it: https://cli.github.com"
-    echo "Or use --direct to commit on the current branch instead."
+    echo "Or use --branch to create a branch without pushing or creating a PR."
     exit 1
   fi
   if ! gh auth status &>/dev/null; then
     echo "ERROR: gh is installed but not authenticated."
-    echo "Run 'gh auth login' first, or use --direct to skip PR creation."
+    echo "Run 'gh auth login' first, or use --branch to skip PR creation."
     exit 1
   fi
 fi
@@ -97,7 +97,7 @@ if [[ "$DRY_RUN" != true ]]; then
         exit 1
       fi
 
-      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "direct" ]]; then
+      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "patch" ]]; then
         echo "WARNING: Dirty state detected on $current_branch (autoCommit=false, skipping recovery commit)."
         echo "Continuing with dirty working tree."
       else

@@ -265,7 +265,7 @@ describe("ralphai command", () => {
     expect(gitSh).toContain("gh auth status");
     expect(gitSh).toContain("PR mode requires the GitHub CLI");
     expect(gitSh).toContain("gh is installed but not authenticated");
-    expect(gitSh).toContain("--direct");
+    expect(gitSh).toContain("--branch");
   });
 
   it("scaffolded ralphai.sh uses create_pr instead of merge_and_cleanup", () => {
@@ -1924,8 +1924,8 @@ echo "$CONTINUOUS"
     const templateLib = join(__dirname, "..", "runner", "lib");
     const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
 
-    // Resume with autoCommit=false in direct mode skips recovery commit
-    expect(gitSh).toContain('AUTO_COMMIT" == "false" && "$MODE" == "direct"');
+    // Resume with autoCommit=false in patch mode skips recovery commit
+    expect(gitSh).toContain('AUTO_COMMIT" == "false" && "$MODE" == "patch"');
     expect(gitSh).toContain("autoCommit=false, skipping recovery commit");
   });
 
