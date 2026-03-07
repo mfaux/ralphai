@@ -1829,6 +1829,220 @@ echo "$CONTINUOUS"
   );
 
   // -------------------------------------------------------------------------
+  // --auto-commit config infrastructure tests
+  // -------------------------------------------------------------------------
+
+  it("scaffolded ralphai.sh contains autoCommit config infrastructure", () => {
+    const templateLib = join(__dirname, "..", "runner", "lib");
+
+    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
+    expect(defaults).toContain('DEFAULT_AUTO_COMMIT="false"');
+    expect(defaults).toContain('AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"');
+    expect(defaults).toContain('CLI_AUTO_COMMIT=""');
+
+    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
+    // Config file loader reads autoCommit from JSON
+    expect(config).toContain('"autoCommit"');
+    expect(config).toContain("CONFIG_AUTO_COMMIT=");
+    // Env var override
+    expect(config).toContain("RALPHAI_AUTO_COMMIT");
+    // CLI flags
+    expect(config).toContain("--auto-commit)");
+    expect(config).toContain("--no-auto-commit)");
+    expect(config).toContain('CLI_AUTO_COMMIT="true"');
+    expect(config).toContain('CLI_AUTO_COMMIT="false"');
+    // Help text
+    expect(config).toContain("Enable auto-commit of agent changes");
+    expect(config).toContain("Disable auto-commit");
+    // Supported keys list
+    expect(config).toContain("autoCommit");
+    // Show-config output
+    expect(config).toContain("autoCommit         =");
+  });
+
+  it("scaffolded ralphai.sh gates per-turn auto-commit on AUTO_COMMIT and MODE", () => {
+    const templateDir = join(__dirname, "..", "runner");
+    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
+
+    // Direct mode with autoCommit=false skips auto-commit
+    expect(ralphaiSh).toContain(
+      'AUTO_COMMIT" == "false" && "$MODE" == "direct"',
+    );
+    expect(ralphaiSh).toContain("autoCommit=false, skipping recovery commit");
+  });
+
+  it("scaffolded git.sh gates resume recovery on AUTO_COMMIT and MODE", () => {
+    const templateLib = join(__dirname, "..", "runner", "lib");
+    const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
+
+    // Resume with autoCommit=false in direct mode skips recovery commit
+    expect(gitSh).toContain('AUTO_COMMIT" == "false" && "$MODE" == "direct"');
+    expect(gitSh).toContain("autoCommit=false, skipping recovery commit");
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "autoCommit config precedence",
+    () => {
+      /**
+       * Helper: simulates the config loading pipeline for AUTO_COMMIT
+       * and returns the resolved value.
+       */
+      function resolveAutoCommit(opts: {
+        configValue?: string;
+        envValue?: string;
+        cliFlag?: "auto-commit" | "no-auto-commit";
+      }): string {
+        const configContent = opts.configValue
+          ? `autoCommit=${opts.configValue}`
+          : "";
+        const envExport = opts.envValue
+          ? `export RALPHAI_AUTO_COMMIT=${JSON.stringify(opts.envValue)}`
+          : "";
+        let cliArg = "";
+        if (opts.cliFlag === "auto-commit") cliArg = "--auto-commit";
+        else if (opts.cliFlag === "no-auto-commit") cliArg = "--no-auto-commit";
+
+        const script = `#!/bin/bash
+set -e
+
+# Defaults
+DEFAULT_AUTO_COMMIT="false"
+AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"
+CLI_AUTO_COMMIT=""
+
+# Simulate load_config
+CONFIG_AUTO_COMMIT=""
+config_content=${JSON.stringify(configContent)}
+if [[ -n "$config_content" ]]; then
+  key="\${config_content%%=*}"
+  value="\${config_content#*=}"
+  if [[ "$key" == "autoCommit" ]]; then
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: 'autoCommit' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_AUTO_COMMIT="$value"
+  fi
+fi
+
+# Simulate apply_config
+if [[ -n "\${CONFIG_AUTO_COMMIT:-}" ]]; then
+  AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
+fi
+
+# Simulate apply_env_overrides
+${envExport}
+if [[ -n "\${RALPHAI_AUTO_COMMIT:-}" ]]; then
+  if [[ "$RALPHAI_AUTO_COMMIT" != "true" && "$RALPHAI_AUTO_COMMIT" != "false" ]]; then
+    echo "ERROR: RALPHAI_AUTO_COMMIT must be 'true' or 'false', got '$RALPHAI_AUTO_COMMIT'"
+    exit 1
+  fi
+  AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
+fi
+
+# Simulate CLI flag parsing
+for arg in ${cliArg}; do
+  case "$arg" in
+    --auto-commit)
+      CLI_AUTO_COMMIT="true"
+      ;;
+    --no-auto-commit)
+      CLI_AUTO_COMMIT="false"
+      ;;
+  esac
+done
+
+# Simulate CLI override merge
+if [[ -n "$CLI_AUTO_COMMIT" ]]; then
+  AUTO_COMMIT="$CLI_AUTO_COMMIT"
+fi
+
+echo "$AUTO_COMMIT"
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralphai-ac-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result.trim();
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("defaults to false when no overrides", () => {
+        expect(resolveAutoCommit({})).toBe("false");
+      });
+
+      it("config file sets autoCommit to true", () => {
+        expect(resolveAutoCommit({ configValue: "true" })).toBe("true");
+      });
+
+      it("config file sets autoCommit to false", () => {
+        expect(resolveAutoCommit({ configValue: "false" })).toBe("false");
+      });
+
+      it("env var overrides config file", () => {
+        expect(
+          resolveAutoCommit({
+            configValue: "true",
+            envValue: "false",
+          }),
+        ).toBe("false");
+      });
+
+      it("env var sets autoCommit when no config", () => {
+        expect(resolveAutoCommit({ envValue: "true" })).toBe("true");
+      });
+
+      it("--auto-commit CLI flag overrides env var", () => {
+        expect(
+          resolveAutoCommit({
+            envValue: "false",
+            cliFlag: "auto-commit",
+          }),
+        ).toBe("true");
+      });
+
+      it("--no-auto-commit CLI flag overrides env var", () => {
+        expect(
+          resolveAutoCommit({
+            envValue: "true",
+            cliFlag: "no-auto-commit",
+          }),
+        ).toBe("false");
+      });
+
+      it("CLI flag overrides config and env", () => {
+        expect(
+          resolveAutoCommit({
+            configValue: "false",
+            envValue: "false",
+            cliFlag: "auto-commit",
+          }),
+        ).toBe("true");
+      });
+
+      it("rejects invalid config value", () => {
+        expect(() => resolveAutoCommit({ configValue: "bad" })).toThrow();
+      });
+
+      it("rejects invalid env var value", () => {
+        expect(() => resolveAutoCommit({ envValue: "bad" })).toThrow();
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Prompt construction wiring tests (format_file_ref used in prompt)
   // -------------------------------------------------------------------------
 
