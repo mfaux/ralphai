@@ -102,7 +102,7 @@ describe("ralphai command", () => {
     expect(parsed.feedbackCommands).toEqual([]);
     // New config keys from wizard expansion
     expect(parsed.turns).toBe(5);
-    expect(parsed.mode).toBe("direct");
+    expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
     expect(parsed.maxStuck).toBe(3);
     expect(parsed.turnTimeout).toBe(0);
@@ -124,7 +124,7 @@ describe("ralphai command", () => {
 
     // New wizard settings
     expect(parsed.turns).toBe(5);
-    expect(parsed.mode).toBe("direct");
+    expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
     expect(parsed.maxStuck).toBe(3);
 
@@ -152,7 +152,7 @@ describe("ralphai command", () => {
     // Other keys should still get defaults
     expect(Object.keys(parsed)).toHaveLength(17);
     expect(parsed.turns).toBe(5);
-    expect(parsed.mode).toBe("direct");
+    expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
     expect(parsed.maxStuck).toBe(3);
   });
@@ -516,7 +516,10 @@ describe("ralphai command", () => {
     const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
     writeFileSync(join(inProgressDir, "prd-feature-a.md"), "# Feature A");
     writeFileSync(join(inProgressDir, "prd-feature-b.md"), "# Feature B");
-    writeFileSync(join(inProgressDir, "progress-feature-a.md"), "## Progress Log");
+    writeFileSync(
+      join(inProgressDir, "progress-feature-a.md"),
+      "## Progress Log",
+    );
     writeFileSync(
       join(inProgressDir, "receipt-feature-a.txt"),
       "slug=feature-a",

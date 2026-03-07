@@ -6,7 +6,7 @@ DEFAULT_AGENT_COMMAND=""
 DEFAULT_FEEDBACK_COMMANDS=""
 DEFAULT_BASE_BRANCH="main"
 DEFAULT_MAX_STUCK=3
-DEFAULT_MODE="direct"                # "direct" (default) or "pr"
+DEFAULT_MODE="branch"                # "branch" (default), "pr", or "patch"
 DEFAULT_ISSUE_SOURCE="none"              # set to "github" to enable GitHub Issues integration
 DEFAULT_ISSUE_LABEL="ralphai"             # label to filter issues by
 DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"  # label applied when issue is picked up
@@ -17,7 +17,7 @@ DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent inv
 DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 DEFAULT_CONTINUOUS="false"               # "true" to keep draining backlog after first plan
 DEFAULT_FALLBACK_AGENTS=""               # comma-separated fallback agent commands
-DEFAULT_AUTO_COMMIT="false"              # "true" to auto-commit after turns / on resume (direct mode)
+DEFAULT_AUTO_COMMIT="false"              # "true" to auto-commit after turns / on resume (patch mode)
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"

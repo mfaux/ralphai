@@ -53,7 +53,7 @@ interface WizardAnswers {
   baseBranch: string;
   feedbackCommands: string;
   turns?: number;
-  mode?: "direct" | "pr";
+  mode?: "branch" | "pr" | "patch";
   autoCommit?: boolean;
   maxStuck?: number;
   issueSource: "none" | "github";
@@ -452,14 +452,19 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     message: "Workflow mode:",
     options: [
       {
-        value: "direct",
-        label: "Direct",
-        hint: "commit to base branch",
+        value: "branch",
+        label: "Branch",
+        hint: "create a branch, don't push or open a PR",
       },
       {
         value: "pr",
         label: "PR",
         hint: "create a branch and open a pull request",
+      },
+      {
+        value: "patch",
+        label: "Patch",
+        hint: "leave changes uncommitted in the working tree",
       },
     ],
   });
@@ -469,11 +474,11 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  const mode = modeSelection as "direct" | "pr";
+  const mode = modeSelection as "branch" | "pr" | "patch";
 
-  // 6. Auto-commit (only for direct mode)
+  // 6. Auto-commit (only for patch mode)
   let autoCommit = false;
-  if (mode === "direct") {
+  if (mode === "patch") {
     const autoCommitAnswer = await clack.confirm({
       message: "Auto-commit between turns?",
       initialValue: false,
@@ -665,7 +670,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     feedbackCommands,
     baseBranch: answers.baseBranch,
     turns: answers.turns ?? 5,
-    mode: answers.mode ?? "direct",
+    mode: answers.mode ?? "branch",
     autoCommit: answers.autoCommit ?? false,
     maxStuck: answers.maxStuck ?? 3,
     turnTimeout: 0,
@@ -818,9 +823,7 @@ async function runRalphaiReset(
   const files = readdirSync(inProgressDir);
   const planFiles = files.filter(
     (f) =>
-      f.endsWith(".md") &&
-      f !== "progress.md" &&
-      !f.startsWith("progress-"),
+      f.endsWith(".md") && f !== "progress.md" && !f.startsWith("progress-"),
   );
   const progressFiles = files.filter(
     (f) => f === "progress.md" || f.startsWith("progress-"),
@@ -1162,7 +1165,7 @@ async function runRalphaiInit(
       baseBranch: detectBaseBranch(),
       feedbackCommands: detectFeedbackCommands(cwd),
       turns: 5,
-      mode: "direct",
+      mode: "branch",
       autoCommit: false,
       maxStuck: 3,
       issueSource: "none",
@@ -1383,10 +1386,9 @@ function selectPlanForWorktree(
   }
 
   // No unattended plans — check backlog for new work
-  const backlogPlans =
-    existsSync(backlogDir)
-      ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
-      : [];
+  const backlogPlans = existsSync(backlogDir)
+    ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
+    : [];
 
   if (backlogPlans.length > 0) {
     const firstPlan = backlogPlans[0]!;
@@ -1634,9 +1636,7 @@ function runRalphaiStatus(cwd: string): void {
     : [];
   const inProgressPlans = inProgressFiles.filter(
     (f) =>
-      f.endsWith(".md") &&
-      f !== "progress.md" &&
-      !f.startsWith("progress-"),
+      f.endsWith(".md") && f !== "progress.md" && !f.startsWith("progress-"),
   );
   const receiptFiles = inProgressFiles.filter(
     (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
@@ -1854,9 +1854,7 @@ async function runRalphaiWorktree(
   // Determine base branch
   const baseBranch = detectBaseBranch();
   const branch = `ralphai/${plan.slug}`;
-  const activeWorktree = activeWorktrees.find(
-    (wt) => wt.branch === branch,
-  );
+  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
 
   // Determine worktree directory
   const worktreeBase = wtOpts.dir
