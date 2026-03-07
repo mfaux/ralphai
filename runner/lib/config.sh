@@ -73,32 +73,10 @@ load_config() {
     if [[ "$fc_type" == "array" ]]; then
       # Join array elements with commas (matches internal format)
       value=$(jq -r '.feedbackCommands | join(",")' "$config_path")
-      # Validate: no empty entries
-      if [[ -n "$value" ]]; then
-        IFS=',' read -ra fc_parts <<< "$value"
-        for fc in "${fc_parts[@]}"; do
-          local trimmed_fc
-          trimmed_fc=$(echo "$fc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          if [[ -z "$trimmed_fc" ]]; then
-            echo "ERROR: $config_path: 'feedbackCommands' array contains an empty entry"
-            exit 1
-          fi
-        done
-      fi
+      validate_comma_list "$value" "$config_path: 'feedbackCommands' array"
     elif [[ "$fc_type" == "string" ]]; then
       value=$(_json_str "feedbackCommands")
-      # Validate: no empty entries between commas
-      if [[ -n "$value" ]]; then
-        IFS=',' read -ra fc_parts <<< "$value"
-        for fc in "${fc_parts[@]}"; do
-          local trimmed_fc
-          trimmed_fc=$(echo "$fc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          if [[ -z "$trimmed_fc" ]]; then
-            echo "ERROR: $config_path: 'feedbackCommands' contains an empty entry in '$value'"
-            exit 1
-          fi
-        done
-      fi
+      validate_comma_list "$value" "$config_path: 'feedbackCommands'"
     else
       echo "ERROR: $config_path: 'feedbackCommands' must be an array of strings or a comma-separated string, got $fc_type"
       exit 1
@@ -123,40 +101,28 @@ load_config() {
   # --- maxStuck (positive integer) ---
   if _json_has "maxStuck"; then
     value=$(_json_raw "maxStuck")
-    if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
-      echo "ERROR: $config_path: 'maxStuck' must be a positive integer, got '$value'"
-      exit 1
-    fi
+    validate_positive_int "$value" "$config_path: 'maxStuck'"
     CONFIG_MAX_STUCK="$value"
   fi
 
   # --- mode ("branch", "pr", or "patch") ---
   if _json_has "mode"; then
     value=$(_json_str "mode")
-    if [[ "$value" != "branch" && "$value" != "pr" && "$value" != "patch" ]]; then
-      echo "ERROR: $config_path: 'mode' must be 'branch', 'pr', or 'patch', got '$value'"
-      exit 1
-    fi
+    validate_enum "$value" "$config_path: 'mode'" "branch" "pr" "patch"
     CONFIG_MODE="$value"
   fi
 
   # --- issueCloseOnComplete (boolean) ---
   if _json_has "issueCloseOnComplete"; then
     value=$(_json_raw "issueCloseOnComplete")
-    if [[ "$value" != "true" && "$value" != "false" ]]; then
-      echo "ERROR: $config_path: 'issueCloseOnComplete' must be true or false, got '$value'"
-      exit 1
-    fi
+    validate_boolean "$value" "$config_path: 'issueCloseOnComplete'"
     CONFIG_ISSUE_CLOSE_ON_COMPLETE="$value"
   fi
 
   # --- issueSource ("none" or "github") ---
   if _json_has "issueSource"; then
     value=$(_json_str "issueSource")
-    if [[ "$value" != "none" && "$value" != "github" ]]; then
-      echo "ERROR: $config_path: 'issueSource' must be 'none' or 'github', got '$value'"
-      exit 1
-    fi
+    validate_enum "$value" "$config_path: 'issueSource'" "none" "github"
     CONFIG_ISSUE_SOURCE="$value"
   fi
 
@@ -189,40 +155,28 @@ load_config() {
   # --- issueCommentProgress (boolean) ---
   if _json_has "issueCommentProgress"; then
     value=$(_json_raw "issueCommentProgress")
-    if [[ "$value" != "true" && "$value" != "false" ]]; then
-      echo "ERROR: $config_path: 'issueCommentProgress' must be true or false, got '$value'"
-      exit 1
-    fi
+    validate_boolean "$value" "$config_path: 'issueCommentProgress'"
     CONFIG_ISSUE_COMMENT_PROGRESS="$value"
   fi
 
   # --- turnTimeout (non-negative integer) ---
   if _json_has "turnTimeout"; then
     value=$(_json_raw "turnTimeout")
-    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: $config_path: 'turnTimeout' must be a non-negative integer (seconds), got '$value'"
-      exit 1
-    fi
+    validate_nonneg_int "$value" "$config_path: 'turnTimeout'" "seconds"
     CONFIG_TURN_TIMEOUT="$value"
   fi
 
   # --- promptMode ("auto", "at-path", or "inline") ---
   if _json_has "promptMode"; then
     value=$(_json_str "promptMode")
-    if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
-      echo "ERROR: $config_path: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
-      exit 1
-    fi
+    validate_enum "$value" "$config_path: 'promptMode'" "auto" "at-path" "inline"
     CONFIG_PROMPT_MODE="$value"
   fi
 
   # --- continuous (boolean) ---
   if _json_has "continuous"; then
     value=$(_json_raw "continuous")
-    if [[ "$value" != "true" && "$value" != "false" ]]; then
-      echo "ERROR: $config_path: 'continuous' must be true or false, got '$value'"
-      exit 1
-    fi
+    validate_boolean "$value" "$config_path: 'continuous'"
     CONFIG_CONTINUOUS="$value"
   fi
 
@@ -232,30 +186,10 @@ load_config() {
     fa_type=$(jq -r '.fallbackAgents | type' "$config_path")
     if [[ "$fa_type" == "array" ]]; then
       value=$(jq -r '.fallbackAgents | join(",")' "$config_path")
-      if [[ -n "$value" ]]; then
-        IFS=',' read -ra fa_parts <<< "$value"
-        for fa in "${fa_parts[@]}"; do
-          local trimmed_fa
-          trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          if [[ -z "$trimmed_fa" ]]; then
-            echo "ERROR: $config_path: 'fallbackAgents' array contains an empty entry"
-            exit 1
-          fi
-        done
-      fi
+      validate_comma_list "$value" "$config_path: 'fallbackAgents' array"
     elif [[ "$fa_type" == "string" ]]; then
       value=$(_json_str "fallbackAgents")
-      if [[ -n "$value" ]]; then
-        IFS=',' read -ra fa_parts <<< "$value"
-        for fa in "${fa_parts[@]}"; do
-          local trimmed_fa
-          trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          if [[ -z "$trimmed_fa" ]]; then
-            echo "ERROR: $config_path: 'fallbackAgents' contains an empty entry in '$value'"
-            exit 1
-          fi
-        done
-      fi
+      validate_comma_list "$value" "$config_path: 'fallbackAgents'"
     else
       echo "ERROR: $config_path: 'fallbackAgents' must be an array of strings or a comma-separated string, got $fa_type"
       exit 1
@@ -266,20 +200,14 @@ load_config() {
   # --- autoCommit (boolean) ---
   if _json_has "autoCommit"; then
     value=$(_json_raw "autoCommit")
-    if [[ "$value" != "true" && "$value" != "false" ]]; then
-      echo "ERROR: $config_path: 'autoCommit' must be true or false, got '$value'"
-      exit 1
-    fi
+    validate_boolean "$value" "$config_path: 'autoCommit'"
     CONFIG_AUTO_COMMIT="$value"
   fi
 
   # --- turns (non-negative integer, 0 = unlimited) ---
   if _json_has "turns"; then
     value=$(_json_raw "turns")
-    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: $config_path: 'turns' must be a non-negative integer (0 = unlimited), got '$value'"
-      exit 1
-    fi
+    validate_nonneg_int "$value" "$config_path: 'turns'" "0 = unlimited"
     CONFIG_TURNS="$value"
   fi
 }
@@ -357,31 +285,19 @@ apply_env_overrides() {
     BASE_BRANCH="$RALPHAI_BASE_BRANCH"
   fi
   if [[ -n "${RALPHAI_MAX_STUCK:-}" ]]; then
-    if [[ ! "$RALPHAI_MAX_STUCK" =~ ^[1-9][0-9]*$ ]]; then
-      echo "ERROR: RALPHAI_MAX_STUCK must be a positive integer, got '$RALPHAI_MAX_STUCK'"
-      exit 1
-    fi
+    validate_positive_int "$RALPHAI_MAX_STUCK" "RALPHAI_MAX_STUCK"
     MAX_STUCK="$RALPHAI_MAX_STUCK"
   fi
   if [[ -n "${RALPHAI_MODE:-}" ]]; then
-    if [[ "$RALPHAI_MODE" != "branch" && "$RALPHAI_MODE" != "pr" && "$RALPHAI_MODE" != "patch" ]]; then
-      echo "ERROR: RALPHAI_MODE must be 'branch', 'pr', or 'patch', got '$RALPHAI_MODE'"
-      exit 1
-    fi
+    validate_enum "$RALPHAI_MODE" "RALPHAI_MODE" "branch" "pr" "patch"
     MODE="$RALPHAI_MODE"
   fi
   if [[ -n "${RALPHAI_TURN_TIMEOUT:-}" ]]; then
-    if [[ ! "$RALPHAI_TURN_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: RALPHAI_TURN_TIMEOUT must be a non-negative integer (seconds), got '$RALPHAI_TURN_TIMEOUT'"
-      exit 1
-    fi
+    validate_nonneg_int "$RALPHAI_TURN_TIMEOUT" "RALPHAI_TURN_TIMEOUT" "seconds"
     TURN_TIMEOUT="$RALPHAI_TURN_TIMEOUT"
   fi
   if [[ -n "${RALPHAI_ISSUE_SOURCE:-}" ]]; then
-    if [[ "$RALPHAI_ISSUE_SOURCE" != "none" && "$RALPHAI_ISSUE_SOURCE" != "github" ]]; then
-      echo "ERROR: RALPHAI_ISSUE_SOURCE must be 'none' or 'github', got '$RALPHAI_ISSUE_SOURCE'"
-      exit 1
-    fi
+    validate_enum "$RALPHAI_ISSUE_SOURCE" "RALPHAI_ISSUE_SOURCE" "none" "github"
     ISSUE_SOURCE="$RALPHAI_ISSUE_SOURCE"
   fi
   if [[ -n "${RALPHAI_ISSUE_LABEL:-}" ]]; then
@@ -394,57 +310,31 @@ apply_env_overrides() {
     ISSUE_REPO="$RALPHAI_ISSUE_REPO"
   fi
   if [[ -n "${RALPHAI_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
-    if [[ "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" != "true" && "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" != "false" ]]; then
-      echo "ERROR: RALPHAI_ISSUE_CLOSE_ON_COMPLETE must be 'true' or 'false', got '$RALPHAI_ISSUE_CLOSE_ON_COMPLETE'"
-      exit 1
-    fi
+    validate_boolean "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" "RALPHAI_ISSUE_CLOSE_ON_COMPLETE"
     ISSUE_CLOSE_ON_COMPLETE="$RALPHAI_ISSUE_CLOSE_ON_COMPLETE"
   fi
   if [[ -n "${RALPHAI_ISSUE_COMMENT_PROGRESS:-}" ]]; then
-    if [[ "$RALPHAI_ISSUE_COMMENT_PROGRESS" != "true" && "$RALPHAI_ISSUE_COMMENT_PROGRESS" != "false" ]]; then
-      echo "ERROR: RALPHAI_ISSUE_COMMENT_PROGRESS must be 'true' or 'false', got '$RALPHAI_ISSUE_COMMENT_PROGRESS'"
-      exit 1
-    fi
+    validate_boolean "$RALPHAI_ISSUE_COMMENT_PROGRESS" "RALPHAI_ISSUE_COMMENT_PROGRESS"
     ISSUE_COMMENT_PROGRESS="$RALPHAI_ISSUE_COMMENT_PROGRESS"
   fi
   if [[ -n "${RALPHAI_PROMPT_MODE:-}" ]]; then
-    if [[ "$RALPHAI_PROMPT_MODE" != "auto" && "$RALPHAI_PROMPT_MODE" != "at-path" && "$RALPHAI_PROMPT_MODE" != "inline" ]]; then
-      echo "ERROR: RALPHAI_PROMPT_MODE must be 'auto', 'at-path', or 'inline', got '$RALPHAI_PROMPT_MODE'"
-      exit 1
-    fi
+    validate_enum "$RALPHAI_PROMPT_MODE" "RALPHAI_PROMPT_MODE" "auto" "at-path" "inline"
     PROMPT_MODE="$RALPHAI_PROMPT_MODE"
   fi
   if [[ -n "${RALPHAI_CONTINUOUS:-}" ]]; then
-    if [[ "$RALPHAI_CONTINUOUS" != "true" && "$RALPHAI_CONTINUOUS" != "false" ]]; then
-      echo "ERROR: RALPHAI_CONTINUOUS must be 'true' or 'false', got '$RALPHAI_CONTINUOUS'"
-      exit 1
-    fi
+    validate_boolean "$RALPHAI_CONTINUOUS" "RALPHAI_CONTINUOUS"
     CONTINUOUS="$RALPHAI_CONTINUOUS"
   fi
   if [[ -n "${RALPHAI_FALLBACK_AGENTS:-}" ]]; then
-    # Validate: no empty entries between commas
-    IFS=',' read -ra _fa_env_parts <<< "$RALPHAI_FALLBACK_AGENTS"
-    for _fa_env in "${_fa_env_parts[@]}"; do
-      _trimmed_fa_env=$(echo "$_fa_env" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      if [[ -z "$_trimmed_fa_env" ]]; then
-        echo "ERROR: RALPHAI_FALLBACK_AGENTS contains an empty entry in '$RALPHAI_FALLBACK_AGENTS'"
-        exit 1
-      fi
-    done
+    validate_comma_list "$RALPHAI_FALLBACK_AGENTS" "RALPHAI_FALLBACK_AGENTS"
     FALLBACK_AGENTS="$RALPHAI_FALLBACK_AGENTS"
   fi
   if [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
-    if [[ "$RALPHAI_AUTO_COMMIT" != "true" && "$RALPHAI_AUTO_COMMIT" != "false" ]]; then
-      echo "ERROR: RALPHAI_AUTO_COMMIT must be 'true' or 'false', got '$RALPHAI_AUTO_COMMIT'"
-      exit 1
-    fi
+    validate_boolean "$RALPHAI_AUTO_COMMIT" "RALPHAI_AUTO_COMMIT"
     AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
   fi
   if [[ -n "${RALPHAI_TURNS:-}" ]]; then
-    if [[ ! "$RALPHAI_TURNS" =~ ^[0-9]+$ ]]; then
-      echo "ERROR: RALPHAI_TURNS must be a non-negative integer (0 = unlimited), got '$RALPHAI_TURNS'"
-      exit 1
-    fi
+    validate_nonneg_int "$RALPHAI_TURNS" "RALPHAI_TURNS" "0 = unlimited"
     TURNS="$RALPHAI_TURNS"
   fi
 }

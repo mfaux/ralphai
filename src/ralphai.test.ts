@@ -2136,7 +2136,9 @@ echo "$AUTO_COMMIT"
       join(__dirname, "..", "runner", "lib", "config.sh"),
       "utf-8",
     );
-    expect(config).toContain("'mode' must be 'branch', 'pr', or 'patch'");
+    expect(config).toContain(
+      'validate_enum "$value" "$config_path: \'mode\'" "branch" "pr" "patch"',
+    );
   });
 
   it("scaffolded config.sh validates RALPHAI_MODE env var as branch|pr|patch", () => {
@@ -2144,7 +2146,9 @@ echo "$AUTO_COMMIT"
       join(__dirname, "..", "runner", "lib", "config.sh"),
       "utf-8",
     );
-    expect(config).toContain("RALPHAI_MODE must be 'branch', 'pr', or 'patch'");
+    expect(config).toContain(
+      'validate_enum "$RALPHAI_MODE" "RALPHAI_MODE" "branch" "pr" "patch"',
+    );
   });
 
   it("init --yes sets autoCommit=false by default (non-patch mode)", () => {
