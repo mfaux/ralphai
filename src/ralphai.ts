@@ -1718,8 +1718,11 @@ function runRalphaiStatus(cwd: string): void {
   // Completed
   console.log();
   console.log(
-    `  ${TEXT}Completed${RESET}   ${DIM}${completedSlugs.size} plan${completedSlugs.size !== 1 ? "s" : ""}${RESET}`,
+    `  ${TEXT}Completed${RESET}    ${DIM}${completedSlugs.size} plan${completedSlugs.size !== 1 ? "s" : ""}${RESET}`,
   );
+  for (const slug of [...completedSlugs].sort()) {
+    console.log(`    ${DIM}${slug}.md${RESET}`);
+  }
 
   // --- Worktrees section ---
   let worktrees: WorktreeEntry[] = [];
