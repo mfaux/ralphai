@@ -6,7 +6,7 @@ Ralphai takes [plan files](#1-write-plans) (markdown) from its backlog and drive
 
 ## Why Ralphai?
 
-AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/HOW-RALPHAI-WORKS.md#context-rot)
+AI coding agents get worse the longer they run. Every model can only "see" a limited amount of text at once (its context window). As the conversation grows, the model quietly drops or summarizes older messages. It forgets what it already tried, repeats mistakes, or contradicts earlier work. [More on this →](docs/how-ralphai-works.md#context-rot)
 
 Ralphai avoids this by starting each **turn** with a **fresh session**: just the plan and a progress log. No conversation history to lose, no drift.
 
@@ -150,7 +150,7 @@ Use `ralphai status` to see what's in the backlog, what's in progress (with task
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `AGENTS.md` or skill docs. [How the learnings system works →](docs/HOW-RALPHAI-WORKS.md#learnings-system)
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review those entries and promote durable lessons to `AGENTS.md` or skill docs. [How the learnings system works →](docs/how-ralphai-works.md#learnings-system)
 
 ### After you're set up
 
@@ -176,7 +176,7 @@ For worktree internals, agent compatibility, and manual worktree setup, see
 - **Plan dependencies** — plans can declare `depends-on` for ordering across a backlog
 - **GitHub Issues** — Ralphai can pull labeled issues when the backlog is empty
 
-See [How Ralphai Works](docs/HOW-RALPHAI-WORKS.md) for the full picture.
+See [How Ralphai Works](docs/how-ralphai-works.md) for the full picture.
 
 ## Docs
 
