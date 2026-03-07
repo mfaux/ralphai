@@ -3431,7 +3431,7 @@ build_continuous_pr_body
       expect(output).toContain("waiting on prd-auth.md");
     });
 
-    it("status shows in-progress plan with task progress", () => {
+    it("status shows in-progress plan with task progress from receipt", () => {
       runCli(["init", "--yes"], testDir);
 
       const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
@@ -3449,7 +3449,7 @@ build_continuous_pr_body
         "## Progress Log\n\n### Task 1: Theme\n\n**Status:** Complete\n",
       );
 
-      // Receipt for this plan
+      // Receipt for this plan — includes tasks_completed
       writeFileSync(
         join(ipDir, "receipt-dark-mode.txt"),
         [
@@ -3460,6 +3460,7 @@ build_continuous_pr_body
           "slug=dark-mode",
           "agent=claude -p",
           "turns_completed=2",
+          "tasks_completed=1",
         ].join("\n"),
       );
 
@@ -3472,6 +3473,78 @@ build_continuous_pr_body
       expect(output).toContain("prd-dark-mode.md");
       expect(output).toContain("1 of 3 tasks");
       expect(output).toContain("worktree: dark-mode");
+    });
+
+    it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan with 2 tasks
+      writeFileSync(
+        join(ipDir, "prd-legacy.md"),
+        "# Legacy\n\n### Task 1: Migrate\n### Task 2: Validate\n",
+      );
+
+      // Receipt WITHOUT tasks_completed (backwards compatibility)
+      writeFileSync(
+        join(ipDir, "receipt-legacy.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/legacy",
+          "slug=legacy",
+          "agent=claude -p",
+          "turns_completed=1",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("0 of 2 tasks");
+    });
+
+    it("status shows tasks_completed from receipt, not progress.md", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan with 4 tasks
+      writeFileSync(
+        join(ipDir, "prd-feature.md"),
+        "# Feature\n\n### Task 1: A\n### Task 2: B\n### Task 3: C\n### Task 4: D\n",
+      );
+
+      // Progress file with 2 completed tasks
+      writeFileSync(
+        join(ipDir, "progress.md"),
+        "## Progress Log\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
+      );
+
+      // Receipt says 3 tasks completed (receipt is authoritative)
+      writeFileSync(
+        join(ipDir, "receipt-feature.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/feature",
+          "slug=feature",
+          "agent=claude -p",
+          "turns_completed=3",
+          "tasks_completed=3",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      // Should show 3 (from receipt), not 2 (from progress.md parsing)
+      expect(output).toContain("3 of 4 tasks");
     });
 
     it("status shows orphaned receipt as a problem", () => {

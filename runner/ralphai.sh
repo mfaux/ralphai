@@ -322,7 +322,11 @@ while true; do
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${LEARNINGS_STEP}
-$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers.
+$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PROGRESS_FILE} with what you did, decisions made, files changed, and any blockers. For each task you completed, include a heading and status marker in this exact format:
+   ### Task N: <title>
+   **Status:** Complete
+   <summary of what was done>
+   This format is required — ralphai parses it to track task completion.
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.
 ONLY WORK ON A SINGLE TASK.
 If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes.
@@ -427,6 +431,9 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
 
     # --- Update receipt turn counter ---
     update_receipt_turn
+
+    # --- Update receipt tasks_completed from progress.md ---
+    update_receipt_tasks
 
     # --- Check for completion ---
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then

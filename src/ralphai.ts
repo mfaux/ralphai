@@ -1096,6 +1096,7 @@ interface Receipt {
   slug: string;
   agent: string;
   turns_completed: number;
+  tasks_completed: number;
 }
 
 function parseReceipt(filePath: string): Receipt | null {
@@ -1116,6 +1117,7 @@ function parseReceipt(filePath: string): Receipt | null {
     slug: fields.slug ?? "",
     agent: fields.agent ?? "",
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
+    tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
   };
 }
 
@@ -1545,8 +1547,7 @@ function runRalphaiStatus(cwd: string): void {
     // Task progress
     const totalTasks = countPlanTasks(join(inProgressDir, plan));
     if (totalTasks > 0) {
-      const progressFile = join(inProgressDir, "progress.md");
-      const completed = countCompletedTasks(progressFile);
+      const completed = receipt?.tasks_completed ?? 0;
       parts.push(`${completed} of ${totalTasks} tasks`);
     }
 

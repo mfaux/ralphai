@@ -2,12 +2,23 @@
 # Sourced by ralphai.sh — do not execute directly.
 #
 # The receipt file tracks which plan is running, where it started (main repo
-# or worktree), and how many turns have completed. It is used to prevent
-# cross-source conflicts (e.g. a worktree plan being resumed by `ralphai run`
-# in the main repo) and to provide status information.
+# or worktree), how many turns have completed, and how many tasks have been
+# completed. It is used to prevent cross-source conflicts (e.g. a worktree
+# plan being resumed by `ralphai run` in the main repo) and to provide
+# status information.
 #
 # Receipt files live at: .ralphai/pipeline/in-progress/receipt-<slug>.txt
 # Format: key=value (one per line, no quoting needed).
+#
+# Fields:
+#   started_at       — ISO 8601 UTC timestamp of when the run started
+#   source           — "main" or "worktree"
+#   worktree_path    — absolute path to worktree (only when source=worktree)
+#   branch           — git branch name
+#   slug             — plan slug (derived from filename)
+#   agent            — agent command string
+#   turns_completed  — number of agent turns completed
+#   tasks_completed  — number of plan tasks completed (parsed from progress.md)
 
 # --- Derive the receipt file path from the plan slug ---
 # Must be called after WIP_FILES is set (i.e. after detect_plan).
@@ -43,6 +54,7 @@ init_receipt() {
     echo "slug=$PLAN_SLUG"
     echo "agent=$AGENT_COMMAND"
     echo "turns_completed=0"
+    echo "tasks_completed=0"
   } > "$RECEIPT_FILE"
 
   echo "Initialized $RECEIPT_FILE"
@@ -60,6 +72,45 @@ update_receipt_turn() {
   current=${current:-0}
   local next=$((current + 1))
   sed -i "s/^turns_completed=.*/turns_completed=$next/" "$RECEIPT_FILE"
+}
+
+# --- Recount tasks_completed from progress.md ---
+# Called after each turn completes (after auto-commit).
+# Counts individual `**Status:** Complete` markers and batch `Tasks X-Y` headings
+# in $PROGRESS_FILE, then writes the total to the receipt.
+update_receipt_tasks() {
+  if [[ ! -f "$RECEIPT_FILE" ]]; then
+    return
+  fi
+  if [[ ! -f "$PROGRESS_FILE" ]]; then
+    return
+  fi
+
+  local count=0
+
+  # Count individual **Status:** Complete markers (case-insensitive)
+  local individual
+  individual=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null || true)
+  count=$((count + individual))
+
+  # Count batch entries: Tasks X-Y or Tasks X–Y (en-dash or hyphen)
+  # Each match contributes (end - start + 1) tasks
+  while IFS= read -r line; do
+    # Extract start and end numbers from patterns like "Tasks 1-3" or "Tasks 1–3"
+    local start_num end_num
+    start_num=$(echo "$line" | sed -n 's/.*[Tt]asks\?[[:space:]]\+\([0-9]\+\)[[:space:]]*[–-][[:space:]]*\([0-9]\+\).*/\1/p')
+    end_num=$(echo "$line" | sed -n 's/.*[Tt]asks\?[[:space:]]\+\([0-9]\+\)[[:space:]]*[–-][[:space:]]*\([0-9]\+\).*/\2/p')
+    if [[ -n "$start_num" && -n "$end_num" && "$end_num" -gt "$start_num" ]]; then
+      count=$((count + end_num - start_num + 1))
+    fi
+  done < <(grep -i 'tasks\?[[:space:]]\+[0-9]\+[[:space:]]*[–-][[:space:]]*[0-9]\+' "$PROGRESS_FILE" 2>/dev/null || true)
+
+  # Update or append tasks_completed in the receipt
+  if grep -q '^tasks_completed=' "$RECEIPT_FILE"; then
+    sed -i "s/^tasks_completed=.*/tasks_completed=$count/" "$RECEIPT_FILE"
+  else
+    echo "tasks_completed=$count" >> "$RECEIPT_FILE"
+  fi
 }
 
 # --- Check receipt source for cross-source conflicts ---
