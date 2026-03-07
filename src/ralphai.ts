@@ -701,7 +701,7 @@ async function runRalphaiReset(
   const ralphaiRoot = resolveRalphaiDir(cwd);
   if (!ralphaiRoot) {
     console.error(
-      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
@@ -1010,7 +1010,7 @@ async function runRalphaiInit(
   // Block init inside a git worktree — .ralphai/ must live in the main repo
   if (isGitWorktree(cwd)) {
     console.error(
-      `${TEXT}Error:${RESET} Cannot initialize ralphai inside a git worktree.\n` +
+      `Cannot initialize ralphai inside a git worktree.\n` +
         `${DIM}Run ${TEXT}ralphai init${DIM} in the main repository instead.${RESET}`,
     );
     process.exit(1);
@@ -1039,7 +1039,7 @@ async function runRalphaiInit(
       // Fall through to normal scaffold below
     } else {
       console.error(
-        `${TEXT}Error:${RESET} Ralphai is already set up in this directory (.ralphai/ exists).\n` +
+        `Ralphai is already set up in this directory (.ralphai/ exists).\n` +
           `${DIM}Use ${TEXT}ralphai init --force${DIM} to re-scaffold from scratch.${RESET}`,
       );
       process.exit(1);
@@ -1138,7 +1138,7 @@ function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
     if (receipt.source === "worktree" && !isWorktree) {
       console.error();
       console.error(
-        `${TEXT}Error:${RESET} Plan "${receipt.slug}" is running in a worktree.`,
+        `Plan "${receipt.slug}" is running in a worktree.`,
       );
       console.error();
       console.error(`  Worktree: ${receipt.worktree_path ?? "unknown"}`);
@@ -1153,7 +1153,7 @@ function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
     if (receipt.source === "main" && isWorktree) {
       console.error();
       console.error(
-        `${TEXT}Error:${RESET} Plan "${receipt.slug}" is already running in the main repository.`,
+        `Plan "${receipt.slug}" is already running in the main repository.`,
       );
       console.error();
       console.error(`  Branch:  ${receipt.branch || "unknown"}`);
@@ -1235,7 +1235,7 @@ function selectPlanForWorktree(
 
   if (!specificPlan && inProgressPlans.length > 1) {
     console.error(
-      `${TEXT}Error:${RESET} Multiple plans are already in progress. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
+      `Multiple plans are already in progress. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
     );
     for (const planFile of inProgressPlans) {
       console.error(`  ${planFile}`);
@@ -1245,7 +1245,7 @@ function selectPlanForWorktree(
 
   if (!existsSync(backlogDir)) {
     console.error(
-      `${TEXT}Error:${RESET} No backlog directory found at ${backlogDir}`,
+      `No backlog directory found at ${backlogDir}`,
     );
     return null;
   }
@@ -1254,7 +1254,7 @@ function selectPlanForWorktree(
     const planPath = join(backlogDir, specificPlan);
     if (!existsSync(planPath)) {
       console.error(
-        `${TEXT}Error:${RESET} Plan '${specificPlan}' not found in backlog.`,
+        `Plan '${specificPlan}' not found in backlog.`,
       );
       return null;
     }
@@ -1267,7 +1267,7 @@ function selectPlanForWorktree(
 
   if (plans.length === 0) {
     console.error(
-      `${TEXT}Error:${RESET} No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
+      `No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
     );
     return null;
   }
@@ -1471,7 +1471,7 @@ function runRalphaiStatus(cwd: string): void {
   const ralphaiRoot = resolveRalphaiDir(cwd);
   if (!ralphaiRoot) {
     console.error(
-      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
@@ -1650,7 +1650,7 @@ async function runRalphaiWorktree(
   // Guard: must be in main repo, not a worktree
   if (isGitWorktree(cwd)) {
     console.error(
-      `${TEXT}Error:${RESET} 'ralphai worktree' must be run from the main repository.`,
+      `'ralphai worktree' must be run from the main repository.`,
     );
     console.error(
       "You are inside a worktree. Run this command from the main repo.",
@@ -1661,7 +1661,7 @@ async function runRalphaiWorktree(
   // Guard: .ralphai must exist
   if (!existsSync(join(cwd, ".ralphai"))) {
     console.error(
-      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
@@ -1682,10 +1682,10 @@ async function runRalphaiWorktree(
   if (receipt && receipt.source === "main") {
     console.error();
     console.error(
-      `${TEXT}Error:${RESET} Plan "${plan.slug}" is already running in the main repository.`,
+      `Plan "${plan.slug}" is already running in the main repository.`,
     );
     console.error();
-    console.error(`  Branch:  ${receipt.branch || "unknown"}`);
+    console.error(`  Branch:  ${receipt.branch || "unknown"}`);    
     console.error(`  Started: ${receipt.started_at || "unknown"}`);
     console.error();
     console.error(`  Finish or interrupt the main-repo run first, then retry.`);
@@ -1891,7 +1891,7 @@ function runRalphaiRunner(
   const ralphaiRoot = resolveRalphaiDir(cwd);
   if (!ralphaiRoot) {
     console.error(
-      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
