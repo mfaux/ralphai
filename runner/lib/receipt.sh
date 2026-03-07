@@ -30,6 +30,14 @@ resolve_receipt_path() {
   PLAN_SLUG="${plan_basename#prd-}"
   PLAN_SLUG="${PLAN_SLUG%.md}"
   RECEIPT_FILE="$WIP_DIR/receipt-${PLAN_SLUG}.txt"
+  PROGRESS_FILE="$WIP_DIR/progress-${PLAN_SLUG}.md"
+
+  # Backward-compat: migrate legacy progress.md → progress-<slug>.md
+  # when there is exactly one plan in-progress and the old file exists.
+  if [[ ! -f "$PROGRESS_FILE" && -f "$WIP_DIR/progress.md" ]]; then
+    mv "$WIP_DIR/progress.md" "$PROGRESS_FILE"
+    echo "Migrated progress.md -> $(basename "$PROGRESS_FILE")"
+  fi
 }
 
 # --- Write a new receipt file ---
