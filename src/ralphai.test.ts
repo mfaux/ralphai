@@ -2819,23 +2819,25 @@ build_continuous_pr_body
       writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
       chmodSync(stubScript, 0o755);
 
-      const worktreeDir = join(
-        testDir,
-        "..",
-        ".ralphai-worktrees",
-        "symlink-test",
-      );
+      // Use --dir to place worktree inside testDir (auto-cleaned by afterEach)
+      const worktreeDir = join(testDir, "wt-symlink");
 
-      runCli(
-        ["worktree", "--plan=prd-symlink-test.md"],
+      const result = runCli(
+        ["worktree", "--plan=prd-symlink-test.md", `--dir=${worktreeDir}`],
         testDir,
         { RALPHAI_RUNNER_SCRIPT: stubScript },
         30000,
       );
 
+      // Debug: print stdout/stderr if the worktree dir doesn't exist
+      const combined = result.stdout + result.stderr;
+
       // Verify the symlink was created
       const symlinkPath = join(worktreeDir, ".ralphai");
-      expect(existsSync(symlinkPath)).toBe(true);
+      expect(
+        existsSync(symlinkPath),
+        `Symlink not found at ${symlinkPath}. worktreeDir exists: ${existsSync(worktreeDir)}. CLI output: ${combined}`,
+      ).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
