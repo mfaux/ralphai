@@ -328,13 +328,16 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("Rolled back: moved plan to");
   });
 
-  it("scaffolded cli.sh includes worktree status in --show-config output", () => {
+  it("scaffolded show_config.sh includes worktree status in --show-config output", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
     // When in a worktree, --show-config should display worktree info
-    expect(cli).toContain("worktree           = true");
-    expect(cli).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
+    expect(showConfig).toContain("worktree           = true");
+    expect(showConfig).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
   });
 
   it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
@@ -1742,8 +1745,12 @@ echo "$PROMPT_MODE"
     );
     // Supported keys list
     expect(cli).toContain("continuous,");
-    // Show-config output
-    expect(cli).toContain("continuous         =");
+    // Show-config output (now in show_config.sh)
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
+    expect(showConfig).toContain("continuous         =");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1916,8 +1923,12 @@ echo "$CONTINUOUS"
     expect(cli).toContain("Disable auto-commit");
     // Supported keys list
     expect(cli).toContain("autoCommit");
-    // Show-config output
-    expect(cli).toContain("autoCommit         =");
+    // Show-config output (now in show_config.sh)
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
+    expect(showConfig).toContain("autoCommit         =");
   });
 
   it("scaffolded ralphai.sh gates per-turn auto-commit on AUTO_COMMIT and MODE", () => {
