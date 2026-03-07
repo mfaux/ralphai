@@ -47,7 +47,9 @@ describe("ralphai command", () => {
     expect(output).toContain("Ralphai initialized");
 
     // User-owned files (scripts are no longer scaffolded)
-    expect(existsSync(join(testDir, ".ralphai", "ralphai.config"))).toBe(true);
+    expect(existsSync(join(testDir, ".ralphai", "ralphai.config.json"))).toBe(
+      true,
+    );
     expect(existsSync(join(testDir, ".ralphai", "README.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "LEARNINGS.md"))).toBe(true);
@@ -104,24 +106,26 @@ describe("ralphai command", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config"),
+      join(testDir, ".ralphai", "ralphai.config.json"),
       "utf-8",
     );
-    expect(config).toContain("agentCommand=opencode run --agent build");
-    expect(config).toContain("baseBranch=");
-    expect(config).not.toContain("protectedBranches");
-    // feedbackCommands should be commented out when empty
-    expect(config).toContain("# feedbackCommands=");
+    const parsed = JSON.parse(config);
+    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    expect(parsed.baseBranch).toBeDefined();
+    expect(parsed).not.toHaveProperty("protectedBranches");
+    // feedbackCommands should be absent when not detected (omitted from JSON)
+    expect(parsed).not.toHaveProperty("feedbackCommands");
   });
 
   it("init --yes --agent-command uses the provided agent command", () => {
     runCliOutput(["init", "--yes", "--agent-command=claude -p"], testDir);
 
     const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config"),
+      join(testDir, ".ralphai", "ralphai.config.json"),
       "utf-8",
     );
-    expect(config).toContain("agentCommand=claude -p");
+    const parsed = JSON.parse(config);
+    expect(parsed.agentCommand).toBe("claude -p");
   });
 
   it("success output contains next steps", () => {
@@ -129,7 +133,7 @@ describe("ralphai command", () => {
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("dry-run");
-    expect(output).toContain(".ralphai/ralphai.config");
+    expect(output).toContain(".ralphai/ralphai.config.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
   });
@@ -179,9 +183,9 @@ describe("ralphai command", () => {
       expect(output).toContain("Ralphai initialized");
 
       // .ralphai/ should exist in targetDir, NOT in testDir (cwd)
-      expect(existsSync(join(targetDir, ".ralphai", "ralphai.config"))).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(targetDir, ".ralphai", "ralphai.config.json")),
+      ).toBe(true);
       expect(existsSync(join(targetDir, ".ralphai", "README.md"))).toBe(true);
       expect(existsSync(join(testDir, ".ralphai"))).toBe(false);
     } finally {
@@ -552,13 +556,13 @@ describe("ralphai command", () => {
   // --force tests
   // -------------------------------------------------------------------------
 
-  it("init --force --yes re-scaffolds from scratch, overwriting ralphai.config", () => {
+  it("init --force --yes re-scaffolds from scratch, overwriting ralphai.config.json", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Write custom config
     writeFileSync(
-      join(testDir, ".ralphai", "ralphai.config"),
-      "agentCommand=my-agent\n",
+      join(testDir, ".ralphai", "ralphai.config.json"),
+      JSON.stringify({ agentCommand: "my-agent", baseBranch: "main" }) + "\n",
     );
 
     // Force re-scaffold
@@ -570,11 +574,12 @@ describe("ralphai command", () => {
 
     // Config should have been overwritten with defaults
     const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config"),
+      join(testDir, ".ralphai", "ralphai.config.json"),
       "utf-8",
     );
-    expect(config).toContain("agentCommand=opencode run --agent build");
-    expect(config).not.toContain("my-agent");
+    const parsed = JSON.parse(config);
+    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    expect(parsed.agentCommand).not.toBe("my-agent");
   });
 
   it("init --force --yes overwrites LEARNINGS.md", () => {
@@ -642,12 +647,15 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain(
-        "feedbackCommands=pnpm build,pnpm test,pnpm lint",
-      );
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([
+        "pnpm build",
+        "pnpm test",
+        "pnpm lint",
+      ]);
     });
 
     it("detects npm from package-lock.json and populates feedbackCommands", () => {
@@ -664,10 +672,11 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain("feedbackCommands=npm run build,npm test");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual(["npm run build", "npm test"]);
     });
 
     it("detects yarn from yarn.lock and populates feedbackCommands", () => {
@@ -687,12 +696,15 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain(
-        "feedbackCommands=yarn build,yarn test,yarn lint",
-      );
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([
+        "yarn build",
+        "yarn test",
+        "yarn lint",
+      ]);
     });
 
     it("detects bun from bun.lockb and populates feedbackCommands", () => {
@@ -712,12 +724,15 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain(
-        "feedbackCommands=bun run build,bun test,bun run lint",
-      );
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([
+        "bun run build",
+        "bun test",
+        "bun run lint",
+      ]);
     });
 
     it("detects deno from deno.json and reads tasks", () => {
@@ -733,13 +748,16 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
+      const parsed = JSON.parse(config);
       // No test task in deno.json, but deno has a built-in test runner
-      expect(config).toContain(
-        "feedbackCommands=deno task build,deno task lint,deno test",
-      );
+      expect(parsed.feedbackCommands).toEqual([
+        "deno task build",
+        "deno task lint",
+        "deno test",
+      ]);
     });
 
     it("detects PM from packageManager field when no lock file exists", () => {
@@ -759,10 +777,11 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain("feedbackCommands=pnpm build,pnpm test");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
     });
 
     it("only includes scripts that actually exist in package.json", () => {
@@ -775,16 +794,14 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain("feedbackCommands=npm test");
-      // Should NOT contain build or lint since they don't exist
-      expect(config).not.toContain("npm run build");
-      expect(config).not.toContain("npm run lint");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual(["npm test"]);
     });
 
-    it("leaves feedbackCommands commented out when no scripts exist", () => {
+    it("omits feedbackCommands when no scripts exist", () => {
       writeFileSync(join(testDir, "package-lock.json"), "{}");
       writeFileSync(
         join(testDir, "package.json"),
@@ -798,25 +815,27 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain("# feedbackCommands=");
+      const parsed = JSON.parse(config);
+      expect(parsed).not.toHaveProperty("feedbackCommands");
     });
 
-    it("leaves feedbackCommands commented out for non-JS projects", () => {
+    it("omits feedbackCommands for non-JS projects", () => {
       // No package.json, no deno.json — nothing to detect
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain("# feedbackCommands=");
+      const parsed = JSON.parse(config);
+      expect(parsed).not.toHaveProperty("feedbackCommands");
     });
 
-    it("uses detected PM in commented-out feedbackCommands example", () => {
-      // pnpm project with no matching scripts → commented out but with pnpm prefix
+    it("omits feedbackCommands when no matching scripts detected", () => {
+      // pnpm project with no matching scripts → feedbackCommands omitted
       writeFileSync(join(testDir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
       writeFileSync(
         join(testDir, "package.json"),
@@ -830,12 +849,11 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain(
-        "# feedbackCommands=pnpm build,pnpm test,pnpm lint",
-      );
+      const parsed = JSON.parse(config);
+      expect(parsed).not.toHaveProperty("feedbackCommands");
     });
 
     it("detects type-check and format:check scripts", () => {
@@ -861,12 +879,17 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
-      expect(config).toContain(
-        "feedbackCommands=pnpm build,pnpm test,pnpm type-check,pnpm lint,pnpm format:check",
-      );
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([
+        "pnpm build",
+        "pnpm test",
+        "pnpm type-check",
+        "pnpm lint",
+        "pnpm format:check",
+      ]);
     });
 
     it("lock file takes priority over packageManager field", () => {
@@ -887,11 +910,12 @@ describe("ralphai command", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "utf-8",
       );
+      const parsed = JSON.parse(config);
       // pnpm should win because lock file beats packageManager field
-      expect(config).toContain("feedbackCommands=pnpm build,pnpm test");
+      expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
     });
   });
 
@@ -1003,9 +1027,9 @@ describe("ralphai command", () => {
     it("init --yes succeeds in the main repo (not a worktree)", () => {
       const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
       expect(output).toContain("Ralphai initialized");
-      expect(existsSync(join(mainRepo, ".ralphai", "ralphai.config"))).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(mainRepo, ".ralphai", "ralphai.config.json")),
+      ).toBe(true);
     });
 
     it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
@@ -1075,7 +1099,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
           `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
         );
         expect(result).toContain(
-          `CONFIG_FILE=${mainRepo}/.ralphai/ralphai.config`,
+          `CONFIG_FILE=${mainRepo}/.ralphai/ralphai.config.json`,
         );
         expect(result).toContain(
           `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
@@ -1097,7 +1121,10 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       });
       mkdirSync(join(ralphaiDir, "pipeline", "backlog"), { recursive: true });
       mkdirSync(join(ralphaiDir, "pipeline", "out"), { recursive: true });
-      writeFileSync(join(ralphaiDir, "ralphai.config"), "baseBranch=main\n");
+      writeFileSync(
+        join(ralphaiDir, "ralphai.config.json"),
+        "baseBranch=main\n",
+      );
 
       // Create symlink in the worktree pointing to main repo's .ralphai/
       symlinkSync(ralphaiDir, join(worktreeDir, ".ralphai"));
@@ -1135,7 +1162,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
         expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config");
+        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config.json");
         expect(result).toContain(
           "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
         );
@@ -1185,7 +1212,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
         expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config");
+        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config.json");
         expect(result).toContain(
           "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
         );
@@ -1962,23 +1989,20 @@ echo "$CONTINUOUS"
     it("init --yes does not enable issueSource in config", () => {
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
-        "utf-8",
+      const parsed = JSON.parse(
+        readFileSync(join(testDir, ".ralphai", "ralphai.config.json"), "utf-8"),
       );
-      expect(config).not.toContain("issueSource=github");
-      expect(config).toContain("# issueSource=none");
+      expect(parsed).not.toHaveProperty("issueSource");
     });
 
-    it("init --yes config contains issueSource line (commented out)", () => {
+    it("init --yes omits issueSource from JSON config", () => {
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
-        "utf-8",
+      const parsed = JSON.parse(
+        readFileSync(join(testDir, ".ralphai", "ralphai.config.json"), "utf-8"),
       );
-      // The commented-out line should be present
-      expect(config).toContain("# issueSource=none");
+      // issueSource should not appear at all in the JSON config
+      expect(parsed).not.toHaveProperty("issueSource");
     });
 
     it("init --yes output does not contain GitHub label info", () => {
@@ -2800,7 +2824,7 @@ build_continuous_pr_body
       gitInitialCommit(testDir);
 
       // Create .ralphai with a plan and git-track it (simulating a repo
-      // where .ralphai/ has committed files like ralphai.config)
+      // where .ralphai/ has committed files like ralphai.config.json)
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
         recursive: true,
       });
@@ -2808,8 +2832,8 @@ build_continuous_pr_body
         recursive: true,
       });
       writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
-        "agentCommand=echo hello\n",
+        join(testDir, ".ralphai", "ralphai.config.json"),
+        JSON.stringify({ agentCommand: "echo hello" }) + "\n",
       );
       writeFileSync(
         join(testDir, ".ralphai", "pipeline", "backlog", "prd-tracked-test.md"),
@@ -2904,7 +2928,7 @@ build_continuous_pr_body
         recursive: true,
       });
       writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "agent=claude -p\n",
       );
       writeFileSync(
@@ -2951,7 +2975,7 @@ build_continuous_pr_body
         recursive: true,
       });
       writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config"),
+        join(testDir, ".ralphai", "ralphai.config.json"),
         "agent=claude -p\n",
       );
       writeFileSync(
