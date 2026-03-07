@@ -61,7 +61,6 @@ if [[ "$MODE" == "patch" ]]; then
     done
     if [[ -n "$_first_plan" ]]; then
       _slug=$(basename "$_first_plan")
-      _slug="${_slug#prd-}"
       _slug="${_slug%.md}"
       echo ""
       if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
@@ -121,8 +120,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   elif [[ "$MODE" == "branch" ]]; then
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
+    slug="${plan_basename%.md}"
     branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
@@ -137,8 +135,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
+    slug="${plan_basename%.md}"
     branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
@@ -226,8 +223,7 @@ while true; do
     if [[ "$branch" == "$BASE_BRANCH" ]]; then
       echo "ERROR: Running in a worktree on the base branch '$BASE_BRANCH'."
       echo "Create a worktree on a feature branch instead:"
-      slug="${plan_basename#prd-}"
-      slug="${slug%.md}"
+      slug="${plan_basename%.md}"
       echo "  git worktree add ../<dir> -b ralphai/${slug} $BASE_BRANCH"
       # Roll back plan
       rollback_dest="$BACKLOG_DIR/${plan_basename}"
@@ -246,8 +242,7 @@ while true; do
   else
     git checkout "$BASE_BRANCH"
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename#prd-}"
-    slug="${slug%.md}"
+    slug="${plan_basename%.md}"
     branch="ralphai/${slug}"
 
     # Guard: a bare "ralphai" branch blocks all "ralphai/*" branches (git ref hierarchy conflict)
