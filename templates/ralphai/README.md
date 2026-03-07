@@ -43,7 +43,7 @@ ralphai run --turns=5
 # Preview selection and readiness without moving files or creating branches
 ralphai run --dry-run
 
-# Recover dirty state and continue on current ralphai/* branch
+# Recover dirty state and continue
 ralphai run --turns=5 --resume
 
 # Override agent command, base branch, or stuck threshold
@@ -58,11 +58,11 @@ ralphai run --turns=5 --direct
 
 No file arguments needed. The script auto-detects:
 
-1. **In-progress work** — If `.ralphai/pipeline/in-progress/` has plan files, resumes on the current `ralphai/*` branch.
-2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralphai/pipeline/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` and a new branch is created.
+1. **In-progress work** — If `.ralphai/pipeline/in-progress/` has plan files, resumes on the current branch (your feature branch in direct mode, or the `ralphai/*` branch in PR mode).
+2. **Backlog selection** — If no in-progress work, picks from dependency-ready plans in `.ralphai/pipeline/backlog/`. When multiple ready plans exist, an LLM call selects the best one based on dependencies, risk, and value. The chosen plan is moved to `in-progress/` (and in PR mode, a new `ralphai/*` branch is created).
 3. **Nothing to do** — If both are empty and no GitHub issues are available, exits.
 
-The turn budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
+The turn budget (N) resets for each new plan. With `--continuous`, the script automatically picks the next plan from the backlog after completing one, continuing until the backlog is empty. Without `--continuous`, the script exits after completing one plan.
 
 Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `ralphai.json`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
 
@@ -85,7 +85,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 **Two modes:**
 
 - **Direct mode** (default): Commits on the current branch — no branch creation, no PR. Refuses to run on `main`/`master`. Use this when you're already on a feature branch.
-- **PR mode** (`--pr`): On completion, pushes the `ralphai/*` branch and creates a PR via `gh` CLI (with plan content + commit log in the PR body). Then loops back to pick the next backlog item.
+- **PR mode** (`--pr`): On completion, pushes the `ralphai/*` branch and creates a PR via `gh` CLI (with plan content + commit log in the PR body). With `--continuous`, loops back to pick the next backlog item.
 
 - **On turn exhaustion or stuck abort**: leaves files in `in-progress/` so you can resume with another run on the same branch.
 
@@ -105,11 +105,11 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 1. Ralphai loads `ralphai.json` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.md`
-3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
+3. In PR mode, a `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried. In direct mode, work continues on the current branch.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.md`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
 6. `progress.md` is updated with what was done
-7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
+7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. With `--continuous`, the script then loops back to pick the next backlog item; otherwise it exits.
 8. On incomplete run: files stay in `pipeline/in-progress/` for resumption
 
 **Turn pacing:** A single turn can take several minutes — the agent invocation itself plus all configured feedback commands (build, test, lint) run sequentially. Don't expect `progress.md` to update every few seconds. It updates between turns when there is something to report.
@@ -170,9 +170,9 @@ Plans without `source` frontmatter behave exactly as before.
 
 ## Conventions
 
-### Branch Naming
+### Branch Naming (PR mode)
 
-Branches are derived from the plan filename: `prd-add-dark-mode.md` → `ralphai/add-dark-mode`. If the branch already exists (locally, on the remote, or has an open PR), the plan is **skipped** and Ralphai tries the next dependency-ready plan. The `ralphai/` prefix is always used for isolation.
+In PR mode, branches are derived from the plan filename: `prd-add-dark-mode.md` → `ralphai/add-dark-mode`. If the branch already exists (locally, on the remote, or has an open PR), the plan is **skipped** and Ralphai tries the next dependency-ready plan. The `ralphai/` prefix is always used for isolation. In direct mode, no branches are created — work happens on the current branch.
 
 ### Commit Messages
 
@@ -244,23 +244,25 @@ A standard JSON file.
 
 Supported keys:
 
-| Key                    | Description                                                                | Default               | Validation                     |
-| ---------------------- | -------------------------------------------------------------------------- | --------------------- | ------------------------------ |
-| `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_              | Non-empty                      |
-| `feedbackCommands`     | Shell commands to run after each change (JSON array or comma-separated)    | _(none)_              | Array of non-empty strings     |
-| `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token        |
-| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`               |
-| `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)               | `false`               | `true` or `false`              |
-| `turns`                | Number of turns per plan (0 = unlimited)                                   | `5`                   | Non-negative integer           |
-| `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer               |
-| `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer           |
-| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline` |
-| `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`                | `none` or `github`             |
-| `issueLabel`           | Label to filter GitHub issues by                                           | `ralphai`             | Non-empty                      |
-| `issueInProgressLabel` | Label applied when an issue is picked up                                   | `ralphai:in-progress` | Non-empty                      |
-| `issueRepo`            | `owner/repo` override (auto-detected from remote)                          | _(auto-detect)_       | Any value                      |
-| `issueCloseOnComplete` | Close the issue when the plan completes                                    | `true`                | `true` or `false`              |
-| `issueCommentProgress` | Comment on the issue during the run                                        | `true`                | `true` or `false`              |
+| Key                    | Description                                                                 | Default               | Validation                     |
+| ---------------------- | --------------------------------------------------------------------------- | --------------------- | ------------------------------ |
+| `agentCommand`         | Full CLI invocation prefix for the AI agent                                 | _(none)_              | Non-empty                      |
+| `feedbackCommands`     | Shell commands to run after each change (JSON array or comma-separated)     | _(none)_              | Array of non-empty strings     |
+| `baseBranch`           | Branch to create work branches from                                         | `main`                | Non-empty, single token        |
+| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR)  | `direct`              | `pr` or `direct`               |
+| `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)                | `false`               | `true` or `false`              |
+| `turns`                | Number of turns per plan (0 = unlimited)                                    | `5`                   | Non-negative integer           |
+| `maxStuck`             | Consecutive no-progress turns before aborting                               | `3`                   | Positive integer               |
+| `turnTimeout`          | Seconds before killing a hung agent invocation                              | `0` (off)             | Non-negative integer           |
+| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`       | `auto`                | `auto`, `at-path`, or `inline` |
+| `continuous`           | Keep processing backlog plans after the first completes                     | `false`               | `true` or `false`              |
+| `fallbackAgents`       | Alternative agent commands tried when stuck (comma-separated or JSON array) | _(none)_              | Array of non-empty strings     |
+| `issueSource`          | Issue source to pull from (`none` or `github`)                              | `none`                | `none` or `github`             |
+| `issueLabel`           | Label to filter GitHub issues by                                            | `ralphai`             | Non-empty                      |
+| `issueInProgressLabel` | Label applied when an issue is picked up                                    | `ralphai:in-progress` | Non-empty                      |
+| `issueRepo`            | `owner/repo` override (auto-detected from remote)                           | _(auto-detect)_       | Any value                      |
+| `issueCloseOnComplete` | Close the issue when the plan completes                                     | `true`                | `true` or `false`              |
+| `issueCommentProgress` | Comment on the issue during the run                                         | `true`                | `true` or `false`              |
 
 The `agentCommand` is the full CLI invocation prefix — Ralphai appends the prompt as a quoted argument. Examples:
 
@@ -298,6 +300,8 @@ Environment variables override config file values:
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
+| `RALPHAI_CONTINUOUS`              | `continuous`           |
+| `RALPHAI_FALLBACK_AGENTS`         | `fallbackAgents`       |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
@@ -326,6 +330,8 @@ CLI flags have the highest priority:
 | `--max-stuck=<n>`                   | `maxStuck`                  |
 | `--turn-timeout=<seconds>`          | `turnTimeout`               |
 | `--prompt-mode=<mode>`              | `promptMode`                |
+| `--continuous`                      | `continuous` (sets `true`)  |
+| `--fallback-agents=<list>`          | `fallbackAgents`            |
 | `--issue-source=<source>`           | `issueSource`               |
 | `--issue-label=<label>`             | `issueLabel`                |
 | `--issue-in-progress-label=<label>` | `issueInProgressLabel`      |
