@@ -23,6 +23,12 @@ archive_run() {
     echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${timestamp}.md"
   fi
 
+  # Move receipt file
+  if [[ -n "${RECEIPT_FILE:-}" && -f "$RECEIPT_FILE" ]]; then
+    mv "$RECEIPT_FILE" "$ARCHIVE_DIR/receipt-${PLAN_SLUG}-${timestamp}.txt"
+    echo "Archived $RECEIPT_FILE -> $ARCHIVE_DIR/receipt-${PLAN_SLUG}-${timestamp}.txt"
+  fi
+
   # Move PRD/plan files from in-progress/ to out/
   for f in "${WIP_FILES[@]}"; do
     if [[ -f "$f" ]]; then

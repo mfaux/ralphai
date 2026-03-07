@@ -26,9 +26,9 @@ ${BOLD}Usage:${RESET} ralphai <command> [options]
 ${BOLD}Commands:${RESET}
   init           Set up Ralphai in your project (interactive wizard)
   run            Start the Ralphai task runner
-  worktree       Run in an isolated git worktree
+  worktree       Create or reuse an isolated git worktree
+  status         Show pipeline and worktree status
   update [tag]   Update ralphai to the latest (or specified) version
-  sync           Refresh .ralphai/ template files (preserves config & state)
   uninstall      Remove Ralphai from your project
 
 ${BOLD}Options:${RESET}
@@ -59,9 +59,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai worktree               ${DIM}# run next plan in an isolated worktree${RESET}
   ${DIM}$${RESET} ralphai worktree list           ${DIM}# show active ralphai worktrees${RESET}
   ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
+  ${DIM}$${RESET} ralphai status                 ${DIM}# show pipeline and worktree status${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
-  ${DIM}$${RESET} ralphai sync --yes             ${DIM}# refresh template files${RESET}
   ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
 `);
 }

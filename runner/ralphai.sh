@@ -27,6 +27,7 @@ source "$RALPHAI_LIB_DIR/plans.sh"
 source "$RALPHAI_LIB_DIR/prompt.sh"
 source "$RALPHAI_LIB_DIR/learnings.sh"
 source "$RALPHAI_LIB_DIR/pr.sh"
+source "$RALPHAI_LIB_DIR/receipt.sh"
 
 # ==========================================================================
 # MAIN LOOP — pick a plan, run turns, merge on complete, repeat
@@ -158,6 +159,10 @@ while true; do
   # Get a description for merge commit messages
   PLAN_DESC=$(plan_description "${WIP_FILES[0]}")
 
+  # --- Receipt: resolve path and check for cross-source conflicts ---
+  resolve_receipt_path
+  check_receipt_source
+
   # --- Branch strategy ---
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -169,7 +174,7 @@ while true; do
     branch="$current_branch"
     echo "Resuming on existing branch: $branch"
 
-    # Preserve existing progress file
+    # Preserve existing progress file and receipt
     echo "Resuming — keeping existing $PROGRESS_FILE"
   elif [[ "$MODE" == "direct" ]]; then
     # Direct mode: work on the current branch, no branch creation, no PR
@@ -181,6 +186,7 @@ while true; do
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
+    init_receipt
   elif [[ "$CONTINUOUS" == "true" && -n "$CONTINUOUS_BRANCH" ]]; then
     # Continuous+PR mode, subsequent plan: reuse the existing branch
     branch="$CONTINUOUS_BRANCH"
@@ -191,6 +197,7 @@ while true; do
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
+    init_receipt
   elif [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     # Worktree mode: the user already created the worktree on the right branch.
     # Do not create branches or switch — just validate.
@@ -216,6 +223,7 @@ while true; do
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
+    init_receipt
   else
     git checkout "$BASE_BRANCH"
     plan_basename=$(basename "${WIP_FILES[0]}")
@@ -273,6 +281,7 @@ while true; do
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
+    init_receipt
   fi
 
   # --- Per-plan agent override ---
@@ -411,6 +420,9 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       git add -A
       git commit -m "chore(ralphai): auto-commit uncommitted changes from turn $i" || true
     fi
+
+    # --- Update receipt turn counter ---
+    update_receipt_turn
 
     # --- Check for completion ---
     if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then

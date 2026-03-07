@@ -118,7 +118,7 @@ ralphai worktree                          # auto-pick next backlog plan
 ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
 ```
 
-The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved so you can inspect or resume.
+The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved. Re-run `ralphai worktree` from the main repo to reuse it, or `cd` into the worktree and run `ralphai run --resume` directly.
 
 ```bash
 ralphai worktree list    # show active ralphai-managed worktrees
@@ -140,7 +140,9 @@ pipeline/wip/           ← parked, ralphai ignores
 
 ### 4. Pause and resume
 
-Stop mid-run any time. Work stays in `in-progress/`. Resume by running `ralphai run` again — it auto-detects in-progress work.
+Stop mid-run any time. Work stays in `in-progress/`. Resume by running `ralphai run` again — it auto-detects in-progress work. For worktree runs, re-run `ralphai worktree` from the main repo to reuse the existing managed worktree, or resume inside the worktree with `ralphai run --resume`.
+
+Use `ralphai status` to see what's in the backlog, what's in progress (with task counts), active worktrees, and any problems.
 
 ### 5. Close the learnings loop
 
@@ -157,38 +159,8 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After
 <details>
 <summary><strong>Advanced: Git Worktrees</strong></summary>
 
-Git worktrees let you work on multiple plans in parallel without stashing or
-switching branches. Each worktree is a separate directory with its own working
-tree and branch, sharing the same git history.
-
-**When worktrees are useful:**
-
-- Running multiple plans concurrently (each in its own worktree)
-- Keeping your main branch clean while Ralphai works in an isolated directory
-- Avoiding branch-switching interruptions in your main checkout
-
-**Workflow:**
-
-```bash
-# In your main repo (where you ran ralphai init):
-git worktree add ../feature-x -b ralphai/feature-x main
-
-# Switch to the worktree and run ralphai:
-cd ../feature-x
-ralphai run --pr
-```
-
-Ralphai auto-detects worktrees — no extra flags needed. Pipeline state
-(`.ralphai/pipeline/`) lives in the main worktree and is shared across all
-worktrees.
-
-**Important:**
-
-- `ralphai init` and `ralphai sync` must be run in the **main repository**, not
-  inside a worktree.
-- `ralphai run` works in both the main repo and any worktree.
-- Use `ralphai run --show-config` inside a worktree to verify it detected the
-  main repo correctly (`worktree = true`).
+For worktree internals, agent compatibility, and manual worktree setup, see
+[Worktrees](docs/worktrees.md).
 
 </details>
 
@@ -209,6 +181,7 @@ After `ralphai init`, the good stuff lives in `.ralphai/`:
 
 - [`.ralphai/README.md`](.ralphai/README.md) — full operational docs (lifecycle, config)
 - [`.ralphai/PLANNING.md`](.ralphai/PLANNING.md) — guide for writing plan files (give this to your agent)
+- [Worktrees](docs/worktrees.md) — worktree usage, agent compatibility, and manual setup
 
 ## Supported Agents
 
@@ -242,8 +215,8 @@ Commands:
   init        Set up Ralphai in your project
   run         Start the Ralphai task runner
   worktree    Run in an isolated git worktree
+  status      Show pipeline and worktree status
   update      Update ralphai to the latest (or specified) version
-  sync        Refresh template files (preserves config & state)
   uninstall   Remove Ralphai from your project
 
 Options:

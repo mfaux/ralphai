@@ -199,3 +199,10 @@ it at the start of each turn so it doesn't repeat past errors.
 
 Keeping learnings gitignored prevents auto-written entries from interfering
 with stuck detection (which counts commits).
+
+## Worktrees
+
+`ralphai worktree` runs a plan in an isolated git worktree, letting you keep
+working in your main checkout while Ralphai runs in a separate directory.
+
+See [Worktrees](worktrees.md) for usage, agent compatibility, and manual setup.
