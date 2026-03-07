@@ -1,8 +1,12 @@
 {
-  "agentCommand": "claude -p",
-  "feedbackCommands": ["pnpm build", "pnpm test", "pnpm type-check"],
+  "agentCommand": "opencode run --agent build",
+  "feedbackCommands": [
+    "pnpm build",
+    "pnpm test",
+    "pnpm type-check"
+  ],
   "baseBranch": "main",
-  "turns": 5,
+  "turns": 10,
   "mode": "pr",
   "autoCommit": false,
   "maxStuck": 3,
