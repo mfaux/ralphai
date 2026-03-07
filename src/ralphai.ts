@@ -1,6 +1,7 @@
 import { execSync, spawn } from "child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   copyFileSync,
   writeFileSync,
@@ -1762,8 +1763,20 @@ async function runRalphaiWorktree(
   // pipeline files as relative paths. Without this, agents with directory
   // sandboxing (OpenCode, Claude Code, Codex) reject reads/writes to the
   // main repo's .ralphai/ as "external directory" access.
+  //
+  // When .ralphai/ is git-tracked, `git worktree add` checks out its
+  // tracked files as a real directory. We must replace it with a symlink
+  // so pipeline state (gitignored files like plans, receipts, progress)
+  // is shared with the main repo.
   const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
-  if (!existsSync(worktreeRalphaiLink)) {
+  const needsSymlink =
+    !existsSync(worktreeRalphaiLink) ||
+    !lstatSync(worktreeRalphaiLink).isSymbolicLink();
+  if (needsSymlink) {
+    // Remove the real directory (if any) before creating the symlink.
+    // This is safe because the symlink target (main repo's .ralphai/)
+    // contains all the same tracked files plus gitignored pipeline state.
+    rmSync(worktreeRalphaiLink, { recursive: true, force: true });
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 
