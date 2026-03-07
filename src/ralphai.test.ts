@@ -2196,6 +2196,59 @@ echo "$AUTO_COMMIT"
       expect(combined).toContain("Unrecognized argument: 3");
     });
 
+    it("run --show-config shows turns from config file", () => {
+      // Modify ralphai.json to set turns: 3
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.turns = 3;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["run", "--show-config"], testDir);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 3");
+      expect(result.stdout).toContain("(config (ralphai.json))");
+    });
+
+    it("RALPHAI_TURNS env var overrides config file turns", () => {
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.turns = 3;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["run", "--show-config"], testDir, {
+        RALPHAI_TURNS: "10",
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 10");
+      expect(result.stdout).toContain("(env (RALPHAI_TURNS=10))");
+    });
+
+    it("CLI --turns overrides both config and env var", () => {
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.turns = 3;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["run", "--turns=7", "--show-config"], testDir, {
+        RALPHAI_TURNS: "10",
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 7");
+      expect(result.stdout).toContain("(cli (--turns=7))");
+    });
+
+    it("turns: 0 in config displays as unlimited", () => {
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.turns = 0;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["run", "--show-config"], testDir);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = unlimited");
+      expect(result.stdout).toContain("(config (ralphai.json))");
+    });
+
     it("built CLI can locate the bundled runner script", () => {
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
