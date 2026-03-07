@@ -52,6 +52,10 @@ interface WizardAnswers {
   agentCommand: string;
   baseBranch: string;
   feedbackCommands: string;
+  turns?: number;
+  mode?: "direct" | "pr";
+  autoCommit?: boolean;
+  maxStuck?: number;
   issueSource: "none" | "github";
 }
 
@@ -426,7 +430,81 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 4. GitHub Issues integration
+  // 4. Turns per plan
+  const turnsInput = await clack.text({
+    message: "Turns per plan (0 = unlimited):",
+    initialValue: "5",
+    validate: (value) => {
+      if (!/^[0-9]+$/.test(value.trim()))
+        return "Must be a non-negative integer (0 = unlimited)";
+    },
+  });
+
+  if (clack.isCancel(turnsInput)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
+  const turns = parseInt(turnsInput, 10);
+
+  // 5. Workflow mode
+  const modeSelection = await clack.select({
+    message: "Workflow mode:",
+    options: [
+      {
+        value: "direct",
+        label: "Direct",
+        hint: "commit to base branch",
+      },
+      {
+        value: "pr",
+        label: "PR",
+        hint: "create a branch and open a pull request",
+      },
+    ],
+  });
+
+  if (clack.isCancel(modeSelection)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
+  const mode = modeSelection as "direct" | "pr";
+
+  // 6. Auto-commit (only for direct mode)
+  let autoCommit = false;
+  if (mode === "direct") {
+    const autoCommitAnswer = await clack.confirm({
+      message: "Auto-commit between turns?",
+      initialValue: false,
+    });
+
+    if (clack.isCancel(autoCommitAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+
+    autoCommit = autoCommitAnswer;
+  }
+
+  // 7. Max stuck turns
+  const maxStuckInput = await clack.text({
+    message: "Max stuck turns before abort:",
+    initialValue: "3",
+    validate: (value) => {
+      if (!/^[1-9][0-9]*$/.test(value.trim()))
+        return "Must be a positive integer";
+    },
+  });
+
+  if (clack.isCancel(maxStuckInput)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
+  const maxStuck = parseInt(maxStuckInput, 10);
+
+  // 8. GitHub Issues integration
   const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: false,
@@ -449,6 +527,10 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     agentCommand,
     baseBranch,
     feedbackCommands: feedbackCommands || "",
+    turns,
+    mode,
+    autoCommit,
+    maxStuck,
     issueSource: enableIssues ? "github" : "none",
   };
 }
@@ -1062,6 +1144,10 @@ async function runRalphaiInit(
       agentCommand: options.agentCommand || "opencode run --agent build",
       baseBranch: detectBaseBranch(),
       feedbackCommands: detectFeedbackCommands(cwd),
+      turns: 5,
+      mode: "direct",
+      autoCommit: false,
+      maxStuck: 3,
       issueSource: "none",
     };
   } else {
