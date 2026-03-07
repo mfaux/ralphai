@@ -244,7 +244,6 @@ Run:
   --continuous                      Keep processing backlog plans after the first completes
   --max-stuck=<n>                   Stuck threshold before abort (default: 3)
   --turn-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
-  --fallback-agents=<list>          Comma-separated fallback agent commands (tried when stuck)
   --auto-commit                     Auto-commit agent changes between turns
   --no-auto-commit                  Disable auto-commit (default)
   --prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
@@ -285,7 +284,6 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_TURNS`                   | `turns`                |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
-| `RALPHAI_FALLBACK_AGENTS`         | `fallbackAgents`       |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |

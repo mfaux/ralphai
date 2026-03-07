@@ -676,7 +676,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     turnTimeout: 0,
     promptMode: "auto",
     continuous: false,
-    fallbackAgents: "",
     issueSource: answers.issueSource ?? "none",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
