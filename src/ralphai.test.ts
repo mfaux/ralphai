@@ -291,21 +291,21 @@ describe("ralphai command", () => {
     expect(ralphaiSh).not.toContain("PROTECTED_BRANCHES");
   });
 
-  it("scaffolded ralphai.sh has direct mode safety guard for main/master", () => {
+  it("scaffolded ralphai.sh has patch mode safety guard for main/master", () => {
     const templateDir = join(__dirname, "..", "runner");
 
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // Direct mode refuses to run on main or master
-    expect(ralphaiSh).toContain("Direct mode cannot run on");
+    // Patch mode refuses to run on main or master
+    expect(ralphaiSh).toContain("Patch mode cannot run on");
     expect(ralphaiSh).toContain("ralphai run --pr");
     expect(ralphaiSh).toContain("git checkout -b ralphai/");
   });
 
-  it("scaffolded ralphai.sh has worktree-aware direct mode suggestion", () => {
+  it("scaffolded ralphai.sh has worktree-aware patch mode suggestion", () => {
     const templateDir = join(__dirname, "..", "runner");
 
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // When in a worktree, the direct mode guard suggests git worktree add
+    // When in a worktree, the patch mode guard suggests git worktree add
     expect(ralphaiSh).toContain(
       'if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then',
     );
@@ -361,13 +361,13 @@ describe("ralphai command", () => {
     expect(assignLine!.trimStart().startsWith("#")).toBe(false);
   });
 
-  it("scaffolded ralphai.sh skips create_pr in direct mode", () => {
+  it("scaffolded ralphai.sh skips create_pr in branch mode", () => {
     const templateDir = join(__dirname, "..", "runner");
 
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
     // Completion handler should conditionally call create_pr only in PR mode
     expect(ralphaiSh).toContain('if [[ "$MODE" == "pr" ]]; then');
-    expect(ralphaiSh).toContain("Direct mode: commits are on branch");
+    expect(ralphaiSh).toContain("Branch mode: changes committed on branch");
   });
 
   it("scaffolded ralphai.sh warns on unknown config keys instead of erroring", () => {
@@ -1913,9 +1913,9 @@ echo "$CONTINUOUS"
     const templateDir = join(__dirname, "..", "runner");
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
 
-    // Direct mode with autoCommit=false skips auto-commit
+    // Patch mode with autoCommit=false skips auto-commit
     expect(ralphaiSh).toContain(
-      'AUTO_COMMIT" == "false" && "$MODE" == "direct"',
+      'AUTO_COMMIT" == "false" && "$MODE" == "patch"',
     );
     expect(ralphaiSh).toContain("autoCommit=false, skipping recovery commit");
   });

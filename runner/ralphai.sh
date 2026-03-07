@@ -2,15 +2,17 @@
 # ralphai.sh — Ralphai (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: ralphai run [--turns=<n>] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: ralphai run [--turns=<n>] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--branch] [--pr] [--patch] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralphai/pipeline/in-progress/ has plan files → resume on the current ralphai/* branch
 #   2. Otherwise, pick the best plan from .ralphai/pipeline/backlog/ (LLM-selected if multiple)
 #
-# On completion of a plan (PR mode, --pr): pushes the branch and creates
-# a PR via 'gh' CLI. In direct mode (the default): commits on the current branch
-# with no branch creation and no PR. Turn budget resets for each new plan.
+# On completion (branch mode, the default): creates an isolated ralphai/<slug>
+# branch, commits changes, but does not push or create a PR.
+# PR mode (--pr): creates branch, pushes, and opens a PR via 'gh' CLI.
+# Patch mode (--patch): stays on the current branch and leaves changes uncommitted.
+# Turn budget resets for each new plan.
 #
 # On turn exhaustion or stuck: exits, leaving files in in-progress/ for
 # resume on a subsequent run.
@@ -38,13 +40,16 @@ COMPLETED_PLANS=()
 CONTINUOUS_BRANCH=""
 CONTINUOUS_PR_URL=""
 
-# --- Early guard: direct mode cannot run on main/master ---
-if [[ "$MODE" == "direct" ]]; then
+# --- Early guard: patch mode cannot run on main/master ---
+if [[ "$MODE" == "patch" ]]; then
   current_branch=$(git rev-parse --abbrev-ref HEAD)
   if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
-    echo "Direct mode cannot run on '$current_branch'."
+    echo "Patch mode cannot run on '$current_branch'."
     echo ""
-    echo "Either run in PR mode (a branch and pull request are created for you):"
+    echo "Either run in branch mode (an isolated branch is created for you):"
+    echo "  ralphai run --branch"
+    echo ""
+    echo "Or run in PR mode (a branch and pull request are created for you):"
     echo "  ralphai run --pr"
     # Peek at backlog to suggest a branch name
     _first_plan=""
@@ -98,6 +103,8 @@ if [[ "$DRY_RUN" == true ]]; then
 
   if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
     echo "[dry-run] Continuous+PR mode: all backlog plans will run on a single branch with one PR."
+  elif [[ "$CONTINUOUS" == "true" && "$MODE" == "branch" ]]; then
+    echo "[dry-run] Continuous+branch mode: all backlog plans will run on a single branch."
   fi
 
   if [[ "$RESUMING" == true ]]; then
@@ -105,9 +112,25 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Mode: resume in-progress"
     echo "[dry-run] Would run on current branch: $current_branch"
     echo "[dry-run] Would keep existing $PROGRESS_FILE"
-  elif [[ "$MODE" == "direct" ]]; then
+  elif [[ "$MODE" == "patch" ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
-    echo "[dry-run] Mode: direct — would commit on current branch '$current_branch' (no PR)"
+    echo "[dry-run] Mode: patch — would leave changes uncommitted on '$current_branch'"
+    echo "[dry-run] Would initialize: $PROGRESS_FILE"
+  elif [[ "$MODE" == "branch" ]]; then
+    plan_basename=$(basename "${WIP_FILES[0]}")
+    slug="${plan_basename#prd-}"
+    slug="${slug%.md}"
+    branch="ralphai/${slug}"
+    if git show-ref --verify --quiet "refs/heads/ralphai"; then
+      echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
+      echo "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai"
+    fi
+    if branch_has_open_work "$branch"; then
+      echo "[dry-run] WARNING: $COLLISION_REASON"
+      echo "[dry-run] This plan would be SKIPPED in a real run."
+    fi
+    echo "[dry-run] Mode: branch — would create branch from $BASE_BRANCH: $branch"
+    echo "[dry-run] Would commit but not push or create a PR"
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
@@ -166,7 +189,7 @@ while true; do
   # --- Branch strategy ---
   if [[ "$RESUMING" == true ]]; then
     current_branch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$MODE" != "direct" && "$current_branch" == "$BASE_BRANCH" ]]; then
+    if [[ "$MODE" != "patch" && "$current_branch" == "$BASE_BRANCH" ]]; then
       echo "ERROR: Resuming requires being on a ralphai/* branch, not '$BASE_BRANCH'."
       echo "Checkout the branch you want to resume, then run again."
       exit 1
@@ -176,10 +199,10 @@ while true; do
 
     # Preserve existing progress file and receipt
     echo "Resuming — keeping existing $PROGRESS_FILE"
-  elif [[ "$MODE" == "direct" ]]; then
-    # Direct mode: work on the current branch, no branch creation, no PR
+  elif [[ "$MODE" == "patch" ]]; then
+    # Patch mode: work on the current branch, no branch creation, no commit, no PR
     branch=$(git rev-parse --abbrev-ref HEAD)
-    echo "Direct mode: working on current branch '$branch' (no PR will be created)"
+    echo "Patch mode: working on current branch '$branch' (changes will be left uncommitted)"
 
     # Initialize progress file
     mkdir -p "$WIP_DIR"
@@ -271,8 +294,8 @@ while true; do
     fi
     echo "Created branch from $BASE_BRANCH: $branch"
 
-    # In continuous+PR mode, remember this branch for subsequent plans
-    if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
+    # In continuous mode (branch or PR), remember this branch for subsequent plans
+    if [[ "$CONTINUOUS" == "true" && ("$MODE" == "pr" || "$MODE" == "branch") ]]; then
       CONTINUOUS_BRANCH="$branch"
     fi
 
@@ -420,7 +443,7 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
 
     # --- Auto-commit dirty state (AFTER stuck detection) ---
     if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "direct" ]]; then
+      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "patch" ]]; then
         echo "WARNING: Agent left uncommitted changes (autoCommit=false, skipping recovery commit)."
       else
         echo "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot."
@@ -451,9 +474,12 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
         fi
       elif [[ "$MODE" == "pr" ]]; then
         create_pr "$branch" "$PLAN_DESC"
+      elif [[ "$MODE" == "branch" ]]; then
+        echo "Branch mode: changes committed on branch '$branch'. No PR created."
+        echo "Tip: use --pr to automatically push and open a pull request."
       else
-        echo "Direct mode: commits are on branch '$branch'. No PR created."
-        echo "Tip: use --pr to automatically create a branch and open a pull request."
+        echo "Patch mode: changes left in working tree on branch '$branch'. No commits created."
+        echo "Tip: use --branch to create an isolated branch with commits."
       fi
       plans_completed=$((plans_completed + 1))
       completed=true
@@ -486,9 +512,9 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
 
   # --- Non-continuous modes: stop after one plan ---
   if [[ "$CONTINUOUS" != "true" ]]; then
-    if [[ "$MODE" == "direct" ]]; then
+    if [[ "$MODE" != "pr" ]]; then
       echo ""
-      echo "Plan complete. Direct mode stops after one plan by default."
+      echo "Plan complete. Stopping after one plan by default."
       echo "Tip: use --continuous to keep processing backlog plans."
     fi
     exit 0
