@@ -130,11 +130,11 @@ load_config() {
     CONFIG_MAX_STUCK="$value"
   fi
 
-  # --- mode ("pr" or "direct") ---
+  # --- mode ("branch", "pr", or "patch") ---
   if _json_has "mode"; then
     value=$(_json_str "mode")
-    if [[ "$value" != "pr" && "$value" != "direct" ]]; then
-      echo "ERROR: $config_path: 'mode' must be 'pr' or 'direct', got '$value'"
+    if [[ "$value" != "branch" && "$value" != "pr" && "$value" != "patch" ]]; then
+      echo "ERROR: $config_path: 'mode' must be 'branch', 'pr', or 'patch', got '$value'"
       exit 1
     fi
     CONFIG_MODE="$value"
@@ -364,8 +364,8 @@ apply_env_overrides() {
     MAX_STUCK="$RALPHAI_MAX_STUCK"
   fi
   if [[ -n "${RALPHAI_MODE:-}" ]]; then
-    if [[ "$RALPHAI_MODE" != "pr" && "$RALPHAI_MODE" != "direct" ]]; then
-      echo "ERROR: RALPHAI_MODE must be 'pr' or 'direct', got '$RALPHAI_MODE'"
+    if [[ "$RALPHAI_MODE" != "branch" && "$RALPHAI_MODE" != "pr" && "$RALPHAI_MODE" != "patch" ]]; then
+      echo "ERROR: RALPHAI_MODE must be 'branch', 'pr', or 'patch', got '$RALPHAI_MODE'"
       exit 1
     fi
     MODE="$RALPHAI_MODE"
@@ -466,14 +466,15 @@ print_usage() {
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
   echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
-  echo "  --direct                         Direct mode (default): commit on current branch, no PR"
+  echo "  --branch                         Branch mode (default): create isolated branch, commit, no PR"
   echo "  --pr                             PR mode: create branch, push, and open PR"
+  echo "  --patch                          Patch mode: leave changes uncommitted in working tree"
   echo "  --continuous                     Keep processing backlog plans after the first completes"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --fallback-agents=<list>         Comma-separated fallback agent commands (tried when stuck)"
   echo "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)"
-  echo "  --no-auto-commit                 Disable auto-commit (default; ignored in PR mode)"
+  echo "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
@@ -512,12 +513,12 @@ print_usage() {
   echo "  $0 --turns=10 --resume                       # recover dirty state and continue"
   echo "  $0 --turns=10 --agent-command='claude -p'     # use Claude Code"
   echo "  $0 --turns=10 --agent-command='opencode run --agent build'  # use OpenCode"
-  echo "  $0 --turns=10 --direct                       # commit on current branch (no PR)"
-  echo "  $0 --turns=10 --direct --continuous          # keep draining backlog on current branch"
+  echo "  $0 --turns=10 --branch                       # create isolated branch, commit (no PR)"
+  echo "  $0 --turns=10 --branch --continuous          # keep draining backlog on isolated branches"
   echo "  RALPHAI_AGENT_COMMAND='codex exec' $0 --turns=10  # override via env var"
   echo ""
   echo "Feature branch workflow:"
-  echo "  $0 --turns=10 --direct --base-branch=feature/big-thing  # commit directly on a feature branch"
+  echo "  $0 --turns=10 --patch --base-branch=feature/big-thing  # leave changes uncommitted on a feature branch"
 }
 
 # --- Parse args ---
@@ -589,11 +590,14 @@ for arg in "$@"; do
         exit 1
       fi
       ;;
-    --direct)
-      CLI_MODE="direct"
+    --branch)
+      CLI_MODE="branch"
       ;;
     --pr)
       CLI_MODE="pr"
+      ;;
+    --patch)
+      CLI_MODE="patch"
       ;;
     --continuous)
       CLI_CONTINUOUS="true"
