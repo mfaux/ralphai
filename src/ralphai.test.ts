@@ -2537,6 +2537,19 @@ build_continuous_pr_body
   // -----------------------------------------------------------------------
 
   describe.skipIf(process.platform === "win32")("worktree subcommand", () => {
+    /** Create an initial commit so worktree operations work (CI has no global git config). */
+    function gitInitialCommit(cwd: string): void {
+      execSync("git config user.name 'Test'", { cwd, stdio: "ignore" });
+      execSync("git config user.email 'test@test.com'", {
+        cwd,
+        stdio: "ignore",
+      });
+      execSync("git commit --allow-empty -m 'initial'", {
+        cwd,
+        stdio: "ignore",
+      });
+    }
+
     it("help text includes worktree command", () => {
       const result = runCli([], testDir);
       const output = stripLogo(result.stdout);
@@ -2554,10 +2567,7 @@ build_continuous_pr_body
 
     it("worktree refuses inside a worktree", () => {
       // Set up a main repo with a worktree
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       const worktreeDir = join(testDir, "wt");
       execSync(`git worktree add "${worktreeDir}" -b ralphai/test HEAD`, {
         cwd: testDir,
@@ -2586,20 +2596,14 @@ build_continuous_pr_body
     });
 
     it("worktree errors when .ralphai is not set up", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       const result = runCli(["worktree"], testDir);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not set up");
     });
 
     it("worktree errors with no backlog plans", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       // Create .ralphai with empty backlog
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
         recursive: true,
@@ -2611,10 +2615,7 @@ build_continuous_pr_body
     });
 
     it("worktree --plan=nonexistent.md errors", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
         recursive: true,
       });
@@ -2625,19 +2626,13 @@ build_continuous_pr_body
     });
 
     it("worktree list shows no worktrees initially", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       const output = runCliOutput(["worktree", "list"], testDir);
       expect(output).toContain("No active ralphai worktrees");
     });
 
     it("worktree list shows ralphai worktrees", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
 
       // Create a worktree on a ralphai/* branch
       const wtPath = join(testDir, "wt-list-test");
@@ -2658,10 +2653,7 @@ build_continuous_pr_body
     });
 
     it("worktree clean removes completed worktrees", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
 
       // Create a worktree on a ralphai/* branch
       const wtPath = join(testDir, "wt-clean-test");
@@ -2679,10 +2671,7 @@ build_continuous_pr_body
     });
 
     it("worktree clean preserves in-progress worktrees", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
 
       // Create a worktree on a ralphai/* branch
       const wtPath = join(testDir, "wt-keep-test");
@@ -2719,10 +2708,7 @@ build_continuous_pr_body
     });
 
     it("worktree --plan selects a specific plan", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
 
       // Create .ralphai with two plans
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
@@ -2755,10 +2741,7 @@ build_continuous_pr_body
     });
 
     it("worktree clean with no ralphai worktrees", () => {
-      execSync("git commit --allow-empty -m 'initial'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      gitInitialCommit(testDir);
       const output = runCliOutput(["worktree", "clean"], testDir);
       expect(output).toContain("No ralphai worktrees to clean");
     });
