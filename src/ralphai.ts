@@ -652,23 +652,33 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     join(ralphaiDir, "PLANNING.md"),
   );
 
-  // Generate config (JSON format)
-  const configObj: Record<string, string | string[]> = {
+  // Generate config (JSON format) — all 17 keys with explicit defaults
+  const feedbackCommands = answers.feedbackCommands
+    ? answers.feedbackCommands
+        .split(",")
+        .map((cmd) => cmd.trim())
+        .filter((cmd) => cmd.length > 0)
+    : [];
+
+  const configObj: Record<string, string | string[] | number | boolean> = {
     agentCommand: answers.agentCommand,
+    feedbackCommands,
     baseBranch: answers.baseBranch,
+    turns: answers.turns ?? 5,
+    mode: answers.mode ?? "direct",
+    autoCommit: answers.autoCommit ?? false,
+    maxStuck: answers.maxStuck ?? 3,
+    turnTimeout: 0,
+    promptMode: "auto",
+    continuous: false,
+    fallbackAgents: "",
+    issueSource: answers.issueSource ?? "none",
+    issueLabel: "ralphai",
+    issueInProgressLabel: "ralphai:in-progress",
+    issueRepo: "",
+    issueCloseOnComplete: true,
+    issueCommentProgress: true,
   };
-
-  if (answers.feedbackCommands) {
-    // Split comma-separated string into a JSON array
-    configObj.feedbackCommands = answers.feedbackCommands
-      .split(",")
-      .map((cmd) => cmd.trim())
-      .filter((cmd) => cmd.length > 0);
-  }
-
-  if (answers.issueSource === "github") {
-    configObj.issueSource = "github";
-  }
 
   const config = JSON.stringify(configObj, null, 2) + "\n";
 

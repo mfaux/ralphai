@@ -98,8 +98,8 @@ describe("ralphai command", () => {
     expect(parsed.agentCommand).toBe("opencode run --agent build");
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed).not.toHaveProperty("protectedBranches");
-    // feedbackCommands should be absent when not detected (omitted from JSON)
-    expect(parsed).not.toHaveProperty("feedbackCommands");
+    // feedbackCommands should be an empty array when not detected
+    expect(parsed.feedbackCommands).toEqual([]);
   });
 
   it("init --yes --agent-command uses the provided agent command", () => {
@@ -793,35 +793,8 @@ describe("ralphai command", () => {
       expect(parsed.feedbackCommands).toEqual(["npm test"]);
     });
 
-    it("omits feedbackCommands when no scripts exist", () => {
-      writeFileSync(join(testDir, "package-lock.json"), "{}");
-      writeFileSync(
-        join(testDir, "package.json"),
-        JSON.stringify(
-          { name: "test", scripts: { start: "node index.js" } },
-          null,
-          2,
-        ),
-      );
-
-      runCliOutput(["init", "--yes"], testDir);
-
-      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
-      const parsed = JSON.parse(config);
-      expect(parsed).not.toHaveProperty("feedbackCommands");
-    });
-
-    it("omits feedbackCommands for non-JS projects", () => {
-      // No package.json, no deno.json — nothing to detect
-      runCliOutput(["init", "--yes"], testDir);
-
-      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
-      const parsed = JSON.parse(config);
-      expect(parsed).not.toHaveProperty("feedbackCommands");
-    });
-
-    it("omits feedbackCommands when no matching scripts detected", () => {
-      // pnpm project with no matching scripts → feedbackCommands omitted
+    it("defaults feedbackCommands to empty array when no scripts exist", () => {
+      // pnpm project with only "start" script → no feedback commands detected
       writeFileSync(join(testDir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
       writeFileSync(
         join(testDir, "package.json"),
@@ -836,7 +809,63 @@ describe("ralphai command", () => {
 
       const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
-      expect(parsed).not.toHaveProperty("feedbackCommands");
+      expect(parsed.feedbackCommands).toEqual([]);
+    });
+
+    it("defaults feedbackCommands to empty array for non-JS projects", () => {
+      // No package.json, no deno.json — nothing to detect
+      runCliOutput(["init", "--yes"], testDir);
+
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([]);
+    });
+
+    it("defaults feedbackCommands to empty array when no matching scripts detected", () => {
+      // pnpm project with no matching scripts → feedbackCommands is empty array
+      writeFileSync(join(testDir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+      writeFileSync(
+        join(testDir, "package.json"),
+        JSON.stringify(
+          { name: "test", scripts: { start: "node index.js" } },
+          null,
+          2,
+        ),
+      );
+
+      runCliOutput(["init", "--yes"], testDir);
+
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([]);
+    });
+
+    it("feedbackCommands is empty array for non-JS projects (no package.json)", () => {
+      // No package.json, no deno.json — nothing to detect
+      runCliOutput(["init", "--yes"], testDir);
+
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([]);
+    });
+
+    it("feedbackCommands is empty array when no matching scripts detected", () => {
+      // pnpm project with no matching scripts → feedbackCommands is empty array
+      writeFileSync(join(testDir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+      writeFileSync(
+        join(testDir, "package.json"),
+        JSON.stringify(
+          { name: "test", scripts: { start: "node index.js" } },
+          null,
+          2,
+        ),
+      );
+
+      runCliOutput(["init", "--yes"], testDir);
+
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
+      const parsed = JSON.parse(config);
+      expect(parsed.feedbackCommands).toEqual([]);
     });
 
     it("detects type-check and format:check scripts", () => {
@@ -2170,23 +2199,23 @@ echo "$AUTO_COMMIT"
   // -------------------------------------------------------------------------
 
   describe("GitHub Issues integration", () => {
-    it("init --yes does not enable issueSource in config", () => {
+    it("init --yes defaults issueSource to none in config", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const parsed = JSON.parse(
         readFileSync(join(testDir, "ralphai.json"), "utf-8"),
       );
-      expect(parsed).not.toHaveProperty("issueSource");
+      expect(parsed.issueSource).toBe("none");
     });
 
-    it("init --yes omits issueSource from JSON config", () => {
+    it("init --yes includes issueSource as none in JSON config", () => {
       runCliOutput(["init", "--yes"], testDir);
 
       const parsed = JSON.parse(
         readFileSync(join(testDir, "ralphai.json"), "utf-8"),
       );
-      // issueSource should not appear at all in the JSON config
-      expect(parsed).not.toHaveProperty("issueSource");
+      // issueSource should be "none" by default (all 17 keys are explicit)
+      expect(parsed.issueSource).toBe("none");
     });
 
     it("init --yes output does not contain GitHub label info", () => {
