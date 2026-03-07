@@ -1205,6 +1205,7 @@ interface Receipt {
   worktree_path?: string;
   branch: string;
   slug: string;
+  plan_file?: string;
   agent: string;
   turns_budget: number;
   turns_completed: number;
@@ -1227,6 +1228,7 @@ function parseReceipt(filePath: string): Receipt | null {
     worktree_path: fields.worktree_path,
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
+    plan_file: fields.plan_file,
     agent: fields.agent ?? "",
     turns_budget: parseInt(fields.turns_budget ?? "0", 10),
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
