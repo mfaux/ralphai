@@ -548,6 +548,44 @@ describe("ralphai command", () => {
     expect(existsSync(inProgressDir)).toBe(true);
   });
 
+  it("reset --yes force-removes dirty worktrees and deletes unmerged branches", () => {
+    // Set up git identity for commits
+    execSync(
+      'git config user.email "test@test.com" && git config user.name "Test"',
+      { cwd: testDir, stdio: "ignore" },
+    );
+    // Create initial commit
+    execSync("git commit --allow-empty -m 'init'", {
+      cwd: testDir,
+      stdio: "ignore",
+    });
+
+    runCliOutput(["init", "--yes"], testDir);
+
+    // Create a worktree on a ralphai/* branch
+    const wtPath = join(testDir, "wt-dirty");
+    execSync(`git worktree add "${wtPath}" -b ralphai/dirty-test HEAD`, {
+      cwd: testDir,
+      stdio: "ignore",
+    });
+
+    // Make the worktree dirty (uncommitted changes)
+    writeFileSync(join(wtPath, "dirty-file.txt"), "dirty");
+    execSync("git add dirty-file.txt", { cwd: wtPath, stdio: "ignore" });
+
+    // Reset should force-remove the dirty worktree
+    const output = runCliOutput(["reset", "--yes"], testDir);
+    expect(output).toContain("Pipeline reset");
+    expect(existsSync(wtPath)).toBe(false);
+
+    // Branch should be force-deleted even though it's not merged
+    const branchCheck = execSync("git branch --list ralphai/dirty-test", {
+      cwd: testDir,
+      encoding: "utf-8",
+    }).trim();
+    expect(branchCheck).toBe("");
+  });
+
   // -------------------------------------------------------------------------
   // --force tests
   // -------------------------------------------------------------------------
@@ -2848,6 +2886,58 @@ build_continuous_pr_body
       ).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
+    });
+
+    it("is_tree_dirty ignores .ralphai changes but catches real dirty state", () => {
+      gitInitialCommit(testDir);
+
+      // Create and track .ralphai/ files
+      mkdirSync(join(testDir, ".ralphai"), { recursive: true });
+      writeFileSync(join(testDir, ".ralphai", "ralphai.config"), "test=1\n");
+      execSync("git add .ralphai/ && git commit -m 'add .ralphai'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      const gitShPath = join(__dirname, "..", "runner", "lib", "git.sh");
+
+      // Helper: run is_tree_dirty in a given directory
+      const isDirty = (cwd: string) => {
+        const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+          cwd,
+          encoding: "utf-8",
+        }).trim();
+        const result = execSync(
+          `bash -c 'MODE=direct; DRY_RUN=true; BASE_BRANCH=${branch}; source "${gitShPath}"; is_tree_dirty; echo $?'`,
+          { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+        ).trim();
+        return result === "0";
+      };
+
+      // Clean tree should not be dirty
+      expect(isDirty(testDir)).toBe(false);
+
+      // Replace .ralphai/ with a symlink (simulating worktree setup)
+      const wtDir = join(testDir, "wt-dirty-test");
+      execSync(`git worktree add "${wtDir}" -b ralphai/dirty-test HEAD`, {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      rmSync(join(wtDir, ".ralphai"), { recursive: true, force: true });
+      symlinkSync(join(testDir, ".ralphai"), join(wtDir, ".ralphai"));
+
+      // .ralphai symlink replacement should NOT make the tree dirty
+      expect(isDirty(wtDir)).toBe(false);
+
+      // But a real change (outside .ralphai) should still be caught
+      writeFileSync(join(wtDir, "real-change.txt"), "dirty");
+      expect(isDirty(wtDir)).toBe(true);
+
+      // Clean up
+      execSync(`git worktree remove --force "${wtDir}"`, {
+        cwd: testDir,
+        stdio: "ignore",
+      });
     });
 
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
