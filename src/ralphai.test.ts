@@ -433,19 +433,19 @@ describe("ralphai command", () => {
     expect(existsSync(join(inProgressDir, "prd-my-feature.md"))).toBe(false);
   });
 
-  it("reset --yes deletes progress.md", () => {
+  it("reset --yes deletes progress files", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
     writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
     writeFileSync(
-      join(inProgressDir, "progress.md"),
+      join(inProgressDir, "progress-test.md"),
       "## Progress Log\n### Task 1:\n**Status:** Complete",
     );
 
     runCliOutput(["reset", "--yes"], testDir);
 
-    expect(existsSync(join(inProgressDir, "progress.md"))).toBe(false);
+    expect(existsSync(join(inProgressDir, "progress-test.md"))).toBe(false);
   });
 
   it("reset --yes deletes receipt files", () => {
@@ -469,7 +469,7 @@ describe("ralphai command", () => {
     const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
     writeFileSync(join(inProgressDir, "prd-feature-a.md"), "# Feature A");
     writeFileSync(join(inProgressDir, "prd-feature-b.md"), "# Feature B");
-    writeFileSync(join(inProgressDir, "progress.md"), "## Progress Log");
+    writeFileSync(join(inProgressDir, "progress-feature-a.md"), "## Progress Log");
     writeFileSync(
       join(inProgressDir, "receipt-feature-a.txt"),
       "slug=feature-a",
@@ -482,7 +482,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["reset", "--yes"], testDir));
 
     expect(output).toContain("2 plans moved to backlog");
-    expect(output).toContain("Deleted progress.md");
+    expect(output).toContain("Deleted 1 progress file");
     expect(output).toContain("Deleted 2 receipts");
 
     // Both plans should be in backlog

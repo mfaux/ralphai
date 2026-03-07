@@ -167,9 +167,20 @@ detect_plan() {
 
   # Check for in-progress plan files
   local wip_plans=()
-  for f in "$WIP_DIR"/*.md; do
-    [[ -f "$f" ]] && wip_plans+=("$f")
-  done
+  if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
+    # In worktree mode, only consider the plan matching this branch.
+    # Multiple worktrees share the same .ralphai/ directory via symlink,
+    # so other worktrees' in-progress plans must be ignored.
+    local _branch
+    _branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+    local _slug="${_branch#ralphai/}"
+    local _match="$WIP_DIR/prd-${_slug}.md"
+    [[ -f "$_match" ]] && wip_plans+=("$_match")
+  else
+    for f in "$WIP_DIR"/*.md; do
+      [[ -f "$f" ]] && wip_plans+=("$f")
+    done
+  fi
 
   if [[ ${#wip_plans[@]} -gt 0 ]]; then
     # Resume in-progress work

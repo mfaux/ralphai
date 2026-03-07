@@ -19,8 +19,8 @@ archive_run() {
 
   # Move progress file
   if [[ -f "$PROGRESS_FILE" ]]; then
-    mv "$PROGRESS_FILE" "$ARCHIVE_DIR/progress-${timestamp}.md"
-    echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${timestamp}.md"
+    mv "$PROGRESS_FILE" "$ARCHIVE_DIR/progress-${PLAN_SLUG}-${timestamp}.md"
+    echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${PLAN_SLUG}-${timestamp}.md"
   fi
 
   # Move receipt file

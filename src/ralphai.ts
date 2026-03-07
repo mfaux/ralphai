@@ -725,9 +725,14 @@ async function runRalphaiReset(
 
   const files = readdirSync(inProgressDir);
   const planFiles = files.filter(
-    (f) => f.endsWith(".md") && f !== "progress.md",
+    (f) =>
+      f.endsWith(".md") &&
+      f !== "progress.md" &&
+      !f.startsWith("progress-"),
   );
-  const progressFile = files.includes("progress.md") ? "progress.md" : null;
+  const progressFiles = files.filter(
+    (f) => f === "progress.md" || f.startsWith("progress-"),
+  );
   const receiptFiles = files.filter(
     (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
   );
@@ -742,7 +747,7 @@ async function runRalphaiReset(
 
   if (
     planFiles.length === 0 &&
-    !progressFile &&
+    progressFiles.length === 0 &&
     receiptFiles.length === 0 &&
     worktrees.length === 0
   ) {
@@ -762,9 +767,9 @@ async function runRalphaiReset(
       console.log(`    ${DIM}${f}${RESET}`);
     }
   }
-  if (progressFile) {
+  if (progressFiles.length > 0) {
     console.log(
-      `  ${TEXT}Progress${RESET}    ${DIM}progress.md will be deleted${RESET}`,
+      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""} will be deleted${RESET}`,
     );
   }
   if (receiptFiles.length > 0) {
@@ -807,9 +812,9 @@ async function runRalphaiReset(
     actions++;
   }
 
-  // 2. Delete progress.md
-  if (progressFile) {
-    rmSync(join(inProgressDir, progressFile), { force: true });
+  // 2. Delete progress file(s)
+  for (const pf of progressFiles) {
+    rmSync(join(inProgressDir, pf), { force: true });
     actions++;
   }
 
@@ -865,8 +870,10 @@ async function runRalphaiReset(
       `  ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved to backlog`,
     );
   }
-  if (progressFile) {
-    console.log(`  Deleted progress.md`);
+  if (progressFiles.length > 0) {
+    console.log(
+      `  Deleted ${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}`,
+    );
   }
   if (receiptFiles.length > 0) {
     console.log(
@@ -1217,67 +1224,103 @@ function parseWorktreeList(output: string): WorktreeEntry[] {
 function selectPlanForWorktree(
   ralphaiDir: string,
   specificPlan?: string,
+  activeWorktrees: WorktreeEntry[] = [],
 ): SelectedWorktreePlan | null {
   const backlogDir = join(ralphaiDir, "pipeline", "backlog");
   const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
 
+  // Build set of slugs that already have an active worktree
+  const activeSlugs = new Set(
+    activeWorktrees.map((wt) => wt.branch.replace("ralphai/", "")),
+  );
+
+  // --- Specific plan requested ---
   if (specificPlan) {
     const inProgressPath = join(inProgressDir, specificPlan);
     if (existsSync(inProgressPath)) {
       const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
       return { planFile: specificPlan, slug, source: "in-progress" };
     }
+    if (existsSync(backlogDir)) {
+      const planPath = join(backlogDir, specificPlan);
+      if (existsSync(planPath)) {
+        const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+        return { planFile: specificPlan, slug, source: "backlog" };
+      }
+    }
+    console.error(
+      `Plan '${specificPlan}' not found in backlog or in-progress.`,
+    );
+    return null;
   }
 
+  // --- Auto-detect plan ---
+
+  // Filter in-progress plans: only prd-*.md files
   const inProgressPlans = existsSync(inProgressDir)
-    ? readdirSync(inProgressDir).filter((f) => f.endsWith(".md"))
+    ? readdirSync(inProgressDir).filter(
+        (f) => f.startsWith("prd-") && f.endsWith(".md"),
+      )
     : [];
 
-  if (!specificPlan && inProgressPlans.length === 1) {
-    const planFile = inProgressPlans[0]!;
+  // Plans without an active worktree are "unattended" — resume first
+  const unattendedPlans = inProgressPlans.filter(
+    (f) => !activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+  );
+
+  if (unattendedPlans.length === 1) {
+    const planFile = unattendedPlans[0]!;
     const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
     return { planFile, slug, source: "in-progress" };
   }
 
-  if (!specificPlan && inProgressPlans.length > 1) {
+  if (unattendedPlans.length > 1) {
     console.error(
-      `Multiple plans are already in progress. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
+      `Multiple unattended in-progress plans. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
     );
-    for (const planFile of inProgressPlans) {
+    for (const planFile of unattendedPlans) {
       console.error(`  ${planFile}`);
     }
     return null;
   }
 
-  if (!existsSync(backlogDir)) {
-    console.error(`No backlog directory found at ${backlogDir}`);
-    return null;
+  // No unattended plans — check backlog for new work
+  const backlogPlans =
+    existsSync(backlogDir)
+      ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
+      : [];
+
+  if (backlogPlans.length > 0) {
+    const firstPlan = backlogPlans[0]!;
+    const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+    return { planFile: firstPlan, slug, source: "backlog" };
   }
 
-  if (specificPlan) {
-    const planPath = join(backlogDir, specificPlan);
-    if (!existsSync(planPath)) {
-      console.error(`Plan '${specificPlan}' not found in backlog.`);
-      return null;
-    }
-    const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
-    return { planFile: specificPlan, slug, source: "backlog" };
+  // No backlog — try resuming an in-progress plan that has a worktree
+  const attendedPlans = inProgressPlans.filter((f) =>
+    activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+  );
+
+  if (attendedPlans.length === 1) {
+    const planFile = attendedPlans[0]!;
+    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    return { planFile, slug, source: "in-progress" };
   }
 
-  // Find any .md file in backlog
-  const plans = readdirSync(backlogDir).filter((f) => f.endsWith(".md"));
-
-  if (plans.length === 0) {
+  if (attendedPlans.length > 1) {
     console.error(
-      `No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
+      `Multiple in-progress plans with active worktrees. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
     );
+    for (const planFile of attendedPlans) {
+      console.error(`  ${planFile}`);
+    }
     return null;
   }
 
-  // Use the first plan (actual prioritization happens in the bash runner)
-  const firstPlan = plans[0]!;
-  const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
-  return { planFile: firstPlan, slug, source: "backlog" };
+  console.error(
+    `No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
+  );
+  return null;
 }
 
 function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
@@ -1492,7 +1535,10 @@ function runRalphaiStatus(cwd: string): void {
     ? readdirSync(inProgressDir)
     : [];
   const inProgressPlans = inProgressFiles.filter(
-    (f) => f.endsWith(".md") && f !== "progress.md",
+    (f) =>
+      f.endsWith(".md") &&
+      f !== "progress.md" &&
+      !f.startsWith("progress-"),
   );
   const receiptFiles = inProgressFiles.filter(
     (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
@@ -1667,7 +1713,12 @@ async function runRalphaiWorktree(
   }
 
   // Select plan (in-progress first, then backlog)
-  const plan = selectPlanForWorktree(join(cwd, ".ralphai"), wtOpts.plan);
+  const activeWorktrees = listRalphaiWorktrees(cwd);
+  const plan = selectPlanForWorktree(
+    join(cwd, ".ralphai"),
+    wtOpts.plan,
+    activeWorktrees,
+  );
   if (!plan) process.exit(1);
 
   // Check receipt for cross-source conflicts: block if plan is running in main repo
@@ -1695,7 +1746,7 @@ async function runRalphaiWorktree(
   // Determine base branch
   const baseBranch = detectBaseBranch();
   const branch = `ralphai/${plan.slug}`;
-  const activeWorktree = listRalphaiWorktrees(cwd).find(
+  const activeWorktree = activeWorktrees.find(
     (wt) => wt.branch === branch,
   );
 
