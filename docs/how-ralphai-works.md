@@ -1,44 +1,29 @@
-# How ralphai Works
+# How Ralphai Works
 
 Ralphai is a loop that drives your AI coding agent one plan at a time, with
-real build/test/lint feedback every cycle. This page explains the mechanics
-behind that loop.
+real build/test/lint feedback every cycle.
 
 Back to the [README](../README.md) for setup and quickstart.
 
 ## Context Rot
 
-When you use an AI coding agent in a long session, the conversation history
-grows. Every model has a fixed-size "context window" — the amount of text it
-can consider at once. Once the conversation exceeds that window, the agent may
-apply **context compression** by automatically summarizing or condensing
-older messages to free up space for new ones. Unlike simple truncation,
-compression actively rewrites your earlier conversation into shorter summaries.
-Nuance gets lost. Specific decisions become vague references. Code you
-discussed in detail gets reduced to a one-line note.
+Long AI coding sessions degrade. The model's context window fills up, older
+messages get compressed or dropped, and the agent forgets what it already
+tried — repeating mistakes and drifting from the goal.
 
-The result: the model forgets what it already tried, repeats mistakes, or
-invents things that contradict earlier work.
-
-This is **context rot**. The longer a session runs, the less reliable the agent
-becomes — not because the model is bad, but because its view of the
-conversation has been quietly rewritten underneath it.
-
-Ralphai avoids context rot by design. Each turn starts a **fresh agent
-session** with only the information that matters:
+Ralphai avoids this by starting each turn with a **fresh agent session**
+containing only what matters:
 
 - The [plan file](../templates/ralphai/PLANNING.md) (what to build)
 - A progress log (what was already done)
 - Learnings from past mistakes (if any)
 
-Turn 50 gets exactly the same quality of context as turn 1. No
-accumulated history, no summarization artifacts, no drift.
+Turn 50 gets exactly the same quality of context as turn 1.
 
 ## Feedback Loop
 
-Each turn, Ralphai instructs the agent to run your project's real build, test,
-and lint commands — not cached results, not model-generated guesses. The agent
-runs these commands itself and fixes any failures before committing.
+Each turn, the agent runs your project's real build, test, and lint
+commands — not cached results, not model-generated guesses.
 
 ```
     ┌─────────────────────────────────────┐
@@ -70,161 +55,61 @@ runs these commands itself and fixes any failures before committing.
                 (fresh session)
 ```
 
-1. Agent reads the plan and progress log
-2. Agent implements the next task
-3. Agent runs the configured feedback commands (e.g. `npm run build`, `npm test`)
-4. Agent fixes any errors and commits
-
-This loop keeps the agent grounded. Instead of drifting based on stale
-assumptions, it reacts to actual project state every cycle.
-
-Feedback commands are auto-detected during `ralphai init` or can be configured
-manually via `feedbackCommands` in `ralphai.json`. When configured, the
-agent prompt includes the specific commands. When absent, the prompt uses a
-generic fallback: "Run your project's build, test, and lint commands."
+Feedback commands are auto-detected during `ralphai init` or configured
+via `feedbackCommands` in `ralphai.json`.
 
 ## Stuck Detection
 
-Sometimes an agent gets stuck — making changes that don't compile, going in
-circles, or producing empty commits. Ralphai watches for this.
+If **N consecutive turns** produce no new commits, Ralphai aborts. Default
+threshold is 3. Configurable via `maxStuck` in `ralphai.json`,
+`RALPHAI_MAX_STUCK`, or `--max-stuck`.
 
-If **N consecutive turns** produce no new commits, Ralphai aborts the run.
-The default threshold is 3, meaning: if the agent fails to commit anything
-useful three times in a row, Ralphai stops burning tokens and leaves the work
-in `in-progress/` for you to inspect.
-
-The threshold is configurable:
-
-- **Config file:** `"maxStuck": 5` in `ralphai.json`
-- **Env var:** `RALPHAI_MAX_STUCK=5`
-- **CLI flag:** `--max-stuck=5`
-
-When a run is aborted due to stuck detection, the plan and progress files stay
-in `.ralphai/pipeline/in-progress/`. You can resume with `ralphai run` after
-investigating what went wrong — or adjust the plan and try again.
+The plan stays in `in-progress/` so you can inspect and resume.
 
 ## Continuous Mode
 
-By default, Ralphai stops after completing one plan. Continuous mode keeps
-draining the backlog — after a plan completes, Ralphai picks the next
-dependency-ready plan and starts a fresh turn loop for it.
+By default, Ralphai stops after one plan. With `--continuous`, it keeps
+draining the backlog — picking the next dependency-ready plan after each
+completion.
 
-**How it works:**
-
-1. A plan completes (the agent signals `COMPLETE`).
-2. Ralphai checks the backlog for more dependency-ready plans.
-3. If a plan is found, a new turn loop begins with a fresh turn counter,
-   fresh stuck counter, and a fresh agent session.
-4. This repeats until the backlog is empty or a plan fails.
-
-In **direct mode**, continuous processing simply keeps committing on the
-current branch. In **PR mode**, Ralphai creates a single **draft PR** after
-the first plan completes, updates it after each subsequent plan, and marks
-it as "ready for review" when the backlog is drained.
-
-If a plan fails mid-session (runs out of turns or the agent gets stuck),
-Ralphai pushes any partial work and exits — it does not skip ahead to the
-next plan.
-
-**Configuration:**
-
-- **Config file:** `"continuous": true` in `ralphai.json`
-- **Env var:** `RALPHAI_CONTINUOUS=true`
-- **CLI flag:** `--continuous`
-
-Default: `false` (stop after one plan).
+In **PR mode** (`--continuous --pr`), a single draft PR is created after the
+first plan. Each subsequent plan updates the PR body. The PR is marked ready
+for review when the backlog is drained. If a plan fails mid-session, Ralphai
+pushes partial work and exits.
 
 ## Turn Timeout
 
-Turn timeout sets a maximum duration for each individual agent invocation.
-If the agent exceeds the limit, it is killed and the turn ends. This
-prevents a single agent call from running indefinitely.
-
-**How it works:**
-
-1. When `turnTimeout` is set to a value greater than 0, each agent command
-   is wrapped with the Unix `timeout` command.
-2. If the agent exceeds the limit, it receives a SIGTERM signal and the
-   process is killed.
-3. A warning is printed: `"Agent command timed out after Ns."`.
-4. The turn still counts toward the turn budget. The stuck counter
-   increments (since a killed agent typically produces no commits).
-5. If the agent keeps timing out with no commits, stuck detection
-   eventually fires — which aborts the run.
-
-A timed-out turn is not fatal on its own. Ralphai continues to the next
-turn, giving the agent another chance to make progress.
-
-**Configuration:**
-
-- **Config file:** `"turnTimeout": 300` in `ralphai.json` (value in seconds)
-- **Env var:** `RALPHAI_TURN_TIMEOUT=300`
-- **CLI flag:** `--turn-timeout=300`
-
-Default: `0` (no timeout — the agent runs until it exits on its own).
+Optional per-invocation timeout (`turnTimeout` in seconds, or
+`--turn-timeout`). If the agent exceeds the limit, it's killed via SIGTERM
+and the turn counts toward the stuck budget. Default: 0 (no timeout).
 
 ## Branch Isolation
 
-Ralphai supports two branching strategies:
+Two modes:
 
-- **Direct mode** (default, `--direct`): Ralphai commits on your current
-  branch. No branch creation, no PR. You must be on a feature branch —
-  Ralphai refuses to run on `main` or `master`.
-- **PR mode** (`--pr`): Ralphai creates an isolated `ralphai/*` branch from the
-  configured base branch, does all work there, and opens a PR on completion
-  via the `gh` CLI (validated at startup before any agent work begins).
+- **Branch mode** (default): commits on your current branch. No branch
+  creation, no PR. Refuses to run on `main`/`master`.
+- **PR mode** (`--pr`): creates a `ralphai/<plan-slug>` branch from the base
+  branch, does all work there, and opens a PR on completion via `gh`.
 
-**Branch naming (PR mode only):** The branch name is derived from the plan
-filename (minus the `.md` suffix). `add-dark-mode.md` becomes
-`ralphai/add-dark-mode`. The `ralphai/` prefix keeps automated work visually
-separate from human branches.
-
-**Collision detection (PR mode only):** Before creating a branch, Ralphai
-checks whether it already exists locally, on the remote, or has an open PR. If
-a collision is found, the plan is skipped and Ralphai moves to the next one.
-
-**Feature branch workflow:** For large features spanning multiple plans,
-use direct mode on a feature branch (`git checkout -b feature/big-thing`
-then `ralphai run --turns=5`). When all plans are done, you
-manually open a PR from the feature branch to `main`.
-
-**Safety guards:**
-
-- Ralphai blocks on dirty working state by default; `--resume` auto-commits
-  dirty changes on any non-base branch (not just `ralphai/*` branches)
-- `--resume` refuses to auto-commit on the configured base branch (defaults to
-  `main`; configurable via `baseBranch`)
-- Direct mode (`--direct`) refuses to run on `main` or `master`
-- Dry-run mode (`--dry-run`) is completely read-only — no file moves, branch
-  creation, or agent execution
+PR mode checks for branch collisions (local, remote, open PR) before
+starting — collisions skip to the next plan.
 
 ## Plan Lifecycle
 
-Plans flow through four directories inside `.ralphai/`:
-
 ```
-wip/        (work in progress — Ralphai ignores these)
-backlog/    --> in-progress/ --> out/
+wip/       (parked — Ralphai ignores)
+backlog/  →  in-progress/  →  out/
 ```
 
-1. **`wip/`** (work in progress) — Plans that aren't ready yet. Ralphai never looks here. Use it
-   for ideas that need more thought, external prerequisites, or human review.
-   Move to `backlog/` when ready.
+- **`backlog/`** — the queue. Ralphai picks dependency-ready plans
+  (LLM-selected when multiple are ready).
+- **`in-progress/`** — active work. Plan + `progress.md` live here. Files
+  stay on interruption for resumption.
+- **`out/`** — archive. Moved here when the agent signals completion.
 
-2. **`backlog/`** — The queue. Ralphai picks dependency-ready plans automatically.
-   When multiple plans are ready, an LLM call selects the best one based on
-   dependencies, risk, and value. The chosen plan is moved to `in-progress/`.
-
-3. **`in-progress/`** — Active work. The plan file and `progress.md` live here
-   while Ralphai is working. If a run is interrupted or exhausts its turns,
-   files stay here so work can be resumed.
-
-4. **`out/`** — Archive. Plans and progress logs are moved here only when the
-   agent signals completion.
-
-**Plan dependencies:** Plans can declare `depends-on` in their YAML
-frontmatter. A plan is only runnable when all its dependencies are archived in
-`out/`. Plans without `depends-on` are always considered ready.
+Plans can declare `depends-on` in YAML frontmatter. A plan runs only when
+all dependencies are in `out/`.
 
 ```md
 ---
@@ -232,35 +117,10 @@ depends-on: [foundation.md, wiring.md]
 ---
 ```
 
-**GitHub Issues integration:** When the backlog is empty and `issueSource=github`
-is configured, Ralphai can pull labeled GitHub issues and convert them into plan
-files automatically. See the [operational docs](../templates/ralphai/README.md) for
-details.
-
-**File tracking:** Plan files in `backlog/`, `in-progress/`, and `out/` are
-gitignored (local-only state). The entire `.ralphai/` directory is gitignored.
-Moving files between lifecycle stages requires no git commits.
-
 ## Learnings System
 
-Ralphai logs mistakes and lessons to `.ralphai/LEARNINGS.md` during autonomous
-runs. This file is **gitignored** (local-only, never committed). Ralphai reads
-it at the start of each turn so it doesn't repeat past errors.
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs
+and reads it each turn to avoid repeating errors.
 
-**Review workflow after runs:**
-
-1. Check `.ralphai/LEARNINGS.md` for new entries
-2. Compact findings — merge duplicates, drop one-off noise
-3. Promote durable guidance to the appropriate place:
-   - `AGENTS.md` (or equivalent) for immediate repo-specific agent behavior
-   - Skill/reusable docs for stable patterns worth reusing across tasks or repos
-
-Keeping learnings gitignored prevents auto-written entries from interfering
-with stuck detection (which counts commits).
-
-## Worktrees
-
-`ralphai worktree` runs a plan in an isolated git worktree, letting you keep
-working in your main checkout while Ralphai runs in a separate directory.
-
-See [Worktrees](worktrees.md) for usage, agent compatibility, and manual setup.
+**After runs:** review entries, merge duplicates, and promote durable
+lessons to `AGENTS.md` or skill docs.
