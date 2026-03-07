@@ -31,7 +31,7 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","fallbackAgents","autoCommit","turns"] | index($k) | not)' "$config_path")
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns"] | index($k) | not)' "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -179,22 +179,6 @@ load_config() {
     CONFIG_CONTINUOUS="$value"
   fi
 
-  # --- fallbackAgents (array of strings or comma-separated string) ---
-  if _json_has "fallbackAgents"; then
-    local fa_type
-    fa_type=$(jq -r '.fallbackAgents | type' "$config_path")
-    if [[ "$fa_type" == "array" ]]; then
-      value=$(jq -r '.fallbackAgents | join(",")' "$config_path")
-      validate_comma_list "$value" "$config_path: 'fallbackAgents' array"
-    elif [[ "$fa_type" == "string" ]]; then
-      value=$(_json_str "fallbackAgents")
-      validate_comma_list "$value" "$config_path: 'fallbackAgents'"
-    else
-      echo "ERROR: $config_path: 'fallbackAgents' must be an array of strings or a comma-separated string, got $fa_type"
-      exit 1
-    fi
-    CONFIG_FALLBACK_AGENTS="$value"
-  fi
 
   # --- autoCommit (boolean) ---
   if _json_has "autoCommit"; then
@@ -255,9 +239,6 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_CONTINUOUS:-}" ]]; then
     CONTINUOUS="$CONFIG_CONTINUOUS"
-  fi
-  if [[ -n "${CONFIG_FALLBACK_AGENTS:-}" ]]; then
-    FALLBACK_AGENTS="$CONFIG_FALLBACK_AGENTS"
   fi
   if [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
     AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
@@ -323,10 +304,6 @@ apply_env_overrides() {
   if [[ -n "${RALPHAI_CONTINUOUS:-}" ]]; then
     validate_boolean "$RALPHAI_CONTINUOUS" "RALPHAI_CONTINUOUS"
     CONTINUOUS="$RALPHAI_CONTINUOUS"
-  fi
-  if [[ -n "${RALPHAI_FALLBACK_AGENTS:-}" ]]; then
-    validate_comma_list "$RALPHAI_FALLBACK_AGENTS" "RALPHAI_FALLBACK_AGENTS"
-    FALLBACK_AGENTS="$RALPHAI_FALLBACK_AGENTS"
   fi
   if [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
     validate_boolean "$RALPHAI_AUTO_COMMIT" "RALPHAI_AUTO_COMMIT"

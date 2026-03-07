@@ -1,5 +1,5 @@
 # cli.sh — CLI argument parsing, config precedence orchestration,
-# fallback chain setup, and agent command validation.
+# and agent command validation.
 # Sourced by ralphai.sh after config.sh. Runs at source-time.
 # Depends on: defaults.sh (DEFAULT_* vars), validate.sh (validate_* helpers),
 #             config.sh (load_config, apply_config, apply_env_overrides)
@@ -27,7 +27,6 @@ print_usage() {
   echo "  --continuous                     Keep processing backlog plans after the first completes"
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
-  echo "  --fallback-agents=<list>         Comma-separated fallback agent commands (tried when stuck)"
   echo "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)"
   echo "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
@@ -43,7 +42,7 @@ print_usage() {
   echo "Config file: $CONFIG_FILE (optional, JSON format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
   echo "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,"
-  echo "                  fallbackAgents, issueSource, issueLabel,"
+  echo "                  issueSource, issueLabel,"
   echo "                  issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
@@ -51,7 +50,7 @@ print_usage() {
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
   echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
   echo "                   RALPHAI_AUTO_COMMIT, RALPHAI_TURNS,"
-  echo "                   RALPHAI_TURN_TIMEOUT, RALPHAI_FALLBACK_AGENTS,"
+  echo "                   RALPHAI_TURN_TIMEOUT,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
   echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
@@ -180,13 +179,6 @@ for arg in "$@"; do
       CLI_ISSUE_COMMENT_PROGRESS="${arg#--issue-comment-progress=}"
       validate_boolean "$CLI_ISSUE_COMMENT_PROGRESS" "--issue-comment-progress"
       ;;
-    --fallback-agents=*)
-      CLI_FALLBACK_AGENTS="${arg#--fallback-agents=}"
-      # Empty value is valid (disables fallback); validate entries if non-empty
-      if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
-        validate_comma_list "$CLI_FALLBACK_AGENTS" "--fallback-agents"
-      fi
-      ;;
     *)
       echo "ERROR: Unrecognized argument: $arg"
       print_usage
@@ -256,23 +248,9 @@ fi
 if [[ -n "$CLI_PROMPT_MODE" ]]; then
   PROMPT_MODE="$CLI_PROMPT_MODE"
 fi
-if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
-  FALLBACK_AGENTS="$CLI_FALLBACK_AGENTS"
-fi
 if [[ -n "$CLI_AUTO_COMMIT" ]]; then
   AUTO_COMMIT="$CLI_AUTO_COMMIT"
 fi
-
-# --- Parse fallback chain into array ---
-FALLBACK_CHAIN=()
-if [[ -n "$FALLBACK_AGENTS" ]]; then
-  IFS=',' read -ra FALLBACK_CHAIN <<< "$FALLBACK_AGENTS"
-  # Trim whitespace from each entry
-  for i in "${!FALLBACK_CHAIN[@]}"; do
-    FALLBACK_CHAIN[$i]=$(echo "${FALLBACK_CHAIN[$i]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-  done
-fi
-FALLBACK_INDEX=0
 
 # --- Validate agentCommand is set ---
 if [[ -z "$AGENT_COMMAND" ]]; then

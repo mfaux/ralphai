@@ -244,25 +244,24 @@ A standard JSON file.
 
 Supported keys:
 
-| Key                    | Description                                                                 | Default               | Validation                     |
-| ---------------------- | --------------------------------------------------------------------------- | --------------------- | ------------------------------ |
-| `agentCommand`         | Full CLI invocation prefix for the AI agent                                 | _(none)_              | Non-empty                      |
-| `feedbackCommands`     | Shell commands to run after each change (JSON array or comma-separated)     | _(none)_              | Array of non-empty strings     |
-| `baseBranch`           | Branch to create work branches from                                         | `main`                | Non-empty, single token        |
-| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR)  | `direct`              | `pr` or `direct`               |
-| `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)                | `false`               | `true` or `false`              |
-| `turns`                | Number of turns per plan (0 = unlimited)                                    | `5`                   | Non-negative integer           |
-| `maxStuck`             | Consecutive no-progress turns before aborting                               | `3`                   | Positive integer               |
-| `turnTimeout`          | Seconds before killing a hung agent invocation                              | `0` (off)             | Non-negative integer           |
-| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`       | `auto`                | `auto`, `at-path`, or `inline` |
-| `continuous`           | Keep processing backlog plans after the first completes                     | `false`               | `true` or `false`              |
-| `fallbackAgents`       | Alternative agent commands tried when stuck (comma-separated or JSON array) | _(none)_              | Array of non-empty strings     |
-| `issueSource`          | Issue source to pull from (`none` or `github`)                              | `none`                | `none` or `github`             |
-| `issueLabel`           | Label to filter GitHub issues by                                            | `ralphai`             | Non-empty                      |
-| `issueInProgressLabel` | Label applied when an issue is picked up                                    | `ralphai:in-progress` | Non-empty                      |
-| `issueRepo`            | `owner/repo` override (auto-detected from remote)                           | _(auto-detect)_       | Any value                      |
-| `issueCloseOnComplete` | Close the issue when the plan completes                                     | `true`                | `true` or `false`              |
-| `issueCommentProgress` | Comment on the issue during the run                                         | `true`                | `true` or `false`              |
+| Key                    | Description                                                                | Default               | Validation                     |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------- | ------------------------------ |
+| `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_              | Non-empty                      |
+| `feedbackCommands`     | Shell commands to run after each change (JSON array or comma-separated)    | _(none)_              | Array of non-empty strings     |
+| `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token        |
+| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`               |
+| `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)               | `false`               | `true` or `false`              |
+| `turns`                | Number of turns per plan (0 = unlimited)                                   | `5`                   | Non-negative integer           |
+| `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer               |
+| `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer           |
+| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline` |
+| `continuous`           | Keep processing backlog plans after the first completes                    | `false`               | `true` or `false`              |
+| `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`                | `none` or `github`             |
+| `issueLabel`           | Label to filter GitHub issues by                                           | `ralphai`             | Non-empty                      |
+| `issueInProgressLabel` | Label applied when an issue is picked up                                   | `ralphai:in-progress` | Non-empty                      |
+| `issueRepo`            | `owner/repo` override (auto-detected from remote)                          | _(auto-detect)_       | Any value                      |
+| `issueCloseOnComplete` | Close the issue when the plan completes                                    | `true`                | `true` or `false`              |
+| `issueCommentProgress` | Comment on the issue during the run                                        | `true`                | `true` or `false`              |
 
 The `agentCommand` is the full CLI invocation prefix — Ralphai appends the prompt as a quoted argument. Examples:
 
@@ -301,7 +300,6 @@ Environment variables override config file values:
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
-| `RALPHAI_FALLBACK_AGENTS`         | `fallbackAgents`       |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
@@ -331,7 +329,6 @@ CLI flags have the highest priority:
 | `--turn-timeout=<seconds>`          | `turnTimeout`               |
 | `--prompt-mode=<mode>`              | `promptMode`                |
 | `--continuous`                      | `continuous` (sets `true`)  |
-| `--fallback-agents=<list>`          | `fallbackAgents`            |
 | `--issue-source=<source>`           | `issueSource`               |
 | `--issue-label=<label>`             | `issueLabel`                |
 | `--issue-in-progress-label=<label>` | `issueInProgressLabel`      |

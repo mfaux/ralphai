@@ -153,13 +153,6 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   fi
 
-  if [[ ${#FALLBACK_CHAIN[@]} -gt 0 ]]; then
-    echo "[dry-run] Fallback chain (${#FALLBACK_CHAIN[@]} agent(s)):"
-    for fi_idx in "${!FALLBACK_CHAIN[@]}"; do
-      echo "[dry-run]   $((fi_idx + 1)). ${FALLBACK_CHAIN[$fi_idx]}"
-    done
-  fi
-
   echo "[dry-run] No files moved, no branches created, no agent run executed."
   exit 0
 fi
@@ -311,7 +304,7 @@ while true; do
   fi
 
   # --- Per-plan agent override ---
-  GLOBAL_AGENT_COMMAND="$AGENT_COMMAND"
+  SAVED_AGENT_COMMAND="$AGENT_COMMAND"
   plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
   if [[ -n "$plan_agent" ]]; then
     AGENT_COMMAND="$plan_agent"
@@ -406,38 +399,15 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       stuck_count=$((stuck_count + 1))
       echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."
       if [[ $stuck_count -ge $MAX_STUCK ]]; then
-        # --- Fallback agent rotation ---
-        if [[ $FALLBACK_INDEX -lt ${#FALLBACK_CHAIN[@]} ]]; then
-          next_agent="${FALLBACK_CHAIN[$FALLBACK_INDEX]}"
-          FALLBACK_INDEX=$((FALLBACK_INDEX + 1))
-          echo ""
-          echo "Agent stuck after $MAX_STUCK iterations with no progress."
-          echo "Switching to fallback agent: $next_agent"
-          AGENT_COMMAND="$next_agent"
-          detect_agent_type
-          resolve_prompt_mode
-          stuck_count=0
-          # Log switch to progress file
-          if [[ -n "${PROGRESS_FILE:-}" && -f "$PROGRESS_FILE" ]]; then
-            echo "" >> "$PROGRESS_FILE"
-            echo "--- Agent switch (stuck after $MAX_STUCK iterations) ---" >> "$PROGRESS_FILE"
-            echo "Switched to fallback agent: $next_agent" >> "$PROGRESS_FILE"
-            echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$PROGRESS_FILE"
-          fi
-        else
-          echo "ERROR: $MAX_STUCK consecutive turns with no progress. All fallback agents exhausted."
-          echo "Branch: $branch"
-          echo "Plan files remain in $WIP_DIR/ — resume with another run."
-          # In continuous+PR mode, push partial work
-          if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
-            echo "Pushing partial work to continuous branch..."
-            git push origin "$branch" 2>&1 || true
-          fi
-          AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
-          detect_agent_type
-          resolve_prompt_mode
-          exit 1
+        echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
+        echo "Branch: $branch"
+        echo "Plan files remain in $WIP_DIR/ — resume with another run."
+        # In continuous+PR mode, push partial work
+        if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
+          echo "Pushing partial work to continuous branch..."
+          git push origin "$branch" 2>&1 || true
         fi
+        exit 1
       fi
     else
       stuck_count=0
@@ -490,8 +460,8 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     fi
   done
 
-  # --- Restore global agent command after plan completes ---
-  AGENT_COMMAND="$GLOBAL_AGENT_COMMAND"
+  # --- Restore agent command after plan completes ---
+  AGENT_COMMAND="$SAVED_AGENT_COMMAND"
   detect_agent_type
   resolve_prompt_mode
 

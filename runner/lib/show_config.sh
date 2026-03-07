@@ -64,7 +64,6 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   issue_close_source=$(_setting_source "$CLI_ISSUE_CLOSE_ON_COMPLETE" "RALPHAI_ISSUE_CLOSE_ON_COMPLETE" "${CONFIG_ISSUE_CLOSE_ON_COMPLETE:-}" "--issue-close-on-complete=$CLI_ISSUE_CLOSE_ON_COMPLETE")
   issue_comment_source=$(_setting_source "$CLI_ISSUE_COMMENT_PROGRESS" "RALPHAI_ISSUE_COMMENT_PROGRESS" "${CONFIG_ISSUE_COMMENT_PROGRESS:-}" "--issue-comment-progress=$CLI_ISSUE_COMMENT_PROGRESS")
   prompt_mode_source=$(_setting_source "$CLI_PROMPT_MODE" "RALPHAI_PROMPT_MODE" "${CONFIG_PROMPT_MODE:-}" "--prompt-mode=$CLI_PROMPT_MODE")
-  fallback_agents_source=$(_setting_source "$CLI_FALLBACK_AGENTS" "RALPHAI_FALLBACK_AGENTS" "${CONFIG_FALLBACK_AGENTS:-}" "--fallback-agents=$CLI_FALLBACK_AGENTS" "none")
 
   # auto_commit: special-case --no-auto-commit vs --auto-commit CLI label
   if [[ -n "$CLI_AUTO_COMMIT" ]]; then
@@ -101,7 +100,6 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  turnTimeout        = off  ($timeout_source)"
   fi
   echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
-  echo "  fallbackAgents     = ${FALLBACK_AGENTS:-<none>}  ($fallback_agents_source)"
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"

@@ -103,37 +103,6 @@ When a run is aborted due to stuck detection, the plan and progress files stay
 in `.ralphai/pipeline/in-progress/`. You can resume with `ralphai run` after
 investigating what went wrong — or adjust the plan and try again.
 
-## Fallback Agents
-
-When stuck detection fires, Ralphai doesn't have to give up — it can try a
-different agent. Fallback agents are an ordered list of alternative agent
-commands that Ralphai rotates through when the primary agent gets stuck.
-
-**How it works:**
-
-1. The primary agent hits the stuck threshold (no new commits for N
-   consecutive turns).
-2. Instead of aborting, Ralphai switches to the first fallback agent command
-   and **resets the stuck counter to zero**, giving the new agent a fresh
-   budget of N turns to make progress.
-3. If the first fallback also gets stuck, Ralphai moves to the next one in
-   the list.
-4. If all fallback agents are exhausted and the last one also gets stuck,
-   the run aborts — plan files stay in `in-progress/` for manual inspection.
-
-Each switch is logged in `progress.md` with a timestamp. The turn counter
-is **not** reset — fallback agents share the remaining turn budget.
-
-**Configuration:**
-
-- **Config file:** `"fallbackAgents": ["claude -p", "codex exec"]` in
-  `ralphai.json` (JSON array of strings, or a comma-separated string)
-- **Env var:** `RALPHAI_FALLBACK_AGENTS="claude -p,codex exec"`
-- **CLI flag:** `--fallback-agents='claude -p,codex exec'`
-
-Default: no fallback agents (empty). Ralphai aborts after the primary agent
-gets stuck.
-
 ## Continuous Mode
 
 By default, Ralphai stops after completing one plan. Continuous mode keeps
@@ -153,7 +122,7 @@ current branch. In **PR mode**, Ralphai creates a single **draft PR** after
 the first plan completes, updates it after each subsequent plan, and marks
 it as "ready for review" when the backlog is drained.
 
-If a plan fails mid-session (runs out of turns or all agents get stuck),
+If a plan fails mid-session (runs out of turns or the agent gets stuck),
 Ralphai pushes any partial work and exits — it does not skip ahead to the
 next plan.
 
@@ -181,8 +150,7 @@ prevents a single agent call from running indefinitely.
 4. The turn still counts toward the turn budget. The stuck counter
    increments (since a killed agent typically produces no commits).
 5. If the agent keeps timing out with no commits, stuck detection
-   eventually fires — which either rotates to a fallback agent or aborts
-   the run.
+   eventually fires — which aborts the run.
 
 A timed-out turn is not fatal on its own. Ralphai continues to the next
 turn, giving the agent another chance to make progress.

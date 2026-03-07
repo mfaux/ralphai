@@ -13,7 +13,7 @@ npx ralphai uninstall && npm install -g ralphai@latest
 - **Worktree subcommand** — `ralphai worktree` runs a plan in an isolated git worktree with `list` and `clean` management commands (#41)
 - **Worktree-aware runner** — auto-detects git worktrees and adapts branch strategy, PR creation, and CLI suggestions accordingly (#39)
 - **Continuous single-branch mode** — replaced group mode with a simpler continuous + PR single-branch workflow (#38)
-- **Fallback agent rotation** — automatically rotates to a fallback agent when stuck, with per-plan agent override support (#35)
+- **~~Fallback agent rotation~~** — removed; stuck detection now aborts cleanly instead of rotating agents
 - **Real-time streaming output** — runner streams agent output in real time on Unix (#36)
 - **Self-update command** — `ralphai update` with background update notifications (#30)
 - **Direct mode safety guard** — shows copy-pasteable `git checkout` command when direct mode blocks on main/master (#33)
