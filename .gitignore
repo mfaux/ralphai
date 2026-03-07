@@ -34,4 +34,4 @@ logs
 package-lock.json
 
 # ralphai local pipeline state (fully gitignored)
-.ralphai/
+.ralphai

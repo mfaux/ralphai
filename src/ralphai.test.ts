@@ -69,11 +69,13 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralphai", "pipeline", "out"))).toBe(true);
   });
 
-  it("init --yes adds .ralphai/ to root .gitignore", () => {
+  it("init --yes adds .ralphai to root .gitignore", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain(".ralphai/");
+    expect(gitignore).toContain(".ralphai");
+    // Should use ".ralphai" (no trailing slash) to also match symlinks in worktrees
+    expect(gitignore).not.toContain(".ralphai/");
   });
 
   it("init --yes creates LEARNINGS.md with seed content", () => {
@@ -3043,7 +3045,8 @@ build_continuous_pr_body
     it("is_tree_dirty ignores .ralphai changes (gitignored) but catches real dirty state", () => {
       gitInitialCommit(testDir);
 
-      // Add .ralphai/ to .gitignore (as scaffold does)
+      // Add .ralphai/ to .gitignore (legacy pattern — only matches directories,
+      // not symlinks; the pathspec exclusion in is_tree_dirty handles this)
       writeFileSync(join(testDir, ".gitignore"), ".ralphai/\n");
       execSync("git add .gitignore && git commit -m 'add gitignore'", {
         cwd: testDir,
@@ -3071,6 +3074,13 @@ build_continuous_pr_body
       // Adding files inside .ralphai/ should NOT make the tree dirty (gitignored)
       mkdirSync(join(testDir, ".ralphai"), { recursive: true });
       writeFileSync(join(testDir, ".ralphai", "LEARNINGS.md"), "# Learnings");
+      expect(isDirty(testDir)).toBe(false);
+
+      // A .ralphai symlink (as created in worktrees) should also not trigger dirty
+      rmSync(join(testDir, ".ralphai"), { recursive: true, force: true });
+      const symlinkTarget = join(testDir, ".ralphai-real");
+      mkdirSync(symlinkTarget, { recursive: true });
+      symlinkSync(symlinkTarget, join(testDir, ".ralphai"));
       expect(isDirty(testDir)).toBe(false);
 
       // But a real change (outside .ralphai) should still be caught

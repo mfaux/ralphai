@@ -619,19 +619,27 @@ Each entry should include:
 `;
   writeFileSync(join(ralphaiDir, "LEARNINGS.md"), learningsContent);
 
-  // Ensure .ralphai/ is gitignored in the project's root .gitignore
+  // Ensure .ralphai is gitignored in the project's root .gitignore
+  // Use ".ralphai" (no trailing slash) so it matches both directories and
+  // symlinks — worktrees create a .ralphai symlink that ".ralphai/" won't match.
   const rootGitignore = join(cwd, ".gitignore");
-  const gitignoreEntry = ".ralphai/";
+  const gitignoreEntry = ".ralphai";
+  const gitignoreEntryLegacy = ".ralphai/";
   if (existsSync(rootGitignore)) {
     const content = readFileSync(rootGitignore, "utf-8");
-    if (!content.split("\n").some((line) => line.trim() === gitignoreEntry)) {
+    const lines = content.split("\n").map((l) => l.trim());
+    if (
+      !lines.some(
+        (line) => line === gitignoreEntry || line === gitignoreEntryLegacy,
+      )
+    ) {
       writeFileSync(
         rootGitignore,
-        content.trimEnd() + "\n\n# ralphai local pipeline state\n.ralphai/\n",
+        content.trimEnd() + "\n\n# ralphai local pipeline state\n.ralphai\n",
       );
     }
   } else {
-    writeFileSync(rootGitignore, "# ralphai local pipeline state\n.ralphai/\n");
+    writeFileSync(rootGitignore, "# ralphai local pipeline state\n.ralphai\n");
   }
 
   // Create GitHub labels if issues integration is enabled
@@ -1137,9 +1145,7 @@ function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
 
     if (receipt.source === "worktree" && !isWorktree) {
       console.error();
-      console.error(
-        `Plan "${receipt.slug}" is running in a worktree.`,
-      );
+      console.error(`Plan "${receipt.slug}" is running in a worktree.`);
       console.error();
       console.error(`  Worktree: ${receipt.worktree_path ?? "unknown"}`);
       console.error(`  Branch:   ${receipt.branch || "unknown"}`);
@@ -1244,18 +1250,14 @@ function selectPlanForWorktree(
   }
 
   if (!existsSync(backlogDir)) {
-    console.error(
-      `No backlog directory found at ${backlogDir}`,
-    );
+    console.error(`No backlog directory found at ${backlogDir}`);
     return null;
   }
 
   if (specificPlan) {
     const planPath = join(backlogDir, specificPlan);
     if (!existsSync(planPath)) {
-      console.error(
-        `Plan '${specificPlan}' not found in backlog.`,
-      );
+      console.error(`Plan '${specificPlan}' not found in backlog.`);
       return null;
     }
     const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
@@ -1649,9 +1651,7 @@ async function runRalphaiWorktree(
 
   // Guard: must be in main repo, not a worktree
   if (isGitWorktree(cwd)) {
-    console.error(
-      `'ralphai worktree' must be run from the main repository.`,
-    );
+    console.error(`'ralphai worktree' must be run from the main repository.`);
     console.error(
       "You are inside a worktree. Run this command from the main repo.",
     );
@@ -1685,7 +1685,7 @@ async function runRalphaiWorktree(
       `Plan "${plan.slug}" is already running in the main repository.`,
     );
     console.error();
-    console.error(`  Branch:  ${receipt.branch || "unknown"}`);    
+    console.error(`  Branch:  ${receipt.branch || "unknown"}`);
     console.error(`  Started: ${receipt.started_at || "unknown"}`);
     console.error();
     console.error(`  Finish or interrupt the main-repo run first, then retry.`);
