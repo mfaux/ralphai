@@ -752,7 +752,7 @@ Each entry should include:
     `  ralphai.json               ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
-  console.log(`  .ralphai/PLANNING.md   ${DIM}How to write plans${RESET}`);
+  console.log(`  .ralphai/PLANNING.md       ${DIM}How to write plans${RESET}`);
   console.log(
     `  .ralphai/LEARNINGS.md      ${DIM}Ralphai-specific learnings${RESET}`,
   );
@@ -763,7 +763,7 @@ Each entry should include:
   if (labelResult) {
     if (labelResult.success) {
       console.log(
-        `  GitHub labels            ${DIM}Created "ralphai" and "ralphai:in-progress" labels${RESET}`,
+        `  GitHub labels              ${DIM}Created "ralphai" and "ralphai:in-progress" labels${RESET}`,
       );
     } else {
       console.log();
@@ -772,15 +772,11 @@ Each entry should include:
   }
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
-  console.log(`  1. Review ${TEXT}ralphai.json${RESET} and adjust settings`);
   console.log(
-    `  2. Read ${TEXT}.ralphai/PLANNING.md${RESET} for how to write plans`,
+    `  1. Write a plan in ${TEXT}.ralphai/pipeline/backlog/${RESET} (see ${TEXT}PLANNING.md${RESET})`,
   );
-  console.log(
-    `  3. Create your first plan in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
-  );
-  console.log(`  4. Preview:  ${TEXT}ralphai run --dry-run${RESET}`);
-  console.log(`  5. Run:      ${TEXT}ralphai run${RESET}`);
+  console.log(`  2. Switch to a feature branch`);
+  console.log(`  3. ${TEXT}ralphai run${RESET}`);
   if (answers.issueSource === "github") {
     console.log();
     console.log(

@@ -160,7 +160,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain("dry-run");
+    expect(output).toContain("feature branch");
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
@@ -193,7 +193,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain("ralphai run --dry-run");
+    expect(output).toContain("ralphai run");
   });
 
   it("init --yes <target-dir> scaffolds into the target directory, not cwd", () => {
