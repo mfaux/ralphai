@@ -79,7 +79,7 @@ This loop keeps the agent grounded. Instead of drifting based on stale
 assumptions, it reacts to actual project state every cycle.
 
 Feedback commands are auto-detected during `ralphai init` or can be configured
-manually via `feedbackCommands` in `.ralphai/ralphai.config.json`. When configured, the
+manually via `feedbackCommands` in `ralphai.json`. When configured, the
 agent prompt includes the specific commands. When absent, the prompt uses a
 generic fallback: "Run your project's build, test, and lint commands."
 
@@ -95,7 +95,7 @@ in `in-progress/` for you to inspect.
 
 The threshold is configurable:
 
-- **Config file:** `"maxStuck": 5` in `.ralphai/ralphai.config.json`
+- **Config file:** `"maxStuck": 5` in `ralphai.json`
 - **Env var:** `RALPHAI_MAX_STUCK=5`
 - **CLI flag:** `--max-stuck=5`
 
@@ -180,8 +180,8 @@ files automatically. See the [operational docs](../.ralphai/README.md) for
 details.
 
 **File tracking:** Plan files in `backlog/`, `in-progress/`, and `out/` are
-gitignored (local-only state). Only `.gitkeep` files are tracked. Moving files
-between lifecycle stages requires no git commits.
+gitignored (local-only state). The entire `.ralphai/` directory is gitignored.
+Moving files between lifecycle stages requires no git commits.
 
 ## Learnings System
 

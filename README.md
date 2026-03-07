@@ -43,7 +43,7 @@ In your project directory:
 ralphai init
 ```
 
-Ralphai scaffolds a `.ralphai/` directory into your project with config, docs, and a plan pipeline. It detects your package manager and build scripts automatically.
+Ralphai scaffolds a `.ralphai/` directory into your project with docs and a plan pipeline, and creates a `ralphai.json` config file at the repo root. It detects your package manager and build scripts automatically.
 
 > Use `ralphai init --yes` to skip prompts and accept defaults.
 
@@ -151,10 +151,9 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After
 
 ### After you're set up
 
-1. **Commit the `.ralphai/` folder to git.** The config and docs
-   are designed to be shared with your team.
+1. **Commit `ralphai.json` to git.** It's the shared config for your team.
 
-2. **Review `.ralphai/ralphai.config.json`** and adjust settings (agent command,
+2. **Review `ralphai.json`** and adjust settings (agent command,
    feedback commands, base branch, etc.).
 
 <details>
@@ -178,10 +177,10 @@ See [How Ralphai Works](docs/HOW-RALPHAI-WORKS.md) for the full picture.
 
 ## Docs
 
-After `ralphai init`, the good stuff lives in `.ralphai/`:
+After `ralphai init`, pipeline docs live in `.ralphai/` (local-only, gitignored):
 
-- [`.ralphai/README.md`](.ralphai/README.md) — full operational docs (lifecycle, config)
-- [`.ralphai/PLANNING.md`](.ralphai/PLANNING.md) — guide for writing plan files (give this to your agent)
+- `.ralphai/README.md` — full operational docs (lifecycle, config)
+- `.ralphai/PLANNING.md` — guide for writing plan files (give this to your agent)
 - [Worktrees](docs/worktrees.md) — worktree usage, agent compatibility, and manual setup
 
 ## Supported Agents
@@ -245,7 +244,7 @@ Worktree:
 
 ## Configuration
 
-Settings resolve in this order: **CLI flags > env vars > `.ralphai/ralphai.config.json` > defaults**.
+Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaults**.
 
 <details>
 <summary>Environment variables</summary>
