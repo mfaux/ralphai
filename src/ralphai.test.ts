@@ -1282,9 +1282,14 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
   it("scaffolded ralphai.sh contains detect_agent_type function", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
+    // detect_agent_type is defined in validate.sh (shared helpers)
+    const validate = readFileSync(join(templateLib, "validate.sh"), "utf-8");
+    expect(validate).toContain("detect_agent_type()");
+    expect(validate).toContain("DETECTED_AGENT_TYPE=");
+
+    // prompt.sh calls detect_agent_type (defined in validate.sh, sourced earlier)
     const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
-    expect(prompt).toContain("detect_agent_type()");
-    expect(prompt).toContain("DETECTED_AGENT_TYPE=");
+    expect(prompt).toContain("detect_agent_type");
   });
 
   describe.skipIf(process.platform === "win32")(

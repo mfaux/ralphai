@@ -22,6 +22,7 @@ set -e
 # --- Source library modules ---
 RALPHAI_LIB_DIR="$(dirname "$0")/lib"
 source "$RALPHAI_LIB_DIR/defaults.sh"
+source "$RALPHAI_LIB_DIR/validate.sh"
 source "$RALPHAI_LIB_DIR/config.sh"
 source "$RALPHAI_LIB_DIR/issues.sh"
 source "$RALPHAI_LIB_DIR/git.sh"
