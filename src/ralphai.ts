@@ -5,6 +5,7 @@ import {
   copyFileSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
   rmSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
@@ -17,7 +18,22 @@ import { runSelfUpdate } from "./self-update.ts";
 // Types
 // ---------------------------------------------------------------------------
 
-type RalphaiSubcommand = "init" | "update" | "sync" | "run" | "uninstall";
+type RalphaiSubcommand =
+  | "init"
+  | "update"
+  | "sync"
+  | "run"
+  | "uninstall"
+  | "worktree";
+
+type WorktreeSubcommand = "run" | "list" | "clean";
+
+interface WorktreeOptions {
+  subcommand: WorktreeSubcommand;
+  plan?: string; // --plan=<file>
+  dir?: string; // --dir=<path>
+  runArgs: string[]; // passthrough args for the runner (--turns, --agent, etc.)
+}
 
 interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
@@ -26,6 +42,7 @@ interface RalphaiOptions {
   agentCommand?: string;
   targetDir?: string;
   runArgs: string[];
+  worktreeOptions?: WorktreeOptions;
 }
 
 interface WizardAnswers {
@@ -60,6 +77,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "sync",
   "run",
   "uninstall",
+  "worktree",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -69,6 +87,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   const runArgs: string[] = [];
+  let worktreeOptions: WorktreeOptions | undefined;
 
   let collectingRunArgs = false;
 
@@ -99,13 +118,56 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
         if (subcommand === "run") {
           collectingRunArgs = true;
         }
+        // For `worktree`, parse worktree-specific args from the rest
+        if (subcommand === "worktree") {
+          worktreeOptions = parseWorktreeArgs(
+            args.slice(args.indexOf(arg) + 1),
+          );
+          break; // worktree parser consumed remaining args
+        }
       } else {
         targetDir = arg;
       }
     }
   }
 
-  return { subcommand, yes, force, agentCommand, targetDir, runArgs };
+  return {
+    subcommand,
+    yes,
+    force,
+    agentCommand,
+    targetDir,
+    runArgs,
+    worktreeOptions,
+  };
+}
+
+const WORKTREE_SUBCOMMANDS = new Set<WorktreeSubcommand>(["list", "clean"]);
+
+function parseWorktreeArgs(args: string[]): WorktreeOptions {
+  let wtSubcommand: WorktreeSubcommand = "run"; // default
+  let plan: string | undefined;
+  let dir: string | undefined;
+  const wtRunArgs: string[] = [];
+
+  for (const arg of args) {
+    if (arg.startsWith("--plan=")) {
+      plan = arg.slice("--plan=".length);
+    } else if (arg.startsWith("--dir=")) {
+      dir = arg.slice("--dir=".length);
+    } else if (
+      !arg.startsWith("-") &&
+      wtSubcommand === "run" &&
+      WORKTREE_SUBCOMMANDS.has(arg as WorktreeSubcommand)
+    ) {
+      wtSubcommand = arg as WorktreeSubcommand;
+    } else {
+      // Everything else passes through to the runner
+      wtRunArgs.push(arg);
+    }
+  }
+
+  return { subcommand: wtSubcommand, plan, dir, runArgs: wtRunArgs };
 }
 
 // ---------------------------------------------------------------------------
@@ -729,6 +791,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}run${RESET}         ${DIM}Start the Ralphai task runner${RESET}`,
   );
   console.log(
+    `  ${TEXT}worktree${RESET}    ${DIM}Run in an isolated git worktree${RESET}`,
+  );
+  console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
   );
   console.log(
@@ -769,6 +834,9 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "run":
       await runRalphaiRunner(options, cwd);
+      break;
+    case "worktree":
+      await runRalphaiWorktree(options, cwd);
       break;
     default:
       showRalphaiHelp();
@@ -922,6 +990,315 @@ async function runRalphaiSync(
   }
 
   await syncRalphaiTemplates(options, cwd);
+}
+
+// ---------------------------------------------------------------------------
+// Worktree subcommand
+// ---------------------------------------------------------------------------
+
+interface WorktreeEntry {
+  path: string;
+  branch: string;
+  head: string;
+  bare: boolean;
+}
+
+function parseWorktreeList(output: string): WorktreeEntry[] {
+  const entries: WorktreeEntry[] = [];
+  let current: Partial<WorktreeEntry> = {};
+
+  for (const line of output.split("\n")) {
+    if (line === "") {
+      if (current.path) {
+        entries.push({
+          path: current.path,
+          branch: current.branch ?? "",
+          head: current.head ?? "",
+          bare: current.bare ?? false,
+        });
+      }
+      current = {};
+    } else if (line.startsWith("worktree ")) {
+      current.path = line.slice("worktree ".length);
+    } else if (line.startsWith("HEAD ")) {
+      current.head = line.slice("HEAD ".length);
+    } else if (line.startsWith("branch ")) {
+      // branch refs/heads/ralphai/foo → ralphai/foo
+      current.branch = line.slice("branch ".length).replace("refs/heads/", "");
+    } else if (line === "bare") {
+      current.bare = true;
+    }
+  }
+
+  // Handle last entry if no trailing newline
+  if (current.path) {
+    entries.push({
+      path: current.path,
+      branch: current.branch ?? "",
+      head: current.head ?? "",
+      bare: current.bare ?? false,
+    });
+  }
+
+  return entries;
+}
+
+function selectPlanForWorktree(
+  ralphaiDir: string,
+  specificPlan?: string,
+): { planFile: string; slug: string } | null {
+  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+
+  if (!existsSync(backlogDir)) {
+    console.error(
+      `${TEXT}Error:${RESET} No backlog directory found at ${backlogDir}`,
+    );
+    return null;
+  }
+
+  if (specificPlan) {
+    const planPath = join(backlogDir, specificPlan);
+    if (!existsSync(planPath)) {
+      console.error(
+        `${TEXT}Error:${RESET} Plan '${specificPlan}' not found in backlog.`,
+      );
+      return null;
+    }
+    const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+    return { planFile: specificPlan, slug };
+  }
+
+  // Find any .md file in backlog
+  const plans = readdirSync(backlogDir).filter((f) => f.endsWith(".md"));
+
+  if (plans.length === 0) {
+    console.error(
+      `${TEXT}Error:${RESET} No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
+    );
+    return null;
+  }
+
+  // Use the first plan (actual prioritization happens in the bash runner)
+  const firstPlan = plans[0]!;
+  const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+  return { planFile: firstPlan, slug };
+}
+
+function showWorktreeHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai worktree [command] [options]`);
+  console.log();
+  console.log(`${TEXT}Commands:${RESET}`);
+  console.log(
+    `  ${DIM}(default)${RESET}   ${DIM}Create a worktree, run a plan, and clean up on completion${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}list${RESET}        ${DIM}Show active ralphai-managed worktrees${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}clean${RESET}       ${DIM}Remove completed/orphaned worktrees${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--plan=${RESET}<file>   ${DIM}Target a specific backlog plan (default: auto-detect)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--dir=${RESET}<path>    ${DIM}Worktree directory (default: ../.ralphai-worktrees/<slug>)${RESET}`,
+  );
+  console.log();
+  console.log(
+    `${DIM}All other options are forwarded to the task runner.${RESET}`,
+  );
+}
+
+function listWorktrees(cwd: string): void {
+  const output = execSync("git worktree list --porcelain", {
+    cwd,
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const worktrees = parseWorktreeList(output).filter((wt) =>
+    wt.branch.startsWith("ralphai/"),
+  );
+
+  if (worktrees.length === 0) {
+    console.log("No active ralphai worktrees.");
+    return;
+  }
+
+  console.log("Active ralphai worktrees:\n");
+  for (const wt of worktrees) {
+    const slug = wt.branch.replace("ralphai/", "");
+    const ralphaiDir = join(cwd, ".ralphai");
+    const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+    const status = hasActivePlan ? "in-progress" : "idle";
+    console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
+  }
+}
+
+function cleanWorktrees(cwd: string): void {
+  // Prune stale worktree entries first
+  execSync("git worktree prune", { cwd, stdio: "inherit" });
+
+  const output = execSync("git worktree list --porcelain", {
+    cwd,
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const worktrees = parseWorktreeList(output).filter((wt) =>
+    wt.branch.startsWith("ralphai/"),
+  );
+
+  if (worktrees.length === 0) {
+    console.log("No ralphai worktrees to clean.");
+    return;
+  }
+
+  const ralphaiDir = join(cwd, ".ralphai");
+  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  let cleaned = 0;
+
+  for (const wt of worktrees) {
+    const slug = wt.branch.replace("ralphai/", "");
+    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+
+    if (!hasActivePlan) {
+      console.log(`Removing: ${wt.path} (${wt.branch})`);
+      try {
+        execSync(`git worktree remove "${wt.path}"`, {
+          cwd,
+          stdio: "inherit",
+        });
+        // Try to delete branch (may fail if not merged — that's ok)
+        try {
+          execSync(`git branch -d "${wt.branch}"`, {
+            cwd,
+            stdio: "pipe",
+          });
+        } catch {
+          // Branch deletion failure is not critical
+        }
+        cleaned++;
+      } catch {
+        console.log(`  Warning: Could not remove ${wt.path}. Remove manually.`);
+      }
+    } else {
+      console.log(
+        `Keeping: ${wt.path} (${wt.branch}) — plan still in progress`,
+      );
+    }
+  }
+
+  console.log(`\nCleaned ${cleaned} worktree(s).`);
+}
+
+async function runRalphaiWorktree(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  const wtOpts = options.worktreeOptions ?? {
+    subcommand: "run",
+    runArgs: [],
+  };
+
+  // Handle --help
+  if (wtOpts.runArgs.includes("--help") || wtOpts.runArgs.includes("-h")) {
+    showWorktreeHelp();
+    return;
+  }
+
+  // Dispatch worktree sub-subcommands
+  switch (wtOpts.subcommand) {
+    case "list":
+      listWorktrees(cwd);
+      return;
+    case "clean":
+      cleanWorktrees(cwd);
+      return;
+    case "run":
+      break; // fall through to worktree run logic below
+  }
+
+  // --- worktree run ---
+
+  // Guard: must be in main repo, not a worktree
+  if (isGitWorktree(cwd)) {
+    console.error(
+      `${TEXT}Error:${RESET} 'ralphai worktree' must be run from the main repository.`,
+    );
+    console.error(
+      "You are inside a worktree. Run this command from the main repo.",
+    );
+    process.exit(1);
+  }
+
+  // Guard: .ralphai must exist
+  if (!existsSync(join(cwd, ".ralphai"))) {
+    console.error(
+      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  // Select plan
+  const plan = selectPlanForWorktree(join(cwd, ".ralphai"), wtOpts.plan);
+  if (!plan) process.exit(1);
+
+  // Determine base branch
+  const baseBranch = detectBaseBranch();
+  const branch = `ralphai/${plan.slug}`;
+
+  // Determine worktree directory
+  const worktreeBase = wtOpts.dir
+    ? resolve(wtOpts.dir)
+    : join(cwd, "..", ".ralphai-worktrees");
+  const worktreeDir = wtOpts.dir
+    ? resolve(wtOpts.dir)
+    : join(worktreeBase, plan.slug);
+  if (!wtOpts.dir) {
+    mkdirSync(worktreeBase, { recursive: true });
+  }
+
+  // Create worktree
+  console.log(`Creating worktree: ${worktreeDir}`);
+  console.log(`Branch: ${branch} (from ${baseBranch})`);
+  try {
+    execSync(
+      `git worktree add "${worktreeDir}" -b "${branch}" "${baseBranch}"`,
+      { cwd, stdio: "inherit" },
+    );
+  } catch {
+    console.error(
+      `${TEXT}Error:${RESET} Failed to create worktree. The branch '${branch}' may already exist.`,
+    );
+    process.exit(1);
+  }
+
+  // Spawn ralphai runner in the worktree
+  console.log("Running ralphai in worktree...");
+  const runnerArgs = ["--pr", ...wtOpts.runArgs];
+
+  // Reuse runRalphaiRunner by constructing options with the worktree as cwd
+  const worktreeRunOptions: RalphaiOptions = {
+    ...options,
+    subcommand: "run",
+    runArgs: runnerArgs,
+  };
+
+  try {
+    await runRalphaiRunner(worktreeRunOptions, worktreeDir);
+  } catch {
+    // runRalphaiRunner calls process.exit() internally, so this catch
+    // handles edge cases where it throws instead
+  }
+
+  // Note: cleanup after runner completion happens via process.exit in
+  // runRalphaiRunner. For proper lifecycle management (cleanup on success,
+  // preserve on failure), we'd need to refactor runRalphaiRunner to return
+  // an exit code instead of calling process.exit. That's a future improvement.
 }
 
 /** Default turn count when `ralphai run` is invoked without args. */

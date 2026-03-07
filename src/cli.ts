@@ -26,6 +26,7 @@ ${BOLD}Usage:${RESET} ralphai <command> [options]
 ${BOLD}Commands:${RESET}
   init           Set up Ralphai in your project (interactive wizard)
   run            Start the Ralphai task runner
+  worktree       Run in an isolated git worktree
   update [tag]   Update ralphai to the latest (or specified) version
   sync           Refresh .ralphai/ template files (preserves config & state)
   uninstall      Remove Ralphai from your project
@@ -42,6 +43,12 @@ ${BOLD}Init Options:${RESET}
 ${BOLD}Run Options:${RESET}
   All arguments after 'run' are forwarded directly to the task runner.
 
+${BOLD}Worktree Options:${RESET}
+  --plan=<file>     Target a specific backlog plan (default: auto-detect)
+  --dir=<path>      Worktree directory (default: ../.ralphai-worktrees/<slug>)
+  worktree list     Show active ralphai-managed worktrees
+  worktree clean    Remove completed/orphaned worktrees
+
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
   ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
@@ -49,6 +56,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai run 3                  ${DIM}# 3 turns per plan${RESET}
   ${DIM}$${RESET} ralphai run --dry-run          ${DIM}# preview only${RESET}
   ${DIM}$${RESET} ralphai run --pr               ${DIM}# create branch and open PR${RESET}
+  ${DIM}$${RESET} ralphai worktree               ${DIM}# run next plan in an isolated worktree${RESET}
+  ${DIM}$${RESET} ralphai worktree list           ${DIM}# show active ralphai worktrees${RESET}
+  ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
   ${DIM}$${RESET} ralphai sync --yes             ${DIM}# refresh template files${RESET}
@@ -65,7 +75,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (args.includes("--help") || args.includes("-h")) {
+  // Only show top-level help if --help is before any subcommand or is the only arg.
+  // Subcommands like `worktree --help` should be handled by the subcommand.
+  const firstNonFlag = args.find((a) => !a.startsWith("-"));
+  const helpRequested = args.includes("--help") || args.includes("-h");
+  if (helpRequested && !firstNonFlag) {
     showHelp();
     return;
   }

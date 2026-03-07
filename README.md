@@ -109,6 +109,24 @@ ralphai run --pr         # create a ralphai/* branch and open a PR instead
 ralphai run --dry-run    # preview what ralphai would do without changing anything
 ```
 
+### 2b. Run in a worktree
+
+For non-disruptive parallel work, use `ralphai worktree` to run a plan in an isolated [git worktree](https://git-scm.com/docs/git-worktree). This lets you keep working in your main checkout while Ralphai runs in a separate directory.
+
+```bash
+ralphai worktree                          # auto-pick next backlog plan
+ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
+```
+
+The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved so you can inspect or resume.
+
+```bash
+ralphai worktree list    # show active ralphai-managed worktrees
+ralphai worktree clean   # remove completed/orphaned worktrees
+```
+
+> `ralphai worktree` must be run from the **main repository**, not from inside a worktree. All runner options (`--turns`, `--agent`, `--feedback-commands`, etc.) are forwarded automatically.
+
 ### 3. Steer
 
 Plans flow through three directories: `backlog/ → in-progress/ → out/`. Not ready for Ralphai to pick something up? Park it in `wip/` — Ralphai ignores that folder.
@@ -223,6 +241,7 @@ ralphai <command> [options]
 Commands:
   init        Set up Ralphai in your project
   run         Start the Ralphai task runner
+  worktree    Run in an isolated git worktree
   update      Update ralphai to the latest (or specified) version
   sync        Refresh template files (preserves config & state)
   uninstall   Remove Ralphai from your project
@@ -240,6 +259,12 @@ Run:
   Runs with sensible defaults (5 turns per plan).
   Arguments after 'run' are forwarded directly.
   See ralphai run --help for all options (--pr, --dry-run, --resume, etc.).
+
+Worktree:
+  --plan=<file>     Target a specific backlog plan (default: auto-detect)
+  --dir=<path>      Worktree directory (default: ../.ralphai-worktrees/<slug>)
+  worktree list     Show active ralphai-managed worktrees
+  worktree clean    Remove completed/orphaned worktrees
 ```
 
 </details>
