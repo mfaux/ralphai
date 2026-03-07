@@ -32,7 +32,7 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","fallbackAgents","autoCommit"] | index($k) | not)' "$config_path")
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","fallbackAgents","autoCommit","turns"] | index($k) | not)' "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -272,6 +272,16 @@ load_config() {
     fi
     CONFIG_AUTO_COMMIT="$value"
   fi
+
+  # --- turns (non-negative integer, 0 = unlimited) ---
+  if _json_has "turns"; then
+    value=$(_json_raw "turns")
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: $config_path: 'turns' must be a non-negative integer (0 = unlimited), got '$value'"
+      exit 1
+    fi
+    CONFIG_TURNS="$value"
+  fi
 }
 
 # --- Apply config file settings ---
@@ -324,6 +334,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
     AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
+  fi
+  if [[ -n "${CONFIG_TURNS:-}" ]]; then
+    TURNS="$CONFIG_TURNS"
   fi
 }
 
@@ -427,6 +440,13 @@ apply_env_overrides() {
     fi
     AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
   fi
+  if [[ -n "${RALPHAI_TURNS:-}" ]]; then
+    if [[ ! "$RALPHAI_TURNS" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: RALPHAI_TURNS must be a non-negative integer (0 = unlimited), got '$RALPHAI_TURNS'"
+      exit 1
+    fi
+    TURNS="$RALPHAI_TURNS"
+  fi
 }
 
 print_usage() {
@@ -466,7 +486,7 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, JSON format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, continuous, autoCommit, turnTimeout, promptMode,"
+  echo "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,"
   echo "                  fallbackAgents, issueSource, issueLabel,"
   echo "                  issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
@@ -474,7 +494,7 @@ print_usage() {
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
   echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
-  echo "                   RALPHAI_AUTO_COMMIT,"
+  echo "                   RALPHAI_AUTO_COMMIT, RALPHAI_TURNS,"
   echo "                   RALPHAI_TURN_TIMEOUT, RALPHAI_FALLBACK_AGENTS,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
@@ -900,12 +920,27 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     auto_commit_source="default"
   fi
 
+  if [[ -n "$CLI_TURNS" ]]; then
+    turns_source="cli (--turns=$CLI_TURNS)"
+  elif [[ -n "${RALPHAI_TURNS:-}" ]]; then
+    turns_source="env (RALPHAI_TURNS=$RALPHAI_TURNS)"
+  elif [[ -n "${CONFIG_TURNS:-}" ]]; then
+    turns_source="config ($CONFIG_FILE)"
+  else
+    turns_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
   echo "  mode               = $MODE  ($mode_source)"
   echo "  continuous         = $CONTINUOUS  ($continuous_source)"
   echo "  autoCommit         = $AUTO_COMMIT  ($auto_commit_source)"
+  if [[ "$TURNS" -eq 0 ]]; then
+    echo "  turns              = unlimited  ($turns_source)"
+  else
+    echo "  turns              = $TURNS  ($turns_source)"
+  fi
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
   if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
     echo "  turnTimeout        = ${TURN_TIMEOUT}s  ($timeout_source)"
