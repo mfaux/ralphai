@@ -2092,6 +2092,339 @@ echo "$AUTO_COMMIT"
   );
 
   // -------------------------------------------------------------------------
+  // Workflow mode tests (branch / pr / patch)
+  // -------------------------------------------------------------------------
+
+  it("init --yes generates config with mode=branch as the default", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const config = JSON.parse(
+      readFileSync(join(testDir, "ralphai.json"), "utf-8"),
+    );
+    expect(config.mode).toBe("branch");
+  });
+
+  it("scaffolded config.sh has --branch, --pr, and --patch CLI flags", () => {
+    const config = readFileSync(
+      join(__dirname, "..", "runner", "lib", "config.sh"),
+      "utf-8",
+    );
+    expect(config).toContain("--branch)");
+    expect(config).toContain("--pr)");
+    expect(config).toContain("--patch)");
+    // --direct should no longer exist
+    expect(config).not.toContain("--direct)");
+  });
+
+  it("scaffolded defaults.sh sets DEFAULT_MODE to branch", () => {
+    const defaults = readFileSync(
+      join(__dirname, "..", "runner", "lib", "defaults.sh"),
+      "utf-8",
+    );
+    expect(defaults).toContain('DEFAULT_MODE="branch"');
+    // Old default should not exist
+    expect(defaults).not.toContain('DEFAULT_MODE="direct"');
+  });
+
+  it("scaffolded config.sh validates mode as branch|pr|patch in config file", () => {
+    const config = readFileSync(
+      join(__dirname, "..", "runner", "lib", "config.sh"),
+      "utf-8",
+    );
+    expect(config).toContain("'mode' must be 'branch', 'pr', or 'patch'");
+  });
+
+  it("scaffolded config.sh validates RALPHAI_MODE env var as branch|pr|patch", () => {
+    const config = readFileSync(
+      join(__dirname, "..", "runner", "lib", "config.sh"),
+      "utf-8",
+    );
+    expect(config).toContain("RALPHAI_MODE must be 'branch', 'pr', or 'patch'");
+  });
+
+  it("init --yes sets autoCommit=false by default (non-patch mode)", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const config = JSON.parse(
+      readFileSync(join(testDir, "ralphai.json"), "utf-8"),
+    );
+    // Default mode is "branch" so auto-commit question is never asked
+    expect(config.mode).toBe("branch");
+    expect(config.autoCommit).toBe(false);
+  });
+
+  it("scaffolded ralphai.sh auto-commit guard uses patch mode", () => {
+    const ralphaiSh = readFileSync(
+      join(__dirname, "..", "runner", "ralphai.sh"),
+      "utf-8",
+    );
+    // Auto-commit skip guard should check for patch mode
+    expect(ralphaiSh).toContain('"patch"');
+    // Should not reference "direct" mode anywhere
+    expect(ralphaiSh).not.toMatch(/\bdirect\b.*mode/i);
+  });
+
+  describe.skipIf(process.platform === "win32")(
+    "mode config precedence",
+    () => {
+      /**
+       * Helper: simulates the config loading pipeline for MODE
+       * and returns the resolved value.
+       */
+      function resolveMode(opts: {
+        configValue?: string;
+        envValue?: string;
+        cliFlag?: string;
+      }): string {
+        const configContent = opts.configValue
+          ? `mode=${opts.configValue}`
+          : "";
+        const envExport = opts.envValue
+          ? `export RALPHAI_MODE=${JSON.stringify(opts.envValue)}`
+          : "";
+        let cliArg = "";
+        if (opts.cliFlag === "branch") cliArg = "--branch";
+        else if (opts.cliFlag === "pr") cliArg = "--pr";
+        else if (opts.cliFlag === "patch") cliArg = "--patch";
+
+        const script = `#!/bin/bash
+set -e
+
+# Defaults
+DEFAULT_MODE="branch"
+MODE="$DEFAULT_MODE"
+CLI_MODE=""
+
+# Simulate load_config
+CONFIG_MODE=""
+config_content=${JSON.stringify(configContent)}
+if [[ -n "$config_content" ]]; then
+  key="\${config_content%%=*}"
+  value="\${config_content#*=}"
+  if [[ "$key" == "mode" ]]; then
+    if [[ "$value" != "branch" && "$value" != "pr" && "$value" != "patch" ]]; then
+      echo "ERROR: 'mode' must be 'branch', 'pr', or 'patch', got '$value'"
+      exit 1
+    fi
+    CONFIG_MODE="$value"
+  fi
+fi
+
+# Simulate apply_config
+if [[ -n "\${CONFIG_MODE:-}" ]]; then
+  MODE="$CONFIG_MODE"
+fi
+
+# Simulate apply_env_overrides
+${envExport}
+if [[ -n "\${RALPHAI_MODE:-}" ]]; then
+  if [[ "$RALPHAI_MODE" != "branch" && "$RALPHAI_MODE" != "pr" && "$RALPHAI_MODE" != "patch" ]]; then
+    echo "ERROR: RALPHAI_MODE must be 'branch', 'pr', or 'patch', got '$RALPHAI_MODE'"
+    exit 1
+  fi
+  MODE="$RALPHAI_MODE"
+fi
+
+# Simulate CLI flag parsing
+for arg in ${cliArg}; do
+  case "$arg" in
+    --branch)
+      CLI_MODE="branch"
+      ;;
+    --pr)
+      CLI_MODE="pr"
+      ;;
+    --patch)
+      CLI_MODE="patch"
+      ;;
+  esac
+done
+
+# Simulate CLI override merge
+if [[ -n "$CLI_MODE" ]]; then
+  MODE="$CLI_MODE"
+fi
+
+echo "$MODE"
+`;
+
+        const scriptFile = join(
+          tmpdir(),
+          `ralphai-mode-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+        );
+        try {
+          writeFileSync(scriptFile, script);
+          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+            encoding: "utf-8",
+          });
+          return result.trim();
+        } finally {
+          try {
+            rmSync(scriptFile);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      it("defaults to branch when no overrides", () => {
+        expect(resolveMode({})).toBe("branch");
+      });
+
+      it("config file sets mode to pr", () => {
+        expect(resolveMode({ configValue: "pr" })).toBe("pr");
+      });
+
+      it("config file sets mode to patch", () => {
+        expect(resolveMode({ configValue: "patch" })).toBe("patch");
+      });
+
+      it("config file sets mode to branch", () => {
+        expect(resolveMode({ configValue: "branch" })).toBe("branch");
+      });
+
+      it("env var overrides config file", () => {
+        expect(
+          resolveMode({
+            configValue: "branch",
+            envValue: "pr",
+          }),
+        ).toBe("pr");
+      });
+
+      it("env var sets mode when no config", () => {
+        expect(resolveMode({ envValue: "patch" })).toBe("patch");
+      });
+
+      it("--branch CLI flag overrides env var", () => {
+        expect(
+          resolveMode({
+            envValue: "pr",
+            cliFlag: "branch",
+          }),
+        ).toBe("branch");
+      });
+
+      it("--pr CLI flag overrides env var", () => {
+        expect(
+          resolveMode({
+            envValue: "branch",
+            cliFlag: "pr",
+          }),
+        ).toBe("pr");
+      });
+
+      it("--patch CLI flag overrides env var", () => {
+        expect(
+          resolveMode({
+            envValue: "pr",
+            cliFlag: "patch",
+          }),
+        ).toBe("patch");
+      });
+
+      it("CLI flag overrides config and env", () => {
+        expect(
+          resolveMode({
+            configValue: "branch",
+            envValue: "pr",
+            cliFlag: "patch",
+          }),
+        ).toBe("patch");
+      });
+
+      it("rejects invalid config value", () => {
+        expect(() => resolveMode({ configValue: "direct" })).toThrow();
+      });
+
+      it("rejects invalid env var value", () => {
+        expect(() => resolveMode({ envValue: "direct" })).toThrow();
+      });
+    },
+  );
+
+  describe.skipIf(process.platform === "win32")(
+    "mode --show-config display",
+    () => {
+      let stubScript: string;
+
+      beforeEach(() => {
+        runCliOutput(["init", "--yes"], testDir);
+        stubScript = join(testDir, "stub-runner.sh");
+        writeFileSync(stubScript, '#!/bin/bash\necho "ARGS:$*"\n');
+        chmodSync(stubScript, 0o755);
+      });
+
+      it("--show-config displays mode=branch as default", () => {
+        const result = runCli(["run", "--show-config"], testDir);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = branch");
+      });
+
+      it("--show-config shows mode=pr when set in config", () => {
+        const configPath = join(testDir, "ralphai.json");
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        config.mode = "pr";
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+        const result = runCli(["run", "--show-config"], testDir);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = pr");
+      });
+
+      it("--show-config shows mode=patch when set in config", () => {
+        const configPath = join(testDir, "ralphai.json");
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        config.mode = "patch";
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+        const result = runCli(["run", "--show-config"], testDir);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = patch");
+      });
+
+      it("RALPHAI_MODE env var overrides config mode in --show-config", () => {
+        const result = runCli(["run", "--show-config"], testDir, {
+          RALPHAI_MODE: "patch",
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = patch");
+        expect(result.stdout).toContain("env (RALPHAI_MODE=patch)");
+      });
+
+      it("--branch CLI flag overrides mode in --show-config", () => {
+        const configPath = join(testDir, "ralphai.json");
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        config.mode = "pr";
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+        const result = runCli(["run", "--branch", "--show-config"], testDir);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = branch");
+        expect(result.stdout).toContain("cli (--branch)");
+      });
+
+      it("--patch CLI flag overrides mode in --show-config", () => {
+        const result = runCli(["run", "--patch", "--show-config"], testDir);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("mode               = patch");
+        expect(result.stdout).toContain("cli (--patch)");
+      });
+
+      it("RALPHAI_MODE rejects invalid value", () => {
+        const result = runCli(["run", "--show-config"], testDir, {
+          RALPHAI_MODE: "direct",
+        });
+        const combined = result.stdout + result.stderr;
+        expect(result.exitCode).not.toBe(0);
+        expect(combined).toContain(
+          "RALPHAI_MODE must be 'branch', 'pr', or 'patch'",
+        );
+      });
+    },
+  );
+
+  // -------------------------------------------------------------------------
   // Prompt construction wiring tests (format_file_ref used in prompt)
   // -------------------------------------------------------------------------
 
