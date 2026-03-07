@@ -1,9 +1,23 @@
 {
-  "agentCommand": "opencode run --agent build",
-  "baseBranch": "main",
+  "agentCommand": "claude -p",
   "feedbackCommands": [
     "pnpm build",
     "pnpm test",
     "pnpm type-check"
-  ]
+  ],
+  "baseBranch": "main",
+  "turns": 5,
+  "mode": "pr",
+  "autoCommit": false,
+  "maxStuck": 3,
+  "turnTimeout": 0,
+  "promptMode": "auto",
+  "continuous": false,
+  "fallbackAgents": "",
+  "issueSource": "none",
+  "issueLabel": "ralphai",
+  "issueInProgressLabel": "ralphai:in-progress",
+  "issueRepo": "",
+  "issueCloseOnComplete": true,
+  "issueCommentProgress": true
 }
