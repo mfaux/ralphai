@@ -826,13 +826,17 @@ async function runRalphaiReset(
 
     for (const wt of worktrees) {
       try {
-        execSync(`git worktree remove "${wt.path}"`, {
+        // Use --force because the worktree may have uncommitted changes
+        // (e.g. the .ralphai symlink replacement, or interrupted agent work).
+        execSync(`git worktree remove --force "${wt.path}"`, {
           cwd: ralphaiRoot,
           stdio: "pipe",
         });
-        // Try to delete branch (may fail if not merged — that's ok)
+        // Force-delete branch (-D) because ralphai/* branches are typically
+        // not merged to main yet. Non-force -d would silently fail, leaving
+        // stale branches that cause dirty-state errors on the next run.
         try {
-          execSync(`git branch -d "${wt.branch}"`, {
+          execSync(`git branch -D "${wt.branch}"`, {
             cwd: ralphaiRoot,
             stdio: "pipe",
           });
@@ -1357,13 +1361,17 @@ function cleanWorktrees(cwd: string): void {
     if (!hasActivePlan) {
       console.log(`Removing: ${wt.path} (${wt.branch})`);
       try {
-        execSync(`git worktree remove "${wt.path}"`, {
+        // Use --force because the worktree may have uncommitted changes
+        // (e.g. the .ralphai symlink replacement, or interrupted agent work).
+        execSync(`git worktree remove --force "${wt.path}"`, {
           cwd,
           stdio: "inherit",
         });
-        // Try to delete branch (may fail if not merged — that's ok)
+        // Force-delete branch (-D) because ralphai/* branches are typically
+        // not merged to main yet. Non-force -d would silently fail, leaving
+        // stale branches that cause dirty-state errors on the next run.
         try {
-          execSync(`git branch -d "${wt.branch}"`, {
+          execSync(`git branch -D "${wt.branch}"`, {
             cwd,
             stdio: "pipe",
           });
@@ -1776,6 +1784,11 @@ async function runRalphaiWorktree(
     // Remove the real directory (if any) before creating the symlink.
     // This is safe because the symlink target (main repo's .ralphai/)
     // contains all the same tracked files plus gitignored pipeline state.
+    //
+    // The symlink replacement causes git to see tracked .ralphai/ files as
+    // deleted and the symlink as untracked. This is intentional — the
+    // runner's is_tree_dirty() excludes .ralphai from its checks so the
+    // worktree can start cleanly without extra commits.
     rmSync(worktreeRalphaiLink, { recursive: true, force: true });
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
