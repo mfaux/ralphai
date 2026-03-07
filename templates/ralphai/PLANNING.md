@@ -396,4 +396,4 @@ Pass `--turns=0` for unlimited turns — Ralphai keeps going until all tasks are
 
 Use `ralphai run --dry-run` to verify selection/readiness before launching long autonomous runs.
 
-If a run is interrupted and leaves a dirty tree, use `ralphai run <turns> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.
+If a run is interrupted and leaves a dirty tree, use `ralphai run --turns=<n> --resume` on the current branch to auto-commit recovery state and continue.

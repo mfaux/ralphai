@@ -265,7 +265,7 @@ depends-on: [prd-a.md, prd-b.md]
 
 **GitHub Issues integration:** When the backlog is empty and `issueSource=github`
 is configured, Ralphai can pull labeled GitHub issues and convert them into plan
-files automatically. See the [operational docs](../.ralphai/README.md) for
+files automatically. See the [operational docs](../templates/ralphai/README.md) for
 details.
 
 **File tracking:** Plan files in `backlog/`, `in-progress/`, and `out/` are
