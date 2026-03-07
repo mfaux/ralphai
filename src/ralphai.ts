@@ -1576,8 +1576,10 @@ function countCompletedTasks(progressPath: string): number {
   const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
   let count = completeMatches ? completeMatches.length : 0;
 
-  // Count batch entries: `Tasks X–Y` or `Tasks X-Y`
-  const batchMatches = content.matchAll(/Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gi);
+  // Count batch entries: `### ... Tasks X–Y` or `### ... Tasks X-Y` headings only
+  const batchMatches = content.matchAll(
+    /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
+  );
   for (const match of batchMatches) {
     const start = parseInt(match[1]!, 10);
     const end = parseInt(match[2]!, 10);
