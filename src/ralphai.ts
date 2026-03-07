@@ -1205,6 +1205,7 @@ interface Receipt {
   worktree_path?: string;
   branch: string;
   slug: string;
+  plan_file?: string;
   agent: string;
   turns_budget: number;
   turns_completed: number;
@@ -1227,6 +1228,7 @@ function parseReceipt(filePath: string): Receipt | null {
     worktree_path: fields.worktree_path,
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
+    plan_file: fields.plan_file,
     agent: fields.agent ?? "",
     turns_budget: parseInt(fields.turns_budget ?? "0", 10),
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
@@ -1338,13 +1340,13 @@ function selectPlanForWorktree(
   if (specificPlan) {
     const inProgressPath = join(inProgressDir, specificPlan);
     if (existsSync(inProgressPath)) {
-      const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+      const slug = specificPlan.replace(/\.md$/, "");
       return { planFile: specificPlan, slug, source: "in-progress" };
     }
     if (existsSync(backlogDir)) {
       const planPath = join(backlogDir, specificPlan);
       if (existsSync(planPath)) {
-        const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+        const slug = specificPlan.replace(/\.md$/, "");
         return { planFile: specificPlan, slug, source: "backlog" };
       }
     }
@@ -1356,21 +1358,24 @@ function selectPlanForWorktree(
 
   // --- Auto-detect plan ---
 
-  // Filter in-progress plans: only prd-*.md files
+  // Filter in-progress plans: .md files excluding progress/receipt files
   const inProgressPlans = existsSync(inProgressDir)
     ? readdirSync(inProgressDir).filter(
-        (f) => f.startsWith("prd-") && f.endsWith(".md"),
+        (f) =>
+          f.endsWith(".md") &&
+          !f.startsWith("progress-") &&
+          !f.startsWith("receipt-"),
       )
     : [];
 
   // Plans without an active worktree are "unattended" — resume first
   const unattendedPlans = inProgressPlans.filter(
-    (f) => !activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+    (f) => !activeSlugs.has(f.replace(/\.md$/, "")),
   );
 
   if (unattendedPlans.length === 1) {
     const planFile = unattendedPlans[0]!;
-    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = planFile.replace(/\.md$/, "");
     return { planFile, slug, source: "in-progress" };
   }
 
@@ -1391,18 +1396,18 @@ function selectPlanForWorktree(
 
   if (backlogPlans.length > 0) {
     const firstPlan = backlogPlans[0]!;
-    const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = firstPlan.replace(/\.md$/, "");
     return { planFile: firstPlan, slug, source: "backlog" };
   }
 
   // No backlog — try resuming an in-progress plan that has a worktree
   const attendedPlans = inProgressPlans.filter((f) =>
-    activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+    activeSlugs.has(f.replace(/\.md$/, "")),
   );
 
   if (attendedPlans.length === 1) {
     const planFile = attendedPlans[0]!;
-    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = planFile.replace(/\.md$/, "");
     return { planFile, slug, source: "in-progress" };
   }
 
@@ -1461,6 +1466,25 @@ function showWorktreeHelp(): void {
   );
 }
 
+/**
+ * Check if any plan file in `dir` has a slug (filename minus `.md`) matching
+ * the given slug. Skips progress-* and receipt-* files.
+ */
+function planExistsForSlug(dir: string, slug: string): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    return readdirSync(dir).some(
+      (f) =>
+        f.endsWith(".md") &&
+        !f.startsWith("progress-") &&
+        !f.startsWith("receipt-") &&
+        f.replace(/\.md$/, "") === slug,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function listWorktrees(cwd: string): void {
   const worktrees = listRalphaiWorktrees(cwd);
 
@@ -1474,7 +1498,7 @@ function listWorktrees(cwd: string): void {
     const slug = wt.branch.replace("ralphai/", "");
     const ralphaiDir = join(cwd, ".ralphai");
     const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
     const status = hasActivePlan ? "in-progress" : "idle";
     console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
   }
@@ -1498,7 +1522,7 @@ function cleanWorktrees(cwd: string): void {
 
   for (const wt of worktrees) {
     const slug = wt.branch.replace("ralphai/", "");
-    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
 
     if (!hasActivePlan) {
       console.log(`Removing: ${wt.path} (${wt.branch})`);
@@ -1644,21 +1668,23 @@ function runRalphaiStatus(cwd: string): void {
   );
 
   const completedFiles = existsSync(archiveDir)
-    ? readdirSync(archiveDir).filter(
-        (f) => f.startsWith("prd-") && f.endsWith(".md"),
-      )
+    ? readdirSync(archiveDir).filter((f) => f.endsWith(".md"))
     : [];
   // Deduplicate completed plans by removing timestamps
   const completedSlugs = new Set(
     completedFiles.map((f) => f.replace(/-\d{8}-\d{6}\.md$/, "")),
   );
 
-  // Build receipt lookup: slug → Receipt
-  const receiptsBySlug = new Map<string, Receipt>();
+  // Build receipt lookup: plan filename → Receipt
+  const receiptsByPlan = new Map<string, Receipt>();
   for (const rf of receiptFiles) {
     const slug = rf.replace(/^receipt-/, "").replace(/\.txt$/, "");
     const receipt = parseReceipt(join(inProgressDir, rf));
-    if (receipt) receiptsBySlug.set(slug, receipt);
+    if (receipt) {
+      // Key by plan_file when present; fall back to prd-<slug>.md for old receipts
+      const key = receipt.plan_file || `prd-${slug}.md`;
+      receiptsByPlan.set(key, receipt);
+    }
   }
 
   // --- Pipeline section ---
@@ -1685,8 +1711,7 @@ function runRalphaiStatus(cwd: string): void {
     `  ${TEXT}In Progress${RESET}  ${DIM}${inProgressPlans.length} plan${inProgressPlans.length !== 1 ? "s" : ""}${RESET}`,
   );
   for (const plan of inProgressPlans) {
-    const slug = plan.replace(/^prd-/, "").replace(/\.md$/, "");
-    const receipt = receiptsBySlug.get(slug);
+    const receipt = receiptsByPlan.get(plan);
     const parts: string[] = [];
 
     // Task progress
@@ -1708,7 +1733,8 @@ function runRalphaiStatus(cwd: string): void {
 
     // Worktree info from receipt
     if (receipt?.source === "worktree") {
-      parts.push(`worktree: ${slug}`);
+      const planSlug = plan.replace(/\.md$/, "");
+      parts.push(`worktree: ${planSlug}`);
     }
 
     const suffix =
@@ -1739,7 +1765,7 @@ function runRalphaiStatus(cwd: string): void {
     console.log();
     for (const wt of worktrees) {
       const slug = wt.branch.replace("ralphai/", "");
-      const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+      const hasActivePlan = planExistsForSlug(inProgressDir, slug);
       const state = hasActivePlan ? "in-progress" : "idle";
       console.log(
         `  ${DIM}${wt.branch}${RESET}  ${DIM}${wt.path}${RESET}  ${DIM}[${state}]${RESET}`,
@@ -1751,10 +1777,10 @@ function runRalphaiStatus(cwd: string): void {
   const problems: string[] = [];
 
   // Orphaned receipts: receipt exists but no matching plan file
-  for (const [slug, _receipt] of receiptsBySlug) {
-    if (!existsSync(join(inProgressDir, `prd-${slug}.md`))) {
+  for (const [planFile, receipt] of receiptsByPlan) {
+    if (!existsSync(join(inProgressDir, planFile))) {
       problems.push(
-        `Orphaned receipt: receipt-${slug}.txt (no matching plan file)`,
+        `Orphaned receipt: receipt-${receipt.slug}.txt (no matching plan file)`,
       );
     }
   }

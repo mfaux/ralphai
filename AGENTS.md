@@ -12,6 +12,10 @@ plan writing guide. Plans not ready for execution go in
 
 ## Learnings
 
+### Plan file naming: no prefix required
+
+Plan files can be named freely — `dark-mode.md`, `gh-42-search.md`, `prd-auth.md` all work. The slug is derived as `filename minus .md` (no prefix stripping). Branch names follow: `dark-mode.md` → `ralphai/dark-mode`. Receipt files store a `plan_file=<basename>` field for explicit plan↔receipt matching.
+
 ### Testing child process output capture
 
 `spawnSync` with `stdio: "inherit"` sends output directly to the parent's file descriptors, bypassing any pipe that a grandparent test harness sets up via `execFileSync`. Use `stdio: ["inherit", "pipe", "pipe"]` and manually write `result.stdout`/`result.stderr` to `process.stdout`/`process.stderr` when the CLI output needs to be capturable by tests.

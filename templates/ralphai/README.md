@@ -105,7 +105,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 1. Ralphai loads `ralphai.json` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.md`
-3. In PR mode, a `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried. In direct mode, work continues on the current branch.
+3. In PR mode, a `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried. In direct mode, work continues on the current branch.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.md`
 5. The agent reads the plan, picks the next task, implements it, runs the configured feedback commands, and commits
 6. `progress.md` is updated with what was done
@@ -122,21 +122,21 @@ Supported forms:
 
 ```md
 ---
-depends-on: [prd-a.md, prd-b.md]
+depends-on: [foundation.md, wiring.md]
 ---
 ```
 
 ```md
 ---
 depends-on:
-	- prd-a.md
-	- prd-b.md
+	- foundation.md
+	- wiring.md
 ---
 ```
 
 Notes:
 
-- Dependencies are referenced by plan basename (e.g. `prd-foo.md`).
+- Dependencies are referenced by plan basename (e.g. `foundation.md`).
 - Missing or still-pending dependencies block the plan.
 - Plans with no `depends-on` are treated as ready (backward compatible).
 
@@ -172,7 +172,7 @@ Plans without `source` frontmatter behave exactly as before.
 
 ### Branch Naming (PR mode)
 
-In PR mode, branches are derived from the plan filename: `prd-add-dark-mode.md` → `ralphai/add-dark-mode`. If the branch already exists (locally, on the remote, or has an open PR), the plan is **skipped** and Ralphai tries the next dependency-ready plan. The `ralphai/` prefix is always used for isolation. In direct mode, no branches are created — work happens on the current branch.
+In PR mode, branches are derived from the plan filename (minus the `.md` suffix): `add-dark-mode.md` → `ralphai/add-dark-mode`. Plans can be named freely — `dark-mode.md`, `gh-42-search.md`, `prd-auth.md` all work. If the branch already exists (locally, on the remote, or has an open PR), the plan is **skipped** and Ralphai tries the next dependency-ready plan. The `ralphai/` prefix is always used for isolation. In direct mode, no branches are created — work happens on the current branch.
 
 ### Commit Messages
 

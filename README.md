@@ -119,7 +119,7 @@ For non-disruptive parallel work, use `ralphai worktree` to run a plan in an iso
 ```bash
 ralphai worktree                          # auto-pick next backlog plan
 ralphai worktree --turns=3                # run with 3 turns per plan
-ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
+ralphai worktree --plan=dark-mode.md      # target a specific plan
 ```
 
 The lifecycle: create worktree → run plan → create PR → clean up. If the agent gets stuck or times out, the worktree is preserved. Re-run `ralphai worktree` from the main repo to reuse it, or `cd` into the worktree and run `ralphai run --resume` directly.

@@ -174,8 +174,16 @@ detect_plan() {
     local _branch
     _branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
     local _slug="${_branch#ralphai/}"
-    local _match="$WIP_DIR/prd-${_slug}.md"
-    [[ -f "$_match" ]] && wip_plans+=("$_match")
+    for _f in "$WIP_DIR"/*.md; do
+      [[ -f "$_f" ]] || continue
+      local _base
+      _base=$(basename "$_f")
+      [[ "$_base" == progress-* || "$_base" == receipt-* ]] && continue
+      if [[ "${_base%.md}" == "$_slug" ]]; then
+        wip_plans+=("$_f")
+        break
+      fi
+    done
   else
     for f in "$WIP_DIR"/*.md; do
       [[ -f "$f" ]] && wip_plans+=("$f")
@@ -285,7 +293,7 @@ Consider:
 - Value: which delivers the most user-facing impact?
 - Simplicity: if plans are similar in value, prefer the simpler one.
 
-Output ONLY the basename of the chosen file (e.g. prd-foo-bar.md), nothing else."
+Output ONLY the basename of the chosen file (e.g. foo-bar.md), nothing else."
 
     local llm_output
     llm_output=$($AGENT_COMMAND "$selection_prompt" 2>/dev/null) || {

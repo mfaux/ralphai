@@ -19,7 +19,7 @@ Back to the [README](../README.md) for setup and quickstart.
 ```bash
 ralphai worktree                          # auto-pick next backlog plan
 ralphai worktree --turns=3                # run with 3 turns per plan
-ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
+ralphai worktree --plan=dark-mode.md      # target a specific plan
 ```
 
 The lifecycle: create worktree → run plan (in PR mode) → create PR → clean up.

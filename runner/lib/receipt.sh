@@ -15,7 +15,8 @@
 #   source           — "main" or "worktree"
 #   worktree_path    — absolute path to worktree (only when source=worktree)
 #   branch           — git branch name
-#   slug             — plan slug (derived from filename)
+#   slug             — plan slug (derived from filename: basename minus .md)
+#   plan_file        — exact plan filename (basename, e.g. "dark-mode.md")
 #   agent            — agent command string
 #   turns_budget     — total turn budget for the run (resolved $TURNS; 0 = unlimited)
 #   turns_completed  — number of agent turns completed
@@ -27,8 +28,8 @@
 resolve_receipt_path() {
   local plan_basename
   plan_basename=$(basename "${WIP_FILES[0]}")
-  PLAN_SLUG="${plan_basename#prd-}"
-  PLAN_SLUG="${PLAN_SLUG%.md}"
+  PLAN_BASENAME="$plan_basename"
+  PLAN_SLUG="${plan_basename%.md}"
   RECEIPT_FILE="$WIP_DIR/receipt-${PLAN_SLUG}.txt"
   PROGRESS_FILE="$WIP_DIR/progress-${PLAN_SLUG}.md"
 
@@ -61,6 +62,7 @@ init_receipt() {
     fi
     echo "branch=$branch"
     echo "slug=$PLAN_SLUG"
+    echo "plan_file=$PLAN_BASENAME"
     echo "agent=$AGENT_COMMAND"
     echo "turns_budget=${TURNS:-5}"
     echo "turns_completed=0"
