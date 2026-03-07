@@ -100,6 +100,47 @@ describe("ralphai command", () => {
     expect(parsed).not.toHaveProperty("protectedBranches");
     // feedbackCommands should be an empty array when not detected
     expect(parsed.feedbackCommands).toEqual([]);
+    // New config keys from wizard expansion
+    expect(parsed.turns).toBe(5);
+    expect(parsed.mode).toBe("direct");
+    expect(parsed.autoCommit).toBe(false);
+    expect(parsed.maxStuck).toBe(3);
+    expect(parsed.turnTimeout).toBe(0);
+  });
+
+  it("init --yes writes all config keys with defaults", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
+    const parsed = JSON.parse(config);
+
+    // Verify exactly 17 keys are present
+    expect(Object.keys(parsed)).toHaveLength(17);
+
+    // Core settings from wizard
+    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    expect(parsed.baseBranch).toBeDefined();
+    expect(parsed.feedbackCommands).toEqual([]);
+
+    // New wizard settings
+    expect(parsed.turns).toBe(5);
+    expect(parsed.mode).toBe("direct");
+    expect(parsed.autoCommit).toBe(false);
+    expect(parsed.maxStuck).toBe(3);
+
+    // Runtime defaults
+    expect(parsed.turnTimeout).toBe(0);
+    expect(parsed.promptMode).toBe("auto");
+    expect(parsed.continuous).toBe(false);
+    expect(parsed.fallbackAgents).toBe("");
+
+    // Issue tracking defaults
+    expect(parsed.issueSource).toBe("none");
+    expect(parsed.issueLabel).toBe("ralphai");
+    expect(parsed.issueInProgressLabel).toBe("ralphai:in-progress");
+    expect(parsed.issueRepo).toBe("");
+    expect(parsed.issueCloseOnComplete).toBe(true);
+    expect(parsed.issueCommentProgress).toBe(true);
   });
 
   it("init --yes --agent-command uses the provided agent command", () => {
@@ -108,6 +149,12 @@ describe("ralphai command", () => {
     const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
+    // Other keys should still get defaults
+    expect(Object.keys(parsed)).toHaveLength(17);
+    expect(parsed.turns).toBe(5);
+    expect(parsed.mode).toBe("direct");
+    expect(parsed.autoCommit).toBe(false);
+    expect(parsed.maxStuck).toBe(3);
   });
 
   it("success output contains next steps", () => {
