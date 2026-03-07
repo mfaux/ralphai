@@ -154,7 +154,7 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After
 1. **Commit the `.ralphai/` folder to git.** The config and docs
    are designed to be shared with your team.
 
-2. **Review `.ralphai/ralphai.config`** and adjust settings (agent command,
+2. **Review `.ralphai/ralphai.config.json`** and adjust settings (agent command,
    feedback commands, base branch, etc.).
 
 <details>
@@ -245,7 +245,7 @@ Worktree:
 
 ## Configuration
 
-Settings resolve in this order: **CLI flags > env vars > `.ralphai/ralphai.config` > defaults**.
+Settings resolve in this order: **CLI flags > env vars > `.ralphai/ralphai.config.json` > defaults**.
 
 <details>
 <summary>Environment variables</summary>
@@ -256,6 +256,7 @@ Settings resolve in this order: **CLI flags > env vars > `.ralphai/ralphai.confi
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
+| `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |

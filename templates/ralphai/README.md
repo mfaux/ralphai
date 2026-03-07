@@ -63,7 +63,7 @@ No file arguments needed. The script auto-detects:
 
 The turn budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
 
-Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `.ralphai/ralphai.config`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
+Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `.ralphai/ralphai.config.json`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
 
 `--dry-run` mode previews:
 
@@ -76,7 +76,8 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 `--resume` mode:
 
-- auto-commits dirty tracked/untracked changes on any non-base branch
+- auto-commits dirty tracked/untracked changes on any non-base branch (when `autoCommit` is `true` or in PR mode)
+- when `autoCommit` is `false` in direct mode, skips the recovery commit and preserves dirty state
 - then continues normal execution
 - refuses to auto-commit on the configured base branch (defaults to `main`)
 
@@ -91,7 +92,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 | File / Directory        | Purpose                                                    |
 | ----------------------- | ---------------------------------------------------------- |
-| `ralphai.config`        | Optional repo-level config file (key=value format)         |
+| `ralphai.config.json`   | Optional repo-level config file (JSON format)              |
 | `README.md`             | This file — operational docs for the `.ralphai/` directory |
 | `PLANNING.md`           | Guide for writing plan files                               |
 | `.gitignore`            | Keeps plan files local-only (not tracked by git)           |
@@ -103,7 +104,7 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## How It Works
 
-1. Ralphai loads `.ralphai/ralphai.config` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
+1. Ralphai loads `.ralphai/ralphai.config.json` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.md`
 3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.md`
@@ -162,7 +163,7 @@ issue-url: https://github.com/owner/repo/issues/42
 **Requirements:**
 
 - `gh` CLI must be installed and authenticated (`gh auth login`). If `gh` is not available, hooks are silently skipped — no error.
-- To disable automatic issue closing while keeping completion comments, set `issueCloseOnComplete=false` in `.ralphai/ralphai.config`.
+- To disable automatic issue closing while keeping completion comments, set `issueCloseOnComplete` to `false` in `.ralphai/ralphai.config.json`.
 
 Plans without `source` frontmatter behave exactly as before.
 
@@ -209,6 +210,7 @@ Keeping learnings gitignored prevents auto-written entries from interfering with
 ## Safety Guards
 
 - **Dirty state**: Ralphai blocks by default; `--resume` auto-commits dirty state on any non-base branch (dry-run is read-only)
+- **Auto-commit control**: Per-turn safety-net commits and resume recovery commits are controlled by `autoCommit` (default `false`). When `autoCommit` is `false` in direct mode, dirty state is preserved with a warning. In PR mode, auto-commits always happen regardless of this setting.
 - **Branch isolation**: All work happens on `ralphai/*` branches (PR mode) or your current feature branch (direct mode), never directly on `main`
 - **Direct mode by default**: Ralphai commits on your current branch with no branch creation or PR. Refuses to run on `main`/`master`.
 - **Direct mode safety**: `--direct` refuses to run on `main`/`master` — you must be on a feature branch.
@@ -220,41 +222,43 @@ Keeping learnings gitignored prevents auto-written entries from interfering with
 
 ## Configuration
 
-Ralphai supports an optional config file at `.ralphai/ralphai.config` for repo-level defaults. Settings follow a strict precedence order:
+Ralphai supports an optional config file at `.ralphai/ralphai.config.json` for repo-level defaults. Settings follow a strict precedence order:
 
 ```
 CLI flags  >  env vars  >  config file  >  built-in defaults
 ```
 
-### Config File (`.ralphai/ralphai.config`)
+### Config File (`.ralphai/ralphai.config.json`)
 
-A simple `key=value` file. Comments (`#`) and blank lines are allowed.
+A standard JSON file.
 
-```txt
-# .ralphai/ralphai.config — repo-level defaults
-agentCommand=opencode run --agent build
-feedbackCommands=npm run build,npm test,npm run lint
-baseBranch=main
-maxStuck=3
+```json
+{
+  "agentCommand": "opencode run --agent build",
+  "feedbackCommands": ["npm run build", "npm test", "npm run lint"],
+  "baseBranch": "main",
+  "maxStuck": 3
+}
 ```
 
 Supported keys:
 
-| Key                    | Description                                                                | Default               | Validation                            |
-| ---------------------- | -------------------------------------------------------------------------- | --------------------- | ------------------------------------- |
-| `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_              | Non-empty                             |
-| `feedbackCommands`     | Shell commands to run after each change (comma-separated)                  | _(none)_              | Comma-separated, each entry non-empty |
-| `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token               |
-| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`                      |
-| `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer                      |
-| `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer                  |
-| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline`        |
-| `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`                | `none` or `github`                    |
-| `issueLabel`           | Label to filter GitHub issues by                                           | `ralphai`             | Non-empty                             |
-| `issueInProgressLabel` | Label applied when an issue is picked up                                   | `ralphai:in-progress` | Non-empty                             |
-| `issueRepo`            | `owner/repo` override (auto-detected from remote)                          | _(auto-detect)_       | Any value                             |
-| `issueCloseOnComplete` | Close the issue when the plan completes                                    | `true`                | `true` or `false`                     |
-| `issueCommentProgress` | Comment on the issue during the run                                        | `true`                | `true` or `false`                     |
+| Key                    | Description                                                                | Default               | Validation                     |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------- | ------------------------------ |
+| `agentCommand`         | Full CLI invocation prefix for the AI agent                                | _(none)_              | Non-empty                      |
+| `feedbackCommands`     | Shell commands to run after each change (JSON array or comma-separated)    | _(none)_              | Array of non-empty strings     |
+| `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token        |
+| `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`               |
+| `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)               | `false`               | `true` or `false`              |
+| `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer               |
+| `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer           |
+| `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline` |
+| `issueSource`          | Issue source to pull from (`none` or `github`)                             | `none`                | `none` or `github`             |
+| `issueLabel`           | Label to filter GitHub issues by                                           | `ralphai`             | Non-empty                      |
+| `issueInProgressLabel` | Label applied when an issue is picked up                                   | `ralphai:in-progress` | Non-empty                      |
+| `issueRepo`            | `owner/repo` override (auto-detected from remote)                          | _(auto-detect)_       | Any value                      |
+| `issueCloseOnComplete` | Close the issue when the plan completes                                    | `true`                | `true` or `false`              |
+| `issueCommentProgress` | Comment on the issue during the run                                        | `true`                | `true` or `false`              |
 
 The `agentCommand` is the full CLI invocation prefix — Ralphai appends the prompt as a quoted argument. Examples:
 
@@ -271,7 +275,7 @@ The `agentCommand` is the full CLI invocation prefix — Ralphai appends the pro
 
 When `feedbackCommands` is configured, the agent prompt includes the specific commands (e.g. "Run all feedback loops: npm run build, npm test, npm run lint"). When absent, the prompt uses a generic fallback: "Run your project's build, test, and lint commands."
 
-Unknown keys are logged as a warning and ignored. Invalid values for known keys cause an immediate error with file path, line number, and a description of the problem.
+Unknown keys are logged as a warning and ignored. Invalid values for known keys cause an immediate error with a description of the problem.
 
 The config file is optional. When absent, built-in defaults are used.
 
@@ -285,6 +289,7 @@ Environment variables override config file values:
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
+| `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
@@ -303,23 +308,25 @@ RALPHAI_AGENT_COMMAND='claude -p' RALPHAI_MAX_STUCK=5 ralphai run --turns=5
 
 CLI flags have the highest priority:
 
-| Flag                                | Overrides              |
-| ----------------------------------- | ---------------------- |
-| `--agent-command=<command>`         | `agentCommand`         |
-| `--feedback-commands=<list>`        | `feedbackCommands`     |
-| `--base-branch=<branch>`            | `baseBranch`           |
-| `--turns=<n>`                       | turn budget            |
-| `--direct`                          | `mode` (sets `direct`) |
-| `--pr`                              | `mode` (sets `pr`)     |
-| `--max-stuck=<n>`                   | `maxStuck`             |
-| `--turn-timeout=<seconds>`          | `turnTimeout`          |
-| `--prompt-mode=<mode>`              | `promptMode`           |
-| `--issue-source=<source>`           | `issueSource`          |
-| `--issue-label=<label>`             | `issueLabel`           |
-| `--issue-in-progress-label=<label>` | `issueInProgressLabel` |
-| `--issue-repo=<owner/repo>`         | `issueRepo`            |
-| `--issue-close-on-complete=<bool>`  | `issueCloseOnComplete` |
-| `--issue-comment-progress=<bool>`   | `issueCommentProgress` |
+| Flag                                | Overrides                   |
+| ----------------------------------- | --------------------------- |
+| `--agent-command=<command>`         | `agentCommand`              |
+| `--feedback-commands=<list>`        | `feedbackCommands`          |
+| `--base-branch=<branch>`            | `baseBranch`                |
+| `--turns=<n>`                       | turn budget                 |
+| `--direct`                          | `mode` (sets `direct`)      |
+| `--pr`                              | `mode` (sets `pr`)          |
+| `--auto-commit`                     | `autoCommit` (sets `true`)  |
+| `--no-auto-commit`                  | `autoCommit` (sets `false`) |
+| `--max-stuck=<n>`                   | `maxStuck`                  |
+| `--turn-timeout=<seconds>`          | `turnTimeout`               |
+| `--prompt-mode=<mode>`              | `promptMode`                |
+| `--issue-source=<source>`           | `issueSource`               |
+| `--issue-label=<label>`             | `issueLabel`                |
+| `--issue-in-progress-label=<label>` | `issueInProgressLabel`      |
+| `--issue-repo=<owner/repo>`         | `issueRepo`                 |
+| `--issue-close-on-complete=<bool>`  | `issueCloseOnComplete`      |
+| `--issue-comment-progress=<bool>`   | `issueCommentProgress`      |
 
 ```bash
 ralphai run --turns=5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
@@ -356,11 +363,13 @@ Ralphai supports working on a feature branch using direct mode. This is useful f
 ralphai run --turns=5 --direct
 ```
 
-Or via `.ralphai/ralphai.config`:
+Or via `.ralphai/ralphai.config.json`:
 
-```txt
-baseBranch=feature/big-thing
-mode=direct
+```json
+{
+  "baseBranch": "feature/big-thing",
+  "mode": "direct"
+}
 ```
 
 **What happens:**
@@ -403,10 +412,12 @@ Ralphai can automatically pull work from GitHub Issues when the backlog is empty
 
 **Prerequisites:** The [`gh` CLI](https://cli.github.com/) must be installed and authenticated (`gh auth login`). If `gh` is not available, Ralphai silently skips issue pulling and continues normally.
 
-**Enable it** by setting `issueSource=github` in `.ralphai/ralphai.config`:
+**Enable it** by setting `issueSource` to `"github"` in `.ralphai/ralphai.config.json`:
 
-```txt
-issueSource=github
+```json
+{
+  "issueSource": "github"
+}
 ```
 
 Or via env var or CLI flag:
@@ -478,11 +489,11 @@ Issue created with label "ralphai"
 
 ### Smoke Checks
 
-Use these checks to verify config behavior after changes to `.ralphai/ralphai.config`:
+Use these checks to verify config behavior after changes to `.ralphai/ralphai.config.json`:
 
-1. **No config** — Remove or rename `.ralphai/ralphai.config`. Run `--show-config` and confirm all settings show `(default)`.
+1. **No config** — Remove or rename `.ralphai/ralphai.config.json`. Run `--show-config` and confirm all settings show `(default)`.
 
-2. **Config file only** — Create `.ralphai/ralphai.config` with custom values (e.g. `agentCommand=claude -p`). Run `--show-config` and confirm settings show `(config)`.
+2. **Config file only** — Create `.ralphai/ralphai.config.json` with custom values (e.g. `{"agentCommand": "claude -p"}`). Run `--show-config` and confirm settings show `(config)`.
 
 3. **Env var override** — Set an env var (e.g. `RALPHAI_AGENT_COMMAND='codex exec'`) with a config file present. Run `--show-config` and confirm the env var wins over the config file value.
 
@@ -499,4 +510,3 @@ Use these checks to verify config behavior after changes to `.ralphai/ralphai.co
 **"Cannot initialize ralphai inside a git worktree"**
 
 Navigate to the main repository and run `ralphai init` there. Ralphai detects that you're in a worktree and refuses to initialize because `.ralphai/` must live in the main repo to be shared across all worktrees. Use `git worktree list` to find the main repo path (the first entry in the list).
-
