@@ -250,7 +250,7 @@ Use basename references (not full paths):
 
 ```md
 ---
-depends-on: [prd-foundation.md, prd-wiring.md]
+depends-on: [foundation.md, wiring.md]
 ---
 ```
 
@@ -259,8 +259,8 @@ or
 ```md
 ---
 depends-on:
-	- prd-foundation.md
-	- prd-wiring.md
+	- foundation.md
+	- wiring.md
 ---
 ```
 

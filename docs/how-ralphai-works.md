@@ -175,8 +175,9 @@ Ralphai supports two branching strategies:
   via the `gh` CLI (validated at startup before any agent work begins).
 
 **Branch naming (PR mode only):** The branch name is derived from the plan
-filename. `prd-add-dark-mode.md` becomes `ralphai/add-dark-mode`. The
-`ralphai/` prefix keeps automated work visually separate from human branches.
+filename (minus the `.md` suffix). `add-dark-mode.md` becomes
+`ralphai/add-dark-mode`. The `ralphai/` prefix keeps automated work visually
+separate from human branches.
 
 **Collision detection (PR mode only):** Before creating a branch, Ralphai
 checks whether it already exists locally, on the remote, or has an open PR. If
@@ -227,7 +228,7 @@ frontmatter. A plan is only runnable when all its dependencies are archived in
 
 ```md
 ---
-depends-on: [prd-a.md, prd-b.md]
+depends-on: [foundation.md, wiring.md]
 ---
 ```
 
