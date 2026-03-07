@@ -1,8 +1,8 @@
 # How ralphai Works
 
-Ralphai is a loop that drives your AI coding agent one plan at a time, on an
-isolated branch, with real build/test/lint feedback every cycle. This page
-explains the mechanics behind that loop.
+Ralphai is a loop that drives your AI coding agent one plan at a time, with
+real build/test/lint feedback every cycle. This page explains the mechanics
+behind that loop.
 
 Back to the [README](../README.md) for setup and quickstart.
 
@@ -197,25 +197,22 @@ Default: `0` (no timeout — the agent runs until it exits on its own).
 
 ## Branch Isolation
 
-All work happens on isolated `ralphai/*` branches, never directly on `main` or
-your working branch.
+Ralphai supports two branching strategies:
 
-**Branch naming:** The branch name is derived from the plan filename.
-`prd-add-dark-mode.md` becomes `ralphai/add-dark-mode`. The `ralphai/` prefix
-keeps automated work visually separate from human branches.
+- **Direct mode** (default, `--direct`): Ralphai commits on your current
+  branch. No branch creation, no PR. You must be on a feature branch —
+  Ralphai refuses to run on `main` or `master`.
+- **PR mode** (`--pr`): Ralphai creates an isolated `ralphai/*` branch from the
+  configured base branch, does all work there, and opens a PR on completion
+  via the `gh` CLI (validated at startup before any agent work begins).
 
-**Collision detection:** Before creating a branch, Ralphai checks whether it
-already exists locally, on the remote, or has an open PR. If a collision is
-found, the plan is skipped and Ralphai moves to the next one.
+**Branch naming (PR mode only):** The branch name is derived from the plan
+filename. `prd-add-dark-mode.md` becomes `ralphai/add-dark-mode`. The
+`ralphai/` prefix keeps automated work visually separate from human branches.
 
-**On completion**, Ralphai operates in one of two modes:
-
-- **Direct mode** (default): Ralphai commits on the current branch. No
-  branch creation, no PR. Refuses to run on `main`/`master` — you must
-  be on a feature branch.
-- **PR mode** (`--pr`): Ralphai pushes the `ralphai/*` branch and creates a PR
-  via the `gh` CLI, with the plan content and commit log in the PR body.
-  The `gh` CLI is validated at startup before any agent work begins.
+**Collision detection (PR mode only):** Before creating a branch, Ralphai
+checks whether it already exists locally, on the remote, or has an open PR. If
+a collision is found, the plan is skipped and Ralphai moves to the next one.
 
 **Feature branch workflow:** For large features spanning multiple plans,
 use direct mode on a feature branch (`git checkout -b feature/big-thing`
