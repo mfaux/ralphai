@@ -416,9 +416,13 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
 
     # --- Auto-commit dirty state (AFTER stuck detection) ---
     if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-      echo "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot."
-      git add -A
-      git commit -m "chore(ralphai): auto-commit uncommitted changes from turn $i" || true
+      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "direct" ]]; then
+        echo "WARNING: Agent left uncommitted changes (autoCommit=false, skipping recovery commit)."
+      else
+        echo "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot."
+        git add -A
+        git commit -m "chore(ralphai): auto-commit uncommitted changes from turn $i" || true
+      fi
     fi
 
     # --- Update receipt turn counter ---

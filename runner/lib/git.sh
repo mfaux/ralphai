@@ -93,12 +93,17 @@ if [[ "$DRY_RUN" != true ]]; then
         exit 1
       fi
 
-      echo "Detected dirty state on $current_branch. Auto-committing recovery snapshot (--resume)."
-      git add -A
-      git commit -m "chore(ralphai): recover interrupted turn
+      if [[ "$AUTO_COMMIT" == "false" && "$MODE" == "direct" ]]; then
+        echo "WARNING: Dirty state detected on $current_branch (autoCommit=false, skipping recovery commit)."
+        echo "Continuing with dirty working tree."
+      else
+        echo "Detected dirty state on $current_branch. Auto-committing recovery snapshot (--resume)."
+        git add -A
+        git commit -m "chore(ralphai): recover interrupted turn
 
 Interrupted mid-turn on branch $current_branch.
 Committing dirty state so ralphai can resume." || true
+      fi
     else
       echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."
       echo "Tip: re-run with --resume to auto-commit and continue."
