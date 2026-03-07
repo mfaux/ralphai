@@ -26,7 +26,8 @@ type RalphaiSubcommand =
   | "run"
   | "uninstall"
   | "worktree"
-  | "status";
+  | "status"
+  | "reset";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -80,6 +81,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "uninstall",
   "worktree",
   "status",
+  "reset",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -691,6 +693,187 @@ LEARNINGS.md
 // Help text
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Reset command
+// ---------------------------------------------------------------------------
+
+async function runRalphaiReset(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  const ralphaiRoot = resolveRalphaiDir(cwd);
+  if (!ralphaiRoot) {
+    console.error(
+      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  const ralphaiDir = join(ralphaiRoot, ".ralphai");
+  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+
+  if (!existsSync(inProgressDir)) {
+    console.log("Nothing to reset — no in-progress directory.");
+    return;
+  }
+
+  const files = readdirSync(inProgressDir);
+  const planFiles = files.filter(
+    (f) => f.endsWith(".md") && f !== "progress.md",
+  );
+  const progressFile = files.includes("progress.md") ? "progress.md" : null;
+  const receiptFiles = files.filter(
+    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  );
+
+  // Check for worktrees to clean
+  let worktrees: WorktreeEntry[] = [];
+  try {
+    worktrees = listRalphaiWorktrees(ralphaiRoot);
+  } catch {
+    // Not in a git repo or git not available
+  }
+
+  if (
+    planFiles.length === 0 &&
+    !progressFile &&
+    receiptFiles.length === 0 &&
+    worktrees.length === 0
+  ) {
+    console.log("Nothing to reset — pipeline is already clean.");
+    return;
+  }
+
+  // Show what will be reset
+  console.log();
+  console.log(`${TEXT}The following will be reset:${RESET}`);
+  console.log();
+  if (planFiles.length > 0) {
+    console.log(
+      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved back to backlog${RESET}`,
+    );
+    for (const f of planFiles) {
+      console.log(`    ${DIM}${f}${RESET}`);
+    }
+  }
+  if (progressFile) {
+    console.log(
+      `  ${TEXT}Progress${RESET}    ${DIM}progress.md will be deleted${RESET}`,
+    );
+  }
+  if (receiptFiles.length > 0) {
+    console.log(
+      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""} will be deleted${RESET}`,
+    );
+  }
+  if (worktrees.length > 0) {
+    console.log(
+      `  ${TEXT}Worktrees${RESET}   ${DIM}${worktrees.length} worktree${worktrees.length !== 1 ? "s" : ""} will be removed${RESET}`,
+    );
+    for (const wt of worktrees) {
+      console.log(`    ${DIM}${wt.branch}  ${wt.path}${RESET}`);
+    }
+  }
+  console.log();
+
+  // Confirm unless --yes
+  if (!options.yes) {
+    clack.intro("Ralphai Reset");
+    const confirmed = await clack.confirm({
+      message:
+        "Reset pipeline state? In-progress plans will return to backlog.",
+    });
+
+    if (clack.isCancel(confirmed) || !confirmed) {
+      clack.cancel("Reset cancelled.");
+      return;
+    }
+  }
+
+  let actions = 0;
+
+  // 1. Move plan files back to backlog
+  for (const planFile of planFiles) {
+    const src = join(inProgressDir, planFile);
+    const dest = join(backlogDir, planFile);
+    mkdirSync(backlogDir, { recursive: true });
+    renameSync(src, dest);
+    actions++;
+  }
+
+  // 2. Delete progress.md
+  if (progressFile) {
+    rmSync(join(inProgressDir, progressFile), { force: true });
+    actions++;
+  }
+
+  // 3. Delete receipt files
+  for (const receiptFile of receiptFiles) {
+    rmSync(join(inProgressDir, receiptFile), { force: true });
+    actions++;
+  }
+
+  // 4. Clean worktrees
+  if (worktrees.length > 0) {
+    // Prune stale entries
+    try {
+      execSync("git worktree prune", { cwd: ralphaiRoot, stdio: "pipe" });
+    } catch {
+      // Not critical
+    }
+
+    for (const wt of worktrees) {
+      try {
+        execSync(`git worktree remove "${wt.path}"`, {
+          cwd: ralphaiRoot,
+          stdio: "pipe",
+        });
+        // Try to delete branch (may fail if not merged — that's ok)
+        try {
+          execSync(`git branch -d "${wt.branch}"`, {
+            cwd: ralphaiRoot,
+            stdio: "pipe",
+          });
+        } catch {
+          // Branch deletion failure is not critical
+        }
+        actions++;
+      } catch {
+        console.log(
+          `  ${DIM}Warning: Could not remove worktree ${wt.path}. Remove manually.${RESET}`,
+        );
+      }
+    }
+  }
+
+  // Summary
+  console.log(`${TEXT}Pipeline reset.${RESET}`);
+  console.log();
+  console.log(`${DIM}Actions:${RESET}`);
+  if (planFiles.length > 0) {
+    console.log(
+      `  ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved to backlog`,
+    );
+  }
+  if (progressFile) {
+    console.log(`  Deleted progress.md`);
+  }
+  if (receiptFiles.length > 0) {
+    console.log(
+      `  Deleted ${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}`,
+    );
+  }
+  if (worktrees.length > 0) {
+    console.log(
+      `  Cleaned ${worktrees.length} worktree${worktrees.length !== 1 ? "s" : ""}`,
+    );
+  }
+  console.log();
+}
+
+// ---------------------------------------------------------------------------
+
 function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
   console.log();
@@ -706,6 +889,9 @@ function showRalphaiHelp(): void {
   );
   console.log(
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline and worktree status${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
   );
   console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
@@ -748,6 +934,9 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "status":
       runRalphaiStatus(cwd);
+      break;
+    case "reset":
+      await runRalphaiReset(options, cwd);
       break;
     default:
       showRalphaiHelp();

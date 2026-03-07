@@ -28,6 +28,7 @@ ${BOLD}Commands:${RESET}
   run            Start the Ralphai task runner
   worktree       Create or reuse an isolated git worktree
   status         Show pipeline and worktree status
+  reset          Move in-progress plans back to backlog and clean up
   update [tag]   Update ralphai to the latest (or specified) version
   uninstall      Remove Ralphai from your project
 
@@ -49,6 +50,9 @@ ${BOLD}Worktree Options:${RESET}
   worktree list     Show active ralphai-managed worktrees
   worktree clean    Remove completed/orphaned worktrees
 
+${BOLD}Reset Options:${RESET}
+  --yes, -y         Skip confirmation prompt
+
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
   ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
@@ -60,6 +64,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai worktree list           ${DIM}# show active ralphai worktrees${RESET}
   ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
   ${DIM}$${RESET} ralphai status                 ${DIM}# show pipeline and worktree status${RESET}
+  ${DIM}$${RESET} ralphai reset                  ${DIM}# move in-progress plans back to backlog${RESET}
+  ${DIM}$${RESET} ralphai reset --yes            ${DIM}# reset without confirmation${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
   ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
