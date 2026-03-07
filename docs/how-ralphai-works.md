@@ -127,7 +127,7 @@ found, the plan is skipped and Ralphai moves to the next one.
 
 **Feature branch workflow:** For large features spanning multiple plans,
 use direct mode on a feature branch (`git checkout -b feature/big-thing`
-then `ralphai run 5`). When all plans are done, you
+then `ralphai run --turns=5`). When all plans are done, you
 manually open a PR from the feature branch to `main`.
 
 **Safety guards:**

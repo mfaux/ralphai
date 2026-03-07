@@ -104,7 +104,7 @@ Ralphai picks a plan from the backlog, hands it to your agent, and loops. Each t
 Common options:
 
 ```bash
-ralphai run 3            # 3 turns per plan (default: 5)
+ralphai run --turns=3    # 3 turns per plan (default: 5)
 ralphai run --pr         # create a ralphai/* branch and open a PR instead
 ralphai run --dry-run    # preview what ralphai would do without changing anything
 ```
@@ -115,6 +115,7 @@ For non-disruptive parallel work, use `ralphai worktree` to run a plan in an iso
 
 ```bash
 ralphai worktree                          # auto-pick next backlog plan
+ralphai worktree --turns=3                # run with 3 turns per plan
 ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
 ```
 
@@ -125,7 +126,7 @@ ralphai worktree list    # show active ralphai-managed worktrees
 ralphai worktree clean   # remove completed/orphaned worktrees
 ```
 
-> `ralphai worktree` must be run from the **main repository**, not from inside a worktree. All runner options (`--turns`, `--agent`, `--feedback-commands`, etc.) are forwarded automatically.
+> `ralphai worktree` must be run from the **main repository**, not from inside a worktree. All runner options (`--turns`, `--agent-command`, `--feedback-commands`, etc.) are forwarded automatically.
 
 ### 3. Steer
 
