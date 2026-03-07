@@ -123,38 +123,6 @@ describe("ralphai command", () => {
     expect(config).toContain("agentCommand=claude -p");
   });
 
-  it("sync --yes updates template files when .ralphai/ already exists", () => {
-    // First scaffold
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Tamper with a template file to verify it gets overwritten
-    writeFileSync(join(testDir, ".ralphai", "README.md"), "old content");
-
-    // Write custom config that should be preserved
-    const customConfig = "agentCommand=my-custom-agent\nbaseBranch=develop\n";
-    writeFileSync(join(testDir, ".ralphai", "ralphai.config"), customConfig);
-
-    // Run sync — should update, not skip
-    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
-
-    expect(output).toContain("Ralphai synced");
-    expect(output).not.toContain("already set up");
-
-    // Template files should be refreshed
-    const readme = readFileSync(
-      join(testDir, ".ralphai", "README.md"),
-      "utf-8",
-    );
-    expect(readme).not.toBe("old content");
-
-    // Config should be preserved
-    const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config"),
-      "utf-8",
-    );
-    expect(config).toBe(customConfig);
-  });
-
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
@@ -410,34 +378,6 @@ describe("ralphai command", () => {
     expect(issues).toContain("slugify()");
   });
 
-  it("sync --yes <target-dir> updates templates if .ralphai/ already exists in target", () => {
-    const targetDir = join(tmpdir(), `ralphai-target-exists-${Date.now()}`);
-    mkdirSync(join(targetDir, ".ralphai"), { recursive: true });
-    execSync("git init", { cwd: targetDir, stdio: "ignore" });
-
-    // Write a template file so sync has something to overwrite
-    writeFileSync(join(targetDir, ".ralphai", "README.md"), "old");
-
-    try {
-      const output = stripLogo(
-        runCliOutput(["sync", "--yes", targetDir], testDir),
-      );
-
-      expect(output).toContain("Ralphai synced");
-
-      // README.md should be refreshed from template
-      const readme = readFileSync(
-        join(targetDir, ".ralphai", "README.md"),
-        "utf-8",
-      );
-      expect(readme).not.toBe("old");
-    } finally {
-      if (existsSync(targetDir)) {
-        rmSync(targetDir, { recursive: true, force: true });
-      }
-    }
-  });
-
   // -------------------------------------------------------------------------
   // Uninstall tests
   // -------------------------------------------------------------------------
@@ -483,104 +423,6 @@ describe("ralphai command", () => {
         rmSync(targetDir, { recursive: true, force: true });
       }
     }
-  });
-
-  // -------------------------------------------------------------------------
-  // Sync mode tests
-  // -------------------------------------------------------------------------
-
-  it("sync --yes preserves LEARNINGS.md", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Add custom content to LEARNINGS.md
-    const customLearnings = "# My Custom Learnings\n\nDo not overwrite me.\n";
-    writeFileSync(join(testDir, ".ralphai", "LEARNINGS.md"), customLearnings);
-
-    // Run sync
-    runCliOutput(["sync", "--yes"], testDir);
-
-    const learnings = readFileSync(
-      join(testDir, ".ralphai", "LEARNINGS.md"),
-      "utf-8",
-    );
-    expect(learnings).toBe(customLearnings);
-  });
-
-  it("sync --yes preserves .gitignore", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Modify .gitignore
-    const customGitignore = "# custom gitignore\n*.log\n";
-    writeFileSync(join(testDir, ".ralphai", ".gitignore"), customGitignore);
-
-    // Run sync
-    runCliOutput(["sync", "--yes"], testDir);
-
-    const gitignore = readFileSync(
-      join(testDir, ".ralphai", ".gitignore"),
-      "utf-8",
-    );
-    expect(gitignore).toBe(customGitignore);
-  });
-
-  it("sync --yes preserves plan directories and files", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Add a plan file to backlog
-    writeFileSync(
-      join(testDir, ".ralphai", "pipeline", "backlog", "my-plan.md"),
-      "# Plan\nDo something.\n",
-    );
-
-    // Run sync
-    runCliOutput(["sync", "--yes"], testDir);
-
-    // Plan file should still be there
-    expect(
-      existsSync(
-        join(testDir, ".ralphai", "pipeline", "backlog", "my-plan.md"),
-      ),
-    ).toBe(true);
-    const plan = readFileSync(
-      join(testDir, ".ralphai", "pipeline", "backlog", "my-plan.md"),
-      "utf-8",
-    );
-    expect(plan).toContain("Do something.");
-  });
-
-  it("sync --yes removes old scaffolded scripts (migration)", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    // Simulate old-style scaffolded scripts that should be cleaned up
-    writeFileSync(
-      join(testDir, ".ralphai", "ralphai.sh"),
-      "#!/bin/bash\necho old-script",
-    );
-    mkdirSync(join(testDir, ".ralphai", "lib"), { recursive: true });
-    writeFileSync(join(testDir, ".ralphai", "lib", "config.sh"), "# old lib");
-
-    // Run sync
-    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
-
-    // Old scripts should be removed
-    expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(false);
-    expect(existsSync(join(testDir, ".ralphai", "lib"))).toBe(false);
-
-    // Output should mention removal
-    expect(output).toContain("Removed");
-    expect(output).toContain("bundled in package");
-  });
-
-  it("sync --yes output lists updated and preserved files", () => {
-    runCliOutput(["init", "--yes"], testDir);
-
-    const output = stripLogo(runCliOutput(["sync", "--yes"], testDir));
-
-    expect(output).toContain("Updated:");
-    expect(output).toContain("README.md");
-    expect(output).toContain("PLANNING.md");
-    expect(output).toContain("Preserved:");
-    expect(output).toContain("ralphai.config");
   });
 
   // -------------------------------------------------------------------------
@@ -942,7 +784,6 @@ describe("ralphai command", () => {
     expect(output).toContain("init");
     expect(output).toContain("run");
     expect(output).toContain("update");
-    expect(output).toContain("sync");
     expect(output).toContain("uninstall");
   });
 
@@ -954,18 +795,10 @@ describe("ralphai command", () => {
     expect(result.stderr).toContain("already set up");
   });
 
-  it("init error message suggests sync and init --force", () => {
+  it("init error message suggests init --force", () => {
     runCliOutput(["init", "--yes"], testDir);
     const result = runCli(["init", "--yes"], testDir);
-    expect(result.stderr).toContain("ralphai sync");
     expect(result.stderr).toContain("ralphai init --force");
-  });
-
-  it("sync --yes errors when .ralphai/ does not exist", () => {
-    const result = runCli(["sync", "--yes"], testDir);
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("not set up");
-    expect(result.stderr).toContain("ralphai init");
   });
 
   it("run errors when .ralphai/ does not exist", () => {
@@ -1040,18 +873,6 @@ describe("ralphai command", () => {
         "Cannot initialize ralphai inside a git worktree",
       );
       expect(result.stderr).toContain("ralphai init");
-      expect(result.stderr).toContain("main repository");
-    });
-
-    it("sync --yes fails inside a git worktree", () => {
-      // First init in main repo so sync has something to operate on
-      runCliOutput(["init", "--yes"], mainRepo);
-      const result = runCli(["sync", "--yes"], worktreeDir);
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain(
-        "Cannot sync ralphai inside a git worktree",
-      );
-      expect(result.stderr).toContain("ralphai sync");
       expect(result.stderr).toContain("main repository");
     });
 
@@ -2276,7 +2097,6 @@ echo "$CONTINUOUS"
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("run");
     expect(result.stdout).toContain("update");
-    expect(result.stdout).toContain("sync");
     expect(result.stdout).toContain("uninstall");
   });
 

@@ -28,7 +28,6 @@ ${BOLD}Commands:${RESET}
   run            Start the Ralphai task runner
   worktree       Run in an isolated git worktree
   update [tag]   Update ralphai to the latest (or specified) version
-  sync           Refresh .ralphai/ template files (preserves config & state)
   uninstall      Remove Ralphai from your project
 
 ${BOLD}Options:${RESET}
@@ -61,7 +60,6 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
-  ${DIM}$${RESET} ralphai sync --yes             ${DIM}# refresh template files${RESET}
   ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
 `);
 }

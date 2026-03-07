@@ -214,7 +214,6 @@ Commands:
   run         Start the Ralphai task runner
   worktree    Run in an isolated git worktree
   update      Update ralphai to the latest (or specified) version
-  sync        Refresh template files (preserves config & state)
   uninstall   Remove Ralphai from your project
 
 Options:

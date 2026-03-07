@@ -119,6 +119,6 @@ Ralphai auto-detects worktrees — no extra flags needed. Use
 
 **Important:**
 
-- `ralphai init` and `ralphai sync` must be run in the **main repository**, not
-  inside a worktree.
+- `ralphai init` must be run in the **main repository**, not inside a
+   worktree.
 - `ralphai run` works in both the main repo and any worktree.

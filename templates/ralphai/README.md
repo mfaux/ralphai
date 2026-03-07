@@ -499,6 +499,3 @@ Use these checks to verify config behavior after changes to `.ralphai/ralphai.co
 
 Navigate to the main repository and run `ralphai init` there. Ralphai detects that you're in a worktree and refuses to initialize because `.ralphai/` must live in the main repo to be shared across all worktrees. Use `git worktree list` to find the main repo path (the first entry in the list).
 
-**"Cannot sync ralphai inside a git worktree"**
-
-Same as above — `ralphai sync` must be run in the main repository. Navigate to the main repo first.

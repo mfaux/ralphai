@@ -22,7 +22,6 @@ import { runSelfUpdate } from "./self-update.ts";
 type RalphaiSubcommand =
   | "init"
   | "update"
-  | "sync"
   | "run"
   | "uninstall"
   | "worktree";
@@ -75,7 +74,6 @@ const AGENT_PRESETS: { label: string; command: string }[] = [
 const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
-  "sync",
   "run",
   "uninstall",
   "worktree",
@@ -687,97 +685,6 @@ LEARNINGS.md
 }
 
 // ---------------------------------------------------------------------------
-// Sync logic — refresh template files while preserving user state
-// ---------------------------------------------------------------------------
-
-/** Files that are copied from templates and safe to overwrite on sync. */
-const TEMPLATE_FILES = ["README.md", "PLANNING.md"] as const;
-
-async function syncRalphaiTemplates(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  const __dir = dirname(fileURLToPath(import.meta.url));
-  const templatesDir = join(__dir, "..", "templates", "ralphai");
-  const ralphaiDir = join(cwd, ".ralphai");
-
-  if (!options.yes) {
-    clack.intro("Syncing Ralphai — refreshing template files");
-
-    const confirmed = await clack.confirm({
-      message:
-        "This will overwrite README.md and PLANNING.md " +
-        "from the latest templates. Your config and plan " +
-        "files will be preserved. Continue?",
-    });
-
-    if (clack.isCancel(confirmed) || !confirmed) {
-      clack.cancel("Sync cancelled.");
-      return;
-    }
-  }
-
-  const updated: string[] = [];
-  const removed: string[] = [];
-  const skipped: string[] = [];
-
-  // Update template files (docs only — scripts now run from the package)
-  for (const file of TEMPLATE_FILES) {
-    const src = join(templatesDir, file);
-    const dest = join(ralphaiDir, file);
-    copyFileSync(src, dest);
-    updated.push(file);
-  }
-
-  // Migration: remove old scaffolded scripts (now bundled in the package)
-  const oldScript = join(ralphaiDir, "ralphai.sh");
-  if (existsSync(oldScript)) {
-    rmSync(oldScript);
-    removed.push("ralphai.sh");
-  }
-  const oldLibDir = join(ralphaiDir, "lib");
-  if (existsSync(oldLibDir)) {
-    rmSync(oldLibDir, { recursive: true });
-    removed.push("lib/");
-  }
-
-  // Report what was preserved
-  for (const file of ["ralphai.config", ".gitignore"]) {
-    if (existsSync(join(ralphaiDir, file))) {
-      skipped.push(file);
-    }
-  }
-  for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    if (existsSync(join(ralphaiDir, "pipeline", subdir))) {
-      skipped.push(`pipeline/${subdir}/`);
-    }
-  }
-
-  // Print results
-  console.log(`${TEXT}Ralphai synced in .ralphai/${RESET}`);
-  console.log();
-  if (updated.length > 0) {
-    console.log(`${DIM}Updated:${RESET}`);
-    for (const file of updated) {
-      console.log(`  .ralphai/${file}`);
-    }
-  }
-  if (removed.length > 0) {
-    console.log(`${DIM}Removed (now bundled in package):${RESET}`);
-    for (const file of removed) {
-      console.log(`  .ralphai/${file}`);
-    }
-  }
-  if (skipped.length > 0) {
-    console.log(`${DIM}Preserved:${RESET}`);
-    for (const file of skipped) {
-      console.log(`  .ralphai/${file}`);
-    }
-  }
-  console.log();
-}
-
-// ---------------------------------------------------------------------------
 // Help text
 // ---------------------------------------------------------------------------
 
@@ -796,9 +703,6 @@ function showRalphaiHelp(): void {
   );
   console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}sync${RESET}        ${DIM}Refresh .ralphai/ template files from the installed version${RESET}`,
   );
   console.log(
     `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from your project${RESET}`,
@@ -826,9 +730,6 @@ export async function runRalphai(args: string[]): Promise<void> {
         packageName: "ralphai",
         tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
       });
-      break;
-    case "sync":
-      await runRalphaiSync(options, cwd);
       break;
     case "uninstall":
       await uninstallRalphai(options, cwd);
@@ -940,8 +841,7 @@ async function runRalphaiInit(
     } else {
       console.error(
         `${TEXT}Error:${RESET} Ralphai is already set up in this directory (.ralphai/ exists).\n` +
-          `${DIM}Use ${TEXT}ralphai sync${DIM} to refresh templates, ` +
-          `or ${TEXT}ralphai init --force${DIM} to re-scaffold from scratch.${RESET}`,
+          `${DIM}Use ${TEXT}ralphai init --force${DIM} to re-scaffold from scratch.${RESET}`,
       );
       process.exit(1);
     }
@@ -968,29 +868,6 @@ async function runRalphaiInit(
   }
 
   scaffold(answers, cwd);
-}
-
-async function runRalphaiSync(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  // Block sync inside a git worktree — .ralphai/ must live in the main repo
-  if (isGitWorktree(cwd)) {
-    console.error(
-      `${TEXT}Error:${RESET} Cannot sync ralphai inside a git worktree.\n` +
-        `${DIM}Run ${TEXT}ralphai sync${DIM} in the main repository instead.${RESET}`,
-    );
-    process.exit(1);
-  }
-
-  if (!existsSync(join(cwd, ".ralphai"))) {
-    console.error(
-      `${TEXT}Error:${RESET} Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
-    );
-    process.exit(1);
-  }
-
-  await syncRalphaiTemplates(options, cwd);
 }
 
 // ---------------------------------------------------------------------------
