@@ -1,7 +1,6 @@
 import { execSync, spawn } from "child_process";
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   copyFileSync,
   writeFileSync,
@@ -591,13 +590,11 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
 
   const config = JSON.stringify(configObj, null, 2) + "\n";
 
-  writeFileSync(join(ralphaiDir, "ralphai.config.json"), config);
+  writeFileSync(join(cwd, "ralphai.json"), config);
 
-  // Create subdirectories with .gitkeep
+  // Create pipeline subdirectories (no .gitkeep — .ralphai/ is fully gitignored)
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
-    const subdirPath = join(ralphaiDir, "pipeline", subdir);
-    mkdirSync(subdirPath, { recursive: true });
-    writeFileSync(join(subdirPath, ".gitkeep"), "");
+    mkdirSync(join(ralphaiDir, "pipeline", subdir), { recursive: true });
   }
 
   // Create .ralphai/LEARNINGS.md — Ralphai-specific learnings (gitignored, local-only)
@@ -622,17 +619,20 @@ Each entry should include:
 `;
   writeFileSync(join(ralphaiDir, "LEARNINGS.md"), learningsContent);
 
-  // Create .ralphai/.gitignore — plan files are local-only state, not tracked by git
-  const gitignoreContent = `# Plan files are local-only state (not tracked by git).
-# Only the directory structure (.gitkeep), config, and docs are committed.
-pipeline/backlog/*.md
-pipeline/wip/*.md
-pipeline/in-progress/*.md
-pipeline/in-progress/progress.md
-pipeline/out/
-LEARNINGS.md
-`;
-  writeFileSync(join(ralphaiDir, ".gitignore"), gitignoreContent);
+  // Ensure .ralphai/ is gitignored in the project's root .gitignore
+  const rootGitignore = join(cwd, ".gitignore");
+  const gitignoreEntry = ".ralphai/";
+  if (existsSync(rootGitignore)) {
+    const content = readFileSync(rootGitignore, "utf-8");
+    if (!content.split("\n").some((line) => line.trim() === gitignoreEntry)) {
+      writeFileSync(
+        rootGitignore,
+        content.trimEnd() + "\n\n# ralphai local pipeline state\n.ralphai/\n",
+      );
+    }
+  } else {
+    writeFileSync(rootGitignore, "# ralphai local pipeline state\n.ralphai/\n");
+  }
 
   // Create GitHub labels if issues integration is enabled
   let labelResult: LabelResult | null = null;
@@ -641,16 +641,16 @@ LEARNINGS.md
   }
 
   // Print success output
-  console.log(`${TEXT}Ralphai initialized in .ralphai/${RESET}`);
+  console.log(`${TEXT}Ralphai initialized${RESET}`);
   console.log();
   console.log(`${DIM}Created:${RESET}`);
   console.log(
-    `  .ralphai/ralphai.config.json ${DIM}Configuration (edit to customize)${RESET}`,
+    `  ralphai.json               ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
   console.log(`  .ralphai/PLANNING.md   ${DIM}How to write plans${RESET}`);
   console.log(
-    `  .ralphai/LEARNINGS.md      ${DIM}Ralphai-specific learnings (gitignored)${RESET}`,
+    `  .ralphai/LEARNINGS.md      ${DIM}Ralphai-specific learnings${RESET}`,
   );
   console.log(`  .ralphai/pipeline/backlog/ ${DIM}Queue plans here${RESET}`);
   console.log(
@@ -668,9 +668,7 @@ LEARNINGS.md
   }
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
-  console.log(
-    `  1. Review ${TEXT}.ralphai/ralphai.config.json${RESET} and adjust settings`,
-  );
+  console.log(`  1. Review ${TEXT}ralphai.json${RESET} and adjust settings`);
   console.log(
     `  2. Read ${TEXT}.ralphai/PLANNING.md${RESET} for how to write plans`,
   );
@@ -825,7 +823,7 @@ async function runRalphaiReset(
     for (const wt of worktrees) {
       try {
         // Use --force because the worktree may have uncommitted changes
-        // (e.g. the .ralphai symlink replacement, or interrupted agent work).
+        // from interrupted agent work.
         execSync(`git worktree remove --force "${wt.path}"`, {
           cwd: ralphaiRoot,
           stdio: "pipe",
@@ -1362,7 +1360,7 @@ function cleanWorktrees(cwd: string): void {
       console.log(`Removing: ${wt.path} (${wt.branch})`);
       try {
         // Use --force because the worktree may have uncommitted changes
-        // (e.g. the .ralphai symlink replacement, or interrupted agent work).
+        // from interrupted agent work.
         execSync(`git worktree remove --force "${wt.path}"`, {
           cwd,
           stdio: "inherit",
@@ -1771,24 +1769,10 @@ async function runRalphaiWorktree(
   // sandboxing (OpenCode, Claude Code, Codex) reject reads/writes to the
   // main repo's .ralphai/ as "external directory" access.
   //
-  // When .ralphai/ is git-tracked, `git worktree add` checks out its
-  // tracked files as a real directory. We must replace it with a symlink
-  // so pipeline state (gitignored files like plans, receipts, progress)
-  // is shared with the main repo.
+  // Since .ralphai/ is fully gitignored, `git worktree add` won't create
+  // it in the worktree — we just need to add the symlink.
   const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
-  const needsSymlink =
-    !existsSync(worktreeRalphaiLink) ||
-    !lstatSync(worktreeRalphaiLink).isSymbolicLink();
-  if (needsSymlink) {
-    // Remove the real directory (if any) before creating the symlink.
-    // This is safe because the symlink target (main repo's .ralphai/)
-    // contains all the same tracked files plus gitignored pipeline state.
-    //
-    // The symlink replacement causes git to see tracked .ralphai/ files as
-    // deleted and the symlink as untracked. This is intentional — the
-    // runner's is_tree_dirty() excludes .ralphai from its checks so the
-    // worktree can start cleanly without extra commits.
-    rmSync(worktreeRalphaiLink, { recursive: true, force: true });
+  if (!existsSync(worktreeRalphaiLink)) {
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 

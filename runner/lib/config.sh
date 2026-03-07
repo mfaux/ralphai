@@ -4,7 +4,7 @@
 # and agentCommand validation.
 
 # --- Config file loader ---
-# Parses .ralphai/ralphai.config.json (JSON format via jq).
+# Parses ralphai.json (JSON format via jq).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
 # CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
@@ -959,7 +959,7 @@ fi
 
 # --- Validate agentCommand is set ---
 if [[ -z "$AGENT_COMMAND" ]]; then
-  echo "ERROR: agentCommand is required. Set it in .ralphai/ralphai.config.json, RALPHAI_AGENT_COMMAND env var, or --agent-command= flag."
+  echo "ERROR: agentCommand is required. Set it in ralphai.json, RALPHAI_AGENT_COMMAND env var, or --agent-command= flag."
   echo "Examples: \"agentCommand\": \"opencode run --agent build\""
   echo "          \"agentCommand\": \"claude -p\""
   echo "          \"agentCommand\": \"codex exec\""

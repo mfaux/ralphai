@@ -33,5 +33,5 @@ logs
 
 package-lock.json
 
-# pipeline runtime state
-.ralphai/pipeline/in-progress/
+# ralphai local pipeline state (fully gitignored)
+.ralphai/

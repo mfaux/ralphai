@@ -60,10 +60,13 @@ active plans are preserved.
    If that plan is already in progress, it reuses the existing managed
    worktree instead of creating a second one.
 2. A **symlink** is created from the worktree's `.ralphai/` to the main repo's
-   `.ralphai/` directory. This is critical for agent compatibility (see below).
+   `.ralphai/` directory. Since `.ralphai/` is fully gitignored, it won't exist
+   in the worktree after `git worktree add` — the symlink is simply created.
 3. The runner is spawned with the worktree as its working directory.
 4. When the runner detects the symlink, it uses **relative paths** (e.g.,
    `.ralphai/pipeline/in-progress/`) in the prompt sent to the agent.
+5. Config (`ralphai.json`) lives at the repo root and is tracked by git, so
+   `git worktree add` checks it out automatically — no special handling needed.
 
 Pipeline state (`.ralphai/pipeline/`) lives in the main worktree and is shared
 across all worktrees via the symlink.
@@ -93,7 +96,7 @@ read and write pipeline files through relative paths.
 | Codex       | No               | Container sandbox may not follow symlinks outside the mount |
 
 **Workaround for unsupported agents:** Set `"promptMode": "inline"` in
-`.ralphai/ralphai.config.json`. This causes the runner (bash) to read pipeline files
+`ralphai.json`. This causes the runner (bash) to read pipeline files
 and embed their contents directly in the prompt, bypassing the agent's need to
 access external paths. This increases prompt size but works with all agents.
 

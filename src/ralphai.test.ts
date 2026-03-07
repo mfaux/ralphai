@@ -46,10 +46,10 @@ describe("ralphai command", () => {
 
     expect(output).toContain("Ralphai initialized");
 
-    // User-owned files (scripts are no longer scaffolded)
-    expect(existsSync(join(testDir, ".ralphai", "ralphai.config.json"))).toBe(
-      true,
-    );
+    // Config at repo root (not inside .ralphai/)
+    expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
+
+    // User-owned files inside .ralphai/ (local-only, gitignored)
     expect(existsSync(join(testDir, ".ralphai", "README.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(testDir, ".ralphai", "LEARNINGS.md"))).toBe(true);
@@ -58,36 +58,22 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralphai", "ralphai.sh"))).toBe(false);
     expect(existsSync(join(testDir, ".ralphai", "lib"))).toBe(false);
 
-    // Subdirectories with .gitkeep
+    // Pipeline subdirectories (no .gitkeep — .ralphai/ is fully gitignored)
+    expect(existsSync(join(testDir, ".ralphai", "pipeline", "backlog"))).toBe(
+      true,
+    );
+    expect(existsSync(join(testDir, ".ralphai", "pipeline", "wip"))).toBe(true);
     expect(
-      existsSync(join(testDir, ".ralphai", "pipeline", "backlog", ".gitkeep")),
+      existsSync(join(testDir, ".ralphai", "pipeline", "in-progress")),
     ).toBe(true);
-    expect(
-      existsSync(join(testDir, ".ralphai", "pipeline", "wip", ".gitkeep")),
-    ).toBe(true);
-    expect(
-      existsSync(
-        join(testDir, ".ralphai", "pipeline", "in-progress", ".gitkeep"),
-      ),
-    ).toBe(true);
-    expect(
-      existsSync(join(testDir, ".ralphai", "pipeline", "out", ".gitkeep")),
-    ).toBe(true);
+    expect(existsSync(join(testDir, ".ralphai", "pipeline", "out"))).toBe(true);
   });
 
-  it("init --yes creates .gitignore for plan files", () => {
+  it("init --yes adds .ralphai/ to root .gitignore", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const gitignore = readFileSync(
-      join(testDir, ".ralphai", ".gitignore"),
-      "utf-8",
-    );
-    expect(gitignore).toContain("pipeline/backlog/*.md");
-    expect(gitignore).toContain("pipeline/wip/*.md");
-    expect(gitignore).toContain("pipeline/in-progress/*.md");
-    expect(gitignore).toContain("pipeline/in-progress/progress.md");
-    expect(gitignore).toContain("pipeline/out/");
-    expect(gitignore).toContain("LEARNINGS.md");
+    const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".ralphai/");
   });
 
   it("init --yes creates LEARNINGS.md with seed content", () => {
@@ -105,10 +91,7 @@ describe("ralphai command", () => {
   it("init --yes generates config with default agent command", () => {
     runCliOutput(["init", "--yes"], testDir);
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config.json"),
-      "utf-8",
-    );
+    const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("opencode run --agent build");
     expect(parsed.baseBranch).toBeDefined();
@@ -120,10 +103,7 @@ describe("ralphai command", () => {
   it("init --yes --agent-command uses the provided agent command", () => {
     runCliOutput(["init", "--yes", "--agent-command=claude -p"], testDir);
 
-    const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config.json"),
-      "utf-8",
-    );
+    const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
   });
@@ -133,7 +113,7 @@ describe("ralphai command", () => {
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("dry-run");
-    expect(output).toContain(".ralphai/ralphai.config.json");
+    expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
   });
@@ -182,10 +162,8 @@ describe("ralphai command", () => {
 
       expect(output).toContain("Ralphai initialized");
 
-      // .ralphai/ should exist in targetDir, NOT in testDir (cwd)
-      expect(
-        existsSync(join(targetDir, ".ralphai", "ralphai.config.json")),
-      ).toBe(true);
+      // ralphai.json should exist in targetDir (repo root), not in testDir (cwd)
+      expect(existsSync(join(targetDir, "ralphai.json"))).toBe(true);
       expect(existsSync(join(targetDir, ".ralphai", "README.md"))).toBe(true);
       expect(existsSync(join(testDir, ".ralphai"))).toBe(false);
     } finally {
@@ -517,9 +495,9 @@ describe("ralphai command", () => {
       ),
     ).toBe(true);
 
-    // in-progress should be clean (only .gitkeep)
+    // in-progress should be clean (empty)
     const remaining = readdirSync(inProgressDir);
-    expect(remaining).toEqual([".gitkeep"]);
+    expect(remaining).toEqual([]);
   });
 
   it("reset --yes reports nothing to reset when pipeline is clean", () => {
@@ -538,7 +516,7 @@ describe("ralphai command", () => {
     expect(result.stderr).toContain("ralphai init");
   });
 
-  it("reset preserves .gitkeep in in-progress directory", () => {
+  it("reset preserves in-progress directory", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
@@ -546,8 +524,6 @@ describe("ralphai command", () => {
 
     runCliOutput(["reset", "--yes"], testDir);
 
-    // .gitkeep should still exist
-    expect(existsSync(join(inProgressDir, ".gitkeep"))).toBe(true);
     // Directory should still exist
     expect(existsSync(inProgressDir)).toBe(true);
   });
@@ -594,12 +570,12 @@ describe("ralphai command", () => {
   // --force tests
   // -------------------------------------------------------------------------
 
-  it("init --force --yes re-scaffolds from scratch, overwriting ralphai.config.json", () => {
+  it("init --force --yes re-scaffolds from scratch, overwriting ralphai.json", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     // Write custom config
     writeFileSync(
-      join(testDir, ".ralphai", "ralphai.config.json"),
+      join(testDir, "ralphai.json"),
       JSON.stringify({ agentCommand: "my-agent", baseBranch: "main" }) + "\n",
     );
 
@@ -611,10 +587,7 @@ describe("ralphai command", () => {
     expect(output).toContain("Ralphai initialized");
 
     // Config should have been overwritten with defaults
-    const config = readFileSync(
-      join(testDir, ".ralphai", "ralphai.config.json"),
-      "utf-8",
-    );
+    const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("opencode run --agent build");
     expect(parsed.agentCommand).not.toBe("my-agent");
@@ -652,15 +625,15 @@ describe("ralphai command", () => {
     // Force re-scaffold
     runCliOutput(["init", "--force", "--yes"], testDir);
 
-    // Plan file should be gone (directory was deleted and recreated with only .gitkeep)
+    // Plan file should be gone (directory was deleted and recreated)
     expect(
       existsSync(
         join(testDir, ".ralphai", "pipeline", "backlog", "old-plan.md"),
       ),
     ).toBe(false);
-    expect(
-      existsSync(join(testDir, ".ralphai", "pipeline", "backlog", ".gitkeep")),
-    ).toBe(true);
+    expect(existsSync(join(testDir, ".ralphai", "pipeline", "backlog"))).toBe(
+      true,
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -684,10 +657,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual([
         "pnpm build",
@@ -709,10 +679,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual(["npm run build", "npm test"]);
     });
@@ -733,10 +700,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual([
         "yarn build",
@@ -761,10 +725,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual([
         "bun run build",
@@ -785,10 +746,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       // No test task in deno.json, but deno has a built-in test runner
       expect(parsed.feedbackCommands).toEqual([
@@ -814,10 +772,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
     });
@@ -831,10 +786,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual(["npm test"]);
     });
@@ -852,10 +804,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed).not.toHaveProperty("feedbackCommands");
     });
@@ -864,10 +813,7 @@ describe("ralphai command", () => {
       // No package.json, no deno.json — nothing to detect
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed).not.toHaveProperty("feedbackCommands");
     });
@@ -886,10 +832,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed).not.toHaveProperty("feedbackCommands");
     });
@@ -916,10 +859,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       expect(parsed.feedbackCommands).toEqual([
         "pnpm build",
@@ -947,10 +887,7 @@ describe("ralphai command", () => {
 
       runCliOutput(["init", "--yes"], testDir);
 
-      const config = readFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "utf-8",
-      );
+      const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
       const parsed = JSON.parse(config);
       // pnpm should win because lock file beats packageManager field
       expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
@@ -1065,9 +1002,7 @@ describe("ralphai command", () => {
     it("init --yes succeeds in the main repo (not a worktree)", () => {
       const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
       expect(output).toContain("Ralphai initialized");
-      expect(
-        existsSync(join(mainRepo, ".ralphai", "ralphai.config.json")),
-      ).toBe(true);
+      expect(existsSync(join(mainRepo, "ralphai.json"))).toBe(true);
     });
 
     it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
@@ -1136,9 +1071,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain(
           `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
         );
-        expect(result).toContain(
-          `CONFIG_FILE=${mainRepo}/.ralphai/ralphai.config.json`,
-        );
+        // Config is at repo root and checked out by git, so stays relative
+        expect(result).toContain("CONFIG_FILE=ralphai.json");
         expect(result).toContain(
           `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
         );
@@ -1159,10 +1093,6 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       });
       mkdirSync(join(ralphaiDir, "pipeline", "backlog"), { recursive: true });
       mkdirSync(join(ralphaiDir, "pipeline", "out"), { recursive: true });
-      writeFileSync(
-        join(ralphaiDir, "ralphai.config.json"),
-        "baseBranch=main\n",
-      );
 
       // Create symlink in the worktree pointing to main repo's .ralphai/
       symlinkSync(ralphaiDir, join(worktreeDir, ".ralphai"));
@@ -1200,7 +1130,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
         expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config.json");
+        expect(result).toContain("CONFIG_FILE=ralphai.json");
         expect(result).toContain(
           "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
         );
@@ -1250,7 +1180,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
         expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config.json");
+        expect(result).toContain("CONFIG_FILE=ralphai.json");
         expect(result).toContain(
           "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
         );
@@ -2242,7 +2172,7 @@ echo "$AUTO_COMMIT"
       runCliOutput(["init", "--yes"], testDir);
 
       const parsed = JSON.parse(
-        readFileSync(join(testDir, ".ralphai", "ralphai.config.json"), "utf-8"),
+        readFileSync(join(testDir, "ralphai.json"), "utf-8"),
       );
       expect(parsed).not.toHaveProperty("issueSource");
     });
@@ -2251,7 +2181,7 @@ echo "$AUTO_COMMIT"
       runCliOutput(["init", "--yes"], testDir);
 
       const parsed = JSON.parse(
-        readFileSync(join(testDir, ".ralphai", "ralphai.config.json"), "utf-8"),
+        readFileSync(join(testDir, "ralphai.json"), "utf-8"),
       );
       // issueSource should not appear at all in the JSON config
       expect(parsed).not.toHaveProperty("issueSource");
@@ -3072,34 +3002,17 @@ build_continuous_pr_body
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
 
-    it("worktree replaces git-tracked .ralphai dir with symlink", () => {
+    it("worktree replaces existing .ralphai dir with symlink", () => {
       gitInitialCommit(testDir);
 
-      // Create .ralphai with a plan and git-track it (simulating a repo
-      // where .ralphai/ has committed files like ralphai.config.json)
+      // Create .ralphai with a plan (not git-tracked since .ralphai/ is gitignored)
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
         recursive: true,
       });
-      mkdirSync(join(testDir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        JSON.stringify({ agentCommand: "echo hello" }) + "\n",
-      );
       writeFileSync(
         join(testDir, ".ralphai", "pipeline", "backlog", "prd-tracked-test.md"),
         "# Tracked test\n",
       );
-      writeFileSync(
-        join(testDir, ".ralphai", "pipeline", "in-progress", ".gitkeep"),
-        "",
-      );
-      // Commit .ralphai/ so worktrees check it out as a real directory
-      execSync("git add .ralphai/ && git commit -m 'add .ralphai'", {
-        cwd: testDir,
-        stdio: "ignore",
-      });
 
       // Use a stub runner that just exits 0
       const stubScript = join(testDir, "stub-runner.sh");
@@ -3127,13 +3040,12 @@ build_continuous_pr_body
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
 
-    it("is_tree_dirty ignores .ralphai changes but catches real dirty state", () => {
+    it("is_tree_dirty ignores .ralphai changes (gitignored) but catches real dirty state", () => {
       gitInitialCommit(testDir);
 
-      // Create and track .ralphai/ files
-      mkdirSync(join(testDir, ".ralphai"), { recursive: true });
-      writeFileSync(join(testDir, ".ralphai", "ralphai.config"), "test=1\n");
-      execSync("git add .ralphai/ && git commit -m 'add .ralphai'", {
+      // Add .ralphai/ to .gitignore (as scaffold does)
+      writeFileSync(join(testDir, ".gitignore"), ".ralphai/\n");
+      execSync("git add .gitignore && git commit -m 'add gitignore'", {
         cwd: testDir,
         stdio: "ignore",
       });
@@ -3156,27 +3068,14 @@ build_continuous_pr_body
       // Clean tree should not be dirty
       expect(isDirty(testDir)).toBe(false);
 
-      // Replace .ralphai/ with a symlink (simulating worktree setup)
-      const wtDir = join(testDir, "wt-dirty-test");
-      execSync(`git worktree add "${wtDir}" -b ralphai/dirty-test HEAD`, {
-        cwd: testDir,
-        stdio: "ignore",
-      });
-      rmSync(join(wtDir, ".ralphai"), { recursive: true, force: true });
-      symlinkSync(join(testDir, ".ralphai"), join(wtDir, ".ralphai"));
-
-      // .ralphai symlink replacement should NOT make the tree dirty
-      expect(isDirty(wtDir)).toBe(false);
+      // Adding files inside .ralphai/ should NOT make the tree dirty (gitignored)
+      mkdirSync(join(testDir, ".ralphai"), { recursive: true });
+      writeFileSync(join(testDir, ".ralphai", "LEARNINGS.md"), "# Learnings");
+      expect(isDirty(testDir)).toBe(false);
 
       // But a real change (outside .ralphai) should still be caught
-      writeFileSync(join(wtDir, "real-change.txt"), "dirty");
-      expect(isDirty(wtDir)).toBe(true);
-
-      // Clean up
-      execSync(`git worktree remove --force "${wtDir}"`, {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      writeFileSync(join(testDir, "real-change.txt"), "dirty");
+      expect(isDirty(testDir)).toBe(true);
     });
 
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
@@ -3232,8 +3131,8 @@ build_continuous_pr_body
         recursive: true,
       });
       writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "agent=claude -p\n",
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ agentCommand: "claude -p" }) + "\n",
       );
       writeFileSync(
         join(
@@ -3279,8 +3178,8 @@ build_continuous_pr_body
         recursive: true,
       });
       writeFileSync(
-        join(testDir, ".ralphai", "ralphai.config.json"),
-        "agent=claude -p\n",
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ agentCommand: "claude -p" }) + "\n",
       );
       writeFileSync(
         join(testDir, ".ralphai", "pipeline", "in-progress", "prd-search.md"),

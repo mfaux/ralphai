@@ -28,7 +28,7 @@ wip/ (work in progress)  backlog/  -->  in-progress/  -->  out/
 3. **`in-progress/`** — Active work. Plan files and `progress.md` live here while ralphai is working. If a run is interrupted or exhausts its turns, files stay here so work can be resumed.
 4. **`out/`** — Archive. Plans and progress logs are moved here only when the agent signals `COMPLETE`.
 
-Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-only state). Only directory structure (`.gitkeep` files) is tracked. This means moving files between lifecycle stages requires no git commits.
+Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** (local-only state). The entire `.ralphai/` directory is gitignored. This means moving files between lifecycle stages requires no git commits.
 
 ## Task Runner
 
@@ -63,7 +63,7 @@ No file arguments needed. The script auto-detects:
 
 The turn budget (N) resets for each new plan. After completing one plan, the script automatically picks the next one from the backlog and continues until the backlog is empty.
 
-Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `.ralphai/ralphai.config.json`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
+Aborts if N consecutive turns produce no commits (stuck detection). The threshold defaults to 3 and can be configured via `maxStuck` in `ralphai.json`, `RALPHAI_MAX_STUCK` env var, or `--max-stuck=<n>` CLI flag.
 
 `--dry-run` mode previews:
 
@@ -90,21 +90,19 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 
 ## Files
 
-| File / Directory        | Purpose                                                    |
-| ----------------------- | ---------------------------------------------------------- |
-| `ralphai.config.json`   | Optional repo-level config file (JSON format)              |
-| `README.md`             | This file — operational docs for the `.ralphai/` directory |
-| `PLANNING.md`           | Guide for writing plan files                               |
-| `.gitignore`            | Keeps plan files local-only (not tracked by git)           |
-| `.ralphai/LEARNINGS.md` | Ralphai-written learnings — gitignored, local-only         |
-| `wip/`                  | Work-in-progress plans — not scanned by ralphai            |
-| `backlog/`              | Incoming plans queued for ralphai to pick up               |
-| `in-progress/`          | Active plans and progress.md — work in flight              |
-| `out/`                  | Archived PRD files and progress logs from completed runs   |
+| File / Directory | Purpose                                                    |
+| ---------------- | ---------------------------------------------------------- |
+| `README.md`      | This file — operational docs for the `.ralphai/` directory |
+| `PLANNING.md`    | Guide for writing plan files                               |
+| `LEARNINGS.md`   | Ralphai-written learnings — local-only                     |
+| `wip/`           | Work-in-progress plans — not scanned by ralphai            |
+| `backlog/`       | Incoming plans queued for ralphai to pick up               |
+| `in-progress/`   | Active plans and progress.md — work in flight              |
+| `out/`           | Archived PRD files and progress logs from completed runs   |
 
 ## How It Works
 
-1. Ralphai loads `.ralphai/ralphai.config.json` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
+1. Ralphai loads `ralphai.json` (if present), applies env var overrides, then CLI flag overrides to resolve settings (agent command, feedback commands, base branch, mode, stuck threshold)
 2. It scans `in-progress/` for existing plan files; if found, it resumes. Otherwise it picks from `backlog/` (LLM-selected when multiple ready plans exist) and moves the chosen plan to `in-progress/`, initializing `progress.md`
 3. A `ralphai/<plan-slug>` branch is created from the base branch (e.g. `ralphai/add-dark-mode` from `prd-add-dark-mode.md`; current branch reused on resume). If the branch already exists (local, remote, or has an open PR), the plan is skipped and the next one is tried.
 4. The agent receives a prompt with `@file` references to the plan files + `progress.md`
@@ -163,7 +161,7 @@ issue-url: https://github.com/owner/repo/issues/42
 **Requirements:**
 
 - `gh` CLI must be installed and authenticated (`gh auth login`). If `gh` is not available, hooks are silently skipped — no error.
-- To disable automatic issue closing while keeping completion comments, set `issueCloseOnComplete` to `false` in `.ralphai/ralphai.config.json`.
+- To disable automatic issue closing while keeping completion comments, set `issueCloseOnComplete` to `false` in `ralphai.json`.
 
 Plans without `source` frontmatter behave exactly as before.
 
@@ -215,20 +213,20 @@ Keeping learnings gitignored prevents auto-written entries from interfering with
 - **Direct mode by default**: Ralphai commits on your current branch with no branch creation or PR. Refuses to run on `main`/`master`.
 - **Direct mode safety**: `--direct` refuses to run on `main`/`master` — you must be on a feature branch.
 - **Collision detection**: Before creating a new branch, Ralphai checks for existing local/remote branches and open PRs. If a collision is found, the plan is skipped and the next one is tried.
-- **Plan files gitignored**: Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are gitignored (local-only state). Only `.gitkeep` files are tracked.
+- **Plan files gitignored**: The entire `.ralphai/` directory is gitignored. Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are local-only state.
 - **Stuck detection**: Ralphai aborts after N turns with no new commits (default 3, configurable)
 - **Turn timeout**: Optional per-invocation timeout (`turnTimeout` in seconds). When set, the agent command is killed if it exceeds the limit. Default is 0 (no timeout).
 - **Completion signal**: Agent outputs `<promise>COMPLETE</promise>` when all tasks are done
 
 ## Configuration
 
-Ralphai supports an optional config file at `.ralphai/ralphai.config.json` for repo-level defaults. Settings follow a strict precedence order:
+Ralphai supports an optional config file at `ralphai.json` (repo root) for repo-level defaults. Settings follow a strict precedence order:
 
 ```
 CLI flags  >  env vars  >  config file  >  built-in defaults
 ```
 
-### Config File (`.ralphai/ralphai.config.json`)
+### Config File (`ralphai.json`)
 
 A standard JSON file.
 
@@ -363,7 +361,7 @@ Ralphai supports working on a feature branch using direct mode. This is useful f
 ralphai run --turns=5 --direct
 ```
 
-Or via `.ralphai/ralphai.config.json`:
+Or via `ralphai.json`:
 
 ```json
 {
@@ -412,7 +410,7 @@ Ralphai can automatically pull work from GitHub Issues when the backlog is empty
 
 **Prerequisites:** The [`gh` CLI](https://cli.github.com/) must be installed and authenticated (`gh auth login`). If `gh` is not available, Ralphai silently skips issue pulling and continues normally.
 
-**Enable it** by setting `issueSource` to `"github"` in `.ralphai/ralphai.config.json`:
+**Enable it** by setting `issueSource` to `"github"` in `ralphai.json`:
 
 ```json
 {
@@ -489,11 +487,11 @@ Issue created with label "ralphai"
 
 ### Smoke Checks
 
-Use these checks to verify config behavior after changes to `.ralphai/ralphai.config.json`:
+Use these checks to verify config behavior after changes to `ralphai.json`:
 
-1. **No config** — Remove or rename `.ralphai/ralphai.config.json`. Run `--show-config` and confirm all settings show `(default)`.
+1. **No config** — Remove or rename `ralphai.json`. Run `--show-config` and confirm all settings show `(default)`.
 
-2. **Config file only** — Create `.ralphai/ralphai.config.json` with custom values (e.g. `{"agentCommand": "claude -p"}`). Run `--show-config` and confirm settings show `(config)`.
+2. **Config file only** — Create `ralphai.json` with custom values (e.g. `{"agentCommand": "claude -p"}`). Run `--show-config` and confirm settings show `(config)`.
 
 3. **Env var override** — Set an env var (e.g. `RALPHAI_AGENT_COMMAND='codex exec'`) with a config file present. Run `--show-config` and confirm the env var wins over the config file value.
 
