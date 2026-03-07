@@ -1,0 +1,9 @@
+{
+  "agentCommand": "opencode run --agent build",
+  "baseBranch": "main",
+  "feedbackCommands": [
+    "pnpm build",
+    "pnpm test",
+    "pnpm type-check"
+  ]
+}

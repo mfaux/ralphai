@@ -7,6 +7,7 @@ Ralphai is an autonomous task runner that drives an AI coding agent to implement
 ```bash
 ralphai run              # run with defaults (5 turns per plan)
 ralphai run --turns=3    # 3 turns per plan
+ralphai run --turns=0    # unlimited turns — runs until all work is done
 ralphai run --dry-run    # preview what ralphai would do
 ralphai run --resume     # recover dirty state and continue
 ralphai run --pr         # create a ralphai/* branch and open a PR
@@ -34,7 +35,7 @@ Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** 
 
 ### `ralphai run [options]`
 
-Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection.
+Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection. Pass `--turns=0` for unlimited turns — Ralphai keeps going until all tasks are complete or stuck detection triggers.
 
 ```bash
 ralphai run --turns=5
@@ -110,6 +111,8 @@ Dry run makes no mutations (no file moves, branch creation, or agent execution).
 6. `progress.md` is updated with what was done
 7. On completion (`COMPLETE` signal): plan + progress archived to `pipeline/out/`, then in PR mode the branch is pushed and a PR is created via `gh`. In direct mode, work is simply committed on the current branch. The script then loops back to pick the next backlog item.
 8. On incomplete run: files stay in `pipeline/in-progress/` for resumption
+
+**Turn pacing:** A single turn can take several minutes — the agent invocation itself plus all configured feedback commands (build, test, lint) run sequentially. Don't expect `progress.md` to update every few seconds. It updates between turns when there is something to report.
 
 ## Optional plan dependencies (`depends-on`)
 
@@ -270,6 +273,8 @@ The `agentCommand` is the full CLI invocation prefix — Ralphai appends the pro
 | Goose       | `goose run -t`                   |
 | Kiro        | `kiro-cli chat --no-interactive` |
 | Amp         | `amp -x`                         |
+
+> **Tested agents:** Only **Claude Code** and **OpenCode** have been validated end-to-end. The other presets are included for convenience and should work, but are untested.
 
 When `feedbackCommands` is configured, the agent prompt includes the specific commands (e.g. "Run all feedback loops: npm run build, npm test, npm run lint"). When absent, the prompt uses a generic fallback: "Run your project's build, test, and lint commands."
 
