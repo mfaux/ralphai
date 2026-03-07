@@ -2903,8 +2903,12 @@ build_continuous_pr_body
 
       // Helper: run is_tree_dirty in a given directory
       const isDirty = (cwd: string) => {
+        const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+          cwd,
+          encoding: "utf-8",
+        }).trim();
         const result = execSync(
-          `bash -c 'MODE=direct; DRY_RUN=true; BASE_BRANCH=main; source "${gitShPath}"; is_tree_dirty; echo $?'`,
+          `bash -c 'MODE=direct; DRY_RUN=true; BASE_BRANCH=${branch}; source "${gitShPath}"; is_tree_dirty; echo $?'`,
           { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
         ).trim();
         return result === "0";
