@@ -392,6 +392,8 @@ Final verification:
 | Large feature (10+ tasks, new modules) | 15-25                             |
 | Structural refactor                    | 10-15                             |
 
+Pass `--turns=0` for unlimited turns — Ralphai keeps going until all tasks are complete or stuck detection triggers. This is useful when you don't want to estimate a turn budget up front.
+
 Use `ralphai run --dry-run` to verify selection/readiness before launching long autonomous runs.
 
 If a run is interrupted and leaves a dirty tree, use `ralphai run <turns> --resume` on the current `ralphai/*` branch to auto-commit recovery state and continue.

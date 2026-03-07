@@ -86,14 +86,16 @@ read and write pipeline files through relative paths.
 
 | Agent       | Worktree support | Notes                                                       |
 | ----------- | ---------------- | ----------------------------------------------------------- |
-| OpenCode    | Yes              | Follows symlinks within working directory                   |
-| Claude Code | Yes              | Follows symlinks within project directory                   |
-| Gemini CLI  | Yes              | No known sandbox restrictions                               |
-| Aider       | Yes              | No directory sandbox                                        |
+| OpenCode    | Yes              | Tested — follows symlinks within working directory          |
+| Claude Code | Yes              | Tested — follows symlinks within project directory          |
+| Gemini CLI  | Likely           | Untested — no known sandbox restrictions                    |
+| Aider       | Likely           | Untested — no directory sandbox                             |
 | Goose       | Likely           | Untested                                                    |
 | Amp         | Likely           | Untested                                                    |
 | Kiro        | Likely           | Untested                                                    |
 | Codex       | No               | Container sandbox may not follow symlinks outside the mount |
+
+> Only **Claude Code** and **OpenCode** have been tested end-to-end with Ralphai. The other agents are expected to work but are unverified.
 
 **Workaround for unsupported agents:** Set `"promptMode": "inline"` in
 `ralphai.json`. This causes the runner (bash) to read pipeline files

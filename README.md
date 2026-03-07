@@ -105,9 +105,12 @@ Common options:
 
 ```bash
 ralphai run --turns=3    # 3 turns per plan (default: 5)
+ralphai run --turns=0    # unlimited turns — runs until all work is done
 ralphai run --pr         # create a ralphai/* branch and open a PR instead
 ralphai run --dry-run    # preview what ralphai would do without changing anything
 ```
+
+> A single turn can take several minutes (agent invocation + feedback commands). Don't expect `progress.md` to update every few seconds — it updates between turns when there's something to report.
 
 ### 2b. Run in a worktree
 
@@ -185,21 +188,21 @@ After `ralphai init`, pipeline docs live in `.ralphai/` (local-only, gitignored)
 
 ## Supported Agents
 
-Works with any CLI agent that accepts a prompt argument:
+Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code** and **OpenCode** are actively tested. The other presets are included for convenience but have not been validated end-to-end — they should work, but your mileage may vary.
 
 <details>
 <summary>Agent commands</summary>
 
-| Agent       | Command                          |
-| ----------- | -------------------------------- |
-| OpenCode    | `opencode run --agent build`     |
-| Claude Code | `claude -p`                      |
-| Codex       | `codex exec`                     |
-| Gemini CLI  | `gemini -p`                      |
-| Aider       | `aider --message`                |
-| Goose       | `goose run -t`                   |
-| Kiro        | `kiro-cli chat --no-interactive` |
-| Amp         | `amp -x`                         |
+| Agent       | Command                          | Status   |
+| ----------- | -------------------------------- | -------- |
+| Claude Code | `claude -p`                      | Tested   |
+| OpenCode    | `opencode run --agent build`     | Tested   |
+| Codex       | `codex exec`                     | Untested |
+| Gemini CLI  | `gemini -p`                      | Untested |
+| Aider       | `aider --message`                | Untested |
+| Goose       | `goose run -t`                   | Untested |
+| Kiro        | `kiro-cli chat --no-interactive` | Untested |
+| Amp         | `amp -x`                         | Untested |
 
 </details>
 
