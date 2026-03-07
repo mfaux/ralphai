@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+### Fixes
+
+- Warn when `ralphai.json` is uncommitted before worktree creation (#66)
+
 ## 0.4.1
 
 ### Docs
