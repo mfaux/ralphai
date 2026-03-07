@@ -3388,11 +3388,15 @@ build_continuous_pr_body
       gitInitialCommit(testDir);
 
       // Create a worktree on a ralphai/* branch
+      // Slug is now filename minus .md, so prd-active-feature.md → slug prd-active-feature
       const wtPath = join(testDir, "wt-keep-test");
-      execSync(`git worktree add "${wtPath}" -b ralphai/active-feature HEAD`, {
-        cwd: testDir,
-        stdio: "ignore",
-      });
+      execSync(
+        `git worktree add "${wtPath}" -b ralphai/prd-active-feature HEAD`,
+        {
+          cwd: testDir,
+          stdio: "ignore",
+        },
+      );
 
       // Create matching in-progress plan
       mkdirSync(join(testDir, ".ralphai", "pipeline", "in-progress"), {

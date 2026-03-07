@@ -1466,6 +1466,25 @@ function showWorktreeHelp(): void {
   );
 }
 
+/**
+ * Check if any plan file in `dir` has a slug (filename minus `.md`) matching
+ * the given slug. Skips progress-* and receipt-* files.
+ */
+function planExistsForSlug(dir: string, slug: string): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    return readdirSync(dir).some(
+      (f) =>
+        f.endsWith(".md") &&
+        !f.startsWith("progress-") &&
+        !f.startsWith("receipt-") &&
+        f.replace(/\.md$/, "") === slug,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function listWorktrees(cwd: string): void {
   const worktrees = listRalphaiWorktrees(cwd);
 
@@ -1479,7 +1498,7 @@ function listWorktrees(cwd: string): void {
     const slug = wt.branch.replace("ralphai/", "");
     const ralphaiDir = join(cwd, ".ralphai");
     const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
     const status = hasActivePlan ? "in-progress" : "idle";
     console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
   }
@@ -1503,7 +1522,7 @@ function cleanWorktrees(cwd: string): void {
 
   for (const wt of worktrees) {
     const slug = wt.branch.replace("ralphai/", "");
-    const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
 
     if (!hasActivePlan) {
       console.log(`Removing: ${wt.path} (${wt.branch})`);
@@ -1746,7 +1765,7 @@ function runRalphaiStatus(cwd: string): void {
     console.log();
     for (const wt of worktrees) {
       const slug = wt.branch.replace("ralphai/", "");
-      const hasActivePlan = existsSync(join(inProgressDir, `prd-${slug}.md`));
+      const hasActivePlan = planExistsForSlug(inProgressDir, slug);
       const state = hasActivePlan ? "in-progress" : "idle";
       console.log(
         `  ${DIM}${wt.branch}${RESET}  ${DIM}${wt.path}${RESET}  ${DIM}[${state}]${RESET}`,
