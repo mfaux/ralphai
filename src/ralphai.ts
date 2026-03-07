@@ -1197,6 +1197,7 @@ interface Receipt {
   branch: string;
   slug: string;
   agent: string;
+  turns_budget: number;
   turns_completed: number;
   tasks_completed: number;
 }
@@ -1218,6 +1219,7 @@ function parseReceipt(filePath: string): Receipt | null {
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
     agent: fields.agent ?? "",
+    turns_budget: parseInt(fields.turns_budget ?? "0", 10),
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
     tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
   };
@@ -1645,6 +1647,16 @@ function runRalphaiStatus(cwd: string): void {
     if (totalTasks > 0) {
       const completed = receipt?.tasks_completed ?? 0;
       parts.push(`${completed} of ${totalTasks} tasks`);
+    }
+
+    // Turns remaining
+    if (receipt) {
+      if (receipt.turns_budget > 0) {
+        const remaining = receipt.turns_budget - receipt.turns_completed;
+        parts.push(`${remaining} turns remaining`);
+      } else if (receipt.turns_budget === 0) {
+        parts.push("unlimited turns");
+      }
     }
 
     // Worktree info from receipt
