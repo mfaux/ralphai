@@ -1470,8 +1470,8 @@ ${cleanupFile}
     const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    // Config file loader case
-    expect(config).toContain("promptMode)");
+    // Config file loader reads promptMode from JSON
+    expect(config).toContain('"promptMode"');
     expect(config).toContain("CONFIG_PROMPT_MODE=");
     // Env var override
     expect(config).toContain("RALPHAI_PROMPT_MODE");
@@ -1945,6 +1945,7 @@ echo "$CONTINUOUS"
           env: {
             ...process.env,
             RALPHAI_NO_UPDATE_CHECK: "1",
+            RALPHAI_AGENT_COMMAND: "echo test-agent",
           },
         },
       );

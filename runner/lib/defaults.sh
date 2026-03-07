@@ -38,7 +38,7 @@ FALLBACK_AGENTS="$DEFAULT_FALLBACK_AGENTS"
 WIP_DIR=".ralphai/pipeline/in-progress"
 BACKLOG_DIR=".ralphai/pipeline/backlog"
 ARCHIVE_DIR=".ralphai/pipeline/out"
-CONFIG_FILE=".ralphai/ralphai.config"
+CONFIG_FILE=".ralphai/ralphai.config.json"
 PROGRESS_FILE="$WIP_DIR/progress.md"
 
 # --- Worktree detection ---
@@ -70,7 +70,7 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     WIP_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/in-progress"
     BACKLOG_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/backlog"
     ARCHIVE_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/out"
-    CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/.ralphai/ralphai.config"
+    CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/.ralphai/ralphai.config.json"
     PROGRESS_FILE="$WIP_DIR/progress.md"
   fi
 fi
