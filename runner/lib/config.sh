@@ -262,6 +262,16 @@ load_config() {
     fi
     CONFIG_FALLBACK_AGENTS="$value"
   fi
+
+  # --- autoCommit (boolean) ---
+  if _json_has "autoCommit"; then
+    value=$(_json_raw "autoCommit")
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: $config_path: 'autoCommit' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_AUTO_COMMIT="$value"
+  fi
 }
 
 # --- Apply config file settings ---
@@ -311,6 +321,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_FALLBACK_AGENTS:-}" ]]; then
     FALLBACK_AGENTS="$CONFIG_FALLBACK_AGENTS"
+  fi
+  if [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
+    AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
   fi
 }
 
@@ -407,6 +420,13 @@ apply_env_overrides() {
     done
     FALLBACK_AGENTS="$RALPHAI_FALLBACK_AGENTS"
   fi
+  if [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
+    if [[ "$RALPHAI_AUTO_COMMIT" != "true" && "$RALPHAI_AUTO_COMMIT" != "false" ]]; then
+      echo "ERROR: RALPHAI_AUTO_COMMIT must be 'true' or 'false', got '$RALPHAI_AUTO_COMMIT'"
+      exit 1
+    fi
+    AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
+  fi
 }
 
 print_usage() {
@@ -432,6 +452,8 @@ print_usage() {
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --fallback-agents=<list>         Comma-separated fallback agent commands (tried when stuck)"
+  echo "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)"
+  echo "  --no-auto-commit                 Disable auto-commit (default; ignored in PR mode)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
@@ -444,13 +466,15 @@ print_usage() {
   echo ""
   echo "Config file: $CONFIG_FILE (optional, JSON format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, continuous, turnTimeout, promptMode, fallbackAgents,"
-  echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
+  echo "                  mode, continuous, autoCommit, turnTimeout, promptMode,"
+  echo "                  fallbackAgents, issueSource, issueLabel,"
+  echo "                  issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
   echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
+  echo "                   RALPHAI_AUTO_COMMIT,"
   echo "                   RALPHAI_TURN_TIMEOUT, RALPHAI_FALLBACK_AGENTS,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
@@ -553,6 +577,12 @@ for arg in "$@"; do
       ;;
     --continuous)
       CLI_CONTINUOUS="true"
+      ;;
+    --auto-commit)
+      CLI_AUTO_COMMIT="true"
+      ;;
+    --no-auto-commit)
+      CLI_AUTO_COMMIT="false"
       ;;
     --prompt-mode=*)
       CLI_PROMPT_MODE="${arg#--prompt-mode=}"
@@ -684,6 +714,9 @@ if [[ -n "$CLI_PROMPT_MODE" ]]; then
 fi
 if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
   FALLBACK_AGENTS="$CLI_FALLBACK_AGENTS"
+fi
+if [[ -n "$CLI_AUTO_COMMIT" ]]; then
+  AUTO_COMMIT="$CLI_AUTO_COMMIT"
 fi
 
 # --- Parse fallback chain into array ---
@@ -853,11 +886,26 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     fallback_agents_source="default (none)"
   fi
 
+  if [[ -n "$CLI_AUTO_COMMIT" ]]; then
+    if [[ "$CLI_AUTO_COMMIT" == "false" ]]; then
+      auto_commit_source="cli (--no-auto-commit)"
+    else
+      auto_commit_source="cli (--auto-commit)"
+    fi
+  elif [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
+    auto_commit_source="env (RALPHAI_AUTO_COMMIT=$RALPHAI_AUTO_COMMIT)"
+  elif [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
+    auto_commit_source="config ($CONFIG_FILE)"
+  else
+    auto_commit_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
   echo "  mode               = $MODE  ($mode_source)"
   echo "  continuous         = $CONTINUOUS  ($continuous_source)"
+  echo "  autoCommit         = $AUTO_COMMIT  ($auto_commit_source)"
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
   if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
     echo "  turnTimeout        = ${TURN_TIMEOUT}s  ($timeout_source)"

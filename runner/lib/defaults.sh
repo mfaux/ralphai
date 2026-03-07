@@ -17,6 +17,7 @@ DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent inv
 DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 DEFAULT_CONTINUOUS="false"               # "true" to keep draining backlog after first plan
 DEFAULT_FALLBACK_AGENTS=""               # comma-separated fallback agent commands
+DEFAULT_AUTO_COMMIT="false"              # "true" to auto-commit after turns / on resume (direct mode)
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -34,6 +35,7 @@ ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 TURN_TIMEOUT="$DEFAULT_TURN_TIMEOUT"
 PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 FALLBACK_AGENTS="$DEFAULT_FALLBACK_AGENTS"
+AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"
 
 WIP_DIR=".ralphai/pipeline/in-progress"
 BACKLOG_DIR=".ralphai/pipeline/backlog"
@@ -93,4 +95,5 @@ CLI_ISSUE_CLOSE_ON_COMPLETE=""
 CLI_ISSUE_COMMENT_PROGRESS=""
 CLI_PROMPT_MODE=""
 CLI_FALLBACK_AGENTS=""
+CLI_AUTO_COMMIT=""
 SHOW_CONFIG=false
