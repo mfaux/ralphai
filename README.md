@@ -219,6 +219,7 @@ Commands:
   run         Start the Ralphai task runner
   worktree    Run in an isolated git worktree
   status      Show pipeline and worktree status
+  reset       Move in-progress plans back to backlog and clean up
   update      Update ralphai to the latest (or specified) version
   uninstall   Remove Ralphai from your project
 
@@ -232,15 +233,37 @@ Init:
   --agent-command=CMD    Set the agent command
 
 Run:
-  Runs with sensible defaults (5 turns per plan).
-  Arguments after 'run' are forwarded directly.
-  See ralphai run --help for all options (--pr, --dry-run, --resume, etc.).
+  --turns=<n>                       Turns per plan (default: 5, 0 = unlimited)
+  --dry-run, -n                     Preview what would happen without changing anything
+  --resume, -r                      Auto-commit dirty state and continue
+  --agent-command=<command>         Override agent CLI command
+  --feedback-commands=<list>        Comma-separated feedback commands
+  --base-branch=<branch>            Override base branch (default: main)
+  --direct                          Direct mode (default): commit on current branch, no PR
+  --pr                              PR mode: create branch, push, and open PR
+  --continuous                      Keep processing backlog plans after the first completes
+  --max-stuck=<n>                   Stuck threshold before abort (default: 3)
+  --turn-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
+  --fallback-agents=<list>          Comma-separated fallback agent commands (tried when stuck)
+  --auto-commit                     Auto-commit agent changes between turns
+  --no-auto-commit                  Disable auto-commit (default)
+  --prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
+  --show-config                     Print resolved settings and exit
+  --issue-source=<source>           Issue source: 'none' or 'github' (default: none)
+  --issue-label=<label>             Label to filter issues (default: ralphai)
+  --issue-in-progress-label=<label> Label applied when issue is picked up
+  --issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
+  --issue-close-on-complete=<bool>  Close issue on plan completion (default: true)
+  --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 
 Worktree:
   --plan=<file>     Target a specific backlog plan (default: auto-detect)
   --dir=<path>      Worktree directory (default: ../.ralphai-worktrees/<slug>)
   worktree list     Show active ralphai-managed worktrees
   worktree clean    Remove completed/orphaned worktrees
+
+Reset:
+  --yes, -y         Skip confirmation prompt
 ```
 
 </details>
