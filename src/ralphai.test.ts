@@ -3585,6 +3585,107 @@ build_continuous_pr_body
       expect(output).toContain("3 of 4 tasks");
     });
 
+    it("status shows turns remaining when receipt has turns_budget", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan with 2 tasks
+      writeFileSync(
+        join(ipDir, "prd-search.md"),
+        "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
+      );
+
+      // Receipt with turns_budget=5, turns_completed=2 → 3 remaining
+      writeFileSync(
+        join(ipDir, "receipt-search.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/search",
+          "slug=search",
+          "agent=claude -p",
+          "turns_budget=5",
+          "turns_completed=2",
+          "tasks_completed=1",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("3 turns remaining");
+    });
+
+    it("status shows unlimited turns when turns_budget is 0", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      // Plan with 1 task
+      writeFileSync(
+        join(ipDir, "prd-refactor.md"),
+        "# Refactor\n\n### Task 1: Cleanup\n",
+      );
+
+      // Receipt with turns_budget=0 (unlimited)
+      writeFileSync(
+        join(ipDir, "receipt-refactor.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/refactor",
+          "slug=refactor",
+          "agent=claude -p",
+          "turns_budget=0",
+          "turns_completed=4",
+          "tasks_completed=0",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("unlimited turns");
+    });
+
+    it("status shows no turns info for old receipt without turns_budget", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      writeFileSync(
+        join(ipDir, "prd-old-plan.md"),
+        "# Old Plan\n\n### Task 1: Stuff\n",
+      );
+
+      // Old receipt without turns_budget field — defaults to 0 in parseReceipt
+      writeFileSync(
+        join(ipDir, "receipt-old-plan.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/old-plan",
+          "slug=old-plan",
+          "agent=claude -p",
+          "turns_completed=1",
+          "tasks_completed=0",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      // Old receipts without turns_budget default to 0, which shows "unlimited turns"
+      expect(output).toContain("unlimited turns");
+    });
+
     it("status shows orphaned receipt as a problem", () => {
       runCli(["init", "--yes"], testDir);
 
