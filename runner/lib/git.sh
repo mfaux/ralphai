@@ -2,13 +2,17 @@
 # Sourced by ralphai.sh. Do not execute directly.
 
 is_tree_dirty() {
-  if ! git diff --quiet HEAD 2>/dev/null; then
+  # Exclude .ralphai — the worktree setup creates a symlink there that may
+  # appear as an untracked file when the worktree is based on a commit whose
+  # .gitignore only ignores ".ralphai/" (trailing-slash matches directories,
+  # not symlinks).
+  if ! git diff --quiet HEAD -- ':!.ralphai' 2>/dev/null; then
     return 0
   fi
-  if ! git diff --cached --quiet 2>/dev/null; then
+  if ! git diff --cached --quiet -- ':!.ralphai' 2>/dev/null; then
     return 0
   fi
-  if [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  if [[ -n "$(git ls-files --others --exclude-standard -- ':!.ralphai')" ]]; then
     return 0
   fi
   return 1
