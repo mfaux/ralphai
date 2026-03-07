@@ -238,21 +238,21 @@ describe("ralphai command", () => {
   it("scaffolded ralphai.sh defaults to 5 turns when none specified", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
+    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
     // Should default TURNS to "5" when unset (no error, no conditional)
-    expect(config).toContain('TURNS="5"');
+    expect(cli).toContain('TURNS="5"');
     // Should NOT contain the old error message for missing turns
-    expect(config).not.toContain("ERROR: Missing required <turns-per-plan>");
+    expect(cli).not.toContain("ERROR: Missing required <turns-per-plan>");
   });
 
   it("scaffolded ralphai.sh shows turns-per-plan as optional in usage", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    expect(config).toContain("--turns=<n>");
-    expect(config).not.toContain("[turns-per-plan]");
+    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
+    expect(cli).toContain("--turns=<n>");
+    expect(cli).not.toContain("[turns-per-plan]");
     // Should mention the default
-    expect(config).toContain("Default: 5 turns per plan.");
+    expect(cli).toContain("Default: 5 turns per plan.");
   });
 
   it("scaffolded ralphai.sh contains gh preflight check for PR mode", () => {
@@ -328,13 +328,16 @@ describe("ralphai command", () => {
     expect(ralphaiSh).toContain("Rolled back: moved plan to");
   });
 
-  it("scaffolded config.sh includes worktree status in --show-config output", () => {
+  it("scaffolded show_config.sh includes worktree status in --show-config output", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
     // When in a worktree, --show-config should display worktree info
-    expect(config).toContain("worktree           = true");
-    expect(config).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
+    expect(showConfig).toContain("worktree           = true");
+    expect(showConfig).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
   });
 
   it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
@@ -1282,9 +1285,14 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
   it("scaffolded ralphai.sh contains detect_agent_type function", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
+    // detect_agent_type is defined in validate.sh (shared helpers)
+    const validate = readFileSync(join(templateLib, "validate.sh"), "utf-8");
+    expect(validate).toContain("detect_agent_type()");
+    expect(validate).toContain("DETECTED_AGENT_TYPE=");
+
+    // prompt.sh calls detect_agent_type (defined in validate.sh, sourced earlier)
     const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
-    expect(prompt).toContain("detect_agent_type()");
-    expect(prompt).toContain("DETECTED_AGENT_TYPE=");
+    expect(prompt).toContain("detect_agent_type");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1551,9 +1559,11 @@ ${cleanupFile}
     expect(config).toContain("CONFIG_PROMPT_MODE=");
     // Env var override
     expect(config).toContain("RALPHAI_PROMPT_MODE");
+
+    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
     // CLI flag
-    expect(config).toContain("--prompt-mode=");
-    expect(config).toContain("CLI_PROMPT_MODE=");
+    expect(cli).toContain("--prompt-mode=");
+    expect(cli).toContain("CLI_PROMPT_MODE=");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1719,22 +1729,28 @@ echo "$PROMPT_MODE"
     expect(defaults).toContain('CLI_CONTINUOUS=""');
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    // Config file loader case
-    expect(config).toContain("continuous)");
+    // Config file loader reads continuous from JSON
+    expect(config).toContain('"continuous"');
     expect(config).toContain("CONFIG_CONTINUOUS=");
     // Env var override
     expect(config).toContain("RALPHAI_CONTINUOUS");
+
+    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
     // CLI flag
-    expect(config).toContain("--continuous)");
-    expect(config).toContain('CLI_CONTINUOUS="true"');
+    expect(cli).toContain("--continuous)");
+    expect(cli).toContain('CLI_CONTINUOUS="true"');
     // Help text
-    expect(config).toContain(
+    expect(cli).toContain(
       "Keep processing backlog plans after the first completes",
     );
     // Supported keys list
-    expect(config).toContain("continuous,");
-    // Show-config output
-    expect(config).toContain("continuous         =");
+    expect(cli).toContain("continuous,");
+    // Show-config output (now in show_config.sh)
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
+    expect(showConfig).toContain("continuous         =");
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1895,18 +1911,24 @@ echo "$CONTINUOUS"
     expect(config).toContain("CONFIG_AUTO_COMMIT=");
     // Env var override
     expect(config).toContain("RALPHAI_AUTO_COMMIT");
+
+    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
     // CLI flags
-    expect(config).toContain("--auto-commit)");
-    expect(config).toContain("--no-auto-commit)");
-    expect(config).toContain('CLI_AUTO_COMMIT="true"');
-    expect(config).toContain('CLI_AUTO_COMMIT="false"');
+    expect(cli).toContain("--auto-commit)");
+    expect(cli).toContain("--no-auto-commit)");
+    expect(cli).toContain('CLI_AUTO_COMMIT="true"');
+    expect(cli).toContain('CLI_AUTO_COMMIT="false"');
     // Help text
-    expect(config).toContain("Enable auto-commit of agent changes");
-    expect(config).toContain("Disable auto-commit");
+    expect(cli).toContain("Enable auto-commit of agent changes");
+    expect(cli).toContain("Disable auto-commit");
     // Supported keys list
-    expect(config).toContain("autoCommit");
-    // Show-config output
-    expect(config).toContain("autoCommit         =");
+    expect(cli).toContain("autoCommit");
+    // Show-config output (now in show_config.sh)
+    const showConfig = readFileSync(
+      join(templateLib, "show_config.sh"),
+      "utf-8",
+    );
+    expect(showConfig).toContain("autoCommit         =");
   });
 
   it("scaffolded ralphai.sh gates per-turn auto-commit on AUTO_COMMIT and MODE", () => {
@@ -2104,16 +2126,16 @@ echo "$AUTO_COMMIT"
     expect(config.mode).toBe("branch");
   });
 
-  it("scaffolded config.sh has --branch, --pr, and --patch CLI flags", () => {
-    const config = readFileSync(
-      join(__dirname, "..", "runner", "lib", "config.sh"),
+  it("scaffolded cli.sh has --branch, --pr, and --patch CLI flags", () => {
+    const cli = readFileSync(
+      join(__dirname, "..", "runner", "lib", "cli.sh"),
       "utf-8",
     );
-    expect(config).toContain("--branch)");
-    expect(config).toContain("--pr)");
-    expect(config).toContain("--patch)");
+    expect(cli).toContain("--branch)");
+    expect(cli).toContain("--pr)");
+    expect(cli).toContain("--patch)");
     // --direct should no longer exist
-    expect(config).not.toContain("--direct)");
+    expect(cli).not.toContain("--direct)");
   });
 
   it("scaffolded defaults.sh sets DEFAULT_MODE to branch", () => {
@@ -2131,7 +2153,9 @@ echo "$AUTO_COMMIT"
       join(__dirname, "..", "runner", "lib", "config.sh"),
       "utf-8",
     );
-    expect(config).toContain("'mode' must be 'branch', 'pr', or 'patch'");
+    expect(config).toContain(
+      'validate_enum "$value" "$config_path: \'mode\'" "branch" "pr" "patch"',
+    );
   });
 
   it("scaffolded config.sh validates RALPHAI_MODE env var as branch|pr|patch", () => {
@@ -2139,7 +2163,9 @@ echo "$AUTO_COMMIT"
       join(__dirname, "..", "runner", "lib", "config.sh"),
       "utf-8",
     );
-    expect(config).toContain("RALPHAI_MODE must be 'branch', 'pr', or 'patch'");
+    expect(config).toContain(
+      'validate_enum "$RALPHAI_MODE" "RALPHAI_MODE" "branch" "pr" "patch"',
+    );
   });
 
   it("init --yes sets autoCommit=false by default (non-patch mode)", () => {
