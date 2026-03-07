@@ -4073,4 +4073,77 @@ build_continuous_pr_body
       expect(output).toContain("prd-search.md");
     });
   });
+
+  describe.skipIf(process.platform === "win32")(
+    "update_receipt_tasks batch counting",
+    () => {
+      const receiptShPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "receipt.sh",
+      );
+
+      /** Helper: run update_receipt_tasks with given progress content and return tasks_completed */
+      function countTasks(progressContent: string): number {
+        const progressFile = join(testDir, "progress.md");
+        const receiptFile = join(testDir, "receipt.txt");
+        writeFileSync(progressFile, progressContent);
+        writeFileSync(receiptFile, "tasks_completed=0\n");
+
+        execSync(
+          `bash -c 'export RECEIPT_FILE=${JSON.stringify(receiptFile)}; export PROGRESS_FILE=${JSON.stringify(progressFile)}; source ${JSON.stringify(receiptShPath)}; update_receipt_tasks'`,
+          { cwd: testDir, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+        );
+
+        const receipt = readFileSync(receiptFile, "utf-8");
+        const match = receipt.match(/^tasks_completed=(\d+)/m);
+        return match ? parseInt(match[1]!, 10) : -1;
+      }
+
+      it("counts individual Status Complete markers", () => {
+        expect(
+          countTasks(
+            "## Progress\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
+          ),
+        ).toBe(2);
+      });
+
+      it("counts batch heading Tasks X-Y", () => {
+        expect(
+          countTasks(
+            "## Progress\n\n### Tasks 1-3: Batch\n**Status:** Complete\n",
+          ),
+        ).toBe(4); // 3 from batch (1-3) + 1 from Status Complete
+      });
+
+      it("does not count Tasks X-Y in prose body text", () => {
+        // Regression: prose mentioning "Tasks 3-4" was incorrectly counted as batch tasks
+        expect(
+          countTasks(
+            [
+              "## Progress",
+              "",
+              "### Task 1: Refactor",
+              "**Status:** Complete",
+              "",
+              "Refactored validation. CLI parsing moves in Tasks 3-4.",
+              "",
+              "### Task 2: Extract",
+              "**Status:** Complete",
+              "",
+              "Remaining size includes show-config which moves in Tasks 3-4.",
+            ].join("\n"),
+          ),
+        ).toBe(2); // Only 2 individual completions, prose mentions should be ignored
+      });
+
+      it("counts batch heading with en-dash Tasks X–Y", () => {
+        expect(
+          countTasks("## Progress\n\n### Tasks 5\u20138: Later batch\n"),
+        ).toBe(4); // 8 - 5 + 1 = 4 from batch, no Status Complete
+      });
+    },
+  );
 });

@@ -113,7 +113,7 @@ update_receipt_tasks() {
     if [[ -n "$start_num" && -n "$end_num" && "$end_num" -gt "$start_num" ]]; then
       count=$((count + end_num - start_num + 1))
     fi
-  done < <(grep -i 'tasks\?[[:space:]]\+[0-9]\+[[:space:]]*[–-][[:space:]]*[0-9]\+' "$PROGRESS_FILE" 2>/dev/null || true)
+  done < <(grep -i '^### .*tasks\?[[:space:]]\+[0-9]\+[[:space:]]*[–-][[:space:]]*[0-9]\+' "$PROGRESS_FILE" 2>/dev/null || true)
 
   # Update or append tasks_completed in the receipt
   if grep -q '^tasks_completed=' "$RECEIPT_FILE"; then
