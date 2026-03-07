@@ -427,6 +427,129 @@ describe("ralphai command", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Reset tests
+  // -------------------------------------------------------------------------
+
+  it("reset --yes moves in-progress plans back to backlog", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    // Simulate an in-progress plan
+    const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+    writeFileSync(join(inProgressDir, "prd-my-feature.md"), "# My Feature");
+
+    const output = stripLogo(runCliOutput(["reset", "--yes"], testDir));
+
+    expect(output).toContain("Pipeline reset");
+    // Plan should be back in backlog
+    expect(
+      existsSync(
+        join(testDir, ".ralphai", "pipeline", "backlog", "prd-my-feature.md"),
+      ),
+    ).toBe(true);
+    // Plan should NOT be in in-progress
+    expect(existsSync(join(inProgressDir, "prd-my-feature.md"))).toBe(false);
+  });
+
+  it("reset --yes deletes progress.md", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+    writeFileSync(
+      join(inProgressDir, "progress.md"),
+      "## Progress Log\n### Task 1:\n**Status:** Complete",
+    );
+
+    runCliOutput(["reset", "--yes"], testDir);
+
+    expect(existsSync(join(inProgressDir, "progress.md"))).toBe(false);
+  });
+
+  it("reset --yes deletes receipt files", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+    writeFileSync(
+      join(inProgressDir, "receipt-test.txt"),
+      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nagent=claude -p\nturns_completed=3",
+    );
+
+    runCliOutput(["reset", "--yes"], testDir);
+
+    expect(existsSync(join(inProgressDir, "receipt-test.txt"))).toBe(false);
+  });
+
+  it("reset --yes handles multiple plans, progress, and receipts", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+    writeFileSync(join(inProgressDir, "prd-feature-a.md"), "# Feature A");
+    writeFileSync(join(inProgressDir, "prd-feature-b.md"), "# Feature B");
+    writeFileSync(join(inProgressDir, "progress.md"), "## Progress Log");
+    writeFileSync(
+      join(inProgressDir, "receipt-feature-a.txt"),
+      "slug=feature-a",
+    );
+    writeFileSync(
+      join(inProgressDir, "receipt-feature-b.txt"),
+      "slug=feature-b",
+    );
+
+    const output = stripLogo(runCliOutput(["reset", "--yes"], testDir));
+
+    expect(output).toContain("2 plans moved to backlog");
+    expect(output).toContain("Deleted progress.md");
+    expect(output).toContain("Deleted 2 receipts");
+
+    // Both plans should be in backlog
+    expect(
+      existsSync(
+        join(testDir, ".ralphai", "pipeline", "backlog", "prd-feature-a.md"),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(testDir, ".ralphai", "pipeline", "backlog", "prd-feature-b.md"),
+      ),
+    ).toBe(true);
+
+    // in-progress should be clean (only .gitkeep)
+    const remaining = readdirSync(inProgressDir);
+    expect(remaining).toEqual([".gitkeep"]);
+  });
+
+  it("reset --yes reports nothing to reset when pipeline is clean", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const output = stripLogo(runCliOutput(["reset", "--yes"], testDir));
+
+    expect(output).toContain("Nothing to reset");
+  });
+
+  it("reset errors when .ralphai/ does not exist", () => {
+    const result = runCli(["reset", "--yes"], testDir);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("not set up");
+    expect(result.stderr).toContain("ralphai init");
+  });
+
+  it("reset preserves .gitkeep in in-progress directory", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const inProgressDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+
+    runCliOutput(["reset", "--yes"], testDir);
+
+    // .gitkeep should still exist
+    expect(existsSync(join(inProgressDir, ".gitkeep"))).toBe(true);
+    // Directory should still exist
+    expect(existsSync(inProgressDir)).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
   // --force tests
   // -------------------------------------------------------------------------
 
@@ -786,6 +909,7 @@ describe("ralphai command", () => {
     expect(output).toContain("run");
     expect(output).toContain("update");
     expect(output).toContain("uninstall");
+    expect(output).toContain("reset");
   });
 
   it("init --yes errors when .ralphai/ already exists", () => {
