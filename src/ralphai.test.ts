@@ -2795,6 +2795,61 @@ build_continuous_pr_body
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
 
+    it("worktree replaces git-tracked .ralphai dir with symlink", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan and git-track it (simulating a repo
+      // where .ralphai/ has committed files like ralphai.config)
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "in-progress"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(testDir, ".ralphai", "ralphai.config"),
+        "agentCommand=echo hello\n",
+      );
+      writeFileSync(
+        join(testDir, ".ralphai", "pipeline", "backlog", "prd-tracked-test.md"),
+        "# Tracked test\n",
+      );
+      writeFileSync(
+        join(testDir, ".ralphai", "pipeline", "in-progress", ".gitkeep"),
+        "",
+      );
+      // Commit .ralphai/ so worktrees check it out as a real directory
+      execSync("git add .ralphai/ && git commit -m 'add .ralphai'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(testDir, "wt-tracked");
+
+      const result = runCli(
+        ["worktree", "--plan=prd-tracked-test.md", `--dir=${worktreeDir}`],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      const combined = result.stdout + result.stderr;
+
+      // The .ralphai in the worktree should be a symlink, NOT a directory
+      const symlinkPath = join(worktreeDir, ".ralphai");
+      expect(
+        existsSync(symlinkPath),
+        `Symlink not found at ${symlinkPath}. CLI output: ${combined}`,
+      ).toBe(true);
+      expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
+    });
+
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
       gitInitialCommit(testDir);
 
