@@ -488,3 +488,17 @@ Use these checks to verify config behavior after changes to `.ralphai/ralphai.co
 4. **CLI flag override** — Pass a CLI flag (e.g. `--agent-command='gemini -p'`) with both env var and config file set. Run `--show-config` and confirm the CLI flag wins.
 
 5. **Syntax check** — Run `bash -n $(npm root -g)/ralphai/runner/ralphai.sh` to verify the runner script has no syntax errors (or `bash -n $(node -e "console.log(require.resolve('ralphai/runner/ralphai.sh'))")`).
+
+### Troubleshooting
+
+**"Ralphai is not set up. Run ralphai init first."** inside a worktree
+
+`ralphai init` must be run in the **main repository**, not inside a git worktree. The `.ralphai/` directory only exists in the main repo — worktrees resolve it automatically via `git rev-parse --git-common-dir`. Run `git worktree list` to find the main worktree path, then run `ralphai init` there.
+
+**"Cannot initialize ralphai inside a git worktree"**
+
+Navigate to the main repository and run `ralphai init` there. Ralphai detects that you're in a worktree and refuses to initialize because `.ralphai/` must live in the main repo to be shared across all worktrees. Use `git worktree list` to find the main repo path (the first entry in the list).
+
+**"Cannot sync ralphai inside a git worktree"**
+
+Same as above — `ralphai sync` must be run in the main repository. Navigate to the main repo first.
