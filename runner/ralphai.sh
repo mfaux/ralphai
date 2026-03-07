@@ -71,6 +71,7 @@ if [[ "$MODE" == "direct" ]]; then
         echo "Or switch to a feature branch first."
       fi
     fi
+    echo ""
     exit 1
   fi
 fi
