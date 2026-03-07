@@ -1,8 +1,8 @@
 # How ralphai Works
 
-Ralphai is a loop that drives your AI coding agent one plan at a time, on an
-isolated branch, with real build/test/lint feedback every cycle. This page
-explains the mechanics behind that loop.
+Ralphai is a loop that drives your AI coding agent one plan at a time, with
+real build/test/lint feedback every cycle. This page explains the mechanics
+behind that loop.
 
 Back to the [README](../README.md) for setup and quickstart.
 
@@ -103,27 +103,116 @@ When a run is aborted due to stuck detection, the plan and progress files stay
 in `.ralphai/pipeline/in-progress/`. You can resume with `ralphai run` after
 investigating what went wrong — or adjust the plan and try again.
 
+## Fallback Agents
+
+When stuck detection fires, Ralphai doesn't have to give up — it can try a
+different agent. Fallback agents are an ordered list of alternative agent
+commands that Ralphai rotates through when the primary agent gets stuck.
+
+**How it works:**
+
+1. The primary agent hits the stuck threshold (no new commits for N
+   consecutive turns).
+2. Instead of aborting, Ralphai switches to the first fallback agent command
+   and **resets the stuck counter to zero**, giving the new agent a fresh
+   budget of N turns to make progress.
+3. If the first fallback also gets stuck, Ralphai moves to the next one in
+   the list.
+4. If all fallback agents are exhausted and the last one also gets stuck,
+   the run aborts — plan files stay in `in-progress/` for manual inspection.
+
+Each switch is logged in `progress.md` with a timestamp. The turn counter
+is **not** reset — fallback agents share the remaining turn budget.
+
+**Configuration:**
+
+- **Config file:** `"fallbackAgents": ["claude -p", "codex exec"]` in
+  `ralphai.json` (JSON array of strings, or a comma-separated string)
+- **Env var:** `RALPHAI_FALLBACK_AGENTS="claude -p,codex exec"`
+- **CLI flag:** `--fallback-agents='claude -p,codex exec'`
+
+Default: no fallback agents (empty). Ralphai aborts after the primary agent
+gets stuck.
+
+## Continuous Mode
+
+By default, Ralphai stops after completing one plan. Continuous mode keeps
+draining the backlog — after a plan completes, Ralphai picks the next
+dependency-ready plan and starts a fresh turn loop for it.
+
+**How it works:**
+
+1. A plan completes (the agent signals `COMPLETE`).
+2. Ralphai checks the backlog for more dependency-ready plans.
+3. If a plan is found, a new turn loop begins with a fresh turn counter,
+   fresh stuck counter, and a fresh agent session.
+4. This repeats until the backlog is empty or a plan fails.
+
+In **direct mode**, continuous processing simply keeps committing on the
+current branch. In **PR mode**, Ralphai creates a single **draft PR** after
+the first plan completes, updates it after each subsequent plan, and marks
+it as "ready for review" when the backlog is drained.
+
+If a plan fails mid-session (runs out of turns or all agents get stuck),
+Ralphai pushes any partial work and exits — it does not skip ahead to the
+next plan.
+
+**Configuration:**
+
+- **Config file:** `"continuous": true` in `ralphai.json`
+- **Env var:** `RALPHAI_CONTINUOUS=true`
+- **CLI flag:** `--continuous`
+
+Default: `false` (stop after one plan).
+
+## Turn Timeout
+
+Turn timeout sets a maximum duration for each individual agent invocation.
+If the agent exceeds the limit, it is killed and the turn ends. This
+prevents a single agent call from running indefinitely.
+
+**How it works:**
+
+1. When `turnTimeout` is set to a value greater than 0, each agent command
+   is wrapped with the Unix `timeout` command.
+2. If the agent exceeds the limit, it receives a SIGTERM signal and the
+   process is killed.
+3. A warning is printed: `"Agent command timed out after Ns."`.
+4. The turn still counts toward the turn budget. The stuck counter
+   increments (since a killed agent typically produces no commits).
+5. If the agent keeps timing out with no commits, stuck detection
+   eventually fires — which either rotates to a fallback agent or aborts
+   the run.
+
+A timed-out turn is not fatal on its own. Ralphai continues to the next
+turn, giving the agent another chance to make progress.
+
+**Configuration:**
+
+- **Config file:** `"turnTimeout": 300` in `ralphai.json` (value in seconds)
+- **Env var:** `RALPHAI_TURN_TIMEOUT=300`
+- **CLI flag:** `--turn-timeout=300`
+
+Default: `0` (no timeout — the agent runs until it exits on its own).
+
 ## Branch Isolation
 
-All work happens on isolated `ralphai/*` branches, never directly on `main` or
-your working branch.
+Ralphai supports two branching strategies:
 
-**Branch naming:** The branch name is derived from the plan filename.
-`prd-add-dark-mode.md` becomes `ralphai/add-dark-mode`. The `ralphai/` prefix
-keeps automated work visually separate from human branches.
+- **Direct mode** (default, `--direct`): Ralphai commits on your current
+  branch. No branch creation, no PR. You must be on a feature branch —
+  Ralphai refuses to run on `main` or `master`.
+- **PR mode** (`--pr`): Ralphai creates an isolated `ralphai/*` branch from the
+  configured base branch, does all work there, and opens a PR on completion
+  via the `gh` CLI (validated at startup before any agent work begins).
 
-**Collision detection:** Before creating a branch, Ralphai checks whether it
-already exists locally, on the remote, or has an open PR. If a collision is
-found, the plan is skipped and Ralphai moves to the next one.
+**Branch naming (PR mode only):** The branch name is derived from the plan
+filename. `prd-add-dark-mode.md` becomes `ralphai/add-dark-mode`. The
+`ralphai/` prefix keeps automated work visually separate from human branches.
 
-**On completion**, Ralphai operates in one of two modes:
-
-- **Direct mode** (default): Ralphai commits on the current branch. No
-  branch creation, no PR. Refuses to run on `main`/`master` — you must
-  be on a feature branch.
-- **PR mode** (`--pr`): Ralphai pushes the `ralphai/*` branch and creates a PR
-  via the `gh` CLI, with the plan content and commit log in the PR body.
-  The `gh` CLI is validated at startup before any agent work begins.
+**Collision detection (PR mode only):** Before creating a branch, Ralphai
+checks whether it already exists locally, on the remote, or has an open PR. If
+a collision is found, the plan is skipped and Ralphai moves to the next one.
 
 **Feature branch workflow:** For large features spanning multiple plans,
 use direct mode on a feature branch (`git checkout -b feature/big-thing`
@@ -176,7 +265,7 @@ depends-on: [prd-a.md, prd-b.md]
 
 **GitHub Issues integration:** When the backlog is empty and `issueSource=github`
 is configured, Ralphai can pull labeled GitHub issues and convert them into plan
-files automatically. See the [operational docs](../.ralphai/README.md) for
+files automatically. See the [operational docs](../templates/ralphai/README.md) for
 details.
 
 **File tracking:** Plan files in `backlog/`, `in-progress/`, and `out/` are
