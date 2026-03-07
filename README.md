@@ -63,7 +63,7 @@ ralphai run --pr         # create a ralphai/* branch and open a PR
 ralphai run --dry-run    # preview without changing anything
 ```
 
-For parallel work, run in a [git worktree](docs/worktrees.md):
+For parallel work, run in a [git worktree](docs/worktrees.md) (commit `ralphai.json` first — worktrees are fresh checkouts):
 
 ```bash
 ralphai worktree                    # auto-pick next backlog plan
