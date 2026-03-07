@@ -284,8 +284,11 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_TURNS`                   | `turns`                |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
+| `RALPHAI_CONTINUOUS`              | `continuous`           |
+| `RALPHAI_FALLBACK_AGENTS`         | `fallbackAgents`       |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
+| `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
