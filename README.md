@@ -259,6 +259,7 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
+| `RALPHAI_TURNS`                   | `turns`                |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |

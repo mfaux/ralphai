@@ -35,7 +35,7 @@ Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** 
 
 ### `ralphai run [options]`
 
-Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection. Pass `--turns=0` for unlimited turns — Ralphai keeps going until all tasks are complete or stuck detection triggers.
+Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection. Pass `--turns=0` for unlimited turns — Ralphai keeps going until all tasks are complete or stuck detection triggers. You can also set turns in `ralphai.json` (e.g. `"turns": 10`) or via the `RALPHAI_TURNS` environment variable.
 
 ```bash
 ralphai run --turns=5
@@ -251,6 +251,7 @@ Supported keys:
 | `baseBranch`           | Branch to create work branches from                                        | `main`                | Non-empty, single token        |
 | `mode`                 | Run mode: `direct` (commit on current branch) or `pr` (create branch + PR) | `direct`              | `pr` or `direct`               |
 | `autoCommit`           | Auto-commit dirty state after each turn (ignored in PR mode)               | `false`               | `true` or `false`              |
+| `turns`                | Number of turns per plan (0 = unlimited)                                   | `5`                   | Non-negative integer           |
 | `maxStuck`             | Consecutive no-progress turns before aborting                              | `3`                   | Positive integer               |
 | `turnTimeout`          | Seconds before killing a hung agent invocation                             | `0` (off)             | Non-negative integer           |
 | `promptMode`           | How file refs are passed to the agent: `auto`, `at-path`, or `inline`      | `auto`                | `auto`, `at-path`, or `inline` |
@@ -293,6 +294,7 @@ Environment variables override config file values:
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
+| `RALPHAI_TURNS`                   | `turns`                |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
@@ -316,7 +318,7 @@ CLI flags have the highest priority:
 | `--agent-command=<command>`         | `agentCommand`              |
 | `--feedback-commands=<list>`        | `feedbackCommands`          |
 | `--base-branch=<branch>`            | `baseBranch`                |
-| `--turns=<n>`                       | turn budget                 |
+| `--turns=<n>`                       | `turns`                     |
 | `--direct`                          | `mode` (sets `direct`)      |
 | `--pr`                              | `mode` (sets `pr`)          |
 | `--auto-commit`                     | `autoCommit` (sets `true`)  |
