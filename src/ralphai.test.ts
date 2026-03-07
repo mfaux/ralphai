@@ -3872,7 +3872,7 @@ build_continuous_pr_body
       expect(output).toContain("1 plan");
       expect(output).toContain("prd-dark-mode.md");
       expect(output).toContain("1 of 3 tasks");
-      expect(output).toContain("worktree: dark-mode");
+      expect(output).toContain("worktree: prd-dark-mode");
     });
 
     it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {

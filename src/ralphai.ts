@@ -1649,21 +1649,23 @@ function runRalphaiStatus(cwd: string): void {
   );
 
   const completedFiles = existsSync(archiveDir)
-    ? readdirSync(archiveDir).filter(
-        (f) => f.startsWith("prd-") && f.endsWith(".md"),
-      )
+    ? readdirSync(archiveDir).filter((f) => f.endsWith(".md"))
     : [];
   // Deduplicate completed plans by removing timestamps
   const completedSlugs = new Set(
     completedFiles.map((f) => f.replace(/-\d{8}-\d{6}\.md$/, "")),
   );
 
-  // Build receipt lookup: slug → Receipt
-  const receiptsBySlug = new Map<string, Receipt>();
+  // Build receipt lookup: plan filename → Receipt
+  const receiptsByPlan = new Map<string, Receipt>();
   for (const rf of receiptFiles) {
     const slug = rf.replace(/^receipt-/, "").replace(/\.txt$/, "");
     const receipt = parseReceipt(join(inProgressDir, rf));
-    if (receipt) receiptsBySlug.set(slug, receipt);
+    if (receipt) {
+      // Key by plan_file when present; fall back to prd-<slug>.md for old receipts
+      const key = receipt.plan_file || `prd-${slug}.md`;
+      receiptsByPlan.set(key, receipt);
+    }
   }
 
   // --- Pipeline section ---
@@ -1690,8 +1692,7 @@ function runRalphaiStatus(cwd: string): void {
     `  ${TEXT}In Progress${RESET}  ${DIM}${inProgressPlans.length} plan${inProgressPlans.length !== 1 ? "s" : ""}${RESET}`,
   );
   for (const plan of inProgressPlans) {
-    const slug = plan.replace(/^prd-/, "").replace(/\.md$/, "");
-    const receipt = receiptsBySlug.get(slug);
+    const receipt = receiptsByPlan.get(plan);
     const parts: string[] = [];
 
     // Task progress
@@ -1713,7 +1714,8 @@ function runRalphaiStatus(cwd: string): void {
 
     // Worktree info from receipt
     if (receipt?.source === "worktree") {
-      parts.push(`worktree: ${slug}`);
+      const planSlug = plan.replace(/\.md$/, "");
+      parts.push(`worktree: ${planSlug}`);
     }
 
     const suffix =
@@ -1756,10 +1758,10 @@ function runRalphaiStatus(cwd: string): void {
   const problems: string[] = [];
 
   // Orphaned receipts: receipt exists but no matching plan file
-  for (const [slug, _receipt] of receiptsBySlug) {
-    if (!existsSync(join(inProgressDir, `prd-${slug}.md`))) {
+  for (const [planFile, receipt] of receiptsByPlan) {
+    if (!existsSync(join(inProgressDir, planFile))) {
       problems.push(
-        `Orphaned receipt: receipt-${slug}.txt (no matching plan file)`,
+        `Orphaned receipt: receipt-${receipt.slug}.txt (no matching plan file)`,
       );
     }
   }
