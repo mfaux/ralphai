@@ -199,3 +199,60 @@ it at the start of each turn so it doesn't repeat past errors.
 
 Keeping learnings gitignored prevents auto-written entries from interfering
 with stuck detection (which counts commits).
+
+## Worktrees
+
+`ralphai worktree` runs a plan in an isolated [git worktree](https://git-scm.com/docs/git-worktree),
+letting you keep working in your main checkout while Ralphai runs in a separate
+directory.
+
+### How it works
+
+1. `ralphai worktree` creates a git worktree (a separate working directory
+   sharing the same `.git` history) and a new `ralphai/<plan-slug>` branch.
+2. A **symlink** is created from the worktree's `.ralphai/` to the main repo's
+   `.ralphai/` directory. This is critical for agent compatibility (see below).
+3. The runner is spawned with the worktree as its working directory.
+4. When the runner detects the symlink, it uses **relative paths** (e.g.,
+   `.ralphai/pipeline/in-progress/`) in the prompt sent to the agent.
+
+### The sandbox problem
+
+Most AI coding agents enforce **directory sandboxing** — they restrict file
+access to the agent's working directory (the worktree). Without the symlink,
+pipeline files live at absolute paths in the main repo
+(e.g., `/home/user/project/.ralphai/pipeline/in-progress/`), which the agent
+rejects as "external directory" access.
+
+The symlink makes `.ralphai/` appear local to the worktree, so the agent can
+read and write pipeline files through relative paths.
+
+### Agent compatibility
+
+| Agent       | Worktree support | Notes                                                       |
+| ----------- | ---------------- | ----------------------------------------------------------- |
+| OpenCode    | Yes              | Follows symlinks within working directory                   |
+| Claude Code | Yes              | Follows symlinks within project directory                   |
+| Gemini CLI  | Yes              | No known sandbox restrictions                               |
+| Aider       | Yes              | No directory sandbox                                        |
+| Goose       | Likely           | Untested                                                    |
+| Amp         | Likely           | Untested                                                    |
+| Kiro        | Likely           | Untested                                                    |
+| Codex       | No               | Container sandbox may not follow symlinks outside the mount |
+
+**Workaround for unsupported agents:** Set `promptMode=inline` in
+`.ralphai/ralphai.config`. This causes the runner (bash) to read pipeline files
+and embed their contents directly in the prompt, bypassing the agent's need to
+access external paths. This increases prompt size but works with all agents.
+
+### Manual worktrees
+
+If you create worktrees manually (via `git worktree add`) instead of
+`ralphai worktree`, add the symlink yourself:
+
+```bash
+ln -s /path/to/main-repo/.ralphai .ralphai
+```
+
+Without this symlink, the runner falls back to absolute paths, which may be
+rejected by sandboxed agents.

@@ -190,6 +190,31 @@ worktrees.
 - Use `ralphai run --show-config` inside a worktree to verify it detected the
   main repo correctly (`worktree = true`).
 
+**Agent compatibility with worktrees:**
+
+`ralphai worktree` creates a symlink from the worktree's `.ralphai/` to the
+main repo, so agents with directory sandboxing can access pipeline files.
+This works for most agents but not all:
+
+| Agent       | Worktree support | Notes                                                                                                |
+| ----------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| OpenCode    | Yes              | Follows symlinks within working directory                                                            |
+| Claude Code | Yes              | Follows symlinks within project directory                                                            |
+| Gemini CLI  | Yes              | No known sandbox restrictions                                                                        |
+| Aider       | Yes              | No directory sandbox                                                                                 |
+| Goose       | Likely           | Untested                                                                                             |
+| Amp         | Likely           | Untested                                                                                             |
+| Kiro        | Likely           | Untested                                                                                             |
+| Codex       | No               | Container sandbox may not follow symlinks outside the mount; use `promptMode=inline` as a workaround |
+
+For agents that don't support worktree symlinks, set `promptMode=inline` in
+`.ralphai/ralphai.config` to embed file contents directly in the prompt (avoids
+the agent needing to read external paths). Note that `inline` mode increases
+prompt size but works with all agents.
+
+For manually-created worktrees (not via `ralphai worktree`), create the symlink
+yourself: `ln -s /path/to/main-repo/.ralphai .ralphai`
+
 </details>
 
 ## How Ralphai Works

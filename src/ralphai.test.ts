@@ -6,6 +6,9 @@ import {
   mkdirSync,
   writeFileSync,
   chmodSync,
+  symlinkSync,
+  lstatSync,
+  readlinkSync,
 } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
@@ -1131,6 +1134,65 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         );
         expect(result).toContain(
           `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
+        );
+      } finally {
+        try {
+          rmSync(scriptFile);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
+    it("defaults.sh uses relative paths when .ralphai symlink exists in worktree", () => {
+      // Create .ralphai/ directory in the main repo
+      const ralphaiDir = join(mainRepo, ".ralphai");
+      mkdirSync(join(ralphaiDir, "pipeline", "in-progress"), {
+        recursive: true,
+      });
+      mkdirSync(join(ralphaiDir, "pipeline", "backlog"), { recursive: true });
+      mkdirSync(join(ralphaiDir, "pipeline", "out"), { recursive: true });
+      writeFileSync(join(ralphaiDir, "ralphai.config"), "baseBranch=main\n");
+
+      // Create symlink in the worktree pointing to main repo's .ralphai/
+      symlinkSync(ralphaiDir, join(worktreeDir, ".ralphai"));
+
+      const defaultsPath = join(
+        __dirname,
+        "..",
+        "runner",
+        "lib",
+        "defaults.sh",
+      );
+      const script = `#!/bin/bash
+set -e
+source ${JSON.stringify(defaultsPath)}
+echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
+echo "WIP_DIR=$WIP_DIR"
+echo "BACKLOG_DIR=$BACKLOG_DIR"
+echo "ARCHIVE_DIR=$ARCHIVE_DIR"
+echo "CONFIG_FILE=$CONFIG_FILE"
+echo "PROGRESS_FILE=$PROGRESS_FILE"
+`;
+      const scriptFile = join(
+        tmpdir(),
+        `ralphai-defaults-symlink-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
+      );
+      try {
+        writeFileSync(scriptFile, script);
+        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+          encoding: "utf-8",
+          cwd: worktreeDir,
+        });
+        // Should detect worktree
+        expect(result).toContain("IS_WORKTREE=true");
+        // But paths should be RELATIVE (not absolute) thanks to the symlink
+        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
+        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
+        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
+        expect(result).toContain("CONFIG_FILE=.ralphai/ralphai.config");
+        expect(result).toContain(
+          "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
         );
       } finally {
         try {
@@ -2738,6 +2800,44 @@ build_continuous_pr_body
       // The output should mention the second plan's slug, not the first
       const combined = result.stdout + result.stderr;
       expect(combined).toContain("ralphai/second");
+    });
+
+    it("worktree creates .ralphai symlink in worktree directory", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(testDir, ".ralphai", "pipeline", "backlog", "prd-symlink-test.md"),
+        "# Symlink test\n",
+      );
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(
+        testDir,
+        "..",
+        ".ralphai-worktrees",
+        "symlink-test",
+      );
+
+      runCli(
+        ["worktree", "--plan=prd-symlink-test.md"],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      // Verify the symlink was created
+      const symlinkPath = join(worktreeDir, ".ralphai");
+      expect(existsSync(symlinkPath)).toBe(true);
+      expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
 
     it("worktree clean with no ralphai worktrees", () => {

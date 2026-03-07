@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
 } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -1275,6 +1276,15 @@ async function runRalphaiWorktree(
       `${TEXT}Error:${RESET} Failed to create worktree. The branch '${branch}' may already exist.`,
     );
     process.exit(1);
+  }
+
+  // Symlink .ralphai/ from worktree → main repo so the agent can access
+  // pipeline files as relative paths. Without this, agents with directory
+  // sandboxing (OpenCode, Claude Code, Codex) reject reads/writes to the
+  // main repo's .ralphai/ as "external directory" access.
+  const worktreeRalphaiLink = join(worktreeDir, ".ralphai");
+  if (!existsSync(worktreeRalphaiLink)) {
+    symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 
   // Spawn ralphai runner in the worktree
