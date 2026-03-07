@@ -3451,7 +3451,7 @@ build_continuous_pr_body
 
       // The output should mention the second plan's slug, not the first
       const combined = result.stdout + result.stderr;
-      expect(combined).toContain("ralphai/second");
+      expect(combined).toContain("ralphai/prd-second");
     });
 
     it("worktree creates .ralphai symlink in worktree directory", () => {
@@ -3590,7 +3590,7 @@ build_continuous_pr_body
       );
 
       const worktreeDir = join(testDir, "wt-resume");
-      execSync(`git worktree add "${worktreeDir}" -b ralphai/resume HEAD`, {
+      execSync(`git worktree add "${worktreeDir}" -b ralphai/prd-resume HEAD`, {
         cwd: testDir,
         stdio: "ignore",
       });
@@ -3691,13 +3691,14 @@ build_continuous_pr_body
           ".ralphai",
           "pipeline",
           "in-progress",
-          "receipt-search.txt",
+          "receipt-prd-search.txt",
         ),
         [
           "started_at=2026-03-07T12:00:00Z",
           "source=main",
-          "branch=ralphai/search",
-          "slug=search",
+          "branch=ralphai/prd-search",
+          "slug=prd-search",
+          "plan_file=prd-search.md",
           "agent=claude -p",
           "turns_completed=1",
         ].join("\n"),
@@ -3708,7 +3709,7 @@ build_continuous_pr_body
 
       expect(result.exitCode).toBe(1);
       expect(combined).toContain(
-        'Plan "search" is already running in the main repository',
+        'Plan "prd-search" is already running in the main repository',
       );
     });
 

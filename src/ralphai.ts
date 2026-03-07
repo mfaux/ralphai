@@ -1340,13 +1340,13 @@ function selectPlanForWorktree(
   if (specificPlan) {
     const inProgressPath = join(inProgressDir, specificPlan);
     if (existsSync(inProgressPath)) {
-      const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+      const slug = specificPlan.replace(/\.md$/, "");
       return { planFile: specificPlan, slug, source: "in-progress" };
     }
     if (existsSync(backlogDir)) {
       const planPath = join(backlogDir, specificPlan);
       if (existsSync(planPath)) {
-        const slug = specificPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+        const slug = specificPlan.replace(/\.md$/, "");
         return { planFile: specificPlan, slug, source: "backlog" };
       }
     }
@@ -1358,21 +1358,24 @@ function selectPlanForWorktree(
 
   // --- Auto-detect plan ---
 
-  // Filter in-progress plans: only prd-*.md files
+  // Filter in-progress plans: .md files excluding progress/receipt files
   const inProgressPlans = existsSync(inProgressDir)
     ? readdirSync(inProgressDir).filter(
-        (f) => f.startsWith("prd-") && f.endsWith(".md"),
+        (f) =>
+          f.endsWith(".md") &&
+          !f.startsWith("progress-") &&
+          !f.startsWith("receipt-"),
       )
     : [];
 
   // Plans without an active worktree are "unattended" — resume first
   const unattendedPlans = inProgressPlans.filter(
-    (f) => !activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+    (f) => !activeSlugs.has(f.replace(/\.md$/, "")),
   );
 
   if (unattendedPlans.length === 1) {
     const planFile = unattendedPlans[0]!;
-    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = planFile.replace(/\.md$/, "");
     return { planFile, slug, source: "in-progress" };
   }
 
@@ -1393,18 +1396,18 @@ function selectPlanForWorktree(
 
   if (backlogPlans.length > 0) {
     const firstPlan = backlogPlans[0]!;
-    const slug = firstPlan.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = firstPlan.replace(/\.md$/, "");
     return { planFile: firstPlan, slug, source: "backlog" };
   }
 
   // No backlog — try resuming an in-progress plan that has a worktree
   const attendedPlans = inProgressPlans.filter((f) =>
-    activeSlugs.has(f.replace(/^prd-/, "").replace(/\.md$/, "")),
+    activeSlugs.has(f.replace(/\.md$/, "")),
   );
 
   if (attendedPlans.length === 1) {
     const planFile = attendedPlans[0]!;
-    const slug = planFile.replace(/^prd-/, "").replace(/\.md$/, "");
+    const slug = planFile.replace(/\.md$/, "");
     return { planFile, slug, source: "in-progress" };
   }
 
