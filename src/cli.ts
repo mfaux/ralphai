@@ -57,10 +57,11 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
   ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
   ${DIM}$${RESET} ralphai run                    ${DIM}# run with defaults (5 turns per plan)${RESET}
-  ${DIM}$${RESET} ralphai run 3                  ${DIM}# 3 turns per plan${RESET}
+  ${DIM}$${RESET} ralphai run --turns=3          ${DIM}# 3 turns per plan${RESET}
   ${DIM}$${RESET} ralphai run --dry-run          ${DIM}# preview only${RESET}
   ${DIM}$${RESET} ralphai run --pr               ${DIM}# create branch and open PR${RESET}
   ${DIM}$${RESET} ralphai worktree               ${DIM}# run next plan in an isolated worktree${RESET}
+  ${DIM}$${RESET} ralphai worktree --turns=3     ${DIM}# run in a worktree with 3 turns per plan${RESET}
   ${DIM}$${RESET} ralphai worktree list           ${DIM}# show active ralphai worktrees${RESET}
   ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
   ${DIM}$${RESET} ralphai status                 ${DIM}# show pipeline and worktree status${RESET}

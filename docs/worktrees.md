@@ -18,6 +18,7 @@ Back to the [README](../README.md) for setup and quickstart.
 
 ```bash
 ralphai worktree                          # auto-pick next backlog plan
+ralphai worktree --turns=3                # run with 3 turns per plan
 ralphai worktree --plan=prd-dark-mode.md  # target a specific plan
 ```
 
@@ -27,7 +28,7 @@ If the agent gets stuck or times out, the worktree is preserved. Re-run
 worktree with `ralphai run --resume`.
 
 `ralphai worktree` must be run from the **main repository**, not from inside a
-worktree. All runner options (`--turns`, `--agent`, `--feedback-commands`, etc.)
+worktree. All runner options (`--turns`, `--agent-command`, `--feedback-commands`, etc.)
 are forwarded automatically.
 
 Options:

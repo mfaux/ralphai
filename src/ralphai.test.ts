@@ -218,9 +218,8 @@ describe("ralphai command", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    // Usage text should use square brackets (optional) not angle brackets (required)
-    expect(config).toContain("[turns-per-plan]");
-    expect(config).not.toContain("<turns-per-plan>");
+    expect(config).toContain("--turns=<n>");
+    expect(config).not.toContain("[turns-per-plan]");
     // Should mention the default
     expect(config).toContain("Default: 5 turns per plan.");
   });
@@ -1853,18 +1852,19 @@ echo "$CONTINUOUS"
       chmodSync(stubScript, 0o755);
     });
 
-    it("run without args passes default turn count (5) to ralphai.sh", () => {
+    it("run without args lets the runner apply its default turn count", () => {
       const result = runCli(["run"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
-      expect(result.stdout).toContain("ARGS:5");
+      expect(result.stdout).toContain("ARGS:");
+      expect(result.stdout).not.toContain("ARGS:5");
     });
 
-    it("run -- 5 passes explicit turn count to ralphai.sh", () => {
-      const result = runCli(["run", "--", "5"], testDir, {
+    it("run -- --turns=5 passes explicit turn count to ralphai.sh", () => {
+      const result = runCli(["run", "--", "--turns=5"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
-      expect(result.stdout).toContain("ARGS:5");
+      expect(result.stdout).toContain("ARGS:--turns=5");
     });
 
     it("run -- --dry-run passes flags to ralphai.sh", () => {
@@ -1874,18 +1874,18 @@ echo "$CONTINUOUS"
       expect(result.stdout).toContain("ARGS:--dry-run");
     });
 
-    it("run -- 5 --resume passes multiple args to ralphai.sh", () => {
-      const result = runCli(["run", "--", "5", "--resume"], testDir, {
+    it("run -- --turns=5 --resume passes multiple args to ralphai.sh", () => {
+      const result = runCli(["run", "--", "--turns=5", "--resume"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
-      expect(result.stdout).toContain("ARGS:5 --resume");
+      expect(result.stdout).toContain("ARGS:--turns=5 --resume");
     });
 
-    it("run 3 passes turn count without -- separator", () => {
-      const result = runCli(["run", "3"], testDir, {
+    it("run --turns=3 passes turn count without -- separator", () => {
+      const result = runCli(["run", "--turns=3"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
-      expect(result.stdout).toContain("ARGS:3");
+      expect(result.stdout).toContain("ARGS:--turns=3");
     });
 
     it("run --dry-run passes flags without -- separator", () => {
@@ -1895,11 +1895,18 @@ echo "$CONTINUOUS"
       expect(result.stdout).toContain("ARGS:--dry-run");
     });
 
-    it("run 3 --resume passes multiple args without -- separator", () => {
-      const result = runCli(["run", "3", "--resume"], testDir, {
+    it("run --turns=3 --resume passes multiple args without -- separator", () => {
+      const result = runCli(["run", "--turns=3", "--resume"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
-      expect(result.stdout).toContain("ARGS:3 --resume");
+      expect(result.stdout).toContain("ARGS:--turns=3 --resume");
+    });
+
+    it("run 3 is rejected by the bundled runner", () => {
+      const result = runCli(["run", "3"], testDir);
+      const combined = result.stdout + result.stderr;
+      expect(result.exitCode).not.toBe(0);
+      expect(combined).toContain("Unrecognized argument: 3");
     });
 
     it("built CLI can locate the bundled runner script", () => {
@@ -2570,6 +2577,7 @@ build_continuous_pr_body
       expect(output).toContain("clean");
       expect(output).toContain("--plan=");
       expect(output).toContain("--dir=");
+      expect(output).toContain("--turns=<n>");
     });
 
     it("worktree refuses inside a worktree", () => {
@@ -2811,7 +2819,7 @@ build_continuous_pr_body
       );
       chmodSync(stubScript, 0o755);
 
-      const result = runCli(["worktree"], testDir, {
+      const result = runCli(["worktree", "--turns=3"], testDir, {
         RALPHAI_RUNNER_SCRIPT: stubScript,
       });
       const combined = result.stdout + result.stderr;
@@ -2819,7 +2827,7 @@ build_continuous_pr_body
       expect(result.exitCode).toBe(0);
       expect(combined).toContain(`Reusing existing worktree: ${worktreeDir}`);
       expect(combined).toContain(`PWD=${worktreeDir}`);
-      expect(combined).toContain("ARGS=--pr --resume");
+      expect(combined).toContain("ARGS=--pr --resume --turns=3");
 
       const symlinkPath = join(worktreeDir, ".ralphai");
       expect(existsSync(symlinkPath)).toBe(true);

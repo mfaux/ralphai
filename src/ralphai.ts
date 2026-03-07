@@ -35,7 +35,7 @@ interface WorktreeOptions {
   subcommand: WorktreeSubcommand;
   plan?: string; // --plan=<file>
   dir?: string; // --dir=<path>
-  runArgs: string[]; // passthrough args for the runner (--turns, --agent, etc.)
+  runArgs: string[]; // passthrough args for the runner (--turns, --agent-command, etc.)
 }
 
 interface RalphaiOptions {
@@ -1310,7 +1310,7 @@ function showWorktreeHelp(): void {
   );
   console.log();
   console.log(
-    `${DIM}All other options are forwarded to the task runner.${RESET}`,
+    `${DIM}All other options are forwarded to the task runner (for example, --turns=<n>, --resume, --feedback-commands=...).${RESET}`,
   );
 }
 
@@ -1799,9 +1799,6 @@ async function runRalphaiWorktree(
   // an exit code instead of calling process.exit. That's a future improvement.
 }
 
-/** Default turn count when `ralphai run` is invoked without args. */
-const DEFAULT_TURNS = "5";
-
 /**
  * Resolve the path to a bash executable.
  *
@@ -1909,7 +1906,7 @@ function runRalphaiRunner(
     process.exit(1);
   }
 
-  const args = options.runArgs.length > 0 ? options.runArgs : [DEFAULT_TURNS];
+  const args = options.runArgs;
 
   const isWindows = process.platform === "win32";
   // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set

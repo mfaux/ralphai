@@ -6,7 +6,7 @@ Ralphai is an autonomous task runner that drives an AI coding agent to implement
 
 ```bash
 ralphai run              # run with defaults (5 turns per plan)
-ralphai run 3            # 3 turns per plan
+ralphai run --turns=3    # 3 turns per plan
 ralphai run --dry-run    # preview what ralphai would do
 ralphai run --resume     # recover dirty state and continue
 ralphai run --pr         # create a ralphai/* branch and open a PR
@@ -32,27 +32,27 @@ Plan files in `wip/`, `backlog/`, `in-progress/`, and `out/` are **gitignored** 
 
 ## Task Runner
 
-### `ralphai run [turns-per-plan] [options]`
+### `ralphai run [options]`
 
 Looped autonomous runner. Auto-detects what to work on, runs up to N turns per plan, with stuck detection.
 
 ```bash
-ralphai run 5
+ralphai run --turns=5
 
 # Preview selection and readiness without moving files or creating branches
 ralphai run --dry-run
 
 # Recover dirty state and continue on current ralphai/* branch
-ralphai run 5 --resume
+ralphai run --turns=5 --resume
 
 # Override agent command, base branch, or stuck threshold
-ralphai run 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+ralphai run --turns=5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 
 # Override via env vars
-RALPHAI_AGENT_COMMAND='codex exec' ralphai run 5
+RALPHAI_AGENT_COMMAND='codex exec' ralphai run --turns=5
 
 # Direct mode: commit on current branch, no PR
-ralphai run 5 --direct
+ralphai run --turns=5 --direct
 ```
 
 No file arguments needed. The script auto-detects:
@@ -296,7 +296,7 @@ Environment variables override config file values:
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 
 ```bash
-RALPHAI_AGENT_COMMAND='claude -p' RALPHAI_MAX_STUCK=5 ralphai run 5
+RALPHAI_AGENT_COMMAND='claude -p' RALPHAI_MAX_STUCK=5 ralphai run --turns=5
 ```
 
 ### CLI Flag Overrides
@@ -308,6 +308,7 @@ CLI flags have the highest priority:
 | `--agent-command=<command>`         | `agentCommand`         |
 | `--feedback-commands=<list>`        | `feedbackCommands`     |
 | `--base-branch=<branch>`            | `baseBranch`           |
+| `--turns=<n>`                       | turn budget            |
 | `--direct`                          | `mode` (sets `direct`) |
 | `--pr`                              | `mode` (sets `pr`)     |
 | `--max-stuck=<n>`                   | `maxStuck`             |
@@ -321,7 +322,7 @@ CLI flags have the highest priority:
 | `--issue-comment-progress=<bool>`   | `issueCommentProgress` |
 
 ```bash
-ralphai run 5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
+ralphai run --turns=5 --agent-command='claude -p' --base-branch=develop --max-stuck=5
 ```
 
 ### Verifying Config (`--show-config`)
@@ -352,7 +353,7 @@ Ralphai supports working on a feature branch using direct mode. This is useful f
 2. Run Ralphai in direct mode on the feature branch:
 
 ```bash
-ralphai run 5 --direct
+ralphai run --turns=5 --direct
 ```
 
 Or via `.ralphai/ralphai.config`:
@@ -393,7 +394,7 @@ The branch name uses the first plan's slug (e.g. `ralphai/add-dark-mode`). The P
 - Files stay in `in-progress/` so `--resume` can recover
 
 ```bash
-ralphai run 10 --continuous --pr
+ralphai run --turns=10 --continuous --pr
 ```
 
 ### GitHub Issues Integration
@@ -411,8 +412,8 @@ issueSource=github
 Or via env var or CLI flag:
 
 ```bash
-RALPHAI_ISSUE_SOURCE=github ralphai run 5
-ralphai run 5 --issue-source=github
+RALPHAI_ISSUE_SOURCE=github ralphai run --turns=5
+ralphai run --turns=5 --issue-source=github
 ```
 
 **How it works:**

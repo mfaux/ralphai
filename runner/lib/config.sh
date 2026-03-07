@@ -315,7 +315,7 @@ apply_env_overrides() {
 }
 
 print_usage() {
-  echo "Usage: $0 [turns-per-plan] [options]"
+  echo "Usage: $0 [options]"
   echo ""
   echo "  Recommended daily invocation from an initialized repo: ralphai run ..."
   echo ""
@@ -325,6 +325,7 @@ print_usage() {
   echo "  Default: 5 turns per plan."
   echo ""
   echo "Options:"
+  echo "  --turns=<n>                     Turns per plan (default: 5, 0 = unlimited)"
   echo "  --dry-run, -n                    Preview what Ralphai would do without mutating state"
   echo "  --resume, -r                     Auto-commit dirty state and continue"
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
@@ -365,24 +366,31 @@ print_usage() {
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
   echo ""
   echo "Examples:"
-  echo "  $0 10                                        # 10 turns per plan (default: 5)"
-  echo "  $0 0                                         # unlimited turns per plan"
+  echo "  $0 --turns=10                                # 10 turns per plan (default: 5)"
+  echo "  $0 --turns=0                                 # unlimited turns per plan"
   echo "  $0 --dry-run                                 # preview only"
-  echo "  $0 10 --dry-run                              # preview with explicit turns"
-  echo "  $0 10 --resume                               # recover dirty state and continue"
-  echo "  $0 10 --agent-command='claude -p'             # use Claude Code"
-  echo "  $0 10 --agent-command='opencode run --agent build'  # use OpenCode"
-  echo "  $0 10 --direct                               # commit on current branch (no PR)"
-  echo "  $0 10 --direct --continuous                  # keep draining backlog on current branch"
-  echo "  RALPHAI_AGENT_COMMAND='codex exec' $0 10       # override via env var"
+  echo "  $0 --turns=10 --dry-run                      # preview with explicit turns"
+  echo "  $0 --turns=10 --resume                       # recover dirty state and continue"
+  echo "  $0 --turns=10 --agent-command='claude -p'     # use Claude Code"
+  echo "  $0 --turns=10 --agent-command='opencode run --agent build'  # use OpenCode"
+  echo "  $0 --turns=10 --direct                       # commit on current branch (no PR)"
+  echo "  $0 --turns=10 --direct --continuous          # keep draining backlog on current branch"
+  echo "  RALPHAI_AGENT_COMMAND='codex exec' $0 --turns=10  # override via env var"
   echo ""
   echo "Feature branch workflow:"
-  echo "  $0 10 --direct --base-branch=feature/big-thing  # commit directly on a feature branch"
+  echo "  $0 --turns=10 --direct --base-branch=feature/big-thing  # commit directly on a feature branch"
 }
 
 # --- Parse args ---
 for arg in "$@"; do
   case "$arg" in
+    --turns=*)
+      CLI_TURNS="${arg#--turns=}"
+      if ! [[ "$CLI_TURNS" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: --turns must be a non-negative integer, got '$CLI_TURNS'"
+        exit 1
+      fi
+      ;;
     --help|-h)
       print_usage
       exit 0
@@ -511,13 +519,9 @@ for arg in "$@"; do
       fi
       ;;
     *)
-      if [[ -z "$TURNS" && "$arg" =~ ^[0-9]+$ ]]; then
-        TURNS="$arg"
-      else
-        echo "ERROR: Unrecognized argument: $arg"
-        print_usage
-        exit 1
-      fi
+      echo "ERROR: Unrecognized argument: $arg"
+      print_usage
+      exit 1
       ;;
   esac
 done
@@ -549,6 +553,9 @@ if [[ -n "$CLI_BASE_BRANCH" ]]; then
 fi
 if [[ -n "$CLI_MAX_STUCK" ]]; then
   MAX_STUCK="$CLI_MAX_STUCK"
+fi
+if [[ -n "$CLI_TURNS" ]]; then
+  TURNS="$CLI_TURNS"
 fi
 if [[ -n "$CLI_MODE" ]]; then
   MODE="$CLI_MODE"

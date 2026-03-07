@@ -2,7 +2,7 @@
 # ralphai.sh — Ralphai (looped, autonomous)
 # Drives an AI coding agent to autonomously implement tasks from plan files.
 #
-# Usage: ralphai run [turns-per-plan] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
+# Usage: ralphai run [--turns=<n>] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--direct] [--pr] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
 #   1. If .ralphai/pipeline/in-progress/ has plan files → resume on the current ralphai/* branch
