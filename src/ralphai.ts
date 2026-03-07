@@ -996,26 +996,6 @@ async function runRalphaiSync(
 // Worktree subcommand
 // ---------------------------------------------------------------------------
 
-function isGitWorktree(cwd: string): boolean {
-  try {
-    const gitCommonDir = execSync("git rev-parse --git-common-dir", {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    const gitDir = execSync("git rev-parse --git-dir", {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    // In a worktree, --git-dir points to .git/worktrees/<name>
-    // while --git-common-dir points to the main repo's .git directory
-    return resolve(cwd, gitDir) !== resolve(cwd, gitCommonDir);
-  } catch {
-    return false;
-  }
-}
-
 interface WorktreeEntry {
   path: string;
   branch: string;
