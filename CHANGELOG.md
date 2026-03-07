@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0
+
+**Breaking** — This release includes structural changes. If upgrading from an earlier version, uninstall first:
+
+```sh
+npx ralphai uninstall && npm install -g ralphai@latest
+```
+
+### Features
+
+- **Workflow modes** — replaced direct/pr modes with branch/pr/patch for clearer intent (#56)
+- **`ralphai status`** — shows turns remaining and lists completed plan file names (#54, #58)
+- **`ralphai reset`** — new command to clear pipeline state (#44)
+- **`--turns` flag** — replaced positional turns argument with explicit `--turns=<n>` flag (#45)
+- **`turns` config key** — promote `turns` to a top-level config key with all defaults in `ralphai.json`; expand init wizard (#53)
+- **Receipt tasks tracking** — add `tasks_completed` field to receipt files and fix status task count (#49)
+
+### Fixes
+
+- Restrict batch task count regex to heading lines only to prevent false matches (#59)
+- Parallel worktree plan selection and per-plan progress files (#55)
+- Use `.ralphai` gitignore pattern to match symlinks in worktrees (#52)
+- Exclude `.ralphai` from dirty-state check and force-clean on reset (#47)
+- Replace git-tracked `.ralphai` dir with symlink in worktrees (#46)
+
+### Refactors
+
+- **JSON config** — convert config to `ralphai.json` at repo root with `autoCommit` option; gitignore `.ralphai/` dir (#48, #50)
+- **Modular config.sh** — refactor `config.sh` into focused modules with shared validation helpers (#60)
+- **Flexible plan naming** — remove `prd-` naming convention, use `plan_file` field in receipts (#64)
+- Remove fallback agent rotation feature (#62)
+
+### Docs
+
+- Thorough documentation review (#57)
+- Document unlimited turns, tested agents, and turn pacing (#51)
+- Restructure AGENTS.md with dogfooding section and learnings (#61)
+
 ## 0.3.0
 
 **Breaking** — This release includes structural changes. If upgrading from an earlier version, uninstall first:
