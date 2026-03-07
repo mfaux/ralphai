@@ -286,7 +286,7 @@ Fields:
 - `issue` — issue number
 - `issue-url` — full URL to the issue (used for repo detection and human reference)
 
-If `gh` is not available, the hooks are silently skipped. To disable automatic issue closing while keeping comments, set `issueCloseOnComplete=false` in `.ralphai/ralphai.config`.
+If `gh` is not available, the hooks are silently skipped. To disable automatic issue closing while keeping comments, set `"issueCloseOnComplete": false` in `.ralphai/ralphai.config.json`.
 
 ### Be specific about locations
 

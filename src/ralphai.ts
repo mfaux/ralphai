@@ -571,29 +571,27 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     join(ralphaiDir, "PLANNING.md"),
   );
 
-  // Generate config
-  const feedbackLine = answers.feedbackCommands
-    ? `feedbackCommands=${answers.feedbackCommands}`
-    : (() => {
-        // Use detected PM for the example comment
-        const pm = detectPackageManager(cwd);
-        if (!pm || pm.manager === "npm")
-          return `# feedbackCommands=npm run build,npm test,npm run lint`;
-        if (pm.manager === "deno")
-          return `# feedbackCommands=deno task build,deno test,deno task lint`;
-        const prefix = pm.runPrefix;
-        return `# feedbackCommands=${prefix} build,${pm.manager} test,${prefix} lint`;
-      })();
+  // Generate config (JSON format)
+  const configObj: Record<string, string | string[]> = {
+    agentCommand: answers.agentCommand,
+    baseBranch: answers.baseBranch,
+  };
 
-  const config = `# .ralphai/ralphai.config — repo-level defaults
-# Precedence: CLI flags > env vars > config file > built-in defaults
-agentCommand=${answers.agentCommand}
-baseBranch=${answers.baseBranch}
-${feedbackLine}
-${answers.issueSource === "github" ? "issueSource=github" : "# issueSource=none"}
-`;
+  if (answers.feedbackCommands) {
+    // Split comma-separated string into a JSON array
+    configObj.feedbackCommands = answers.feedbackCommands
+      .split(",")
+      .map((cmd) => cmd.trim())
+      .filter((cmd) => cmd.length > 0);
+  }
 
-  writeFileSync(join(ralphaiDir, "ralphai.config"), config);
+  if (answers.issueSource === "github") {
+    configObj.issueSource = "github";
+  }
+
+  const config = JSON.stringify(configObj, null, 2) + "\n";
+
+  writeFileSync(join(ralphaiDir, "ralphai.config.json"), config);
 
   // Create subdirectories with .gitkeep
   for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
@@ -647,7 +645,7 @@ LEARNINGS.md
   console.log();
   console.log(`${DIM}Created:${RESET}`);
   console.log(
-    `  .ralphai/ralphai.config      ${DIM}Configuration (edit to customize)${RESET}`,
+    `  .ralphai/ralphai.config.json ${DIM}Configuration (edit to customize)${RESET}`,
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
   console.log(`  .ralphai/PLANNING.md   ${DIM}How to write plans${RESET}`);
@@ -671,7 +669,7 @@ LEARNINGS.md
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
   console.log(
-    `  1. Review ${TEXT}.ralphai/ralphai.config${RESET} and adjust settings`,
+    `  1. Review ${TEXT}.ralphai/ralphai.config.json${RESET} and adjust settings`,
   );
   console.log(
     `  2. Read ${TEXT}.ralphai/PLANNING.md${RESET} for how to write plans`,

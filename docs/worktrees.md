@@ -92,8 +92,8 @@ read and write pipeline files through relative paths.
 | Kiro        | Likely           | Untested                                                    |
 | Codex       | No               | Container sandbox may not follow symlinks outside the mount |
 
-**Workaround for unsupported agents:** Set `promptMode=inline` in
-`.ralphai/ralphai.config`. This causes the runner (bash) to read pipeline files
+**Workaround for unsupported agents:** Set `"promptMode": "inline"` in
+`.ralphai/ralphai.config.json`. This causes the runner (bash) to read pipeline files
 and embed their contents directly in the prompt, bypassing the agent's need to
 access external paths. This increases prompt size but works with all agents.
 
@@ -124,5 +124,5 @@ Ralphai auto-detects worktrees — no extra flags needed. Use
 **Important:**
 
 - `ralphai init` must be run in the **main repository**, not inside a
-   worktree.
+  worktree.
 - `ralphai run` works in both the main repo and any worktree.

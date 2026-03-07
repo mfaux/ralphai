@@ -79,7 +79,7 @@ This loop keeps the agent grounded. Instead of drifting based on stale
 assumptions, it reacts to actual project state every cycle.
 
 Feedback commands are auto-detected during `ralphai init` or can be configured
-manually via `feedbackCommands` in `.ralphai/ralphai.config`. When configured, the
+manually via `feedbackCommands` in `.ralphai/ralphai.config.json`. When configured, the
 agent prompt includes the specific commands. When absent, the prompt uses a
 generic fallback: "Run your project's build, test, and lint commands."
 
@@ -95,7 +95,7 @@ in `in-progress/` for you to inspect.
 
 The threshold is configurable:
 
-- **Config file:** `maxStuck=5` in `.ralphai/ralphai.config`
+- **Config file:** `"maxStuck": 5` in `.ralphai/ralphai.config.json`
 - **Env var:** `RALPHAI_MAX_STUCK=5`
 - **CLI flag:** `--max-stuck=5`
 

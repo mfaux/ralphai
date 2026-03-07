@@ -4,7 +4,7 @@
 # and agentCommand validation.
 
 # --- Config file loader ---
-# Parses .ralphai/ralphai.config (key=value, comments, blank lines).
+# Parses .ralphai/ralphai.config.json (JSON format via jq).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
 # CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
@@ -16,157 +16,262 @@ load_config() {
     return 0
   fi
 
-  local line_num=0
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_num=$((line_num + 1))
+  # Validate JSON syntax
+  if ! jq empty "$config_path" 2>/dev/null; then
+    echo "ERROR: $config_path: invalid JSON"
+    exit 1
+  fi
 
-    # Skip blank lines and comments
-    if [[ -z "$line" || "$line" =~ ^[[:space:]]*# || "$line" =~ ^[[:space:]]*$ ]]; then
-      continue
-    fi
+  # Must be a JSON object
+  local json_type
+  json_type=$(jq -r 'type' "$config_path")
+  if [[ "$json_type" != "object" ]]; then
+    echo "ERROR: $config_path: expected a JSON object, got $json_type"
+    exit 1
+  fi
 
-    # Strip leading/trailing whitespace
-    local trimmed
-    trimmed=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  # Check for unknown keys
+  local unknown_keys
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","fallbackAgents","autoCommit"] | index($k) | not)' "$config_path")
+  if [[ -n "$unknown_keys" ]]; then
+    local first_unknown
+    first_unknown=$(echo "$unknown_keys" | head -1)
+    echo "WARNING: $config_path: ignoring unknown config key '$first_unknown'"
+  fi
 
-    # Must be key=value
-    if [[ ! "$trimmed" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]]; then
-      echo "ERROR: $config_path:$line_num: malformed line: $trimmed"
-      echo "Expected key=value format (e.g. agentCommand=claude -p)"
+  # Helper: read a string value from JSON (returns empty if key is missing or null)
+  _json_str() {
+    jq -r "if has(\"$1\") then .$1 // \"\" else \"\" end" "$config_path"
+  }
+
+  # Helper: read a raw value (preserves type info for validation)
+  _json_raw() {
+    jq -r "if has(\"$1\") then (.$1 | tostring) else \"\" end" "$config_path"
+  }
+
+  # Helper: check if key exists
+  _json_has() {
+    jq -e "has(\"$1\")" "$config_path" >/dev/null 2>&1
+  }
+
+  local value
+
+  # --- agentCommand (string, non-empty) ---
+  if _json_has "agentCommand"; then
+    value=$(_json_str "agentCommand")
+    if [[ -z "$value" ]]; then
+      echo "ERROR: $config_path: 'agentCommand' must be a non-empty string"
       exit 1
     fi
+    CONFIG_AGENT_COMMAND="$value"
+  fi
 
-    local key="${trimmed%%=*}"
-    local value="${trimmed#*=}"
+  # --- feedbackCommands (array of strings or comma-separated string) ---
+  if _json_has "feedbackCommands"; then
+    local fc_type
+    fc_type=$(jq -r '.feedbackCommands | type' "$config_path")
+    if [[ "$fc_type" == "array" ]]; then
+      # Join array elements with commas (matches internal format)
+      value=$(jq -r '.feedbackCommands | join(",")' "$config_path")
+      # Validate: no empty entries
+      if [[ -n "$value" ]]; then
+        IFS=',' read -ra fc_parts <<< "$value"
+        for fc in "${fc_parts[@]}"; do
+          local trimmed_fc
+          trimmed_fc=$(echo "$fc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [[ -z "$trimmed_fc" ]]; then
+            echo "ERROR: $config_path: 'feedbackCommands' array contains an empty entry"
+            exit 1
+          fi
+        done
+      fi
+    elif [[ "$fc_type" == "string" ]]; then
+      value=$(_json_str "feedbackCommands")
+      # Validate: no empty entries between commas
+      if [[ -n "$value" ]]; then
+        IFS=',' read -ra fc_parts <<< "$value"
+        for fc in "${fc_parts[@]}"; do
+          local trimmed_fc
+          trimmed_fc=$(echo "$fc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [[ -z "$trimmed_fc" ]]; then
+            echo "ERROR: $config_path: 'feedbackCommands' contains an empty entry in '$value'"
+            exit 1
+          fi
+        done
+      fi
+    else
+      echo "ERROR: $config_path: 'feedbackCommands' must be an array of strings or a comma-separated string, got $fc_type"
+      exit 1
+    fi
+    CONFIG_FEEDBACK_COMMANDS="$value"
+  fi
 
-    case "$key" in
-      agentCommand)
-        if [[ -z "$value" ]]; then
-          echo "ERROR: $config_path:$line_num: 'agentCommand' must be a non-empty command"
-          exit 1
-        fi
-        CONFIG_AGENT_COMMAND="$value"
-        ;;
-      feedbackCommands)
-        # Comma-separated list of shell commands; empty is valid (disables feedback commands)
-        if [[ -n "$value" ]]; then
-          # Validate: no empty entries between commas
-          IFS=',' read -ra fc_parts <<< "$value"
-          for fc in "${fc_parts[@]}"; do
-            local trimmed_fc
-            trimmed_fc=$(echo "$fc" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -z "$trimmed_fc" ]]; then
-              echo "ERROR: $config_path:$line_num: 'feedbackCommands' contains an empty entry in '$value'"
-              exit 1
-            fi
-          done
-        fi
-        CONFIG_FEEDBACK_COMMANDS="$value"
-        ;;
-      baseBranch)
-        if [[ -z "$value" ]]; then
-          echo "ERROR: $config_path:$line_num: 'baseBranch' must be a non-empty branch name"
-          exit 1
-        fi
-        if [[ "$value" =~ [[:space:]] ]]; then
-          echo "ERROR: $config_path:$line_num: 'baseBranch' must be a single token without spaces, got '$value'"
-          exit 1
-        fi
-        CONFIG_BASE_BRANCH="$value"
-        ;;
-      maxStuck)
-        if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
-          echo "ERROR: $config_path:$line_num: 'maxStuck' must be a positive integer, got '$value'"
-          exit 1
-        fi
-        CONFIG_MAX_STUCK="$value"
-        ;;
-      mode)
-        if [[ "$value" != "pr" && "$value" != "direct" ]]; then
-          echo "ERROR: $config_path:$line_num: 'mode' must be 'pr' or 'direct', got '$value'"
-          exit 1
-        fi
-        CONFIG_MODE="$value"
-        ;;
-      issueCloseOnComplete)
-        if [[ "$value" != "true" && "$value" != "false" ]]; then
-          echo "ERROR: $config_path:$line_num: 'issueCloseOnComplete' must be 'true' or 'false', got '$value'"
-          exit 1
-        fi
-        CONFIG_ISSUE_CLOSE_ON_COMPLETE="$value"
-        ;;
-      issueSource)
-        if [[ "$value" != "none" && "$value" != "github" ]]; then
-          echo "ERROR: $config_path:$line_num: 'issueSource' must be 'none' or 'github', got '$value'"
-          exit 1
-        fi
-        CONFIG_ISSUE_SOURCE="$value"
-        ;;
-      issueLabel)
-        if [[ -z "$value" ]]; then
-          echo "ERROR: $config_path:$line_num: 'issueLabel' must be a non-empty label name"
-          exit 1
-        fi
-        CONFIG_ISSUE_LABEL="$value"
-        ;;
-      issueInProgressLabel)
-        if [[ -z "$value" ]]; then
-          echo "ERROR: $config_path:$line_num: 'issueInProgressLabel' must be a non-empty label name"
-          exit 1
-        fi
-        CONFIG_ISSUE_IN_PROGRESS_LABEL="$value"
-        ;;
-      issueRepo)
-        CONFIG_ISSUE_REPO="$value"
-        ;;
-      issueCommentProgress)
-        if [[ "$value" != "true" && "$value" != "false" ]]; then
-          echo "ERROR: $config_path:$line_num: 'issueCommentProgress' must be 'true' or 'false', got '$value'"
-          exit 1
-        fi
-        CONFIG_ISSUE_COMMENT_PROGRESS="$value"
-        ;;
-      turnTimeout)
-        if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-          echo "ERROR: $config_path:$line_num: 'turnTimeout' must be a non-negative integer (seconds), got '$value'"
-          exit 1
-        fi
-        CONFIG_TURN_TIMEOUT="$value"
-        ;;
-      promptMode)
-        if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
-          echo "ERROR: $config_path:$line_num: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
-          exit 1
-        fi
-        CONFIG_PROMPT_MODE="$value"
-        ;;
-      continuous)
-        if [[ "$value" != "true" && "$value" != "false" ]]; then
-          echo "ERROR: $config_path:$line_num: 'continuous' must be 'true' or 'false', got '$value'"
-          exit 1
-        fi
-        CONFIG_CONTINUOUS="$value"
-        ;;
-      fallbackAgents)
-        # Comma-separated list of agent commands; empty is valid (disables fallback)
-        if [[ -n "$value" ]]; then
-          IFS=',' read -ra fa_parts <<< "$value"
-          for fa in "${fa_parts[@]}"; do
-            local trimmed_fa
-            trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -z "$trimmed_fa" ]]; then
-              echo "ERROR: $config_path:$line_num: 'fallbackAgents' contains an empty entry in '$value'"
-              exit 1
-            fi
-          done
-        fi
-        CONFIG_FALLBACK_AGENTS="$value"
-        ;;
-      *)
-        echo "WARNING: $config_path:$line_num: ignoring unknown config key '$key'"
-        ;;
-    esac
-  done < "$config_path"
+  # --- baseBranch (string, non-empty, no spaces) ---
+  if _json_has "baseBranch"; then
+    value=$(_json_str "baseBranch")
+    if [[ -z "$value" ]]; then
+      echo "ERROR: $config_path: 'baseBranch' must be a non-empty branch name"
+      exit 1
+    fi
+    if [[ "$value" =~ [[:space:]] ]]; then
+      echo "ERROR: $config_path: 'baseBranch' must be a single token without spaces, got '$value'"
+      exit 1
+    fi
+    CONFIG_BASE_BRANCH="$value"
+  fi
+
+  # --- maxStuck (positive integer) ---
+  if _json_has "maxStuck"; then
+    value=$(_json_raw "maxStuck")
+    if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+      echo "ERROR: $config_path: 'maxStuck' must be a positive integer, got '$value'"
+      exit 1
+    fi
+    CONFIG_MAX_STUCK="$value"
+  fi
+
+  # --- mode ("pr" or "direct") ---
+  if _json_has "mode"; then
+    value=$(_json_str "mode")
+    if [[ "$value" != "pr" && "$value" != "direct" ]]; then
+      echo "ERROR: $config_path: 'mode' must be 'pr' or 'direct', got '$value'"
+      exit 1
+    fi
+    CONFIG_MODE="$value"
+  fi
+
+  # --- issueCloseOnComplete (boolean) ---
+  if _json_has "issueCloseOnComplete"; then
+    value=$(_json_raw "issueCloseOnComplete")
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: $config_path: 'issueCloseOnComplete' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_ISSUE_CLOSE_ON_COMPLETE="$value"
+  fi
+
+  # --- issueSource ("none" or "github") ---
+  if _json_has "issueSource"; then
+    value=$(_json_str "issueSource")
+    if [[ "$value" != "none" && "$value" != "github" ]]; then
+      echo "ERROR: $config_path: 'issueSource' must be 'none' or 'github', got '$value'"
+      exit 1
+    fi
+    CONFIG_ISSUE_SOURCE="$value"
+  fi
+
+  # --- issueLabel (string, non-empty) ---
+  if _json_has "issueLabel"; then
+    value=$(_json_str "issueLabel")
+    if [[ -z "$value" ]]; then
+      echo "ERROR: $config_path: 'issueLabel' must be a non-empty label name"
+      exit 1
+    fi
+    CONFIG_ISSUE_LABEL="$value"
+  fi
+
+  # --- issueInProgressLabel (string, non-empty) ---
+  if _json_has "issueInProgressLabel"; then
+    value=$(_json_str "issueInProgressLabel")
+    if [[ -z "$value" ]]; then
+      echo "ERROR: $config_path: 'issueInProgressLabel' must be a non-empty label name"
+      exit 1
+    fi
+    CONFIG_ISSUE_IN_PROGRESS_LABEL="$value"
+  fi
+
+  # --- issueRepo (string, can be empty) ---
+  if _json_has "issueRepo"; then
+    value=$(_json_str "issueRepo")
+    CONFIG_ISSUE_REPO="$value"
+  fi
+
+  # --- issueCommentProgress (boolean) ---
+  if _json_has "issueCommentProgress"; then
+    value=$(_json_raw "issueCommentProgress")
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: $config_path: 'issueCommentProgress' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_ISSUE_COMMENT_PROGRESS="$value"
+  fi
+
+  # --- turnTimeout (non-negative integer) ---
+  if _json_has "turnTimeout"; then
+    value=$(_json_raw "turnTimeout")
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+      echo "ERROR: $config_path: 'turnTimeout' must be a non-negative integer (seconds), got '$value'"
+      exit 1
+    fi
+    CONFIG_TURN_TIMEOUT="$value"
+  fi
+
+  # --- promptMode ("auto", "at-path", or "inline") ---
+  if _json_has "promptMode"; then
+    value=$(_json_str "promptMode")
+    if [[ "$value" != "auto" && "$value" != "at-path" && "$value" != "inline" ]]; then
+      echo "ERROR: $config_path: 'promptMode' must be 'auto', 'at-path', or 'inline', got '$value'"
+      exit 1
+    fi
+    CONFIG_PROMPT_MODE="$value"
+  fi
+
+  # --- continuous (boolean) ---
+  if _json_has "continuous"; then
+    value=$(_json_raw "continuous")
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: $config_path: 'continuous' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_CONTINUOUS="$value"
+  fi
+
+  # --- fallbackAgents (array of strings or comma-separated string) ---
+  if _json_has "fallbackAgents"; then
+    local fa_type
+    fa_type=$(jq -r '.fallbackAgents | type' "$config_path")
+    if [[ "$fa_type" == "array" ]]; then
+      value=$(jq -r '.fallbackAgents | join(",")' "$config_path")
+      if [[ -n "$value" ]]; then
+        IFS=',' read -ra fa_parts <<< "$value"
+        for fa in "${fa_parts[@]}"; do
+          local trimmed_fa
+          trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [[ -z "$trimmed_fa" ]]; then
+            echo "ERROR: $config_path: 'fallbackAgents' array contains an empty entry"
+            exit 1
+          fi
+        done
+      fi
+    elif [[ "$fa_type" == "string" ]]; then
+      value=$(_json_str "fallbackAgents")
+      if [[ -n "$value" ]]; then
+        IFS=',' read -ra fa_parts <<< "$value"
+        for fa in "${fa_parts[@]}"; do
+          local trimmed_fa
+          trimmed_fa=$(echo "$fa" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [[ -z "$trimmed_fa" ]]; then
+            echo "ERROR: $config_path: 'fallbackAgents' contains an empty entry in '$value'"
+            exit 1
+          fi
+        done
+      fi
+    else
+      echo "ERROR: $config_path: 'fallbackAgents' must be an array of strings or a comma-separated string, got $fa_type"
+      exit 1
+    fi
+    CONFIG_FALLBACK_AGENTS="$value"
+  fi
+
+  # --- autoCommit (boolean) ---
+  if _json_has "autoCommit"; then
+    value=$(_json_raw "autoCommit")
+    if [[ "$value" != "true" && "$value" != "false" ]]; then
+      echo "ERROR: $config_path: 'autoCommit' must be true or false, got '$value'"
+      exit 1
+    fi
+    CONFIG_AUTO_COMMIT="$value"
+  fi
 }
 
 # --- Apply config file settings ---
@@ -216,6 +321,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_FALLBACK_AGENTS:-}" ]]; then
     FALLBACK_AGENTS="$CONFIG_FALLBACK_AGENTS"
+  fi
+  if [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
+    AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
   fi
 }
 
@@ -312,6 +420,13 @@ apply_env_overrides() {
     done
     FALLBACK_AGENTS="$RALPHAI_FALLBACK_AGENTS"
   fi
+  if [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
+    if [[ "$RALPHAI_AUTO_COMMIT" != "true" && "$RALPHAI_AUTO_COMMIT" != "false" ]]; then
+      echo "ERROR: RALPHAI_AUTO_COMMIT must be 'true' or 'false', got '$RALPHAI_AUTO_COMMIT'"
+      exit 1
+    fi
+    AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
+  fi
 }
 
 print_usage() {
@@ -337,6 +452,8 @@ print_usage() {
   echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --fallback-agents=<list>         Comma-separated fallback agent commands (tried when stuck)"
+  echo "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)"
+  echo "  --no-auto-commit                 Disable auto-commit (default; ignored in PR mode)"
   echo "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)"
   echo "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)"
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
@@ -347,15 +464,17 @@ print_usage() {
   echo "  --show-config                    Print resolved settings and exit"
   echo "  --help, -h                       Show this help message"
   echo ""
-  echo "Config file: $CONFIG_FILE (optional, key=value format)"
+  echo "Config file: $CONFIG_FILE (optional, JSON format)"
   echo "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,"
-  echo "                  mode, continuous, turnTimeout, promptMode, fallbackAgents,"
-  echo "                  issueSource, issueLabel, issueInProgressLabel, issueRepo,"
+  echo "                  mode, continuous, autoCommit, turnTimeout, promptMode,"
+  echo "                  fallbackAgents, issueSource, issueLabel,"
+  echo "                  issueInProgressLabel, issueRepo,"
   echo "                  issueCloseOnComplete, issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
   echo "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,"
+  echo "                   RALPHAI_AUTO_COMMIT,"
   echo "                   RALPHAI_TURN_TIMEOUT, RALPHAI_FALLBACK_AGENTS,"
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
@@ -458,6 +577,12 @@ for arg in "$@"; do
       ;;
     --continuous)
       CLI_CONTINUOUS="true"
+      ;;
+    --auto-commit)
+      CLI_AUTO_COMMIT="true"
+      ;;
+    --no-auto-commit)
+      CLI_AUTO_COMMIT="false"
       ;;
     --prompt-mode=*)
       CLI_PROMPT_MODE="${arg#--prompt-mode=}"
@@ -589,6 +714,9 @@ if [[ -n "$CLI_PROMPT_MODE" ]]; then
 fi
 if [[ -n "$CLI_FALLBACK_AGENTS" ]]; then
   FALLBACK_AGENTS="$CLI_FALLBACK_AGENTS"
+fi
+if [[ -n "$CLI_AUTO_COMMIT" ]]; then
+  AUTO_COMMIT="$CLI_AUTO_COMMIT"
 fi
 
 # --- Parse fallback chain into array ---
@@ -758,11 +886,26 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     fallback_agents_source="default (none)"
   fi
 
+  if [[ -n "$CLI_AUTO_COMMIT" ]]; then
+    if [[ "$CLI_AUTO_COMMIT" == "false" ]]; then
+      auto_commit_source="cli (--no-auto-commit)"
+    else
+      auto_commit_source="cli (--auto-commit)"
+    fi
+  elif [[ -n "${RALPHAI_AUTO_COMMIT:-}" ]]; then
+    auto_commit_source="env (RALPHAI_AUTO_COMMIT=$RALPHAI_AUTO_COMMIT)"
+  elif [[ -n "${CONFIG_AUTO_COMMIT:-}" ]]; then
+    auto_commit_source="config ($CONFIG_FILE)"
+  else
+    auto_commit_source="default"
+  fi
+
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
   echo "  baseBranch         = $BASE_BRANCH  ($branch_source)"
   echo "  mode               = $MODE  ($mode_source)"
   echo "  continuous         = $CONTINUOUS  ($continuous_source)"
+  echo "  autoCommit         = $AUTO_COMMIT  ($auto_commit_source)"
   echo "  maxStuck           = $MAX_STUCK  ($stuck_source)"
   if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
     echo "  turnTimeout        = ${TURN_TIMEOUT}s  ($timeout_source)"
@@ -816,9 +959,9 @@ fi
 
 # --- Validate agentCommand is set ---
 if [[ -z "$AGENT_COMMAND" ]]; then
-  echo "ERROR: agentCommand is required. Set it in .ralphai/ralphai.config, RALPHAI_AGENT_COMMAND env var, or --agent-command= flag."
-  echo "Examples: agentCommand=opencode run --agent build"
-  echo "          agentCommand=claude -p"
-  echo "          agentCommand=codex exec"
+  echo "ERROR: agentCommand is required. Set it in .ralphai/ralphai.config.json, RALPHAI_AGENT_COMMAND env var, or --agent-command= flag."
+  echo "Examples: \"agentCommand\": \"opencode run --agent build\""
+  echo "          \"agentCommand\": \"claude -p\""
+  echo "          \"agentCommand\": \"codex exec\""
   exit 1
 fi
