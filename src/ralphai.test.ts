@@ -4068,6 +4068,9 @@ build_continuous_pr_body
       expect(result.exitCode).toBe(0);
       expect(output).toContain("Completed");
       expect(output).toContain("2 plans");
+      // Completed plans list their deduplicated file names
+      expect(output).toContain("prd-auth.md");
+      expect(output).toContain("prd-search.md");
     });
   });
 });
