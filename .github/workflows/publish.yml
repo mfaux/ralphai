@@ -103,22 +103,24 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
 
-          # Get merged PRs since last tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$LATEST_TAG" ]; then
-            SINCE=""
+          # Extract the current version's section from CHANGELOG.md
+          # Matches from "## <version>" until the next "## " heading or end of file
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## / {
+              if (found) exit
+              # Match "## 0.3.0" or "## 0.3.0 — suffix"
+              split($0, a, " "); gsub(/—.*/, "", a[2])
+              if (a[2] == ver) found=1
+              next
+            }
+            found { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            echo "::warning::No CHANGELOG.md section found for version ${VERSION}, falling back to --generate-notes"
+            gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
           else
-            SINCE=$(git log -1 --format=%cI ${LATEST_TAG})
+            echo "$NOTES" | gh release create "v${VERSION}" --title "v${VERSION}" --notes-file -
           fi
-
-          if [ -z "$SINCE" ]; then
-            PRS=$(gh pr list --state merged --json number,title,author --limit 100)
-          else
-            PRS=$(gh pr list --state merged --search "merged:>=${SINCE}" --json number,title,author --limit 100)
-          fi
-
-          CHANGELOG=$(echo "$PRS" | jq -r '.[] | "- \(.title) (#\(.number))"')
-
-          gh release create "v${VERSION}" --title "v${VERSION}" --notes "${CHANGELOG:-Initial release}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
