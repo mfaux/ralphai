@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+### Docs
+
+- Streamline docs — 57% line reduction across README, how-ralphai-works, worktrees, and templates (#65)
+- Add CLI reference doc (#65)
+
 ## 0.4.0
 
 **Breaking** — This release includes structural changes. If upgrading from an earlier version, uninstall first:
