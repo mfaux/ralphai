@@ -61,6 +61,7 @@ interface WizardAnswers {
   autoCommit?: boolean;
   issueSource: "none" | "github";
   createSamplePlan?: boolean;
+  updateAgentsMd?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +578,30 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  // 9. Update AGENTS.md
+  const agentsMdPath = join(cwd, "AGENTS.md");
+  const agentsMdExists = existsSync(agentsMdPath);
+  const agentsMdHasSection =
+    agentsMdExists &&
+    /^## Ralphai\b/m.test(readFileSync(agentsMdPath, "utf-8"));
+
+  let updateAgentsMd = false;
+  if (!agentsMdHasSection) {
+    const updateAnswer = await clack.confirm({
+      message: agentsMdExists
+        ? "Add a Ralphai section to AGENTS.md? This helps coding agents discover Ralphai outside of runs."
+        : "Create AGENTS.md with a Ralphai section? This helps coding agents discover Ralphai outside of runs.",
+      initialValue: true,
+    });
+
+    if (clack.isCancel(updateAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+
+    updateAgentsMd = updateAnswer;
+  }
+
   return {
     agentCommand,
     baseBranch,
@@ -586,6 +611,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
     createSamplePlan,
+    updateAgentsMd,
   };
 }
 
@@ -808,6 +834,37 @@ Each entry should include:
 `;
   writeFileSync(join(ralphaiDir, "LEARNINGS.md"), learningsContent);
 
+  // Update or create AGENTS.md with a Ralphai section
+  const agentsMdSection = `## Ralphai
+
+This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
+Plan files go in \`.ralphai/pipeline/backlog/\`. See \`.ralphai/PLANNING.md\` for
+the plan writing guide.
+`;
+
+  let agentsMdAction: "created" | "updated" | null = null;
+  if (answers.updateAgentsMd) {
+    const agentsMdPath = join(cwd, "AGENTS.md");
+    if (existsSync(agentsMdPath)) {
+      const content = readFileSync(agentsMdPath, "utf-8");
+      if (!/^## Ralphai\b/m.test(content)) {
+        writeFileSync(
+          agentsMdPath,
+          content.trimEnd() + "\n\n" + agentsMdSection,
+        );
+        agentsMdAction = "updated";
+      }
+    } else {
+      const header = `# Agent Instructions
+
+Project-specific guidance for AI coding agents working in this codebase.
+
+`;
+      writeFileSync(agentsMdPath, header + agentsMdSection);
+      agentsMdAction = "created";
+    }
+  }
+
   // Ensure .ralphai and ralphai.json are gitignored in the project's root .gitignore.
   // Use ".ralphai" (no trailing slash) so it matches both directories and
   // symlinks — worktrees create a .ralphai symlink that ".ralphai/" won't match.
@@ -883,6 +940,11 @@ Each entry should include:
       console.log();
       console.log(`${TEXT}Warning:${RESET} ${DIM}${labelResult.error}${RESET}`);
     }
+  }
+  if (agentsMdAction) {
+    console.log(
+      `  AGENTS.md                  ${DIM}Ralphai section (${agentsMdAction})${RESET}`,
+    );
   }
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
@@ -1466,6 +1528,11 @@ async function runRalphaiInit(
 
   if (options.yes) {
     // Non-interactive mode with defaults (auto-detect feedback commands)
+    const agentsMdPath = join(cwd, "AGENTS.md");
+    const agentsMdHasSection =
+      existsSync(agentsMdPath) &&
+      /^## Ralphai\b/m.test(readFileSync(agentsMdPath, "utf-8"));
+
     answers = {
       agentCommand: options.agentCommand || "opencode run --agent build",
       baseBranch: detectBaseBranch(cwd),
@@ -1475,6 +1542,7 @@ async function runRalphaiInit(
       autoCommit: false,
       issueSource: "none",
       createSamplePlan: true,
+      updateAgentsMd: !agentsMdHasSection,
     };
 
     // Print detection summary so users can verify auto-detected values
