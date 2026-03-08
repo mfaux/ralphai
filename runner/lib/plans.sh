@@ -1,20 +1,6 @@
 # plans.sh — Plan dependency helpers and plan detection
 # Sourced by ralphai.sh — do not execute directly.
 
-# --- Per-plan agent override (optional frontmatter: agent) ---
-# Extract the agent command from a plan file's YAML frontmatter.
-# Prints the agent command string if present, nothing if absent.
-# Example frontmatter:
-#   ---
-#   agent: claude -p
-#   ---
-extract_plan_agent() {
-  local plan_file="$1"
-  [[ -f "$plan_file" ]] || return 1
-  head -1 "$plan_file" | grep -q '^---$' || return 1
-  sed -n '/^---$/,/^---$/{ /^agent:[[:space:]]/{ s/^agent:[[:space:]]*//; p; } }' "$plan_file"
-}
-
 # --- Plan dependency helpers (optional frontmatter: depends-on) ---
 # Supported forms in markdown frontmatter:
 #   depends-on: [prd-a.md, prd-b.md]

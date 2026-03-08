@@ -298,16 +298,6 @@ while true; do
     init_receipt
   fi
 
-  # --- Per-plan agent override ---
-  SAVED_AGENT_COMMAND="$AGENT_COMMAND"
-  plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
-  if [[ -n "$plan_agent" ]]; then
-    AGENT_COMMAND="$plan_agent"
-    detect_agent_type
-    resolve_prompt_mode
-    echo "Using plan-specific agent: $plan_agent"
-  fi
-
   # --- Turn loop (per-plan) ---
   stuck_count=0
   last_hash=$(git rev-parse HEAD)
@@ -454,11 +444,6 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       break
     fi
   done
-
-  # --- Restore agent command after plan completes ---
-  AGENT_COMMAND="$SAVED_AGENT_COMMAND"
-  detect_agent_type
-  resolve_prompt_mode
 
   if [[ "$completed" == false ]]; then
     echo ""
