@@ -12,13 +12,12 @@ Project-specific guidance for AI coding agents working in this codebase.
 - **Source files: max ~300 lines.** Extract modules when a file grows beyond this.
 - Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
 
-## Dogfooding Ralphai
 
-Ralphai is an autonomous task runner for AI coding agents.
+## Ralphai
 
-Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for the
-plan writing guide. Plans not ready for execution go in
-`.ralphai/pipeline/wip/`.
+This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
+Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
+the plan writing guide.
 
 ## Learnings
 
