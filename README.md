@@ -32,6 +32,21 @@ ralphai init                 # scaffold .ralphai/ and ralphai.json
 
 Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts.
 
+All ralphai files are **gitignored by default** — your workflow config is personal. Commit the `.gitignore` update so git knows to ignore them:
+
+```bash
+git add .gitignore
+git commit -m "chore: add ralphai to .gitignore"
+```
+
+To share config with your team, use `--shared` to track `ralphai.json` in git:
+
+```bash
+ralphai init --shared        # keeps ralphai.json out of .gitignore
+git add .gitignore ralphai.json
+git commit -m "chore: track shared ralphai config"
+```
+
 ## Workflow
 
 ### 1. Write plans
@@ -43,7 +58,7 @@ Create a plan in the ralphai backlog for adding dark mode support.
 Use PLANNING.md as a guide.
 ```
 
-> Plan files are **gitignored** — local-only state.
+> All ralphai files are **gitignored** — local-only state.
 
 ### 2. Run
 

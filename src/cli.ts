@@ -39,6 +39,7 @@ ${BOLD}Options:${RESET}
 ${BOLD}Init Options:${RESET}
   --yes, -y              Skip prompts and use defaults
   --force                Re-scaffold from scratch (deletes existing .ralphai/)
+  --shared               Track ralphai.json in git (for team-shared config)
   --agent-command=CMD    Set the agent command (default: opencode run --agent build)
 
 ${BOLD}Run Options:${RESET}

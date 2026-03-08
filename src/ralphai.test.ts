@@ -69,13 +69,15 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralphai", "pipeline", "out"))).toBe(true);
   });
 
-  it("init --yes adds .ralphai to root .gitignore", () => {
+  it("init --yes adds .ralphai and ralphai.json to root .gitignore", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".ralphai");
     // Should use ".ralphai" (no trailing slash) to also match symlinks in worktrees
     expect(gitignore).not.toContain(".ralphai/");
+    // ralphai.json is gitignored by default — personal config
+    expect(gitignore).toContain("ralphai.json");
   });
 
   it("init --yes creates LEARNINGS.md with seed content", () => {
@@ -164,6 +166,23 @@ describe("ralphai command", () => {
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
+    expect(output).toContain("ralphai init --shared");
+  });
+
+  it("init --shared does not gitignore ralphai.json", () => {
+    runCliOutput(["init", "--yes", "--shared"], testDir);
+
+    const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".ralphai");
+    expect(gitignore).not.toContain("ralphai.json");
+  });
+
+  it("init --shared output does not show share hint", () => {
+    const output = stripLogo(
+      runCliOutput(["init", "--yes", "--shared"], testDir),
+    );
+
+    expect(output).not.toContain("ralphai init --shared");
   });
 
   it("ralphai.sh template passes bash syntax check", () => {
