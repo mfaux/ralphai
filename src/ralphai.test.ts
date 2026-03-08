@@ -607,7 +607,7 @@ describe("ralphai command", () => {
     writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
     writeFileSync(
       join(inProgressDir, "receipt-test.txt"),
-      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nagent=claude -p\nturns_completed=3",
+      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nturns_completed=3",
     );
 
     runCliOutput(["reset", "--yes"], testDir);
@@ -3898,7 +3898,6 @@ build_continuous_pr_body
           "worktree_path=/tmp/wt-dark-mode",
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
-          "agent=claude -p",
           "turns_completed=3",
         ].join("\n"),
       );
@@ -3939,7 +3938,6 @@ build_continuous_pr_body
           "branch=ralphai/prd-search",
           "slug=prd-search",
           "plan_file=prd-search.md",
-          "agent=claude -p",
           "turns_completed=1",
         ].join("\n"),
       );
@@ -3982,7 +3980,6 @@ build_continuous_pr_body
           "worktree_path=" + worktreeDir,
           "branch=ralphai/done",
           "slug=done",
-          "agent=claude -p",
           "turns_completed=5",
         ].join("\n"),
       );
@@ -4108,7 +4105,6 @@ build_continuous_pr_body
           "worktree_path=/tmp/wt-dark-mode",
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
-          "agent=claude -p",
           "turns_completed=2",
           "tasks_completed=1",
         ].join("\n"),
@@ -4145,7 +4141,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/legacy",
           "slug=legacy",
-          "agent=claude -p",
           "turns_completed=1",
         ].join("\n"),
       );
@@ -4183,7 +4178,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/feature",
           "slug=feature",
-          "agent=claude -p",
           "turns_completed=3",
           "tasks_completed=3",
         ].join("\n"),
@@ -4217,7 +4211,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/search",
           "slug=search",
-          "agent=claude -p",
           "turns_budget=5",
           "turns_completed=2",
           "tasks_completed=1",
@@ -4251,7 +4244,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/refactor",
           "slug=refactor",
-          "agent=claude -p",
           "turns_budget=0",
           "turns_completed=4",
           "tasks_completed=0",
@@ -4284,7 +4276,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/old-plan",
           "slug=old-plan",
-          "agent=claude -p",
           "turns_completed=1",
           "tasks_completed=0",
         ].join("\n"),
@@ -4312,7 +4303,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/orphan",
           "slug=orphan",
-          "agent=claude -p",
           "turns_completed=0",
         ].join("\n"),
       );
@@ -4370,7 +4360,6 @@ build_continuous_pr_body
           "branch=ralphai/remove-fallback-agents",
           "slug=remove-fallback-agents",
           "plan_file=remove-fallback-agents.md",
-          "agent=claude -p",
           "turns_completed=2",
           "tasks_completed=2",
         ].join("\n"),
@@ -4410,7 +4399,6 @@ build_continuous_pr_body
           "branch=ralphai/gh-42-search",
           "slug=gh-42-search",
           "plan_file=gh-42-search.md",
-          "agent=claude -p",
           "turns_completed=1",
           "tasks_completed=1",
         ].join("\n"),
@@ -4447,7 +4435,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/auth",
           "slug=auth",
-          "agent=claude -p",
           "turns_completed=3",
           "tasks_completed=1",
         ].join("\n"),
