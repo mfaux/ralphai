@@ -10,32 +10,32 @@ import {
   useTempGitDir,
 } from "./test-utils.ts";
 
-describe("uninstall command", () => {
+describe("teardown command", () => {
   const ctx = useTempGitDir();
 
-  it("uninstall --yes removes .ralphai/ dir", () => {
+  it("teardown --yes removes .ralphai/ dir", () => {
     // First, set up ralphai
     runCliOutput(["init", "--yes"], ctx.dir);
     expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(true);
 
-    // Now uninstall
-    const output = stripLogo(runCliOutput(["uninstall", "--yes"], ctx.dir));
+    // Now tear down
+    const output = stripLogo(runCliOutput(["teardown", "--yes"], ctx.dir));
 
-    expect(output).toContain("Ralphai uninstalled");
+    expect(output).toContain("Ralphai torn down");
     expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(false);
   });
 
-  it("uninstall --yes prints not set up when .ralphai/ does not exist", () => {
-    const output = stripLogo(runCliOutput(["uninstall", "--yes"], ctx.dir));
+  it("teardown --yes prints not set up when .ralphai/ does not exist", () => {
+    const output = stripLogo(runCliOutput(["teardown", "--yes"], ctx.dir));
 
     expect(output).toContain("not set up");
     expect(output).toContain(".ralphai/ does not exist");
   });
 
-  it("uninstall --yes <target-dir> uninstalls from target directory", () => {
+  it("teardown --yes <target-dir> tears down from target directory", () => {
     const targetDir = join(
       tmpdir(),
-      `ralphai-uninstall-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `ralphai-teardown-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
@@ -45,12 +45,12 @@ describe("uninstall command", () => {
       runCliOutput(["init", "--yes", targetDir], ctx.dir);
       expect(existsSync(join(targetDir, ".ralphai"))).toBe(true);
 
-      // Uninstall from target
+      // Tear down from target
       const output = stripLogo(
-        runCliOutput(["uninstall", "--yes", targetDir], ctx.dir),
+        runCliOutput(["teardown", "--yes", targetDir], ctx.dir),
       );
 
-      expect(output).toContain("Ralphai uninstalled");
+      expect(output).toContain("Ralphai torn down");
       expect(existsSync(join(targetDir, ".ralphai"))).toBe(false);
     } finally {
       if (existsSync(targetDir)) {

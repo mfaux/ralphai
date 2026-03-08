@@ -27,10 +27,10 @@
 
 ## 0.4.0
 
-**Breaking** — This release includes structural changes. If upgrading from an earlier version, uninstall first:
+**Breaking** — This release includes structural changes. If upgrading from an earlier version, teardown first:
 
 ```sh
-npx ralphai uninstall && npm install -g ralphai@latest
+npx ralphai teardown && npm install -g ralphai@latest
 ```
 
 ### Features
@@ -65,10 +65,10 @@ npx ralphai uninstall && npm install -g ralphai@latest
 
 ## 0.3.0
 
-**Breaking** — This release includes structural changes. If upgrading from an earlier version, uninstall first:
+**Breaking** — This release includes structural changes. If upgrading from an earlier version, teardown first:
 
 ```sh
-npx ralphai uninstall && npm install -g ralphai@latest
+npx ralphai teardown && npm install -g ralphai@latest
 ```
 
 ### Features
@@ -152,4 +152,4 @@ Ralph takes plan files from a backlog and drives any CLI-based coding agent to i
 - **GitHub Issues integration** — optionally pulls labeled issues when the backlog is empty
 - **Plan dependencies** — `depends-on` field for ordering across a backlog
 - **Learnings loop** — two-tier system for logging and curating lessons across runs
-- **Update, sync & uninstall** — `ralphai update` self-updates the CLI; `ralphai sync` refreshes templates; `ralphai uninstall` cleans up
+- **Update, sync & teardown** — `ralphai update` self-updates the CLI; `ralphai sync` refreshes templates; `ralphai teardown` cleans up

@@ -24,7 +24,7 @@ type RalphaiSubcommand =
   | "init"
   | "update"
   | "run"
-  | "uninstall"
+  | "teardown"
   | "worktree"
   | "status"
   | "reset"
@@ -85,7 +85,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
   "run",
-  "uninstall",
+  "teardown",
   "worktree",
   "status",
   "reset",
@@ -588,10 +588,10 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Uninstall logic
+// Teardown logic
 // ---------------------------------------------------------------------------
 
-async function uninstallRalphai(
+async function teardownRalphai(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
@@ -605,7 +605,7 @@ async function uninstallRalphai(
   }
 
   if (!options.yes) {
-    clack.intro("Uninstalling Ralphai");
+    clack.intro("Tearing down Ralphai");
     const confirmed = await clack.confirm({
       message:
         "This will permanently delete .ralphai/. " +
@@ -613,7 +613,7 @@ async function uninstallRalphai(
     });
 
     if (clack.isCancel(confirmed) || !confirmed) {
-      clack.cancel("Uninstall cancelled.");
+      clack.cancel("Teardown cancelled.");
       return;
     }
   }
@@ -621,7 +621,7 @@ async function uninstallRalphai(
   // Remove .ralphai/ directory
   rmSync(ralphaiDir, { recursive: true, force: true });
 
-  console.log(`${TEXT}Ralphai uninstalled.${RESET}`);
+  console.log(`${TEXT}Ralphai torn down.${RESET}`);
   console.log();
   console.log(`${DIM}Removed:${RESET}`);
   console.log(`  .ralphai/                  ${DIM}Entire directory${RESET}`);
@@ -1130,7 +1130,7 @@ function showRalphaiHelp(): void {
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
   );
   console.log(
-    `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from your project${RESET}`,
+    `  ${TEXT}teardown${RESET}    ${DIM}Remove Ralphai from your project${RESET}`,
   );
   console.log(
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
@@ -1156,7 +1156,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "status",
     "reset",
     "update",
-    "uninstall",
+    "teardown",
     "doctor",
   ]);
   if (
@@ -1190,12 +1190,12 @@ export async function runRalphai(args: string[]): Promise<void> {
         tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
       });
       break;
-    case "uninstall":
+    case "teardown":
       if (helpRequested) {
-        showUninstallHelp();
+        showTeardownHelp();
         return;
       }
-      await uninstallRalphai(options, cwd);
+      await teardownRalphai(options, cwd);
       break;
     case "run":
       await runRalphaiRunner(options, cwd);
@@ -1721,8 +1721,8 @@ function showUpdateHelp(): void {
   );
 }
 
-function showUninstallHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai uninstall [options]`);
+function showTeardownHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai teardown [options]`);
   console.log();
   console.log(`${DIM}Remove Ralphai from your project.${RESET}`);
   console.log();

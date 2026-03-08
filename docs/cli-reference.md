@@ -14,7 +14,7 @@ ralphai <command> [options]
 | `status`       | Show pipeline and worktree status                   |
 | `reset`        | Move in-progress plans back to backlog and clean up |
 | `update [tag]` | Update ralphai to the latest (or specified) version |
-| `uninstall`    | Remove Ralphai from your project                    |
+| `teardown`     | Remove Ralphai from your project                    |
 
 ## Global Options
 
