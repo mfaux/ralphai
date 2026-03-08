@@ -28,6 +28,7 @@ type RalphaiSubcommand =
   | "worktree"
   | "status"
   | "reset"
+  | "purge"
   | "doctor";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
@@ -89,6 +90,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "worktree",
   "status",
   "reset",
+  "purge",
   "doctor",
 ]);
 
@@ -1106,6 +1108,109 @@ async function runRalphaiReset(
 }
 
 // ---------------------------------------------------------------------------
+// purge — delete all archived artifacts from pipeline/out/
+// ---------------------------------------------------------------------------
+
+async function runRalphaiPurge(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  const ralphaiRoot = resolveRalphaiDir(cwd);
+  if (!ralphaiRoot) {
+    console.error(
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  const outDir = join(ralphaiRoot, ".ralphai", "pipeline", "out");
+
+  if (!existsSync(outDir)) {
+    console.log("Nothing to purge — no out/ directory.");
+    return;
+  }
+
+  const files = readdirSync(outDir);
+  if (files.length === 0) {
+    console.log("Nothing to purge — out/ is already empty.");
+    return;
+  }
+
+  const planFiles = files.filter(
+    (f) => f.endsWith(".md") && !f.startsWith("progress-"),
+  );
+  const progressFiles = files.filter(
+    (f) => f.endsWith(".md") && f.startsWith("progress-"),
+  );
+  const receiptFiles = files.filter(
+    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  );
+
+  // Show what will be deleted
+  console.log();
+  console.log(
+    `${TEXT}The following archived artifacts will be deleted:${RESET}`,
+  );
+  console.log();
+  if (planFiles.length > 0) {
+    console.log(
+      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles.length} archived plan${planFiles.length !== 1 ? "s" : ""}${RESET}`,
+    );
+  }
+  if (progressFiles.length > 0) {
+    console.log(
+      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}${RESET}`,
+    );
+  }
+  if (receiptFiles.length > 0) {
+    console.log(
+      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}${RESET}`,
+    );
+  }
+  console.log();
+
+  // Confirm unless --yes
+  if (!options.yes) {
+    clack.intro("Ralphai Purge");
+    const confirmed = await clack.confirm({
+      message:
+        "Delete all archived artifacts from pipeline/out/? This cannot be undone.",
+    });
+
+    if (clack.isCancel(confirmed) || !confirmed) {
+      clack.cancel("Purge cancelled.");
+      return;
+    }
+  }
+
+  // Delete all files in out/
+  for (const file of files) {
+    rmSync(join(outDir, file), { force: true });
+  }
+
+  // Summary
+  console.log(`${TEXT}Purged.${RESET}`);
+  console.log();
+  console.log(`${DIM}Deleted:${RESET}`);
+  if (planFiles.length > 0) {
+    console.log(
+      `  ${planFiles.length} archived plan${planFiles.length !== 1 ? "s" : ""}`,
+    );
+  }
+  if (progressFiles.length > 0) {
+    console.log(
+      `  ${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}`,
+    );
+  }
+  if (receiptFiles.length > 0) {
+    console.log(
+      `  ${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}`,
+    );
+  }
+  console.log();
+}
+
+// ---------------------------------------------------------------------------
 
 function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
@@ -1125,6 +1230,9 @@ function showRalphaiHelp(): void {
   );
   console.log(
     `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}purge${RESET}       ${DIM}Delete archived artifacts from pipeline/out/${RESET}`,
   );
   console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
@@ -1155,6 +1263,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "init",
     "status",
     "reset",
+    "purge",
     "update",
     "teardown",
     "doctor",
@@ -1216,6 +1325,13 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       await runRalphaiReset(options, cwd);
+      break;
+    case "purge":
+      if (helpRequested) {
+        showPurgeHelp();
+        return;
+      }
+      await runRalphaiPurge(options, cwd);
       break;
     case "doctor":
       if (helpRequested) {
@@ -1697,6 +1813,19 @@ function showResetHelp(): void {
   console.log();
   console.log(
     `${DIM}Move in-progress plans back to backlog and clean up worktrees.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
+  );
+}
+
+function showPurgeHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai purge [options]`);
+  console.log();
+  console.log(
+    `${DIM}Delete all archived plans, progress files, and receipts from pipeline/out/.${RESET}`,
   );
   console.log();
   console.log(`${TEXT}Options:${RESET}`);
