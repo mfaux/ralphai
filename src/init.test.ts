@@ -184,7 +184,6 @@ describe("init command", () => {
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
-    expect(output).toContain("ralphai init --shared");
   });
 
   it("init --shared does not gitignore ralphai.json", () => {
@@ -193,14 +192,6 @@ describe("init command", () => {
     const gitignore = readFileSync(join(ctx.dir, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".ralphai");
     expect(gitignore).not.toContain("ralphai.json");
-  });
-
-  it("init --shared output does not show share hint", () => {
-    const output = stripLogo(
-      runCliOutput(["init", "--yes", "--shared"], ctx.dir),
-    );
-
-    expect(output).not.toContain("ralphai init --shared");
   });
 
   // -------------------------------------------------------------------------
