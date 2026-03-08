@@ -33,7 +33,10 @@ describe("uninstall command", () => {
   });
 
   it("uninstall --yes <target-dir> uninstalls from target directory", () => {
-    const targetDir = join(tmpdir(), `ralphai-uninstall-target-${Date.now()}`);
+    const targetDir = join(
+      tmpdir(),
+      `ralphai-uninstall-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
 

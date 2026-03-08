@@ -239,7 +239,10 @@ describe("init command", () => {
 
   it("init --yes <target-dir> scaffolds into the target directory, not cwd", () => {
     // Create a separate target directory
-    const targetDir = join(tmpdir(), `ralphai-target-${Date.now()}`);
+    const targetDir = join(
+      tmpdir(),
+      `ralphai-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
 
