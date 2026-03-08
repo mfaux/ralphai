@@ -6,13 +6,18 @@ is_tree_dirty() {
   # appear as an untracked file when the worktree is based on a commit whose
   # .gitignore only ignores ".ralphai/" (trailing-slash matches directories,
   # not symlinks).
+  # The untracked-files check (ls-files) also excludes ralphai.json because
+  # the worktree command symlinks it from the main repo when it isn't
+  # committed, and the worktree's .gitignore may not list it yet.
+  # We intentionally keep ralphai.json in the diff checks so that
+  # modifications to a *committed* ralphai.json are still caught.
   if ! git diff --quiet HEAD -- ':!.ralphai' 2>/dev/null; then
     return 0
   fi
   if ! git diff --cached --quiet -- ':!.ralphai' 2>/dev/null; then
     return 0
   fi
-  if [[ -n "$(git ls-files --others --exclude-standard -- ':!.ralphai')" ]]; then
+  if [[ -n "$(git ls-files --others --exclude-standard -- ':!.ralphai' ':!ralphai.json')" ]]; then
     return 0
   fi
   return 1

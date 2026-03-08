@@ -322,6 +322,25 @@ function detectFeedbackCommands(cwd: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Git error extraction
+// ---------------------------------------------------------------------------
+
+/** Extract a trimmed stderr string from an execSync error, if available. */
+function extractExecStderr(err: unknown): string {
+  if (
+    err &&
+    typeof err === "object" &&
+    "stderr" in err &&
+    (err as { stderr: unknown }).stderr
+  ) {
+    const raw = (err as { stderr: Buffer | string }).stderr;
+    const text = typeof raw === "string" ? raw : raw.toString("utf-8");
+    return text.trim();
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------------------
 // Base branch detection
 // ---------------------------------------------------------------------------
 
@@ -2004,6 +2023,16 @@ async function runRalphaiWorktree(
       );
     }
   } else {
+    // Clean up orphaned worktree directory: exists on disk but not tracked
+    // by git (e.g. from a prior run that was interrupted or manually removed).
+    if (existsSync(resolvedWorktreeDir)) {
+      console.log(
+        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
+      );
+      execSync("git worktree prune", { cwd, stdio: "ignore" });
+      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+    }
+
     let branchExists = false;
     try {
       execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
@@ -2021,12 +2050,14 @@ async function runRalphaiWorktree(
       try {
         execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
           cwd,
-          stdio: "inherit",
+          stdio: ["inherit", "pipe", "pipe"],
         });
-      } catch {
+      } catch (err: unknown) {
+        const stderr = extractExecStderr(err);
         console.error(
           `${TEXT}Error:${RESET} Failed to attach existing branch '${branch}' to a worktree.`,
         );
+        if (stderr) console.error(`  git: ${stderr}`);
         process.exit(1);
       }
     } else {
@@ -2035,12 +2066,12 @@ async function runRalphaiWorktree(
       try {
         execSync(
           `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-          { cwd, stdio: "inherit" },
+          { cwd, stdio: ["inherit", "pipe", "pipe"] },
         );
-      } catch {
-        console.error(
-          `${TEXT}Error:${RESET} Failed to create worktree. The branch '${branch}' may already exist.`,
-        );
+      } catch (err: unknown) {
+        const stderr = extractExecStderr(err);
+        console.error(`${TEXT}Error:${RESET} Failed to create worktree.`);
+        if (stderr) console.error(`  git: ${stderr}`);
         process.exit(1);
       }
     }

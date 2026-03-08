@@ -3788,7 +3788,15 @@ build_continuous_pr_body
       symlinkSync(symlinkTarget, join(testDir, ".ralphai"));
       expect(isDirty(testDir)).toBe(false);
 
-      // But a real change (outside .ralphai) should still be caught
+      // A ralphai.json symlink (as created in worktrees) should not trigger dirty.
+      // The symlink target lives outside the repo (in the main repo), so use tmpdir.
+      rmSync(join(testDir, "real-change.txt"), { force: true });
+      const configTarget = join(tmpdir(), "ralphai-config-real.json");
+      writeFileSync(configTarget, '{"agent":"opencode"}');
+      symlinkSync(configTarget, join(testDir, "ralphai.json"));
+      expect(isDirty(testDir)).toBe(false);
+
+      // But a real change (outside .ralphai and ralphai.json) should still be caught
       writeFileSync(join(testDir, "real-change.txt"), "dirty");
       expect(isDirty(testDir)).toBe(true);
     });
