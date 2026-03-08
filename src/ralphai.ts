@@ -58,6 +58,7 @@ interface WizardAnswers {
   autoCommit?: boolean;
   maxStuck?: number;
   issueSource: "none" | "github";
+  createSamplePlan?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -533,6 +534,17 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     );
   }
 
+  // 9. Sample plan
+  const createSamplePlan = await clack.confirm({
+    message: "Create a sample plan to try your first run?",
+    initialValue: true,
+  });
+
+  if (clack.isCancel(createSamplePlan)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
   return {
     agentCommand,
     baseBranch,
@@ -542,6 +554,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     autoCommit,
     maxStuck,
     issueSource: enableIssues ? "github" : "none",
+    createSamplePlan,
   };
 }
 
@@ -1194,6 +1207,7 @@ async function runRalphaiInit(
       autoCommit: false,
       maxStuck: 3,
       issueSource: "none",
+      createSamplePlan: true,
     };
   } else {
     // Interactive wizard
