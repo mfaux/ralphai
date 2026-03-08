@@ -356,12 +356,13 @@ function extractExecStderr(err: unknown): string {
 // Base branch detection
 // ---------------------------------------------------------------------------
 
-function detectBaseBranch(): string {
+function detectBaseBranch(cwd?: string): string {
   // 1. Remote default branch (most reliable when a remote exists)
   try {
     const ref = execSync("git symbolic-ref refs/remotes/origin/HEAD", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      ...(cwd ? { cwd } : {}),
     }).trim();
     return ref.replace("refs/remotes/origin/", "");
   } catch {
@@ -373,6 +374,7 @@ function detectBaseBranch(): string {
     try {
       execSync(`git show-ref --verify refs/heads/${candidate}`, {
         stdio: "ignore",
+        ...(cwd ? { cwd } : {}),
       });
       return candidate;
     } catch {
@@ -385,6 +387,7 @@ function detectBaseBranch(): string {
     const current = execSync("git symbolic-ref --short HEAD", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      ...(cwd ? { cwd } : {}),
     }).trim();
     if (current) return current;
   } catch {
@@ -447,7 +450,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   }
 
   // 2. Base branch
-  const detectedBranch = detectBaseBranch();
+  const detectedBranch = detectBaseBranch(cwd);
   const baseBranch = await clack.text({
     message: "Base branch for PRs:",
     initialValue: detectedBranch,
@@ -1369,7 +1372,7 @@ async function runRalphaiInit(
     // Non-interactive mode with defaults (auto-detect feedback commands)
     answers = {
       agentCommand: options.agentCommand || "opencode run --agent build",
-      baseBranch: detectBaseBranch(),
+      baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectFeedbackCommands(cwd),
       turns: 5,
       mode: "branch",
@@ -1937,7 +1940,7 @@ function checkGitRepo(cwd: string): DoctorCheckResult {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const baseBranch = detectBaseBranch();
+    const baseBranch = detectBaseBranch(cwd);
     return {
       status: "pass",
       message: `git repo detected (base branch: ${baseBranch})`,
@@ -1965,9 +1968,9 @@ function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   const configPath = join(cwd, "ralphai.json");
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    baseBranch = config.baseBranch || detectBaseBranch();
+    baseBranch = config.baseBranch || detectBaseBranch(cwd);
   } catch {
-    baseBranch = detectBaseBranch();
+    baseBranch = detectBaseBranch(cwd);
   }
 
   try {
@@ -2515,7 +2518,7 @@ async function runRalphaiWorktree(
   }
 
   // Determine base branch
-  const baseBranch = detectBaseBranch();
+  const baseBranch = detectBaseBranch(cwd);
   const branch = `ralphai/${plan.slug}`;
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
 
