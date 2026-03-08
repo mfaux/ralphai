@@ -81,7 +81,6 @@ describe("init command", () => {
     expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
-    expect(parsed.maxStuck).toBe(3);
     expect(parsed.turnTimeout).toBe(0);
   });
 
@@ -91,8 +90,8 @@ describe("init command", () => {
     const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 15 keys are present
-    expect(Object.keys(parsed)).toHaveLength(15);
+    // Verify exactly 14 keys are present
+    expect(Object.keys(parsed)).toHaveLength(14);
 
     // Core settings from wizard
     expect(parsed.agentCommand).toBe("opencode run --agent build");
@@ -103,7 +102,6 @@ describe("init command", () => {
     expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
-    expect(parsed.maxStuck).toBe(3);
 
     // Runtime defaults
     expect(parsed.turnTimeout).toBe(0);
@@ -125,11 +123,10 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(15);
+    expect(Object.keys(parsed)).toHaveLength(14);
     expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
-    expect(parsed.maxStuck).toBe(3);
   });
 
   it("init --yes warns when agent command binary is not in PATH", () => {
@@ -242,7 +239,10 @@ describe("init command", () => {
 
   it("init --yes <target-dir> scaffolds into the target directory, not cwd", () => {
     // Create a separate target directory
-    const targetDir = join(tmpdir(), `ralphai-target-${Date.now()}`);
+    const targetDir = join(
+      tmpdir(),
+      `ralphai-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
 

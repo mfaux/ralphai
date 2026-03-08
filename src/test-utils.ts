@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from "child_process";
-import { existsSync, mkdirSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "vitest";
@@ -60,8 +60,7 @@ export function useTempGitDir() {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `ralphai-test-${Date.now()}`);
-    mkdirSync(testDir, { recursive: true });
+    testDir = mkdtempSync(join(tmpdir(), "ralphai-test-"));
     // Initialize a git repo so detectBaseBranch() works
     execSync("git init", { cwd: testDir, stdio: "ignore" });
   });

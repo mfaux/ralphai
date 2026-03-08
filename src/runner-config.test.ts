@@ -225,7 +225,10 @@ ${cleanupFile}
       });
 
       it("inline mode embeds file contents with <file> wrapper", () => {
-        const tmpFile = join(tmpdir(), `ralphai-fmt-test-${Date.now()}.md`);
+        const tmpFile = join(
+          tmpdir(),
+          `ralphai-fmt-test-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
+        );
         try {
           writeFileSync(tmpFile, "# Test Plan\nDo stuff.");
           const result = formatRef({
@@ -265,7 +268,10 @@ ${cleanupFile}
       });
 
       it("resolve_prompt_mode caches explicit inline regardless of agent", () => {
-        const tmpFile = join(tmpdir(), `ralphai-fmt-inline-${Date.now()}.md`);
+        const tmpFile = join(
+          tmpdir(),
+          `ralphai-fmt-inline-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
+        );
         try {
           writeFileSync(tmpFile, "content here");
           const result = formatRef({
