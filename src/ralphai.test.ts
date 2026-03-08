@@ -161,7 +161,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain("feature branch");
+    expect(output).toContain("ralphai worktree");
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");

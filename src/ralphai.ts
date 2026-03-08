@@ -893,15 +893,19 @@ Each entry should include:
     console.log(
       `  1. A sample plan is ready in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
     );
-    console.log(`  2. Switch to a feature branch`);
-    console.log(`  3. ${TEXT}ralphai run${RESET}`);
+    console.log(`  2. ${TEXT}ralphai worktree${RESET}`);
   } else {
     console.log(
       `  1. Write a plan in ${TEXT}.ralphai/pipeline/backlog/${RESET} (see ${TEXT}PLANNING.md${RESET})`,
     );
-    console.log(`  2. Switch to a feature branch`);
-    console.log(`  3. ${TEXT}ralphai run${RESET}`);
+    console.log(`  2. ${TEXT}ralphai worktree${RESET}`);
   }
+  console.log(
+    `     ${DIM}Creates a branch, runs the plan, and opens a PR.${RESET}`,
+  );
+  console.log(
+    `     ${DIM}Or: switch to a branch manually and run ${TEXT}ralphai run${RESET}`,
+  );
   if (!opts?.shared) {
     console.log();
     console.log(
