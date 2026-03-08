@@ -6,15 +6,15 @@ ralphai <command> [options]
 
 ## Commands
 
-| Command          | Description                                         |
-| ---------------- | --------------------------------------------------- |
-| `init`           | Set up Ralphai in your project                      |
-| `run`            | Start the Ralphai task runner                       |
-| `worktree`       | Run in an isolated git worktree                     |
-| `status`         | Show pipeline and worktree status                   |
-| `reset`          | Move in-progress plans back to backlog and clean up |
-| `update [tag]`   | Update ralphai to the latest (or specified) version |
-| `uninstall`      | Remove Ralphai from your project                    |
+| Command        | Description                                         |
+| -------------- | --------------------------------------------------- |
+| `init`         | Set up Ralphai in your project                      |
+| `run`          | Start the Ralphai task runner                       |
+| `worktree`     | Run in an isolated git worktree                     |
+| `status`       | Show pipeline and worktree status                   |
+| `reset`        | Move in-progress plans back to backlog and clean up |
+| `update [tag]` | Update ralphai to the latest (or specified) version |
+| `uninstall`    | Remove Ralphai from your project                    |
 
 ## Global Options
 
@@ -55,7 +55,6 @@ ralphai <command> [options]
 --issue-label=<label>             Label to filter issues (default: ralphai)
 --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)
 --issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
---issue-close-on-complete=<bool>  Close issue on plan completion (default: true)
 --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 ```
 
@@ -84,7 +83,7 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | --------------------------------- | ---------------------- |
 | `RALPHAI_AGENT_COMMAND`           | `agentCommand`         |
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
-| `RALPHAI_BASE_BRANCH`            | `baseBranch`           |
+| `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_TURNS`                   | `turns`                |
@@ -97,5 +96,4 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
-| `RALPHAI_ISSUE_CLOSE_ON_COMPLETE` | `issueCloseOnComplete` |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
