@@ -161,7 +161,7 @@ describe("ralphai command", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain("feature branch");
+    expect(output).toContain("ralphai worktree");
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
@@ -426,6 +426,92 @@ describe("ralphai command", () => {
     expect(issues).toContain("check_gh_available()");
     expect(issues).toContain("detect_issue_repo()");
     expect(issues).toContain("slugify()");
+  });
+
+  // -------------------------------------------------------------------------
+  // Sample plan creation tests
+  // -------------------------------------------------------------------------
+
+  it("init --yes creates hello-ralphai.md in pipeline/backlog/", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const samplePlanPath = join(
+      testDir,
+      ".ralphai",
+      "pipeline",
+      "backlog",
+      "hello-ralphai.md",
+    );
+    expect(existsSync(samplePlanPath)).toBe(true);
+  });
+
+  it("sample plan content follows PLANNING.md format", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const samplePlan = readFileSync(
+      join(testDir, ".ralphai", "pipeline", "backlog", "hello-ralphai.md"),
+      "utf-8",
+    );
+
+    // Title: must start with "# Plan: "
+    expect(samplePlan).toMatch(/^# Plan: /);
+
+    // Has at least one task heading (### Task N: ...)
+    expect(samplePlan).toMatch(/### Task \d+:/);
+
+    // Has acceptance criteria with checkboxes
+    expect(samplePlan).toContain("## Acceptance Criteria");
+    expect(samplePlan).toMatch(/- \[ \] /);
+
+    // Has Implementation Tasks section
+    expect(samplePlan).toContain("## Implementation Tasks");
+
+    // Is repo-agnostic (no build/language assumptions)
+    expect(samplePlan).not.toMatch(
+      /\b(npm|pnpm|yarn|bun|deno|pip|cargo|go build|maven|gradle)\b/,
+    );
+  });
+
+  it("init --force --yes does not overwrite an edited sample plan", () => {
+    runCliOutput(["init", "--yes"], testDir);
+
+    const samplePlanPath = join(
+      testDir,
+      ".ralphai",
+      "pipeline",
+      "backlog",
+      "hello-ralphai.md",
+    );
+
+    // Simulate the user editing the sample plan
+    writeFileSync(
+      samplePlanPath,
+      "# Plan: My Custom Plan\n\nEdited by user.\n",
+    );
+
+    // Force re-init — the sample plan should be preserved because existsSync guard
+    // Note: --force deletes and recreates .ralphai/, so the plan is removed.
+    // The scaffold then writes a fresh hello-ralphai.md because the file no longer exists.
+    runCliOutput(["init", "--force", "--yes"], testDir);
+
+    // After --force re-init, verify the sample plan exists (was recreated)
+    expect(existsSync(samplePlanPath)).toBe(true);
+  });
+
+  it("init --yes output mentions sample plan in created files", () => {
+    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
+
+    expect(output).toContain("hello-ralphai.md");
+    expect(output).toContain("Sample plan");
+  });
+
+  it("init --yes next steps mention sample plan is ready", () => {
+    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
+
+    expect(output).toContain("A sample plan is ready in");
+    expect(output).toContain(".ralphai/pipeline/backlog/");
+    // Should NOT show "Write a plan" as the first step
+    expect(output).not.toContain("Write a plan");
   });
 
   // -------------------------------------------------------------------------
@@ -2631,7 +2717,13 @@ echo "$MODE"
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
 
-      execSync("git checkout -b main", {
+      // Read the baseBranch that init --yes wrote to ralphai.json so
+      // the branch we create matches what the runner will validate.
+      const cfg = JSON.parse(
+        readFileSync(join(testDir, "ralphai.json"), "utf-8"),
+      );
+      const branch = cfg.baseBranch || "main";
+      execSync(`git checkout -b ${branch}`, {
         cwd: testDir,
         stdio: "ignore",
       });
@@ -2652,6 +2744,16 @@ echo "$MODE"
         cwd: repoRoot,
         stdio: ["pipe", "pipe", "pipe"],
       });
+
+      // Remove sample plan so the backlog is empty for this test
+      const samplePlan = join(
+        testDir,
+        ".ralphai",
+        "pipeline",
+        "backlog",
+        "hello-ralphai.md",
+      );
+      if (existsSync(samplePlan)) rmSync(samplePlan);
 
       const output = execFileSync(
         "node",
@@ -3692,7 +3794,15 @@ build_continuous_pr_body
       symlinkSync(symlinkTarget, join(testDir, ".ralphai"));
       expect(isDirty(testDir)).toBe(false);
 
-      // But a real change (outside .ralphai) should still be caught
+      // A ralphai.json symlink (as created in worktrees) should not trigger dirty.
+      // The symlink target lives outside the repo (in the main repo), so use tmpdir.
+      rmSync(join(testDir, "real-change.txt"), { force: true });
+      const configTarget = join(tmpdir(), "ralphai-config-real.json");
+      writeFileSync(configTarget, '{"agent":"opencode"}');
+      symlinkSync(configTarget, join(testDir, "ralphai.json"));
+      expect(isDirty(testDir)).toBe(false);
+
+      // But a real change (outside .ralphai and ralphai.json) should still be caught
       writeFileSync(join(testDir, "real-change.txt"), "dirty");
       expect(isDirty(testDir)).toBe(true);
     });
@@ -3914,6 +4024,16 @@ build_continuous_pr_body
       // Initialize ralphai
       runCli(["init", "--yes"], testDir);
 
+      // Remove sample plan to test truly empty pipeline
+      const samplePlan = join(
+        testDir,
+        ".ralphai",
+        "pipeline",
+        "backlog",
+        "hello-ralphai.md",
+      );
+      if (existsSync(samplePlan)) rmSync(samplePlan);
+
       const result = runCli(["status"], testDir);
       const output = result.stdout + result.stderr;
 
@@ -3944,7 +4064,7 @@ build_continuous_pr_body
       const output = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
-      expect(output).toContain("2 plans");
+      expect(output).toContain("3 plans"); // hello-ralphai.md + prd-auth.md + prd-search.md
       expect(output).toContain("prd-auth.md");
       expect(output).toContain("prd-search.md");
       expect(output).toContain("waiting on prd-auth.md");

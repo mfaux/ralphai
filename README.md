@@ -51,11 +51,21 @@ git add .gitignore ralphai.json
 git commit -m "chore: track shared ralphai config"
 ```
 
+## Try It Now
+
+```bash
+ralphai init --yes           # scaffold .ralphai/ with a sample plan
+git checkout -b try-ralphai  # switch to a feature branch
+ralphai run                  # watch the agent complete the sample plan
+```
+
+`init --yes` creates a sample plan in the backlog so you can see the full loop immediately — no plan writing required.
+
 ## Workflow
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples.
+`init --yes` creates a sample plan automatically. For real work, ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples.
 
 ```
 Create a plan in the .ralphai backlog for adding dark mode support.
