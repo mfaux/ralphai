@@ -1378,6 +1378,22 @@ async function runRalphaiInit(
       issueSource: "none",
       createSamplePlan: true,
     };
+
+    // Print detection summary so users can verify auto-detected values
+    const detectedPM = detectPackageManager(cwd);
+    const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
+    console.log(`${DIM}Detected:${RESET}`);
+    console.log(
+      `  ${DIM}Agent:${RESET}     ${TEXT}${answers.agentCommand}${RESET}`,
+    );
+    console.log(
+      `  ${DIM}Branch:${RESET}    ${TEXT}${answers.baseBranch}${RESET}`,
+    );
+    console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
+    console.log(
+      `  ${DIM}Manager:${RESET}   ${TEXT}${detectedPM?.manager ?? "(none)"}${RESET}`,
+    );
+    console.log();
   } else {
     // Interactive wizard
     const wizardResult = await runWizard(cwd);

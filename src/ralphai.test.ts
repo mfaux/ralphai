@@ -179,6 +179,31 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
   });
 
+  it("init --yes prints detection summary with detected values", () => {
+    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
+    // Summary should contain the header and detected values
+    expect(output).toContain("Detected:");
+    // Default agent command
+    expect(output).toContain("opencode run --agent build");
+    // Base branch (detected from git)
+    expect(output).toMatch(/Branch:.*main|master/);
+    // Feedback should show (none) since testDir has no package.json
+    expect(output).toContain("(none)");
+    // Manager should also show (none) since no package.json
+    expect(output).toMatch(/Manager:.*\(none\)/);
+  });
+
+  it("init --yes detection summary shows custom agent command", () => {
+    const output = stripLogo(
+      runCliOutput(
+        ["init", "--yes", "--agent-command=my-agent --flag"],
+        testDir,
+      ),
+    );
+    expect(output).toContain("Detected:");
+    expect(output).toContain("my-agent --flag");
+  });
+
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
