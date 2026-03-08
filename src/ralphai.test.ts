@@ -4238,7 +4238,7 @@ build_continuous_pr_body
       expect(output).toContain("3 of 4 tasks");
     });
 
-    it("status shows turns remaining when receipt has turns_budget", () => {
+    it("status shows turn progress when receipt has turns_budget", () => {
       runCli(["init", "--yes"], testDir);
 
       const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
@@ -4250,7 +4250,7 @@ build_continuous_pr_body
         "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
       );
 
-      // Receipt with turns_budget=5, turns_completed=2 → 3 remaining
+      // Receipt with turns_budget=5, turns_completed=2
       writeFileSync(
         join(ipDir, "receipt-search.txt"),
         [
@@ -4268,7 +4268,7 @@ build_continuous_pr_body
       const output = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
-      expect(output).toContain("3 turns remaining");
+      expect(output).toContain("turn 2 of 5");
     });
 
     it("status shows unlimited turns when turns_budget is 0", () => {
@@ -4524,6 +4524,73 @@ build_continuous_pr_body
       expect(output).toContain("remove-fallback-agents.md");
       expect(output).toContain("gh-42-search.md");
       expect(output).toContain("prd-auth.md");
+    });
+
+    it("status shows outcome when receipt has outcome field", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      writeFileSync(
+        join(ipDir, "prd-stuck-plan.md"),
+        "# Stuck Plan\n\n### Task 1: A\n### Task 2: B\n",
+      );
+
+      // Receipt with outcome=stuck
+      writeFileSync(
+        join(ipDir, "receipt-stuck-plan.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/stuck-plan",
+          "slug=stuck-plan",
+          "turns_budget=5",
+          "turns_completed=5",
+          "tasks_completed=1",
+          "outcome=stuck",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("[stuck]");
+      expect(output).not.toContain("[in progress]");
+    });
+
+    it("status shows [in progress] when receipt has no outcome", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      writeFileSync(
+        join(ipDir, "prd-active.md"),
+        "# Active\n\n### Task 1: Do\n",
+      );
+
+      // Receipt without outcome field
+      writeFileSync(
+        join(ipDir, "receipt-active.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/active",
+          "slug=active",
+          "turns_budget=5",
+          "turns_completed=2",
+          "tasks_completed=0",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("[in progress]");
+      expect(output).toContain("turn 2 of 5");
     });
   });
 

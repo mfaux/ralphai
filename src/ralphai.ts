@@ -1456,6 +1456,7 @@ interface Receipt {
   turns_budget: number;
   turns_completed: number;
   tasks_completed: number;
+  outcome?: string;
 }
 
 function parseReceipt(filePath: string): Receipt | null {
@@ -1478,6 +1479,7 @@ function parseReceipt(filePath: string): Receipt | null {
     turns_budget: parseInt(fields.turns_budget ?? "0", 10),
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
     tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
+    outcome: fields.outcome,
   };
 }
 
@@ -2330,11 +2332,12 @@ function runRalphaiStatus(cwd: string): void {
       parts.push(`${completed} of ${totalTasks} tasks`);
     }
 
-    // Turns remaining
+    // Turns used / budget
     if (receipt) {
       if (receipt.turns_budget > 0) {
-        const remaining = receipt.turns_budget - receipt.turns_completed;
-        parts.push(`${remaining} turns remaining`);
+        parts.push(
+          `turn ${receipt.turns_completed} of ${receipt.turns_budget}`,
+        );
       } else if (receipt.turns_budget === 0) {
         parts.push("unlimited turns");
       }
@@ -2344,6 +2347,13 @@ function runRalphaiStatus(cwd: string): void {
     if (receipt?.source === "worktree") {
       const planSlug = plan.replace(/\.md$/, "");
       parts.push(`worktree: ${planSlug}`);
+    }
+
+    // Outcome / status tag
+    if (receipt?.outcome) {
+      parts.push(`[${receipt.outcome}]`);
+    } else {
+      parts.push("[in progress]");
     }
 
     const suffix =
