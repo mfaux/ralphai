@@ -47,6 +47,7 @@ interface RalphaiOptions {
   targetDir?: string;
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
+  unknownFlags: string[];
 }
 
 interface WizardAnswers {
@@ -99,6 +100,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let targetDir: string | undefined;
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
+  const unknownFlags: string[] = [];
 
   let collectingRunArgs = false;
 
@@ -121,6 +123,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       force = true;
     } else if (arg === "--shared") {
       shared = true;
+    } else if (arg === "--help" || arg === "-h") {
+      // Handled by runRalphai() dispatcher — skip here
+    } else if (arg === "--no-color") {
+      // Handled by utils.ts at module load — skip here
     } else if (arg.startsWith("--agent-command=")) {
       agentCommand = arg.slice("--agent-command=".length);
     } else if (!arg.startsWith("-")) {
@@ -141,6 +147,9 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       } else {
         targetDir = arg;
       }
+    } else {
+      // Flag not recognized — track it
+      unknownFlags.push(arg);
     }
   }
 
@@ -153,6 +162,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     targetDir,
     runArgs,
     worktreeOptions,
+    unknownFlags,
   };
 }
 
@@ -1150,18 +1160,52 @@ function showRalphaiHelp(): void {
 export async function runRalphai(args: string[]): Promise<void> {
   const options = parseRalphaiOptions(args);
   const cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
+  const helpRequested = args.includes("--help") || args.includes("-h");
+
+  // Subcommands that reject unknown flags (run/worktree pass through to bash)
+  const STRICT_SUBCOMMANDS = new Set([
+    "init",
+    "status",
+    "reset",
+    "update",
+    "uninstall",
+  ]);
+  if (
+    options.subcommand &&
+    STRICT_SUBCOMMANDS.has(options.subcommand) &&
+    !helpRequested &&
+    options.unknownFlags.length > 0
+  ) {
+    console.error(`Unknown flag: ${options.unknownFlags[0]}`);
+    console.error(
+      `${DIM}Run ${TEXT}ralphai ${options.subcommand} --help${RESET}${DIM} for usage.${RESET}`,
+    );
+    process.exit(1);
+  }
 
   switch (options.subcommand) {
     case "init":
+      if (helpRequested) {
+        showInitHelp();
+        return;
+      }
       await runRalphaiInit(options, cwd);
       break;
     case "update":
+      if (helpRequested) {
+        showUpdateHelp();
+        return;
+      }
       runSelfUpdate({
         packageName: "ralphai",
         tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
       });
       break;
     case "uninstall":
+      if (helpRequested) {
+        showUninstallHelp();
+        return;
+      }
       await uninstallRalphai(options, cwd);
       break;
     case "run":
@@ -1171,9 +1215,17 @@ export async function runRalphai(args: string[]): Promise<void> {
       await runRalphaiWorktree(options, cwd);
       break;
     case "status":
+      if (helpRequested) {
+        showStatusHelp();
+        return;
+      }
       runRalphaiStatus(cwd);
       break;
     case "reset":
+      if (helpRequested) {
+        showResetHelp();
+        return;
+      }
       await runRalphaiReset(options, cwd);
       break;
     default:
@@ -1565,6 +1617,70 @@ function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
 
   return parseWorktreeList(output).filter((wt) =>
     wt.branch.startsWith("ralphai/"),
+  );
+}
+
+function showInitHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai init [options] [directory]`);
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}              ${DIM}Skip prompts and use defaults${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--force${RESET}                ${DIM}Re-scaffold from scratch (deletes existing .ralphai/)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--shared${RESET}               ${DIM}Track ralphai.json in git (for team-shared config)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--agent-command=${RESET}<cmd>   ${DIM}Set the agent command (default: opencode run --agent build)${RESET}`,
+  );
+}
+
+function showStatusHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai status`);
+  console.log();
+  console.log(`${DIM}Show pipeline and worktree status.${RESET}`);
+}
+
+function showResetHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai reset [options]`);
+  console.log();
+  console.log(
+    `${DIM}Move in-progress plans back to backlog and clean up worktrees.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
+  );
+}
+
+function showUpdateHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai update [tag]`);
+  console.log();
+  console.log(
+    `${DIM}Update ralphai to the latest (or specified) version.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Examples:${RESET}`);
+  console.log(
+    `  ${DIM}$${RESET} ralphai update          ${DIM}# update to latest${RESET}`,
+  );
+  console.log(
+    `  ${DIM}$${RESET} ralphai update beta     ${DIM}# install beta version${RESET}`,
+  );
+}
+
+function showUninstallHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai uninstall [options]`);
+  console.log();
+  console.log(`${DIM}Remove Ralphai from your project.${RESET}`);
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
   );
 }
 

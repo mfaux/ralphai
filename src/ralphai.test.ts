@@ -3051,6 +3051,122 @@ echo "$MODE"
   });
 
   // -------------------------------------------------------------------------
+  // Subcommand --help
+  // -------------------------------------------------------------------------
+
+  it("init --help shows init-specific flags", () => {
+    const result = runCli(["init", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("init");
+    expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("--force");
+    expect(result.stdout).toContain("--shared");
+    expect(result.stdout).toContain("--agent-command");
+  });
+
+  it("status --help shows status usage", () => {
+    const result = runCli(["status", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("status");
+  });
+
+  it("reset --help shows reset usage and flags", () => {
+    const result = runCli(["reset", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("reset");
+    expect(result.stdout).toContain("--yes");
+  });
+
+  it("update --help shows update usage", () => {
+    const result = runCli(["update", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("update");
+  });
+
+  it("uninstall --help shows uninstall usage and flags", () => {
+    const result = runCli(["uninstall", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("uninstall");
+    expect(result.stdout).toContain("--yes");
+  });
+
+  // -------------------------------------------------------------------------
+  // Top-level help surfaces run flags
+  // -------------------------------------------------------------------------
+
+  it("--help shows common run flags", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--turns");
+    expect(result.stdout).toContain("--dry-run");
+    expect(result.stdout).toContain("--pr");
+    expect(result.stdout).toContain("--resume");
+    expect(result.stdout).toContain("--continuous");
+  });
+
+  // -------------------------------------------------------------------------
+  // Unknown flag rejection
+  // -------------------------------------------------------------------------
+
+  it("init --invalid-flag exits with error", () => {
+    const result = runCli(["init", "--invalid-flag"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+    expect(result.stderr).toContain("--invalid-flag");
+  });
+
+  it("status --bad-opt exits with error", () => {
+    const result = runCli(["status", "--bad-opt"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  it("reset --nope exits with error", () => {
+    const result = runCli(["reset", "--nope"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  it("uninstall --wrong exits with error", () => {
+    const result = runCli(["uninstall", "--wrong"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  // -------------------------------------------------------------------------
+  // NO_COLOR support
+  // -------------------------------------------------------------------------
+
+  it("NO_COLOR=1 disables ANSI escape codes", () => {
+    const cliPath = join(__dirname, "cli.ts");
+    const raw = execFileSync(
+      "node",
+      ["--experimental-strip-types", cliPath, "init", "--help"],
+      {
+        encoding: "utf-8",
+        env: { ...process.env, NO_COLOR: "1" },
+      },
+    );
+    // Should contain no ANSI escape sequences
+    expect(raw).not.toMatch(/\x1b\[/);
+    // But should still contain the help text
+    expect(raw).toContain("init");
+  });
+
+  it("--no-color disables ANSI escape codes", () => {
+    const cliPath = join(__dirname, "cli.ts");
+    const raw = execFileSync(
+      "node",
+      ["--experimental-strip-types", cliPath, "--no-color", "init", "--help"],
+      {
+        encoding: "utf-8",
+      },
+    );
+    expect(raw).not.toMatch(/\x1b\[/);
+    expect(raw).toContain("init");
+  });
+
+  // -------------------------------------------------------------------------
   // Per-plan agent override: extract_plan_agent
   // -------------------------------------------------------------------------
 

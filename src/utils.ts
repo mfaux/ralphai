@@ -1,10 +1,12 @@
 // ANSI color constants used by ralphai output
-export const RESET = "\x1b[0m";
-export const BOLD = "\x1b[1m";
+// Respect NO_COLOR (https://no-color.org/) and --no-color flag
+const useColor = !process.env.NO_COLOR && !process.argv.includes("--no-color");
+export const RESET = useColor ? "\x1b[0m" : "";
+export const BOLD = useColor ? "\x1b[1m" : "";
 /** Darker gray for secondary text (256-color). */
-export const DIM = "\x1b[38;5;102m";
+export const DIM = useColor ? "\x1b[38;5;102m" : "";
 /** Lighter gray for primary text (256-color). */
-export const TEXT = "\x1b[38;5;145m";
+export const TEXT = useColor ? "\x1b[38;5;145m" : "";
 
 /**
  * Compare two semver version strings (major.minor.patch).
