@@ -962,12 +962,6 @@ Project-specific guidance for AI coding agents working in this codebase.
   console.log(`       ${TEXT}$ ralphai worktree${RESET}`);
   console.log(`     ${DIM}Or: switch to a branch and run directly:${RESET}`);
   console.log(`       ${TEXT}$ ralphai run${RESET}`);
-  if (!opts?.shared) {
-    console.log();
-    console.log(
-      `${DIM}To share config with your team: ${TEXT}ralphai init --shared${RESET}`,
-    );
-  }
   if (answers.issueSource === "github") {
     console.log();
     console.log(
