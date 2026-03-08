@@ -4686,10 +4686,7 @@ build_continuous_pr_body
     });
 
     it("doctor in fully initialized directory reports all checks passing", () => {
-      // Initialize ralphai
-      runCli(["init", "--yes"], testDir);
-
-      // Create an initial commit on main so base branch check passes
+      // Create an initial commit on main so detectBaseBranch and base branch check work
       execSync(
         "git config user.email 'test@test.com' && git config user.name 'Test'",
         { cwd: testDir, stdio: "ignore" },
@@ -4698,7 +4695,17 @@ build_continuous_pr_body
         cwd: testDir,
         stdio: "ignore",
       });
+      writeFileSync(join(testDir, "seed.txt"), "seed");
       execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+      runCli(["init", "--yes"], testDir);
+
+      // Commit ralphai files so working tree is clean
+      execSync("git add -A && git commit -m 'add ralphai'", {
         cwd: testDir,
         stdio: "ignore",
       });
@@ -4757,10 +4764,7 @@ build_continuous_pr_body
     });
 
     it("doctor exit code is 0 when only warnings (no failures)", () => {
-      // Initialize ralphai
-      runCli(["init", "--yes"], testDir);
-
-      // Create an initial commit on main so base branch check passes
+      // Create an initial commit on main so detectBaseBranch and base branch check work
       execSync(
         "git config user.email 'test@test.com' && git config user.name 'Test'",
         { cwd: testDir, stdio: "ignore" },
@@ -4769,7 +4773,17 @@ build_continuous_pr_body
         cwd: testDir,
         stdio: "ignore",
       });
+      writeFileSync(join(testDir, "seed.txt"), "seed");
       execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+      runCli(["init", "--yes"], testDir);
+
+      // Commit ralphai files so we have a clean base
+      execSync("git add -A && git commit -m 'add ralphai'", {
         cwd: testDir,
         stdio: "ignore",
       });
