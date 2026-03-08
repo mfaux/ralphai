@@ -1978,6 +1978,20 @@ async function runRalphaiWorktree(
     process.exit(1);
   }
 
+  // Guard: repo must have at least one commit (git worktree requires a valid ref)
+  try {
+    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
+  } catch {
+    console.error(
+      `This repository has no commits yet. Git worktrees require at least one commit.`,
+    );
+    console.error(
+      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
+    );
+    console.error(`\nThen re-run ${TEXT}ralphai worktree${RESET}.`);
+    process.exit(1);
+  }
+
   // Select plan (in-progress first, then backlog)
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const plan = selectPlanForWorktree(
