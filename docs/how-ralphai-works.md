@@ -180,6 +180,54 @@ continuous-mode sessions overlap.
 Use `depends-on` frontmatter to control execution order. Without it, plans
 run in filesystem order (typically alphabetical).
 
+## Receipt Files
+
+When a run starts, Ralphai creates a **receipt file** in
+`pipeline/in-progress/` that tracks run metadata. The receipt is updated
+after each turn and used by `ralphai status` to show progress and
+diagnostics.
+
+Receipt files are plain text, one `key=value` per line:
+
+```
+started_at=2026-03-08T14:22:00Z
+source=main
+branch=ralphai/dark-mode
+slug=dark-mode
+plan_file=dark-mode.md
+turns_budget=5
+turns_completed=3
+tasks_completed=2
+```
+
+### Field Reference
+
+| Field             | Example                           | Meaning                                                          |
+| ----------------- | --------------------------------- | ---------------------------------------------------------------- |
+| `started_at`      | `2026-03-08T14:22:00Z`            | ISO 8601 UTC timestamp of when the run started                   |
+| `source`          | `main` / `worktree`               | Whether the run started in the main repo or a worktree           |
+| `worktree_path`   | `/home/user/wt/dark-mode`         | Absolute path to worktree (only present when `source=worktree`)  |
+| `branch`          | `ralphai/dark-mode`               | Git branch the run is on                                         |
+| `slug`            | `dark-mode`                       | Plan slug (filename minus `.md`)                                 |
+| `plan_file`       | `dark-mode.md`                    | Source plan filename                                             |
+| `turns_budget`    | `5`                               | Max turns configured for the run (0 = unlimited)                 |
+| `turns_completed` | `3`                               | Number of agent turns executed so far                            |
+| `tasks_completed` | `2`                               | Number of plan tasks marked complete (parsed from progress file) |
+| `outcome`         | `completed` / `stuck` / `timeout` | How the run ended (absent while still running)                   |
+
+### When to Check Receipts
+
+- **Run stopped unexpectedly** — check `turns_completed` vs `turns_budget`
+  to see if the turn budget was exhausted, and `outcome` for the reason.
+- **Cross-source conflict** — if `ralphai run` refuses to start because a
+  plan is running in a worktree (or vice versa), the receipt shows where
+  the run originated (`source`, `worktree_path`, `branch`).
+- **Status diagnostics** — `ralphai status` reads receipt files
+  automatically. If you need more detail, inspect the receipt directly at
+  `.ralphai/pipeline/in-progress/receipt-<slug>.txt`.
+
+After a plan is archived to `out/`, the receipt moves with it.
+
 ## Learnings System
 
 Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs
