@@ -36,8 +36,9 @@ a worktree. All runner options are forwarded automatically.
 2. Symlinks the worktree's `.ralphai/` to the main repo's `.ralphai/`
    so the agent can access pipeline files through relative paths
    (bypassing agent directory sandboxing).
-3. Spawns the runner in the worktree directory.
-4. Config (`ralphai.json`) is tracked by git and checked out automatically.
+3. Symlinks `ralphai.json` into the worktree when the config is not
+   committed, so configuration works regardless of git tracking.
+4. Spawns the runner in the worktree directory.
 
 ## Agent compatibility
 

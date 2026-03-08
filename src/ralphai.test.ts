@@ -1154,8 +1154,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain(
           `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
         );
-        // Config is at repo root and checked out by git, so stays relative
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
+        // Config falls back to main repo's absolute path (manual worktree without symlink)
+        expect(result).toContain(`CONFIG_FILE=${mainRepo}/ralphai.json`);
         expect(result).toContain(
           `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
         );

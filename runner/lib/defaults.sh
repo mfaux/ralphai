@@ -63,16 +63,16 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     # relative paths like .ralphai/pipeline/in-progress/ work correctly
     # AND stay within the agent's working directory (avoids "external
     # directory" rejection in sandboxed agents like OpenCode/Claude Code).
-    # Config (ralphai.json) is at repo root and checked out by git, so
-    # the default CONFIG_FILE="ralphai.json" already works.
+    # Config (ralphai.json) is resolved via symlink or checked-out copy,
+    # so the default CONFIG_FILE="ralphai.json" already works.
     :
   else
     # No symlink — use absolute paths to the main repo's pipeline dirs
-    # (for manually-created worktrees without the symlink).
-    # Config is at repo root and checked out by git, so it's already local.
+    # and config file (for manually-created worktrees without the symlink).
     WIP_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/in-progress"
     BACKLOG_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/backlog"
     ARCHIVE_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/out"
+    CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/ralphai.json"
     PROGRESS_FILE="$WIP_DIR/progress.md"
   fi
 fi
