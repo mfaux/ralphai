@@ -1846,21 +1846,6 @@ async function runRalphaiWorktree(
     process.exit(1);
   }
 
-  // Warn if ralphai.json exists but isn't committed (worktrees won't have it)
-  if (existsSync(join(cwd, "ralphai.json"))) {
-    try {
-      execSync("git ls-files --error-unmatch ralphai.json", {
-        cwd,
-        stdio: "ignore",
-      });
-    } catch {
-      console.log(
-        `${TEXT}Warning:${RESET} ${DIM}ralphai.json is not committed. Worktrees are fresh checkouts and won't have your config — commit it first.${RESET}`,
-      );
-      console.log();
-    }
-  }
-
   // Select plan (in-progress first, then backlog)
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const plan = selectPlanForWorktree(

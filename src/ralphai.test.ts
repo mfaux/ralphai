@@ -3328,23 +3328,6 @@ build_continuous_pr_body
       expect(result.stderr).toContain("No plans in backlog");
     });
 
-    it("worktree warns when ralphai.json is not committed", () => {
-      gitInitialCommit(testDir);
-      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      // Create an uncommitted ralphai.json
-      writeFileSync(
-        join(testDir, "ralphai.json"),
-        JSON.stringify({ agentCommand: "claude -p" }),
-      );
-
-      const result = runCli(["worktree"], testDir);
-      // It will still fail (no plans), but should warn first
-      const combined = result.stdout + result.stderr;
-      expect(combined).toContain("ralphai.json is not committed");
-    });
-
     it("worktree --plan=nonexistent.md errors", () => {
       gitInitialCommit(testDir);
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
