@@ -3515,6 +3515,104 @@ build_continuous_pr_body
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
     });
 
+    it("worktree creates ralphai.json symlink when config is not committed", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(
+          testDir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-config-symlink.md",
+        ),
+        "# Config symlink test\n",
+      );
+
+      // Create ralphai.json in main repo (not committed)
+      writeFileSync(
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ runner: "opencode" }),
+      );
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(testDir, "wt-config-symlink");
+
+      const result = runCli(
+        ["worktree", "--plan=prd-config-symlink.md", `--dir=${worktreeDir}`],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      const combined = result.stdout + result.stderr;
+
+      // Verify the ralphai.json symlink was created
+      const configSymlink = join(worktreeDir, "ralphai.json");
+      expect(
+        existsSync(configSymlink),
+        `ralphai.json symlink not found at ${configSymlink}. CLI output: ${combined}`,
+      ).toBe(true);
+      expect(lstatSync(configSymlink).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(configSymlink)).toBe(join(testDir, "ralphai.json"));
+    });
+
+    it("worktree skips ralphai.json symlink when config is committed", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(
+          testDir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-committed-cfg.md",
+        ),
+        "# Committed config test\n",
+      );
+
+      // Create and commit ralphai.json
+      writeFileSync(
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ runner: "opencode" }),
+      );
+      execSync("git add ralphai.json && git commit -m 'add config'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(testDir, "wt-committed-cfg");
+
+      runCli(
+        ["worktree", "--plan=prd-committed-cfg.md", `--dir=${worktreeDir}`],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      // ralphai.json should exist (checked out by git) but NOT be a symlink
+      const configPath = join(worktreeDir, "ralphai.json");
+      expect(existsSync(configPath)).toBe(true);
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(false);
+    });
+
     it("worktree replaces existing .ralphai dir with symlink", () => {
       gitInitialCommit(testDir);
 

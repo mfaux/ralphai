@@ -1974,6 +1974,17 @@ async function runRalphaiWorktree(
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 
+  // Symlink ralphai.json from worktree → main repo so config is available
+  // even when ralphai.json is not committed (gitignored / untracked).
+  // If committed, `git worktree add` already checked it out — skip.
+  const worktreeConfigLink = join(resolvedWorktreeDir, "ralphai.json");
+  if (
+    !existsSync(worktreeConfigLink) &&
+    existsSync(join(cwd, "ralphai.json"))
+  ) {
+    symlinkSync(join(cwd, "ralphai.json"), worktreeConfigLink);
+  }
+
   // Spawn ralphai runner in the worktree
   console.log("Running ralphai in worktree...");
   const shouldResume =
