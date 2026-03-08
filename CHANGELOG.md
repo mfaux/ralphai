@@ -7,6 +7,25 @@
 - **Gitignore `ralphai.json` by default** — each developer's workflow config is personal. Teams that want shared config can use `ralphai init --shared` to keep `ralphai.json` tracked. Init now adds `ralphai.json` to `.gitignore` alongside `.ralphai/`.
 - **Symlink `ralphai.json` into worktrees** — `ralphai worktree` symlinks `ralphai.json` from the main repo into the worktree, so config is available without committing it. This extends the existing `.ralphai/` symlink pattern. (#67)
 - **Runner config fallback for manual worktrees** — the runner resolves `ralphai.json` from the main repo when running in a manually-created worktree without the symlink.
+- **`ralphai purge`** — deletes all archived pipeline artifacts in `pipeline/out/`. Supports `--yes`/`-y` to skip confirmation, consistent with reset and teardown. (#75)
+- **`ralphai doctor`** — validates your setup in one shot with 9 diagnostic checks: `.ralphai/` exists, `ralphai.json` valid, git repo detected, working tree clean, base branch exists, agent command in PATH, feedback commands run, backlog has plans, and no orphaned receipts. (#71)
+- **Sample plan in init wizard** — `ralphai init` now offers to create a `hello-ralphai.md` sample plan in the backlog, reducing friction for first-time users. Included by default with `--yes`. (#70)
+- **Deterministic plan selection** — replaced LLM-based plan selection with oldest-first ordering, eliminating token cost and non-deterministic behavior. (#71)
+
+### Fixes
+
+- Remove duplicate completion comment on linked GitHub issues and unlabel `ralphai:in-progress` on task completion (#68)
+- Auto-clean orphaned worktree directories and improve error messages (#70)
+- Eliminate temp dir collisions causing flaky CI failures by using `mkdtempSync` (#73)
+
+### Refactors
+
+- Rename `uninstall` command to `teardown` — clearer inverse of `init` without implying global uninstall (#74)
+- Remove `issueCloseOnComplete` config — dead code path removed from shell config, CLI args, TypeScript scaffold, and docs (#68)
+- Remove `maxStuck` from init wizard — still configurable via `ralphai.json`, `--max-stuck` flag, or `RALPHAI_MAX_STUCK` env var (#73)
+- Remove per-plan agent override feature — speculative and undocumented (#71)
+- Split monolithic test file into 8 focused test files (#72)
+- Polish CLI help text and flag handling (#71)
 
 ### Removed
 
