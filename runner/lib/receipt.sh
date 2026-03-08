@@ -17,7 +17,6 @@
 #   branch           — git branch name
 #   slug             — plan slug (derived from filename: basename minus .md)
 #   plan_file        — exact plan filename (basename, e.g. "dark-mode.md")
-#   agent            — agent command string
 #   turns_budget     — total turn budget for the run (resolved $TURNS; 0 = unlimited)
 #   turns_completed  — number of agent turns completed
 #   tasks_completed  — number of plan tasks completed (parsed from progress.md)
@@ -63,7 +62,6 @@ init_receipt() {
     echo "branch=$branch"
     echo "slug=$PLAN_SLUG"
     echo "plan_file=$PLAN_BASENAME"
-    echo "agent=$AGENT_COMMAND"
     echo "turns_budget=${TURNS:-5}"
     echo "turns_completed=0"
     echo "tasks_completed=0"

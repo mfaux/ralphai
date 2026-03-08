@@ -97,3 +97,18 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
+
+### Prompt Modes
+
+The `promptMode` setting controls how file references are formatted in the
+prompt sent to the agent. Set it via `--prompt-mode`, `RALPHAI_PROMPT_MODE`, or
+`promptMode` in `ralphai.json`.
+
+| Value         | Behavior                                                                                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`auto`**    | (Default) Resolves to a concrete mode based on the detected agent type. Currently all agents map to `at-path`.                                                              |
+| **`at-path`** | References files as `@filepath`. Lightweight and low-token — works when the agent can resolve file paths natively (e.g. Claude Code, OpenCode).                             |
+| **`inline`**  | Embeds file contents directly as `<file path="...">contents</file>` XML blocks. Uses more tokens but works with any agent. Falls back to `@path` if the file doesn't exist. |
+
+**When to change:** If your agent doesn't support `@path` file references, set
+`promptMode` to `"inline"`. Otherwise, leave it at `"auto"`.

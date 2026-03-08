@@ -27,7 +27,8 @@ type RalphaiSubcommand =
   | "uninstall"
   | "worktree"
   | "status"
-  | "reset";
+  | "reset"
+  | "doctor";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -47,6 +48,7 @@ interface RalphaiOptions {
   targetDir?: string;
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
+  unknownFlags: string[];
 }
 
 interface WizardAnswers {
@@ -88,6 +90,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "worktree",
   "status",
   "reset",
+  "doctor",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -99,6 +102,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let targetDir: string | undefined;
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
+  const unknownFlags: string[] = [];
 
   let collectingRunArgs = false;
 
@@ -121,6 +125,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       force = true;
     } else if (arg === "--shared") {
       shared = true;
+    } else if (arg === "--help" || arg === "-h") {
+      // Handled by runRalphai() dispatcher — skip here
+    } else if (arg === "--no-color") {
+      // Handled by utils.ts at module load — skip here
     } else if (arg.startsWith("--agent-command=")) {
       agentCommand = arg.slice("--agent-command=".length);
     } else if (!arg.startsWith("-")) {
@@ -141,6 +149,9 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       } else {
         targetDir = arg;
       }
+    } else {
+      // Flag not recognized — track it
+      unknownFlags.push(arg);
     }
   }
 
@@ -153,6 +164,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     targetDir,
     runArgs,
     worktreeOptions,
+    unknownFlags,
   };
 }
 
@@ -344,12 +356,13 @@ function extractExecStderr(err: unknown): string {
 // Base branch detection
 // ---------------------------------------------------------------------------
 
-function detectBaseBranch(): string {
+function detectBaseBranch(cwd?: string): string {
   // 1. Remote default branch (most reliable when a remote exists)
   try {
     const ref = execSync("git symbolic-ref refs/remotes/origin/HEAD", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      ...(cwd ? { cwd } : {}),
     }).trim();
     return ref.replace("refs/remotes/origin/", "");
   } catch {
@@ -361,6 +374,7 @@ function detectBaseBranch(): string {
     try {
       execSync(`git show-ref --verify refs/heads/${candidate}`, {
         stdio: "ignore",
+        ...(cwd ? { cwd } : {}),
       });
       return candidate;
     } catch {
@@ -373,6 +387,7 @@ function detectBaseBranch(): string {
     const current = execSync("git symbolic-ref --short HEAD", {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      ...(cwd ? { cwd } : {}),
     }).trim();
     if (current) return current;
   } catch {
@@ -435,7 +450,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   }
 
   // 2. Base branch
-  const detectedBranch = detectBaseBranch();
+  const detectedBranch = detectBaseBranch(cwd);
   const baseBranch = await clack.text({
     message: "Base branch for PRs:",
     initialValue: detectedBranch,
@@ -1137,6 +1152,9 @@ function showRalphaiHelp(): void {
   console.log(
     `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from your project${RESET}`,
   );
+  console.log(
+    `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
+  );
   console.log();
   console.log(
     `${DIM}Run 'ralphai <command> --help' for command-specific options.${RESET}`,
@@ -1150,18 +1168,53 @@ function showRalphaiHelp(): void {
 export async function runRalphai(args: string[]): Promise<void> {
   const options = parseRalphaiOptions(args);
   const cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
+  const helpRequested = args.includes("--help") || args.includes("-h");
+
+  // Subcommands that reject unknown flags (run/worktree pass through to bash)
+  const STRICT_SUBCOMMANDS = new Set([
+    "init",
+    "status",
+    "reset",
+    "update",
+    "uninstall",
+    "doctor",
+  ]);
+  if (
+    options.subcommand &&
+    STRICT_SUBCOMMANDS.has(options.subcommand) &&
+    !helpRequested &&
+    options.unknownFlags.length > 0
+  ) {
+    console.error(`Unknown flag: ${options.unknownFlags[0]}`);
+    console.error(
+      `${DIM}Run ${TEXT}ralphai ${options.subcommand} --help${RESET}${DIM} for usage.${RESET}`,
+    );
+    process.exit(1);
+  }
 
   switch (options.subcommand) {
     case "init":
+      if (helpRequested) {
+        showInitHelp();
+        return;
+      }
       await runRalphaiInit(options, cwd);
       break;
     case "update":
+      if (helpRequested) {
+        showUpdateHelp();
+        return;
+      }
       runSelfUpdate({
         packageName: "ralphai",
         tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
       });
       break;
     case "uninstall":
+      if (helpRequested) {
+        showUninstallHelp();
+        return;
+      }
       await uninstallRalphai(options, cwd);
       break;
     case "run":
@@ -1171,10 +1224,25 @@ export async function runRalphai(args: string[]): Promise<void> {
       await runRalphaiWorktree(options, cwd);
       break;
     case "status":
+      if (helpRequested) {
+        showStatusHelp();
+        return;
+      }
       runRalphaiStatus(cwd);
       break;
     case "reset":
+      if (helpRequested) {
+        showResetHelp();
+        return;
+      }
       await runRalphaiReset(options, cwd);
+      break;
+    case "doctor":
+      if (helpRequested) {
+        showDoctorHelp();
+        return;
+      }
+      runRalphaiDoctor(cwd);
       break;
     default:
       showRalphaiHelp();
@@ -1240,6 +1308,21 @@ function resolveRalphaiDir(cwd: string): string | null {
   return null;
 }
 
+/**
+ * Check whether the first token of an agent command is reachable in PATH.
+ * Returns the token name if NOT found, or null if it is found.
+ */
+function checkAgentCommandInPath(agentCommand: string): string | null {
+  const token = agentCommand.trim().split(/\s+/)[0];
+  if (!token) return null;
+  try {
+    execSync(`which ${token}`, { stdio: ["pipe", "pipe", "pipe"] });
+    return null; // found
+  } catch {
+    return token; // not found
+  }
+}
+
 async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
@@ -1289,7 +1372,7 @@ async function runRalphaiInit(
     // Non-interactive mode with defaults (auto-detect feedback commands)
     answers = {
       agentCommand: options.agentCommand || "opencode run --agent build",
-      baseBranch: detectBaseBranch(),
+      baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectFeedbackCommands(cwd),
       turns: 5,
       mode: "branch",
@@ -1298,6 +1381,22 @@ async function runRalphaiInit(
       issueSource: "none",
       createSamplePlan: true,
     };
+
+    // Print detection summary so users can verify auto-detected values
+    const detectedPM = detectPackageManager(cwd);
+    const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
+    console.log(`${DIM}Detected:${RESET}`);
+    console.log(
+      `  ${DIM}Agent:${RESET}     ${TEXT}${answers.agentCommand}${RESET}`,
+    );
+    console.log(
+      `  ${DIM}Branch:${RESET}    ${TEXT}${answers.baseBranch}${RESET}`,
+    );
+    console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
+    console.log(
+      `  ${DIM}Manager:${RESET}   ${TEXT}${detectedPM?.manager ?? "(none)"}${RESET}`,
+    );
+    console.log();
   } else {
     // Interactive wizard
     const wizardResult = await runWizard(cwd);
@@ -1306,6 +1405,28 @@ async function runRalphaiInit(
       return;
     }
     answers = wizardResult;
+  }
+
+  // Warn if the agent binary isn't in PATH (soft warning, not a hard error)
+  const missingBinary = checkAgentCommandInPath(answers.agentCommand);
+  if (missingBinary) {
+    const msg = `'${missingBinary}' not found in PATH — make sure it's installed before running.`;
+    if (options.yes) {
+      console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
+    } else {
+      clack.log.warn(msg);
+    }
+  }
+
+  // Warn if no feedback commands were detected — the agent won't get feedback
+  if (!answers.feedbackCommands.trim()) {
+    const msg =
+      "No build/test/lint scripts detected. Your agent won't get feedback between turns. Add feedbackCommands to ralphai.json.";
+    if (options.yes) {
+      console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
+    } else {
+      clack.log.warn(msg);
+    }
   }
 
   scaffold(answers, cwd, { shared: options.shared });
@@ -1335,10 +1456,10 @@ interface Receipt {
   branch: string;
   slug: string;
   plan_file?: string;
-  agent: string;
   turns_budget: number;
   turns_completed: number;
   tasks_completed: number;
+  outcome?: string;
 }
 
 function parseReceipt(filePath: string): Receipt | null {
@@ -1358,10 +1479,10 @@ function parseReceipt(filePath: string): Receipt | null {
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
     plan_file: fields.plan_file,
-    agent: fields.agent ?? "",
     turns_budget: parseInt(fields.turns_budget ?? "0", 10),
     turns_completed: parseInt(fields.turns_completed ?? "0", 10),
     tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
+    outcome: fields.outcome,
   };
 }
 
@@ -1568,6 +1689,78 @@ function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
   );
 }
 
+function showInitHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai init [options] [directory]`);
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}              ${DIM}Skip prompts and use defaults${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--force${RESET}                ${DIM}Re-scaffold from scratch (deletes existing .ralphai/)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--shared${RESET}               ${DIM}Track ralphai.json in git (for team-shared config)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--agent-command=${RESET}<cmd>   ${DIM}Set the agent command (default: opencode run --agent build)${RESET}`,
+  );
+}
+
+function showStatusHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai status`);
+  console.log();
+  console.log(`${DIM}Show pipeline and worktree status.${RESET}`);
+}
+
+function showResetHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai reset [options]`);
+  console.log();
+  console.log(
+    `${DIM}Move in-progress plans back to backlog and clean up worktrees.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
+  );
+}
+
+function showUpdateHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai update [tag]`);
+  console.log();
+  console.log(
+    `${DIM}Update ralphai to the latest (or specified) version.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Examples:${RESET}`);
+  console.log(
+    `  ${DIM}$${RESET} ralphai update          ${DIM}# update to latest${RESET}`,
+  );
+  console.log(
+    `  ${DIM}$${RESET} ralphai update beta     ${DIM}# install beta version${RESET}`,
+  );
+}
+
+function showUninstallHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai uninstall [options]`);
+  console.log();
+  console.log(`${DIM}Remove Ralphai from your project.${RESET}`);
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
+  );
+}
+
+function showDoctorHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai doctor`);
+  console.log();
+  console.log(
+    `${DIM}Run diagnostic checks on your ralphai setup and report problems.${RESET}`,
+  );
+}
+
 function showWorktreeHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai worktree [command] [options]`);
   console.log();
@@ -1699,6 +1892,298 @@ function cleanWorktrees(cwd: string): void {
   }
 
   console.log(`\nCleaned ${cleaned} worktree(s).`);
+}
+
+// ---------------------------------------------------------------------------
+// Doctor command
+// ---------------------------------------------------------------------------
+
+interface DoctorCheckResult {
+  status: "pass" | "fail" | "warn";
+  message: string;
+}
+
+function checkRalphaiDirExists(cwd: string): DoctorCheckResult {
+  if (existsSync(join(cwd, ".ralphai"))) {
+    return { status: "pass", message: ".ralphai/ initialized" };
+  }
+  return { status: "fail", message: ".ralphai/ not found — run ralphai init" };
+}
+
+function checkConfigValid(cwd: string): DoctorCheckResult {
+  const configPath = join(cwd, "ralphai.json");
+  if (!existsSync(configPath)) {
+    return {
+      status: "fail",
+      message: "ralphai.json not found",
+    };
+  }
+  try {
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw);
+    const keys = Object.keys(config);
+    return {
+      status: "pass",
+      message: `ralphai.json valid (${keys.length} keys)`,
+    };
+  } catch {
+    return {
+      status: "fail",
+      message: "ralphai.json is not valid JSON",
+    };
+  }
+}
+
+function checkGitRepo(cwd: string): DoctorCheckResult {
+  try {
+    execSync("git rev-parse --git-dir", {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const baseBranch = detectBaseBranch(cwd);
+    return {
+      status: "pass",
+      message: `git repo detected (base branch: ${baseBranch})`,
+    };
+  } catch {
+    return { status: "fail", message: "not a git repository" };
+  }
+}
+
+function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
+  try {
+    execSync("git diff --quiet HEAD", {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return { status: "pass", message: "working tree clean" };
+  } catch {
+    return { status: "warn", message: "working tree has uncommitted changes" };
+  }
+}
+
+function checkBaseBranchExists(cwd: string): DoctorCheckResult {
+  // Read baseBranch from config if available, else detect
+  let baseBranch: string;
+  const configPath = join(cwd, "ralphai.json");
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    baseBranch = config.baseBranch || detectBaseBranch(cwd);
+  } catch {
+    baseBranch = detectBaseBranch(cwd);
+  }
+
+  try {
+    execSync(`git show-ref --verify refs/heads/${baseBranch}`, {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return {
+      status: "pass",
+      message: `base branch exists: ${baseBranch}`,
+    };
+  } catch {
+    return {
+      status: "fail",
+      message: `base branch not found: ${baseBranch}`,
+    };
+  }
+}
+
+function checkAgentCommand(cwd: string): DoctorCheckResult {
+  const configPath = join(cwd, "ralphai.json");
+  let agentCommand: string;
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    agentCommand = config.agentCommand;
+  } catch {
+    return { status: "fail", message: "agent command: cannot read config" };
+  }
+
+  if (!agentCommand) {
+    return { status: "fail", message: "agent command: not configured" };
+  }
+
+  // Extract the first token (the executable) from the command
+  const executable = agentCommand.split(/\s+/)[0]!;
+
+  try {
+    execSync(`which ${executable}`, {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return {
+      status: "pass",
+      message: `agent: ${agentCommand} — found in PATH`,
+    };
+  } catch {
+    return {
+      status: "fail",
+      message: `agent: ${executable} — not found in PATH`,
+    };
+  }
+}
+
+function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
+  const configPath = join(cwd, "ralphai.json");
+  let feedbackCommands: string[];
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    feedbackCommands = config.feedbackCommands;
+  } catch {
+    return [];
+  }
+
+  if (
+    !feedbackCommands ||
+    !Array.isArray(feedbackCommands) ||
+    feedbackCommands.length === 0
+  ) {
+    return [{ status: "warn", message: "feedback commands: none configured" }];
+  }
+
+  return feedbackCommands.map((cmd) => {
+    try {
+      execSync(cmd, {
+        cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 60000,
+      });
+      return {
+        status: "pass" as const,
+        message: `feedback: ${cmd} — exits 0`,
+      };
+    } catch {
+      return {
+        status: "warn" as const,
+        message: `feedback: ${cmd} — exits non-zero`,
+      };
+    }
+  });
+}
+
+function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
+  const backlogDir = join(cwd, ".ralphai", "pipeline", "backlog");
+  if (!existsSync(backlogDir)) {
+    return { status: "warn", message: "backlog: directory not found" };
+  }
+  const plans = readdirSync(backlogDir).filter((f) => f.endsWith(".md"));
+  if (plans.length === 0) {
+    return { status: "warn", message: "backlog: no plans queued" };
+  }
+  return {
+    status: "pass",
+    message: `backlog: ${plans.length} plan${plans.length !== 1 ? "s" : ""} ready`,
+  };
+}
+
+function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
+  const inProgressDir = join(cwd, ".ralphai", "pipeline", "in-progress");
+  if (!existsSync(inProgressDir)) {
+    return { status: "pass", message: "no orphaned receipts" };
+  }
+  const files = readdirSync(inProgressDir);
+  const receiptFiles = files.filter(
+    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  );
+
+  const orphaned: string[] = [];
+  for (const rf of receiptFiles) {
+    const receipt = parseReceipt(join(inProgressDir, rf));
+    if (!receipt) continue;
+    const planFile = receipt.plan_file || `prd-${receipt.slug}.md`;
+    if (!existsSync(join(inProgressDir, planFile))) {
+      orphaned.push(rf);
+    }
+  }
+
+  if (orphaned.length > 0) {
+    return {
+      status: "warn",
+      message: `orphaned receipts: ${orphaned.join(", ")}`,
+    };
+  }
+  return { status: "pass", message: "no orphaned receipts" };
+}
+
+function runRalphaiDoctor(cwd: string): void {
+  const results: DoctorCheckResult[] = [];
+
+  // 1. .ralphai/ exists
+  results.push(checkRalphaiDirExists(cwd));
+
+  // 2. ralphai.json valid
+  results.push(checkConfigValid(cwd));
+
+  // 3. Git repo detected
+  results.push(checkGitRepo(cwd));
+
+  // 4. Working tree clean (only if git repo detected)
+  if (results[2]!.status !== "fail") {
+    results.push(checkWorkingTreeClean(cwd));
+  }
+
+  // 5. Base branch exists (only if git repo detected)
+  if (results[2]!.status !== "fail") {
+    results.push(checkBaseBranchExists(cwd));
+  }
+
+  // 6. Agent command in PATH (only if config exists)
+  if (results[1]!.status !== "fail") {
+    results.push(checkAgentCommand(cwd));
+  }
+
+  // 7. Feedback commands (only if config exists)
+  if (results[1]!.status !== "fail") {
+    results.push(...checkFeedbackCommands(cwd));
+  }
+
+  // 8. Backlog has plans (only if .ralphai/ exists)
+  if (results[0]!.status !== "fail") {
+    results.push(checkBacklogHasPlans(cwd));
+  }
+
+  // 9. No orphaned receipts (only if .ralphai/ exists)
+  if (results[0]!.status !== "fail") {
+    results.push(checkOrphanedReceipts(cwd));
+  }
+
+  // --- Print report ---
+  console.log();
+  console.log(`${TEXT}ralphai doctor${RESET}`);
+  console.log();
+
+  const statusIcons: Record<DoctorCheckResult["status"], string> = {
+    pass: "\u2713",
+    fail: "\u2717",
+    warn: "\u26A0",
+  };
+
+  for (const result of results) {
+    const icon = statusIcons[result.status];
+    console.log(`  ${icon} ${DIM}${result.message}${RESET}`);
+  }
+
+  const failures = results.filter((r) => r.status === "fail").length;
+  const warnings = results.filter((r) => r.status === "warn").length;
+
+  console.log();
+  if (failures > 0 || warnings > 0) {
+    const parts: string[] = [];
+    if (warnings > 0)
+      parts.push(`${warnings} warning${warnings !== 1 ? "s" : ""}`);
+    if (failures > 0)
+      parts.push(`${failures} failure${failures !== 1 ? "s" : ""}`);
+    console.log(`  ${DIM}${parts.join(", ")}${RESET}`);
+  } else {
+    console.log(`  ${DIM}All checks passed${RESET}`);
+  }
+  console.log();
+
+  // Exit code: 1 if any check failed, 0 otherwise (warnings don't count)
+  if (failures > 0) {
+    process.exit(1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1850,11 +2335,12 @@ function runRalphaiStatus(cwd: string): void {
       parts.push(`${completed} of ${totalTasks} tasks`);
     }
 
-    // Turns remaining
+    // Turns used / budget
     if (receipt) {
       if (receipt.turns_budget > 0) {
-        const remaining = receipt.turns_budget - receipt.turns_completed;
-        parts.push(`${remaining} turns remaining`);
+        parts.push(
+          `turn ${receipt.turns_completed} of ${receipt.turns_budget}`,
+        );
       } else if (receipt.turns_budget === 0) {
         parts.push("unlimited turns");
       }
@@ -1864,6 +2350,13 @@ function runRalphaiStatus(cwd: string): void {
     if (receipt?.source === "worktree") {
       const planSlug = plan.replace(/\.md$/, "");
       parts.push(`worktree: ${planSlug}`);
+    }
+
+    // Outcome / status tag
+    if (receipt?.outcome) {
+      parts.push(`[${receipt.outcome}]`);
+    } else {
+      parts.push("[in progress]");
     }
 
     const suffix =
@@ -2025,7 +2518,7 @@ async function runRalphaiWorktree(
   }
 
   // Determine base branch
-  const baseBranch = detectBaseBranch();
+  const baseBranch = detectBaseBranch(cwd);
   const branch = `ralphai/${plan.slug}`;
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
 

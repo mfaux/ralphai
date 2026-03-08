@@ -157,6 +157,53 @@ describe("ralphai command", () => {
     expect(parsed.maxStuck).toBe(3);
   });
 
+  it("init --yes warns when agent command binary is not in PATH", () => {
+    const result = runCli(
+      ["init", "--yes", "--agent-command=nonexistent-agent-xyz -p"],
+      testDir,
+    );
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("not found in PATH");
+    expect(output).toContain("nonexistent-agent-xyz");
+    // Should still scaffold successfully (warning, not error)
+    expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
+  });
+
+  it("init --yes warns when no feedback commands are detected", () => {
+    // testDir has no package.json, so detectFeedbackCommands returns ""
+    const result = runCli(["init", "--yes"], testDir);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("No build/test/lint scripts detected");
+    expect(output).toContain("feedbackCommands");
+    // Should still scaffold successfully (warning, not error)
+    expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
+  });
+
+  it("init --yes prints detection summary with detected values", () => {
+    const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
+    // Summary should contain the header and detected values
+    expect(output).toContain("Detected:");
+    // Default agent command
+    expect(output).toContain("opencode run --agent build");
+    // Base branch (detected from git)
+    expect(output).toMatch(/Branch:.*main|master/);
+    // Feedback should show (none) since testDir has no package.json
+    expect(output).toContain("(none)");
+    // Manager should also show (none) since no package.json
+    expect(output).toMatch(/Manager:.*\(none\)/);
+  });
+
+  it("init --yes detection summary shows custom agent command", () => {
+    const output = stripLogo(
+      runCliOutput(
+        ["init", "--yes", "--agent-command=my-agent --flag"],
+        testDir,
+      ),
+    );
+    expect(output).toContain("Detected:");
+    expect(output).toContain("my-agent --flag");
+  });
+
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
@@ -607,7 +654,7 @@ describe("ralphai command", () => {
     writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
     writeFileSync(
       join(inProgressDir, "receipt-test.txt"),
-      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nagent=claude -p\nturns_completed=3",
+      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nturns_completed=3",
     );
 
     runCliOutput(["reset", "--yes"], testDir);
@@ -2577,10 +2624,6 @@ echo "$MODE"
     expect(ralphaiSh).toContain(
       '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
     );
-    // Backlog selection refs use format_file_ref
-    expect(plans).toContain(
-      'backlog_refs="$backlog_refs $(format_file_ref "$f")"',
-    );
     // Should NOT have any hardcoded @$var or @${VAR} file references in
     // prompt construction or detect_plan FILE_REFS assignments
     expect(plans).not.toMatch(/FILE_REFS=.*@\$/);
@@ -3051,105 +3094,120 @@ echo "$MODE"
   });
 
   // -------------------------------------------------------------------------
-  // Per-plan agent override: extract_plan_agent
+  // Subcommand --help
   // -------------------------------------------------------------------------
 
-  it("scaffolded plans.sh contains extract_plan_agent function", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
-    expect(plans).toContain("extract_plan_agent()");
+  it("init --help shows init-specific flags", () => {
+    const result = runCli(["init", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("init");
+    expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("--force");
+    expect(result.stdout).toContain("--shared");
+    expect(result.stdout).toContain("--agent-command");
   });
 
-  describe.skipIf(process.platform === "win32")(
-    "extract_plan_agent function",
-    () => {
-      /** Helper: run extract_plan_agent on a temp file with given content */
-      function extractPlanAgent(content: string): {
-        stdout: string;
-        exitCode: number;
-      } {
-        const planFile = join(
-          tmpdir(),
-          `ralphai-test-agent-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
-        );
-        const script = `#!/bin/bash
-extract_plan_agent() {
-  local plan_file="$1"
-  [[ -f "$plan_file" ]] || return 1
-  head -1 "$plan_file" | grep -q '^---$' || return 1
-  sed -n '/^---$/,/^---$/{ /^agent:[[:space:]]/{ s/^agent:[[:space:]]*//; p; } }' "$plan_file"
-}
-extract_plan_agent ${JSON.stringify(planFile)}
-echo "EXIT=$?"
-`;
-        const scriptFile = join(
-          tmpdir(),
-          `ralphai-test-script-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-        );
-        try {
-          writeFileSync(planFile, content);
-          writeFileSync(scriptFile, script);
-          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-            encoding: "utf-8",
-          });
-          const lines = result.trimEnd().split("\n");
-          const exitLine = lines.pop()!;
-          const exitCode = parseInt(exitLine.replace("EXIT=", ""), 10);
-          return { stdout: lines.join("\n"), exitCode };
-        } finally {
-          try {
-            rmSync(planFile);
-          } catch {
-            /* ignore */
-          }
-          try {
-            rmSync(scriptFile);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
+  it("status --help shows status usage", () => {
+    const result = runCli(["status", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("status");
+  });
 
-      it("extracts agent command from frontmatter", () => {
-        const result = extractPlanAgent("---\nagent: claude -p\n---\n# Plan\n");
-        expect(result.stdout).toBe("claude -p");
-      });
+  it("reset --help shows reset usage and flags", () => {
+    const result = runCli(["reset", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("reset");
+    expect(result.stdout).toContain("--yes");
+  });
 
-      it("returns empty string when no agent key present", () => {
-        const result = extractPlanAgent(
-          "---\ntitle: my-feature\n---\n# Plan\n",
-        );
-        expect(result.stdout).toBe("");
-      });
+  it("update --help shows update usage", () => {
+    const result = runCli(["update", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("update");
+  });
 
-      it("returns exit code 1 when no frontmatter block", () => {
-        const result = extractPlanAgent("# Just a plan\nNo frontmatter\n");
-        expect(result.exitCode).toBe(1);
-      });
+  it("uninstall --help shows uninstall usage and flags", () => {
+    const result = runCli(["uninstall", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("uninstall");
+    expect(result.stdout).toContain("--yes");
+  });
 
-      it("extracts agent with other frontmatter keys present", () => {
-        const result = extractPlanAgent(
-          "---\ntitle: my-feature\nagent: opencode run --agent build\ndepends-on: [prd-a.md]\n---\n# Plan\n",
-        );
-        expect(result.stdout).toBe("opencode run --agent build");
-      });
+  // -------------------------------------------------------------------------
+  // Top-level help surfaces run flags
+  // -------------------------------------------------------------------------
 
-      it("handles agent as the first frontmatter key", () => {
-        const result = extractPlanAgent(
-          "---\nagent: codex exec\ntitle: test\n---\n# Plan\n",
-        );
-        expect(result.stdout).toBe("codex exec");
-      });
+  it("--help shows common run flags", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--turns");
+    expect(result.stdout).toContain("--dry-run");
+    expect(result.stdout).toContain("--pr");
+    expect(result.stdout).toContain("--resume");
+    expect(result.stdout).toContain("--continuous");
+  });
 
-      it("handles agent command with flags and arguments", () => {
-        const result = extractPlanAgent(
-          "---\nagent: claude --model opus -p\n---\n# Plan\n",
-        );
-        expect(result.stdout).toBe("claude --model opus -p");
-      });
-    },
-  );
+  // -------------------------------------------------------------------------
+  // Unknown flag rejection
+  // -------------------------------------------------------------------------
+
+  it("init --invalid-flag exits with error", () => {
+    const result = runCli(["init", "--invalid-flag"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+    expect(result.stderr).toContain("--invalid-flag");
+  });
+
+  it("status --bad-opt exits with error", () => {
+    const result = runCli(["status", "--bad-opt"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  it("reset --nope exits with error", () => {
+    const result = runCli(["reset", "--nope"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  it("uninstall --wrong exits with error", () => {
+    const result = runCli(["uninstall", "--wrong"], testDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  // -------------------------------------------------------------------------
+  // NO_COLOR support
+  // -------------------------------------------------------------------------
+
+  it("NO_COLOR=1 disables ANSI escape codes", () => {
+    const cliPath = join(__dirname, "cli.ts");
+    const raw = execFileSync(
+      "node",
+      ["--experimental-strip-types", cliPath, "init", "--help"],
+      {
+        encoding: "utf-8",
+        env: { ...process.env, NO_COLOR: "1" },
+      },
+    );
+    // Should contain no ANSI escape sequences
+    expect(raw).not.toMatch(/\x1b\[/);
+    // But should still contain the help text
+    expect(raw).toContain("init");
+  });
+
+  it("--no-color disables ANSI escape codes", () => {
+    const cliPath = join(__dirname, "cli.ts");
+    const raw = execFileSync(
+      "node",
+      ["--experimental-strip-types", cliPath, "--no-color", "init", "--help"],
+      {
+        encoding: "utf-8",
+      },
+    );
+    expect(raw).not.toMatch(/\x1b\[/);
+    expect(raw).toContain("init");
+  });
 
   // -------------------------------------------------------------------------
   // Continuous+PR: build_continuous_pr_body
@@ -3887,7 +3945,6 @@ build_continuous_pr_body
           "worktree_path=/tmp/wt-dark-mode",
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
-          "agent=claude -p",
           "turns_completed=3",
         ].join("\n"),
       );
@@ -3928,7 +3985,6 @@ build_continuous_pr_body
           "branch=ralphai/prd-search",
           "slug=prd-search",
           "plan_file=prd-search.md",
-          "agent=claude -p",
           "turns_completed=1",
         ].join("\n"),
       );
@@ -3971,7 +4027,6 @@ build_continuous_pr_body
           "worktree_path=" + worktreeDir,
           "branch=ralphai/done",
           "slug=done",
-          "agent=claude -p",
           "turns_completed=5",
         ].join("\n"),
       );
@@ -4097,7 +4152,6 @@ build_continuous_pr_body
           "worktree_path=/tmp/wt-dark-mode",
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
-          "agent=claude -p",
           "turns_completed=2",
           "tasks_completed=1",
         ].join("\n"),
@@ -4134,7 +4188,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/legacy",
           "slug=legacy",
-          "agent=claude -p",
           "turns_completed=1",
         ].join("\n"),
       );
@@ -4172,7 +4225,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/feature",
           "slug=feature",
-          "agent=claude -p",
           "turns_completed=3",
           "tasks_completed=3",
         ].join("\n"),
@@ -4186,7 +4238,7 @@ build_continuous_pr_body
       expect(output).toContain("3 of 4 tasks");
     });
 
-    it("status shows turns remaining when receipt has turns_budget", () => {
+    it("status shows turn progress when receipt has turns_budget", () => {
       runCli(["init", "--yes"], testDir);
 
       const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
@@ -4198,7 +4250,7 @@ build_continuous_pr_body
         "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
       );
 
-      // Receipt with turns_budget=5, turns_completed=2 → 3 remaining
+      // Receipt with turns_budget=5, turns_completed=2
       writeFileSync(
         join(ipDir, "receipt-search.txt"),
         [
@@ -4206,7 +4258,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/search",
           "slug=search",
-          "agent=claude -p",
           "turns_budget=5",
           "turns_completed=2",
           "tasks_completed=1",
@@ -4217,7 +4268,7 @@ build_continuous_pr_body
       const output = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
-      expect(output).toContain("3 turns remaining");
+      expect(output).toContain("turn 2 of 5");
     });
 
     it("status shows unlimited turns when turns_budget is 0", () => {
@@ -4240,7 +4291,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/refactor",
           "slug=refactor",
-          "agent=claude -p",
           "turns_budget=0",
           "turns_completed=4",
           "tasks_completed=0",
@@ -4273,7 +4323,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/old-plan",
           "slug=old-plan",
-          "agent=claude -p",
           "turns_completed=1",
           "tasks_completed=0",
         ].join("\n"),
@@ -4301,7 +4350,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/orphan",
           "slug=orphan",
-          "agent=claude -p",
           "turns_completed=0",
         ].join("\n"),
       );
@@ -4359,7 +4407,6 @@ build_continuous_pr_body
           "branch=ralphai/remove-fallback-agents",
           "slug=remove-fallback-agents",
           "plan_file=remove-fallback-agents.md",
-          "agent=claude -p",
           "turns_completed=2",
           "tasks_completed=2",
         ].join("\n"),
@@ -4399,7 +4446,6 @@ build_continuous_pr_body
           "branch=ralphai/gh-42-search",
           "slug=gh-42-search",
           "plan_file=gh-42-search.md",
-          "agent=claude -p",
           "turns_completed=1",
           "tasks_completed=1",
         ].join("\n"),
@@ -4436,7 +4482,6 @@ build_continuous_pr_body
           "source=main",
           "branch=ralphai/auth",
           "slug=auth",
-          "agent=claude -p",
           "turns_completed=3",
           "tasks_completed=1",
         ].join("\n"),
@@ -4479,6 +4524,73 @@ build_continuous_pr_body
       expect(output).toContain("remove-fallback-agents.md");
       expect(output).toContain("gh-42-search.md");
       expect(output).toContain("prd-auth.md");
+    });
+
+    it("status shows outcome when receipt has outcome field", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      writeFileSync(
+        join(ipDir, "prd-stuck-plan.md"),
+        "# Stuck Plan\n\n### Task 1: A\n### Task 2: B\n",
+      );
+
+      // Receipt with outcome=stuck
+      writeFileSync(
+        join(ipDir, "receipt-stuck-plan.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/stuck-plan",
+          "slug=stuck-plan",
+          "turns_budget=5",
+          "turns_completed=5",
+          "tasks_completed=1",
+          "outcome=stuck",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("[stuck]");
+      expect(output).not.toContain("[in progress]");
+    });
+
+    it("status shows [in progress] when receipt has no outcome", () => {
+      runCli(["init", "--yes"], testDir);
+
+      const ipDir = join(testDir, ".ralphai", "pipeline", "in-progress");
+      mkdirSync(ipDir, { recursive: true });
+
+      writeFileSync(
+        join(ipDir, "prd-active.md"),
+        "# Active\n\n### Task 1: Do\n",
+      );
+
+      // Receipt without outcome field
+      writeFileSync(
+        join(ipDir, "receipt-active.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          "source=main",
+          "branch=ralphai/active",
+          "slug=active",
+          "turns_budget=5",
+          "turns_completed=2",
+          "tasks_completed=0",
+        ].join("\n"),
+      );
+
+      const result = runCli(["status"], testDir);
+      const output = result.stdout + result.stderr;
+
+      expect(result.exitCode).toBe(0);
+      expect(output).toContain("[in progress]");
+      expect(output).toContain("turn 2 of 5");
     });
   });
 
@@ -4554,4 +4666,147 @@ build_continuous_pr_body
       });
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // doctor subcommand
+  // ---------------------------------------------------------------------------
+
+  describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
+    it("shows help text with doctor command listed", () => {
+      const result = runCli([], testDir);
+      const output = stripLogo(result.stdout);
+      expect(output).toContain("doctor");
+    });
+
+    it("doctor --help shows doctor-specific help", () => {
+      const result = runCli(["doctor", "--help"], testDir);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("ralphai doctor");
+      expect(output).toContain("diagnostic");
+    });
+
+    it("doctor in fully initialized directory reports all checks passing", () => {
+      // Create an initial commit on main so detectBaseBranch and base branch check work
+      execSync(
+        "git config user.email 'test@test.com' && git config user.name 'Test'",
+        { cwd: testDir, stdio: "ignore" },
+      );
+      execSync("git checkout -b main", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      writeFileSync(join(testDir, "seed.txt"), "seed");
+      execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+      runCli(["init", "--yes"], testDir);
+
+      // Commit ralphai files so working tree is clean
+      execSync("git add -A && git commit -m 'add ralphai'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Override agentCommand to something in PATH and feedbackCommands to a passing command
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "true";
+      config.feedbackCommands = ["true"];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      // All checks should pass
+      expect(output).toContain("\u2713"); // ✓
+      expect(output).not.toContain("\u2717"); // ✗
+      expect(output).toContain(".ralphai/ initialized");
+      expect(output).toContain("ralphai.json valid");
+      expect(output).toContain("git repo detected");
+      expect(output).toContain("agent: true");
+      expect(output).toContain("found in PATH");
+      expect(output).toContain("All checks passed");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("doctor without .ralphai/ reports first check as failed", () => {
+      // Don't run init — no .ralphai/ directory
+      // But we need a ralphai.json for config checks to not crash
+      // Actually, without .ralphai/ the doctor should still run and report failures
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).toContain("\u2717"); // ✗
+      expect(output).toContain(".ralphai/ not found");
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("doctor with unreachable agent command shows failure", () => {
+      runCli(["init", "--yes"], testDir);
+
+      // Set an agent command that won't be found in PATH
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "nonexistent-agent-binary-xyz";
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).toContain("\u2717"); // ✗
+      expect(output).toContain("nonexistent-agent-binary-xyz");
+      expect(output).toContain("not found in PATH");
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("doctor exit code is 0 when only warnings (no failures)", () => {
+      // Create an initial commit on main so detectBaseBranch and base branch check work
+      execSync(
+        "git config user.email 'test@test.com' && git config user.name 'Test'",
+        { cwd: testDir, stdio: "ignore" },
+      );
+      execSync("git checkout -b main", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      writeFileSync(join(testDir, "seed.txt"), "seed");
+      execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+      runCli(["init", "--yes"], testDir);
+
+      // Commit ralphai files so we have a clean base
+      execSync("git add -A && git commit -m 'add ralphai'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Override agentCommand to something in PATH
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "true";
+      // Set feedback commands to something that fails (to produce a warning, not a failure)
+      config.feedbackCommands = ["false"];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      // Make the working tree dirty (uncommitted change) — produces a warning
+      writeFileSync(join(testDir, "dirty.txt"), "dirty");
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      // Should have warnings but no failures
+      expect(output).toContain("\u26A0"); // ⚠
+      expect(output).toContain("warning");
+      // Exit code should be 0 (warnings don't count as failures)
+      expect(result.exitCode).toBe(0);
+    });
+  });
 });

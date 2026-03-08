@@ -31,10 +31,12 @@ ${BOLD}Commands:${RESET}
   reset          Move in-progress plans back to backlog and clean up
   update [tag]   Update ralphai to the latest (or specified) version
   uninstall      Remove Ralphai from your project
+  doctor         Check your ralphai setup for problems
 
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
   --version, -v     Show version number
+  --no-color        Disable colored output (also: NO_COLOR env var)
 
 ${BOLD}Init Options:${RESET}
   --yes, -y              Skip prompts and use defaults
@@ -43,7 +45,12 @@ ${BOLD}Init Options:${RESET}
   --agent-command=CMD    Set the agent command (default: opencode run --agent build)
 
 ${BOLD}Run Options:${RESET}
-  All arguments after 'run' are forwarded directly to the task runner.
+  --turns=N              Number of turns per plan (default: 5, 0 = unlimited)
+  --dry-run              Preview which plans would run without executing
+  --pr                   Create a branch and open a PR after completing the plan
+  --resume               Resume the last in-progress plan
+  --continuous           Run plans in a loop until the backlog is empty
+  Run 'ralphai run --help' for all runner options.
 
 ${BOLD}Worktree Options:${RESET}
   --plan=<file>     Target a specific backlog plan (default: auto-detect)

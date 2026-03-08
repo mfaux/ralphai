@@ -298,16 +298,6 @@ while true; do
     init_receipt
   fi
 
-  # --- Per-plan agent override ---
-  SAVED_AGENT_COMMAND="$AGENT_COMMAND"
-  plan_agent=$(extract_plan_agent "${WIP_FILES[0]}" 2>/dev/null || true)
-  if [[ -n "$plan_agent" ]]; then
-    AGENT_COMMAND="$plan_agent"
-    detect_agent_type
-    resolve_prompt_mode
-    echo "Using plan-specific agent: $plan_agent"
-  fi
-
   # --- Turn loop (per-plan) ---
   stuck_count=0
   last_hash=$(git rev-parse HEAD)
@@ -321,6 +311,24 @@ while true; do
       echo "=== Ralphai turn $i (unlimited) (plan: $(basename "${WIP_FILES[0]}")) ==="
     else
       echo "=== Ralphai turn $i of $TURNS (plan: $(basename "${WIP_FILES[0]}")) ==="
+    fi
+
+    # --- Turn summary: show task progress ---
+    _total_tasks=$(grep -c '^### Task' "${WIP_FILES[0]}" 2>/dev/null || echo "0")
+    _completed_tasks=0
+    if [[ -f "$PROGRESS_FILE" ]]; then
+      _completed_tasks=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null || echo "0")
+    fi
+    _current_task=$((_completed_tasks + 1))
+    if [[ $_current_task -gt $_total_tasks ]]; then
+      _current_task=$_total_tasks
+    fi
+    if [[ $_total_tasks -gt 0 ]]; then
+      if [[ "$TURNS" -eq 0 ]]; then
+        echo "── Turn $i ── Task $_current_task of $_total_tasks ──"
+      else
+        echo "── Turn $i/$TURNS ── Task $_current_task of $_total_tasks ──"
+      fi
     fi
 
     PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
@@ -454,11 +462,6 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
       break
     fi
   done
-
-  # --- Restore agent command after plan completes ---
-  AGENT_COMMAND="$SAVED_AGENT_COMMAND"
-  detect_agent_type
-  resolve_prompt_mode
 
   if [[ "$completed" == false ]]; then
     echo ""
