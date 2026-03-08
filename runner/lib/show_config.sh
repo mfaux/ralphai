@@ -61,7 +61,6 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   issue_label_source=$(_setting_source "$CLI_ISSUE_LABEL" "RALPHAI_ISSUE_LABEL" "${CONFIG_ISSUE_LABEL:-}" "--issue-label=$CLI_ISSUE_LABEL")
   issue_ip_label_source=$(_setting_source "$CLI_ISSUE_IN_PROGRESS_LABEL" "RALPHAI_ISSUE_IN_PROGRESS_LABEL" "${CONFIG_ISSUE_IN_PROGRESS_LABEL:-}" "--issue-in-progress-label=$CLI_ISSUE_IN_PROGRESS_LABEL")
   issue_repo_source=$(_setting_source "$CLI_ISSUE_REPO" "RALPHAI_ISSUE_REPO" "${CONFIG_ISSUE_REPO:-}" "--issue-repo=$CLI_ISSUE_REPO" "auto-detect")
-  issue_close_source=$(_setting_source "$CLI_ISSUE_CLOSE_ON_COMPLETE" "RALPHAI_ISSUE_CLOSE_ON_COMPLETE" "${CONFIG_ISSUE_CLOSE_ON_COMPLETE:-}" "--issue-close-on-complete=$CLI_ISSUE_CLOSE_ON_COMPLETE")
   issue_comment_source=$(_setting_source "$CLI_ISSUE_COMMENT_PROGRESS" "RALPHAI_ISSUE_COMMENT_PROGRESS" "${CONFIG_ISSUE_COMMENT_PROGRESS:-}" "--issue-comment-progress=$CLI_ISSUE_COMMENT_PROGRESS")
   prompt_mode_source=$(_setting_source "$CLI_PROMPT_MODE" "RALPHAI_PROMPT_MODE" "${CONFIG_PROMPT_MODE:-}" "--prompt-mode=$CLI_PROMPT_MODE")
 
@@ -105,7 +104,6 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"
     echo "  issueInProgressLabel = $ISSUE_IN_PROGRESS_LABEL  ($issue_ip_label_source)"
     echo "  issueRepo          = ${ISSUE_REPO:-<auto-detect>}  ($issue_repo_source)"
-    echo "  issueCloseOnComplete = $ISSUE_CLOSE_ON_COMPLETE  ($issue_close_source)"
     echo "  issueCommentProgress = $ISSUE_COMMENT_PROGRESS  ($issue_comment_source)"
   fi
   echo ""
