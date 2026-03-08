@@ -68,14 +68,55 @@ The plan stays in `in-progress/` so you can inspect and resume.
 
 ## Continuous Mode
 
-By default, Ralphai stops after one plan. With `--continuous`, it keeps
-draining the backlog — picking the next dependency-ready plan after each
-completion.
+By default, Ralphai stops after one plan. With `--continuous` (or
+`continuous: true` in `ralphai.json`), it keeps draining the backlog —
+picking the next dependency-ready plan after each completion. All plans
+run sequentially on a single branch.
 
-In **PR mode** (`--continuous --pr`), a single draft PR is created after the
-first plan. Each subsequent plan updates the PR body. The PR is marked ready
-for review when the backlog is drained. If a plan fails mid-session, Ralphai
-pushes partial work and exits.
+### Without `--pr`
+
+Plans are processed one after another on the current branch. Each plan
+gets a fresh progress file and turn budget. When the backlog is empty,
+Ralphai exits. No PR is created — commits stay on the local branch.
+
+### With `--pr` (continuous+PR)
+
+This is the most automated workflow. Ralphai creates a branch, processes
+the backlog, and manages a single PR throughout:
+
+1. **First plan completes** — the branch is pushed and a **draft PR** is
+   created via `gh`. The PR body lists completed and remaining plans as
+   checkboxes, plus a commit log.
+2. **Each subsequent plan** — the branch is pushed again and the PR body
+   is updated (new checkboxes, updated commit log).
+3. **Backlog drained** — the PR body gets a final update and the PR is
+   marked **ready for review** via `gh pr ready`.
+
+The PR body looks like:
+
+```markdown
+## Completed Plans
+
+- [x] plan-a.md
+- [x] plan-b.md
+
+## Remaining Plans
+
+- [ ] plan-c.md
+
+## Commits
+```
+
+### Failure handling
+
+- **Stuck** (N turns with no commits): Ralphai pushes partial work to the
+  continuous branch and exits. The plan stays in `in-progress/` for
+  inspection and resumption.
+- **Turn budget exhausted** (completed all turns without the agent
+  signaling completion): same behavior — partial work is pushed and
+  Ralphai exits.
+- **Branch collision** (branch or PR already exists): the plan is rolled
+  back to `backlog/` and skipped.
 
 ## Turn Timeout
 
