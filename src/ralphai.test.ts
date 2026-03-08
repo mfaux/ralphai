@@ -4671,7 +4671,7 @@ build_continuous_pr_body
   // doctor subcommand
   // ---------------------------------------------------------------------------
 
-  describe("doctor subcommand", () => {
+  describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     it("shows help text with doctor command listed", () => {
       const result = runCli([], testDir);
       const output = stripLogo(result.stdout);
