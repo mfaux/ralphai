@@ -2,7 +2,7 @@
 
 Put your AI coding agent on autopilot.
 
-Ralphai takes [plan files](#1-write-plans) (markdown) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
+Ralphai takes plans (markdown files) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
 
 ## Why Ralphai?
 
@@ -24,7 +24,11 @@ npm install -D ralphai       # local dev dependency
 npx ralphai                  # no install, runs latest
 ```
 
+Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
+
 ## Get Started
+
+In your project repository:
 
 ```bash
 ralphai init                 # scaffold .ralphai/ and ralphai.json
@@ -54,11 +58,19 @@ git commit -m "chore: track shared ralphai config"
 Ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples.
 
 ```
-Create a plan in the ralphai backlog for adding dark mode support.
-Use PLANNING.md as a guide.
+Create a plan in the .ralphai backlog for adding dark mode support.
+Use .ralphai/PLANNING.md as a guide.
 ```
 
-> All ralphai files are **gitignored** — local-only state.
+> **Tip:** `.ralphai/` is gitignored, so agents in normal chat sessions might be slow to discover it. Add a section like this to your project's `AGENTS.md` so agents know about ralphai outside of runs:
+>
+> ```markdown
+> ## Ralphai
+>
+> This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
+> Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
+> the plan writing guide.
+> ```
 
 ### 2. Run
 
@@ -88,7 +100,13 @@ ralphai worktree clean              # remove completed worktrees
 
 ### 3. Steer
 
-Plans flow through `backlog/` → `in-progress/` → `out/`. Park unready plans in `wip/` — Ralphai ignores that folder.
+Plans flow through the pipeline:
+
+```
+wip/ (parked)    backlog/  →  in-progress/  →  out/
+```
+
+Park unready plans in `wip/`. Ralphai ignores that folder.
 
 ### 4. Pause and resume
 
