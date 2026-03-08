@@ -345,6 +345,7 @@ function extractExecStderr(err: unknown): string {
 // ---------------------------------------------------------------------------
 
 function detectBaseBranch(): string {
+  // 1. Remote default branch (most reliable when a remote exists)
   try {
     const ref = execSync("git symbolic-ref refs/remotes/origin/HEAD", {
       encoding: "utf-8",
@@ -352,21 +353,34 @@ function detectBaseBranch(): string {
     }).trim();
     return ref.replace("refs/remotes/origin/", "");
   } catch {
-    // fallback: check if main or master exists
+    // no remote or origin/HEAD not set
+  }
+
+  // 2. Well-known default branch names
+  for (const candidate of ["main", "master"]) {
     try {
-      execSync("git show-ref --verify refs/heads/main", { stdio: "ignore" });
-      return "main";
+      execSync(`git show-ref --verify refs/heads/${candidate}`, {
+        stdio: "ignore",
+      });
+      return candidate;
     } catch {
-      try {
-        execSync("git show-ref --verify refs/heads/master", {
-          stdio: "ignore",
-        });
-        return "master";
-      } catch {
-        return "main";
-      }
+      // not found, try next
     }
   }
+
+  // 3. Current branch (covers fresh repos with non-standard default names)
+  try {
+    const current = execSync("git symbolic-ref --short HEAD", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (current) return current;
+  } catch {
+    // detached HEAD or other edge case
+  }
+
+  // 4. Last resort — use HEAD directly so git commands still have a valid ref
+  return "HEAD";
 }
 
 // ---------------------------------------------------------------------------
