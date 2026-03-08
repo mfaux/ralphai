@@ -32,7 +32,7 @@ All pipeline files are **gitignored** (local-only state).
 ## How It Works
 
 1. Loads config: `ralphai.json` → env vars → CLI flags (highest priority wins)
-2. Resumes in-progress work, or picks from backlog (LLM-selected when multiple plans are ready)
+2. Resumes in-progress work, or picks from backlog (oldest dependency-ready plan first)
 3. In PR mode, creates a `ralphai/<plan-slug>` branch. In branch mode (default), works on current branch.
 4. Agent receives plan + progress log, implements next task, runs feedback commands, commits
 5. Repeats until done or stuck. On completion, archives to `out/` and (in PR mode) opens a PR.

@@ -277,56 +277,8 @@ detect_plan() {
     chosen="${ready_plans[0]}"
     echo "Single dependency-ready backlog plan found: $chosen"
   else
-    echo "Multiple dependency-ready backlog plans found (${#ready_plans[@]}). Asking LLM to pick the best one..."
-
-    # Build @file references for all dependency-ready backlog plans
-    local backlog_refs=""
-    for f in "${ready_plans[@]}"; do
-      backlog_refs="$backlog_refs $(format_file_ref "$f")"
-    done
-
-    local selection_prompt="${backlog_refs}
-Read these backlog plans carefully. Choose the single best plan to work on next.
-Consider:
-- Dependencies: does this plan unblock other plans in the backlog?
-- Risk: should risky architectural work go before safe incremental work?
-- Value: which delivers the most user-facing impact?
-- Simplicity: if plans are similar in value, prefer the simpler one.
-
-Output ONLY the basename of the chosen file (e.g. foo-bar.md), nothing else."
-
-    local llm_output
-    llm_output=$($AGENT_COMMAND "$selection_prompt" 2>/dev/null) || {
-      echo "ERROR: LLM selection failed. Falling back to oldest backlog plan."
-      chosen="${ready_plans[0]}"
-    }
-
-    if [[ -z "$chosen" ]]; then
-      # Extract filename from LLM output — strip whitespace, backticks, quotes
-      local picked
-      picked=$(echo "$llm_output" | grep -oP '[a-zA-Z0-9_-]+\.md' | tail -1)
-
-      if [[ -n "$picked" ]]; then
-        local matched_ready=""
-        for rp in "${ready_plans[@]}"; do
-          if [[ "$(basename "$rp")" == "$picked" ]]; then
-            matched_ready="$rp"
-            break
-          fi
-        done
-
-        if [[ -n "$matched_ready" ]]; then
-          chosen="$matched_ready"
-          echo "LLM selected: $picked"
-        else
-          echo "WARNING: LLM output didn't match a dependency-ready backlog file (got: '$picked'). Falling back to oldest ready plan."
-          chosen="${ready_plans[0]}"
-        fi
-      else
-        echo "WARNING: Could not parse LLM selection. Falling back to oldest ready plan."
-        chosen="${ready_plans[0]}"
-      fi
-    fi
+    chosen="${ready_plans[0]}"
+    echo "Multiple dependency-ready backlog plans found (${#ready_plans[@]}). Picking oldest: $(basename "$chosen")"
   fi
 
   if [[ "$DRY_RUN" == true ]]; then

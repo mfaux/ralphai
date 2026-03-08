@@ -103,7 +103,7 @@ backlog/  →  in-progress/  →  out/
 ```
 
 - **`backlog/`** — the queue. Ralphai picks dependency-ready plans
-  (LLM-selected when multiple are ready).
+  (oldest first when multiple are ready).
 - **`in-progress/`** — active work. Plan + `progress.md` live here. Files
   stay on interruption for resumption.
 - **`out/`** — archive. Moved here when the agent signals completion.

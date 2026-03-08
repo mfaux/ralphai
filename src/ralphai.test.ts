@@ -2577,10 +2577,6 @@ echo "$MODE"
     expect(ralphaiSh).toContain(
       '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
     );
-    // Backlog selection refs use format_file_ref
-    expect(plans).toContain(
-      'backlog_refs="$backlog_refs $(format_file_ref "$f")"',
-    );
     // Should NOT have any hardcoded @$var or @${VAR} file references in
     // prompt construction or detect_plan FILE_REFS assignments
     expect(plans).not.toMatch(/FILE_REFS=.*@\$/);
