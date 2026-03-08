@@ -30,7 +30,7 @@ ${BOLD}Commands:${RESET}
   status         Show pipeline and worktree status
   reset          Move in-progress plans back to backlog and clean up
   update [tag]   Update ralphai to the latest (or specified) version
-  uninstall      Remove Ralphai from your project
+  teardown       Remove Ralphai from your project
   doctor         Check your ralphai setup for problems
 
 ${BOLD}Options:${RESET}
@@ -77,7 +77,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai reset --yes            ${DIM}# reset without confirmation${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
-  ${DIM}$${RESET} ralphai uninstall --yes        ${DIM}# remove ralphai${RESET}
+  ${DIM}$${RESET} ralphai teardown --yes         ${DIM}# remove ralphai from project${RESET}
 `);
 }
 
