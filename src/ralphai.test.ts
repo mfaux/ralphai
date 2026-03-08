@@ -116,8 +116,8 @@ describe("ralphai command", () => {
     const config = readFileSync(join(testDir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 16 keys are present
-    expect(Object.keys(parsed)).toHaveLength(16);
+    // Verify exactly 15 keys are present
+    expect(Object.keys(parsed)).toHaveLength(15);
 
     // Core settings from wizard
     expect(parsed.agentCommand).toBe("opencode run --agent build");
@@ -140,7 +140,6 @@ describe("ralphai command", () => {
     expect(parsed.issueLabel).toBe("ralphai");
     expect(parsed.issueInProgressLabel).toBe("ralphai:in-progress");
     expect(parsed.issueRepo).toBe("");
-    expect(parsed.issueCloseOnComplete).toBe(true);
     expect(parsed.issueCommentProgress).toBe(true);
   });
 
@@ -151,7 +150,7 @@ describe("ralphai command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(16);
+    expect(Object.keys(parsed)).toHaveLength(15);
     expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);

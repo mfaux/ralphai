@@ -689,7 +689,6 @@ function scaffold(
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueRepo: "",
-    issueCloseOnComplete: true,
     issueCommentProgress: true,
   };
 
@@ -742,8 +741,7 @@ Each entry should include:
         (line) => line === gitignoreEntry || line === gitignoreEntryLegacy,
       )
     ) {
-      updated =
-        updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\n";
+      updated = updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\n";
     }
     if (shouldIgnoreConfig && !lines.some((line) => line === "ralphai.json")) {
       // Append on a new line if .ralphai block was just added, otherwise start a new block
@@ -751,7 +749,8 @@ Each entry should include:
         updated = updated.trimEnd() + "\nralphai.json\n";
       } else {
         updated =
-          updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\nralphai.json\n";
+          updated.trimEnd() +
+          "\n\n# ralphai local state\n.ralphai\nralphai.json\n";
       }
     }
     if (updated !== content) {
