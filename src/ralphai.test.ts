@@ -2717,7 +2717,13 @@ echo "$MODE"
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
 
-      execSync("git checkout -b main", {
+      // Read the baseBranch that init --yes wrote to ralphai.json so
+      // the branch we create matches what the runner will validate.
+      const cfg = JSON.parse(
+        readFileSync(join(testDir, "ralphai.json"), "utf-8"),
+      );
+      const branch = cfg.baseBranch || "main";
+      execSync(`git checkout -b ${branch}`, {
         cwd: testDir,
         stdio: "ignore",
       });
