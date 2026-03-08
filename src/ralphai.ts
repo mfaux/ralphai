@@ -58,7 +58,6 @@ interface WizardAnswers {
   turns?: number;
   mode?: "branch" | "pr" | "patch";
   autoCommit?: boolean;
-  maxStuck?: number;
   issueSource: "none" | "github";
   createSamplePlan?: boolean;
 }
@@ -546,24 +545,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     autoCommit = autoCommitAnswer;
   }
 
-  // 7. Max stuck turns
-  const maxStuckInput = await clack.text({
-    message: "Max stuck turns before abort:",
-    initialValue: "3",
-    validate: (value) => {
-      if (!/^[1-9][0-9]*$/.test(value.trim()))
-        return "Must be a positive integer";
-    },
-  });
-
-  if (clack.isCancel(maxStuckInput)) {
-    clack.cancel("Setup cancelled.");
-    return null;
-  }
-
-  const maxStuck = parseInt(maxStuckInput, 10);
-
-  // 8. GitHub Issues integration
+  // 7. GitHub Issues integration
   const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: false,
@@ -582,7 +564,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     );
   }
 
-  // 9. Sample plan
+  // 8. Sample plan
   const createSamplePlan = await clack.confirm({
     message: "Create a sample plan to try your first run?",
     initialValue: true,
@@ -600,7 +582,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     turns,
     mode,
     autoCommit,
-    maxStuck,
     issueSource: enableIssues ? "github" : "none",
     createSamplePlan,
   };
@@ -742,7 +723,6 @@ function scaffold(
     turns: answers.turns ?? 5,
     mode: answers.mode ?? "branch",
     autoCommit: answers.autoCommit ?? false,
-    maxStuck: answers.maxStuck ?? 3,
     turnTimeout: 0,
     promptMode: "auto",
     continuous: false,
@@ -1377,7 +1357,6 @@ async function runRalphaiInit(
       turns: 5,
       mode: "branch",
       autoCommit: false,
-      maxStuck: 3,
       issueSource: "none",
       createSamplePlan: true,
     };
