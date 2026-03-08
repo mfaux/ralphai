@@ -34,7 +34,6 @@ print_usage() {
   echo "  --issue-label=<label>            Label to filter issues by (default: ralphai)"
   echo "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)"
   echo "  --issue-repo=<owner/repo>        Override repo for issue operations (default: auto-detect)"
-  echo "  --issue-close-on-complete=<bool> Close issue on completion (default: true)"
   echo "  --issue-comment-progress=<bool>  Comment on issue during run (default: true)"
   echo "  --show-config                    Print resolved settings and exit"
   echo "  --help, -h                       Show this help message"
@@ -44,7 +43,7 @@ print_usage() {
   echo "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,"
   echo "                  issueSource, issueLabel,"
   echo "                  issueInProgressLabel, issueRepo,"
-  echo "                  issueCloseOnComplete, issueCommentProgress"
+  echo "                  issueCommentProgress"
   echo ""
   echo "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,"
   echo "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,"
@@ -54,7 +53,7 @@ print_usage() {
   echo "                   RALPHAI_PROMPT_MODE,"
   echo "                   RALPHAI_ISSUE_SOURCE,"
   echo "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,"
-  echo "                   RALPHAI_ISSUE_REPO, RALPHAI_ISSUE_CLOSE_ON_COMPLETE,"
+  echo "                   RALPHAI_ISSUE_REPO,"
   echo "                   RALPHAI_ISSUE_COMMENT_PROGRESS"
   echo ""
   echo "Precedence: CLI flags > env vars > config file > built-in defaults"
@@ -171,10 +170,6 @@ for arg in "$@"; do
     --issue-repo=*)
       CLI_ISSUE_REPO="${arg#--issue-repo=}"
       ;;
-    --issue-close-on-complete=*)
-      CLI_ISSUE_CLOSE_ON_COMPLETE="${arg#--issue-close-on-complete=}"
-      validate_boolean "$CLI_ISSUE_CLOSE_ON_COMPLETE" "--issue-close-on-complete"
-      ;;
     --issue-comment-progress=*)
       CLI_ISSUE_COMMENT_PROGRESS="${arg#--issue-comment-progress=}"
       validate_boolean "$CLI_ISSUE_COMMENT_PROGRESS" "--issue-comment-progress"
@@ -238,9 +233,6 @@ if [[ -n "$CLI_ISSUE_IN_PROGRESS_LABEL" ]]; then
 fi
 if [[ -n "$CLI_ISSUE_REPO" ]]; then
   ISSUE_REPO="$CLI_ISSUE_REPO"
-fi
-if [[ -n "$CLI_ISSUE_CLOSE_ON_COMPLETE" ]]; then
-  ISSUE_CLOSE_ON_COMPLETE="$CLI_ISSUE_CLOSE_ON_COMPLETE"
 fi
 if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
   ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"

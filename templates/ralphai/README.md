@@ -63,7 +63,7 @@ depends-on: [foundation.md, wiring.md]
 
 ## Issue Linking
 
-Link a plan to a GitHub issue. On completion, Ralphai comments and closes the issue.
+Link a plan to a GitHub issue. On completion, Ralphai comments on the issue.
 
 ```md
 ---
@@ -73,19 +73,19 @@ issue-url: https://github.com/owner/repo/issues/42
 ---
 ```
 
-Requires `gh` CLI. If `gh` is unavailable, hooks are silently skipped. Set `issueCloseOnComplete: false` to disable auto-closing.
+Requires `gh` CLI. If `gh` is unavailable, hooks are silently skipped.
 
 ## Files
 
-| File / Directory       | Purpose                             |
-| ---------------------- | ----------------------------------- |
-| `README.md`            | This file                           |
-| `PLANNING.md`          | Guide for writing plan files        |
-| `LEARNINGS.md`         | Auto-written learnings (local-only) |
-| `pipeline/wip/`        | Parked plans                        |
-| `pipeline/backlog/`    | Queued plans                        |
-| `pipeline/in-progress/`| Active plans + progress.md          |
-| `pipeline/out/`        | Completed plans archive             |
+| File / Directory        | Purpose                             |
+| ----------------------- | ----------------------------------- |
+| `README.md`             | This file                           |
+| `PLANNING.md`           | Guide for writing plan files        |
+| `LEARNINGS.md`          | Auto-written learnings (local-only) |
+| `pipeline/wip/`         | Parked plans                        |
+| `pipeline/backlog/`     | Queued plans                        |
+| `pipeline/in-progress/` | Active plans + progress.md          |
+| `pipeline/out/`         | Completed plans archive             |
 
 ## Conventions
 
@@ -120,24 +120,23 @@ Settings resolve: **CLI flags > env vars > `ralphai.json` > defaults**.
 }
 ```
 
-| Key                    | Default               | Description                              |
-| ---------------------- | --------------------- | ---------------------------------------- |
-| `agentCommand`         | _(none)_              | CLI prefix for the AI agent              |
-| `feedbackCommands`     | _(none)_              | Commands to run after each change        |
-| `baseBranch`           | `main`                | Branch to create work branches from      |
-| `mode`                 | `direct`              | `direct`, `pr`, or `patch`               |
-| `autoCommit`           | `false`               | Auto-commit after each turn              |
-| `turns`                | `5`                   | Turns per plan (0 = unlimited)           |
-| `maxStuck`             | `3`                   | No-progress turns before aborting        |
-| `turnTimeout`          | `0`                   | Seconds before killing agent (0 = off)   |
-| `promptMode`           | `auto`                | `auto`, `at-path`, or `inline`           |
-| `continuous`           | `false`               | Keep processing after first plan         |
-| `issueSource`          | `none`                | `none` or `github`                       |
-| `issueLabel`           | `ralphai`             | Label to filter issues                   |
-| `issueInProgressLabel` | `ralphai:in-progress` | Label when issue is picked up            |
-| `issueRepo`            | _(auto-detect)_       | `owner/repo` override                    |
-| `issueCloseOnComplete` | `true`                | Close issue on completion                |
-| `issueCommentProgress` | `true`                | Comment on issue during run              |
+| Key                    | Default               | Description                            |
+| ---------------------- | --------------------- | -------------------------------------- |
+| `agentCommand`         | _(none)_              | CLI prefix for the AI agent            |
+| `feedbackCommands`     | _(none)_              | Commands to run after each change      |
+| `baseBranch`           | `main`                | Branch to create work branches from    |
+| `mode`                 | `direct`              | `direct`, `pr`, or `patch`             |
+| `autoCommit`           | `false`               | Auto-commit after each turn            |
+| `turns`                | `5`                   | Turns per plan (0 = unlimited)         |
+| `maxStuck`             | `3`                   | No-progress turns before aborting      |
+| `turnTimeout`          | `0`                   | Seconds before killing agent (0 = off) |
+| `promptMode`           | `auto`                | `auto`, `at-path`, or `inline`         |
+| `continuous`           | `false`               | Keep processing after first plan       |
+| `issueSource`          | `none`                | `none` or `github`                     |
+| `issueLabel`           | `ralphai`             | Label to filter issues                 |
+| `issueInProgressLabel` | `ralphai:in-progress` | Label when issue is picked up          |
+| `issueRepo`            | _(auto-detect)_       | `owner/repo` override                  |
+| `issueCommentProgress` | `true`                | Comment on issue during run            |
 
 All keys have corresponding `RALPHAI_*` env vars and CLI flags. Run `ralphai run --help` for the full list.
 

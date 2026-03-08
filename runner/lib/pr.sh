@@ -40,19 +40,10 @@ archive_run() {
     fi
   done
 
-  # Post progress comment on linked GitHub issue
-  if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" && "$ISSUE_COMMENT_PROGRESS" == "true" ]]; then
-    local repo
-    repo=$(detect_issue_repo) && \
-    gh issue comment "$PLAN_ISSUE_NUMBER" \
-      --repo "$repo" \
-      --body "Ralphai completed this task. Archiving plan and preparing to merge." >/dev/null 2>&1
-  fi
-
   # Plan files are gitignored (local-only state), so no git operations needed.
   # The mv commands above are the entire archive step.
 
-  # Post completion comment on linked issue
+  # Post completion comment on linked issue and remove in-progress label
   if [[ "$PLAN_ISSUE_SOURCE" == "github" && -n "$PLAN_ISSUE_NUMBER" ]]; then
     if check_gh_available; then
       local repo=""
@@ -65,6 +56,9 @@ archive_run() {
         gh issue comment "$PLAN_ISSUE_NUMBER" \
           --repo "$repo" \
           --body "Ralphai completed this task and is preparing to merge." >/dev/null 2>&1 || true
+        gh issue edit "$PLAN_ISSUE_NUMBER" \
+          --repo "$repo" \
+          --remove-label "$ISSUE_IN_PROGRESS_LABEL" >/dev/null 2>&1 || true
       fi
     fi
   fi
