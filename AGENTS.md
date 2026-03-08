@@ -2,6 +2,10 @@
 
 Project-specific guidance for AI coding agents working in this codebase.
 
+## Guiding Principles
+
+- **Great DX.** Every decision — CLI design, defaults, error messages, docs — should minimize the time from install to "wow, that worked."
+
 ## Dogfooding Ralphai
 
 Ralphai is an autonomous task runner for AI coding agents.
