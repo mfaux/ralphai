@@ -151,6 +151,7 @@ Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code**
 - [CLI Reference](docs/cli-reference.md) — all commands, flags, and configuration
 - [How Ralphai Works](docs/how-ralphai-works.md) — context rot, feedback loops, stuck detection
 - [Worktrees](docs/worktrees.md) — parallel runs in isolated directories
+- [Workflows](docs/workflows.md) — common patterns and recipes
 
 ## Acknowledgements
 
