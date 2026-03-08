@@ -313,6 +313,24 @@ while true; do
       echo "=== Ralphai turn $i of $TURNS (plan: $(basename "${WIP_FILES[0]}")) ==="
     fi
 
+    # --- Turn summary: show task progress ---
+    _total_tasks=$(grep -c '^### Task' "${WIP_FILES[0]}" 2>/dev/null || echo "0")
+    _completed_tasks=0
+    if [[ -f "$PROGRESS_FILE" ]]; then
+      _completed_tasks=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null || echo "0")
+    fi
+    _current_task=$((_completed_tasks + 1))
+    if [[ $_current_task -gt $_total_tasks ]]; then
+      _current_task=$_total_tasks
+    fi
+    if [[ $_total_tasks -gt 0 ]]; then
+      if [[ "$TURNS" -eq 0 ]]; then
+        echo "── Turn $i ── Task $_current_task of $_total_tasks ──"
+      else
+        echo "── Turn $i/$TURNS ── Task $_current_task of $_total_tasks ──"
+      fi
+    fi
+
     PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
 1. Read the referenced files and the progress file.${LEARNINGS_HINT}
 2. Find the highest-priority incomplete task (see prioritization rules in the plan).
