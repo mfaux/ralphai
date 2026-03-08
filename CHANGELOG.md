@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 (WIP)
+
+### Features
+
+- **Gitignore `ralphai.json` by default** — each developer's workflow config is personal. Teams that want shared config can use `ralphai init --shared` to keep `ralphai.json` tracked. Init now adds `ralphai.json` to `.gitignore` alongside `.ralphai/`.
+- **Symlink `ralphai.json` into worktrees** — `ralphai worktree` symlinks `ralphai.json` from the main repo into the worktree, so config is available without committing it. This extends the existing `.ralphai/` symlink pattern. (#67)
+- **Runner config fallback for manual worktrees** — the runner resolves `ralphai.json` from the main repo when running in a manually-created worktree without the symlink.
+
+### Removed
+
+- Removed "ralphai.json is not committed" warning — no longer applicable since config is gitignored by default and symlinked into worktrees.
+
+## 0.4.2
+
+### Fixes
+
+- Warn when `ralphai.json` is uncommitted before worktree creation (#66)
+
 ## 0.4.1
 
 ### Docs

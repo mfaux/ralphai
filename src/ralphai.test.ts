@@ -69,13 +69,15 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, ".ralphai", "pipeline", "out"))).toBe(true);
   });
 
-  it("init --yes adds .ralphai to root .gitignore", () => {
+  it("init --yes adds .ralphai and ralphai.json to root .gitignore", () => {
     runCliOutput(["init", "--yes"], testDir);
 
     const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".ralphai");
     // Should use ".ralphai" (no trailing slash) to also match symlinks in worktrees
     expect(gitignore).not.toContain(".ralphai/");
+    // ralphai.json is gitignored by default — personal config
+    expect(gitignore).toContain("ralphai.json");
   });
 
   it("init --yes creates LEARNINGS.md with seed content", () => {
@@ -164,6 +166,23 @@ describe("ralphai command", () => {
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("LEARNINGS.md");
+    expect(output).toContain("ralphai init --shared");
+  });
+
+  it("init --shared does not gitignore ralphai.json", () => {
+    runCliOutput(["init", "--yes", "--shared"], testDir);
+
+    const gitignore = readFileSync(join(testDir, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".ralphai");
+    expect(gitignore).not.toContain("ralphai.json");
+  });
+
+  it("init --shared output does not show share hint", () => {
+    const output = stripLogo(
+      runCliOutput(["init", "--yes", "--shared"], testDir),
+    );
+
+    expect(output).not.toContain("ralphai init --shared");
   });
 
   it("ralphai.sh template passes bash syntax check", () => {
@@ -1154,8 +1173,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain(
           `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
         );
-        // Config is at repo root and checked out by git, so stays relative
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
+        // Config falls back to main repo's absolute path (manual worktree without symlink)
+        expect(result).toContain(`CONFIG_FILE=${mainRepo}/ralphai.json`);
         expect(result).toContain(
           `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
         );
@@ -3328,23 +3347,6 @@ build_continuous_pr_body
       expect(result.stderr).toContain("No plans in backlog");
     });
 
-    it("worktree warns when ralphai.json is not committed", () => {
-      gitInitialCommit(testDir);
-      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      // Create an uncommitted ralphai.json
-      writeFileSync(
-        join(testDir, "ralphai.json"),
-        JSON.stringify({ agentCommand: "claude -p" }),
-      );
-
-      const result = runCli(["worktree"], testDir);
-      // It will still fail (no plans), but should warn first
-      const combined = result.stdout + result.stderr;
-      expect(combined).toContain("ralphai.json is not committed");
-    });
-
     it("worktree --plan=nonexistent.md errors", () => {
       gitInitialCommit(testDir);
       mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
@@ -3513,6 +3515,104 @@ build_continuous_pr_body
       ).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(symlinkPath)).toBe(join(testDir, ".ralphai"));
+    });
+
+    it("worktree creates ralphai.json symlink when config is not committed", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(
+          testDir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-config-symlink.md",
+        ),
+        "# Config symlink test\n",
+      );
+
+      // Create ralphai.json in main repo (not committed)
+      writeFileSync(
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ runner: "opencode" }),
+      );
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(testDir, "wt-config-symlink");
+
+      const result = runCli(
+        ["worktree", "--plan=prd-config-symlink.md", `--dir=${worktreeDir}`],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      const combined = result.stdout + result.stderr;
+
+      // Verify the ralphai.json symlink was created
+      const configSymlink = join(worktreeDir, "ralphai.json");
+      expect(
+        existsSync(configSymlink),
+        `ralphai.json symlink not found at ${configSymlink}. CLI output: ${combined}`,
+      ).toBe(true);
+      expect(lstatSync(configSymlink).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(configSymlink)).toBe(join(testDir, "ralphai.json"));
+    });
+
+    it("worktree skips ralphai.json symlink when config is committed", () => {
+      gitInitialCommit(testDir);
+
+      // Create .ralphai with a plan
+      mkdirSync(join(testDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(
+          testDir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-committed-cfg.md",
+        ),
+        "# Committed config test\n",
+      );
+
+      // Create and commit ralphai.json
+      writeFileSync(
+        join(testDir, "ralphai.json"),
+        JSON.stringify({ runner: "opencode" }),
+      );
+      execSync("git add ralphai.json && git commit -m 'add config'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Use a stub runner that just exits 0
+      const stubScript = join(testDir, "stub-runner.sh");
+      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
+      chmodSync(stubScript, 0o755);
+
+      const worktreeDir = join(testDir, "wt-committed-cfg");
+
+      runCli(
+        ["worktree", "--plan=prd-committed-cfg.md", `--dir=${worktreeDir}`],
+        testDir,
+        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        30000,
+      );
+
+      // ralphai.json should exist (checked out by git) but NOT be a symlink
+      const configPath = join(worktreeDir, "ralphai.json");
+      expect(existsSync(configPath)).toBe(true);
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(false);
     });
 
     it("worktree replaces existing .ralphai dir with symlink", () => {

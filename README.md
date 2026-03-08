@@ -2,7 +2,7 @@
 
 Put your AI coding agent on autopilot.
 
-Ralphai takes [plan files](#1-write-plans) (markdown) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
+Ralphai takes plans (markdown files) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
 
 ## Why Ralphai?
 
@@ -24,13 +24,32 @@ npm install -D ralphai       # local dev dependency
 npx ralphai                  # no install, runs latest
 ```
 
+Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
+
 ## Get Started
+
+In your project repository:
 
 ```bash
 ralphai init                 # scaffold .ralphai/ and ralphai.json
 ```
 
 Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts.
+
+All ralphai files are **gitignored by default** — your workflow config is personal. Commit the `.gitignore` update so git knows to ignore them:
+
+```bash
+git add .gitignore
+git commit -m "chore: add ralphai to .gitignore"
+```
+
+To share config with your team, use `--shared` to track `ralphai.json` in git:
+
+```bash
+ralphai init --shared        # keeps ralphai.json out of .gitignore
+git add .gitignore ralphai.json
+git commit -m "chore: track shared ralphai config"
+```
 
 ## Workflow
 
@@ -39,11 +58,19 @@ Ralphai detects your package manager and build scripts automatically. Use `--yes
 Ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples.
 
 ```
-Create a plan in the ralphai backlog for adding dark mode support.
-Use PLANNING.md as a guide.
+Create a plan in the .ralphai backlog for adding dark mode support.
+Use .ralphai/PLANNING.md as a guide.
 ```
 
-> Plan files are **gitignored** — local-only state.
+> **Tip:** `.ralphai/` is gitignored, so agents in normal chat sessions might be slow to discover it. Add a section like this to your project's `AGENTS.md` so agents know about ralphai outside of runs:
+>
+> ```markdown
+> ## Ralphai
+>
+> This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
+> Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
+> the plan writing guide.
+> ```
 
 ### 2. Run
 
@@ -63,7 +90,7 @@ ralphai run --pr         # create a ralphai/* branch and open a PR
 ralphai run --dry-run    # preview without changing anything
 ```
 
-For parallel work, run in a [git worktree](docs/worktrees.md) (commit `ralphai.json` first — worktrees are fresh checkouts):
+For parallel work, run in a [git worktree](docs/worktrees.md):
 
 ```bash
 ralphai worktree                    # auto-pick next backlog plan
@@ -73,7 +100,13 @@ ralphai worktree clean              # remove completed worktrees
 
 ### 3. Steer
 
-Plans flow through `backlog/` → `in-progress/` → `out/`. Park unready plans in `wip/` — Ralphai ignores that folder.
+Plans flow through the pipeline:
+
+```
+wip/ (parked)    backlog/  →  in-progress/  →  out/
+```
+
+Park unready plans in `wip/`. Ralphai ignores that folder.
 
 ### 4. Pause and resume
 

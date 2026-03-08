@@ -42,6 +42,7 @@ interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
   yes: boolean;
   force: boolean;
+  shared: boolean;
   agentCommand?: string;
   targetDir?: string;
   runArgs: string[];
@@ -92,6 +93,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let subcommand: RalphaiSubcommand | undefined;
   let yes = false;
   let force = false;
+  let shared = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   const runArgs: string[] = [];
@@ -116,6 +118,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       yes = true;
     } else if (arg === "--force") {
       force = true;
+    } else if (arg === "--shared") {
+      shared = true;
     } else if (arg.startsWith("--agent-command=")) {
       agentCommand = arg.slice("--agent-command=".length);
     } else if (!arg.startsWith("-")) {
@@ -143,6 +147,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     subcommand,
     yes,
     force,
+    shared,
     agentCommand,
     targetDir,
     runArgs,
@@ -641,7 +646,11 @@ function ensureGitHubLabels(cwd: string): LabelResult {
 // Scaffold logic
 // ---------------------------------------------------------------------------
 
-function scaffold(answers: WizardAnswers, cwd: string): void {
+function scaffold(
+  answers: WizardAnswers,
+  cwd: string,
+  opts?: { shared?: boolean },
+): void {
   const __dir = dirname(fileURLToPath(import.meta.url));
   const templatesDir = join(__dir, "..", "templates", "ralphai");
 
@@ -715,27 +724,43 @@ Each entry should include:
 `;
   writeFileSync(join(ralphaiDir, "LEARNINGS.md"), learningsContent);
 
-  // Ensure .ralphai is gitignored in the project's root .gitignore
+  // Ensure .ralphai and ralphai.json are gitignored in the project's root .gitignore.
   // Use ".ralphai" (no trailing slash) so it matches both directories and
   // symlinks — worktrees create a .ralphai symlink that ".ralphai/" won't match.
+  // ralphai.json is gitignored by default — each developer's config is personal.
+  // Teams that want shared config can remove ralphai.json from .gitignore.
   const rootGitignore = join(cwd, ".gitignore");
   const gitignoreEntry = ".ralphai";
   const gitignoreEntryLegacy = ".ralphai/";
+  const shouldIgnoreConfig = !opts?.shared;
   if (existsSync(rootGitignore)) {
     const content = readFileSync(rootGitignore, "utf-8");
     const lines = content.split("\n").map((l) => l.trim());
+    let updated = content;
     if (
       !lines.some(
         (line) => line === gitignoreEntry || line === gitignoreEntryLegacy,
       )
     ) {
-      writeFileSync(
-        rootGitignore,
-        content.trimEnd() + "\n\n# ralphai local pipeline state\n.ralphai\n",
-      );
+      updated =
+        updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\n";
+    }
+    if (shouldIgnoreConfig && !lines.some((line) => line === "ralphai.json")) {
+      // Append on a new line if .ralphai block was just added, otherwise start a new block
+      if (updated !== content) {
+        updated = updated.trimEnd() + "\nralphai.json\n";
+      } else {
+        updated =
+          updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\nralphai.json\n";
+      }
+    }
+    if (updated !== content) {
+      writeFileSync(rootGitignore, updated);
     }
   } else {
-    writeFileSync(rootGitignore, "# ralphai local pipeline state\n.ralphai\n");
+    const ignoreLines = ["# ralphai local state", ".ralphai"];
+    if (shouldIgnoreConfig) ignoreLines.push("ralphai.json");
+    writeFileSync(rootGitignore, ignoreLines.join("\n") + "\n");
   }
 
   // Create GitHub labels if issues integration is enabled
@@ -777,6 +802,12 @@ Each entry should include:
   );
   console.log(`  2. Switch to a feature branch`);
   console.log(`  3. ${TEXT}ralphai run${RESET}`);
+  if (!opts?.shared) {
+    console.log();
+    console.log(
+      `${DIM}To share config with your team: ${TEXT}ralphai init --shared${RESET}`,
+    );
+  }
   if (answers.issueSource === "github") {
     console.log();
     console.log(
@@ -1175,7 +1206,7 @@ async function runRalphaiInit(
     answers = wizardResult;
   }
 
-  scaffold(answers, cwd);
+  scaffold(answers, cwd, { shared: options.shared });
 }
 
 // ---------------------------------------------------------------------------
@@ -1846,21 +1877,6 @@ async function runRalphaiWorktree(
     process.exit(1);
   }
 
-  // Warn if ralphai.json exists but isn't committed (worktrees won't have it)
-  if (existsSync(join(cwd, "ralphai.json"))) {
-    try {
-      execSync("git ls-files --error-unmatch ralphai.json", {
-        cwd,
-        stdio: "ignore",
-      });
-    } catch {
-      console.log(
-        `${TEXT}Warning:${RESET} ${DIM}ralphai.json is not committed. Worktrees are fresh checkouts and won't have your config — commit it first.${RESET}`,
-      );
-      console.log();
-    }
-  }
-
   // Select plan (in-progress first, then backlog)
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const plan = selectPlanForWorktree(
@@ -1972,6 +1988,17 @@ async function runRalphaiWorktree(
   const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
   if (!existsSync(worktreeRalphaiLink)) {
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
+  }
+
+  // Symlink ralphai.json from worktree → main repo so config is available
+  // even when ralphai.json is not committed (gitignored / untracked).
+  // If committed, `git worktree add` already checked it out — skip.
+  const worktreeConfigLink = join(resolvedWorktreeDir, "ralphai.json");
+  if (
+    !existsSync(worktreeConfigLink) &&
+    existsSync(join(cwd, "ralphai.json"))
+  ) {
+    symlinkSync(join(cwd, "ralphai.json"), worktreeConfigLink);
   }
 
   // Spawn ralphai runner in the worktree

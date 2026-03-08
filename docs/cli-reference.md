@@ -28,6 +28,7 @@ ralphai <command> [options]
 ```
 --yes, -y              Skip prompts, use defaults
 --force                Re-scaffold from scratch
+--shared               Track ralphai.json in git (for team-shared config)
 --agent-command=CMD    Set the agent command
 ```
 
