@@ -157,6 +157,18 @@ describe("ralphai command", () => {
     expect(parsed.maxStuck).toBe(3);
   });
 
+  it("init --yes warns when agent command binary is not in PATH", () => {
+    const result = runCli(
+      ["init", "--yes", "--agent-command=nonexistent-agent-xyz -p"],
+      testDir,
+    );
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("not found in PATH");
+    expect(output).toContain("nonexistent-agent-xyz");
+    // Should still scaffold successfully (warning, not error)
+    expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
+  });
+
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 

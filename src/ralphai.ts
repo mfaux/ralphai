@@ -1305,6 +1305,21 @@ function resolveRalphaiDir(cwd: string): string | null {
   return null;
 }
 
+/**
+ * Check whether the first token of an agent command is reachable in PATH.
+ * Returns the token name if NOT found, or null if it is found.
+ */
+function checkAgentCommandInPath(agentCommand: string): string | null {
+  const token = agentCommand.trim().split(/\s+/)[0];
+  if (!token) return null;
+  try {
+    execSync(`which ${token}`, { stdio: ["pipe", "pipe", "pipe"] });
+    return null; // found
+  } catch {
+    return token; // not found
+  }
+}
+
 async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
@@ -1371,6 +1386,17 @@ async function runRalphaiInit(
       return;
     }
     answers = wizardResult;
+  }
+
+  // Warn if the agent binary isn't in PATH (soft warning, not a hard error)
+  const missingBinary = checkAgentCommandInPath(answers.agentCommand);
+  if (missingBinary) {
+    const msg = `'${missingBinary}' not found in PATH — make sure it's installed before running.`;
+    if (options.yes) {
+      console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
+    } else {
+      clack.log.warn(msg);
+    }
   }
 
   scaffold(answers, cwd, { shared: options.shared });
