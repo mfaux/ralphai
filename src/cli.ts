@@ -31,6 +31,7 @@ ${BOLD}Commands:${RESET}
   reset          Move in-progress plans back to backlog and clean up
   update [tag]   Update ralphai to the latest (or specified) version
   uninstall      Remove Ralphai from your project
+  doctor         Check your ralphai setup for problems
 
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message

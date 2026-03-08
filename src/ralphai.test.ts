@@ -4666,4 +4666,133 @@ build_continuous_pr_body
       });
     },
   );
+
+  // ---------------------------------------------------------------------------
+  // doctor subcommand
+  // ---------------------------------------------------------------------------
+
+  describe("doctor subcommand", () => {
+    it("shows help text with doctor command listed", () => {
+      const result = runCli([], testDir);
+      const output = stripLogo(result.stdout);
+      expect(output).toContain("doctor");
+    });
+
+    it("doctor --help shows doctor-specific help", () => {
+      const result = runCli(["doctor", "--help"], testDir);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("ralphai doctor");
+      expect(output).toContain("diagnostic");
+    });
+
+    it("doctor in fully initialized directory reports all checks passing", () => {
+      // Initialize ralphai
+      runCli(["init", "--yes"], testDir);
+
+      // Create an initial commit on main so base branch check passes
+      execSync(
+        "git config user.email 'test@test.com' && git config user.name 'Test'",
+        { cwd: testDir, stdio: "ignore" },
+      );
+      execSync("git checkout -b main", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Override agentCommand to something in PATH and feedbackCommands to a passing command
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "true";
+      config.feedbackCommands = ["true"];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      // All checks should pass
+      expect(output).toContain("\u2713"); // ✓
+      expect(output).not.toContain("\u2717"); // ✗
+      expect(output).toContain(".ralphai/ initialized");
+      expect(output).toContain("ralphai.json valid");
+      expect(output).toContain("git repo detected");
+      expect(output).toContain("agent: true");
+      expect(output).toContain("found in PATH");
+      expect(output).toContain("All checks passed");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("doctor without .ralphai/ reports first check as failed", () => {
+      // Don't run init — no .ralphai/ directory
+      // But we need a ralphai.json for config checks to not crash
+      // Actually, without .ralphai/ the doctor should still run and report failures
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).toContain("\u2717"); // ✗
+      expect(output).toContain(".ralphai/ not found");
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("doctor with unreachable agent command shows failure", () => {
+      runCli(["init", "--yes"], testDir);
+
+      // Set an agent command that won't be found in PATH
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "nonexistent-agent-binary-xyz";
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).toContain("\u2717"); // ✗
+      expect(output).toContain("nonexistent-agent-binary-xyz");
+      expect(output).toContain("not found in PATH");
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("doctor exit code is 0 when only warnings (no failures)", () => {
+      // Initialize ralphai
+      runCli(["init", "--yes"], testDir);
+
+      // Create an initial commit on main so base branch check passes
+      execSync(
+        "git config user.email 'test@test.com' && git config user.name 'Test'",
+        { cwd: testDir, stdio: "ignore" },
+      );
+      execSync("git checkout -b main", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+      execSync("git add -A && git commit -m 'init'", {
+        cwd: testDir,
+        stdio: "ignore",
+      });
+
+      // Override agentCommand to something in PATH
+      const configPath = join(testDir, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "true";
+      // Set feedback commands to something that fails (to produce a warning, not a failure)
+      config.feedbackCommands = ["false"];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      // Make the working tree dirty (uncommitted change) — produces a warning
+      writeFileSync(join(testDir, "dirty.txt"), "dirty");
+
+      const result = runCli(["doctor"], testDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      // Should have warnings but no failures
+      expect(output).toContain("\u26A0"); // ⚠
+      expect(output).toContain("warning");
+      // Exit code should be 0 (warnings don't count as failures)
+      expect(result.exitCode).toBe(0);
+    });
+  });
 });
