@@ -158,6 +158,28 @@ depends-on: [foundation.md, wiring.md]
 ---
 ```
 
+### Plan Selection
+
+When Ralphai looks for work, it follows this priority:
+
+1. **In-progress plans first** — if `in-progress/` contains a plan file,
+   Ralphai resumes it (no selection needed).
+2. **Backlog selection** — otherwise, Ralphai scans `backlog/` for
+   dependency-ready plans (all `depends-on` entries archived in `out/`).
+   Plans with unsatisfied dependencies are skipped with a diagnostic
+   message showing which dependencies are blocking.
+3. **Single ready plan** — auto-selected.
+4. **Multiple ready plans** — the oldest plan by filesystem order is
+   picked. (Ralphai logs how many plans were ready and which one it
+   chose.)
+
+Plans are also skipped if their branch or PR already exists (branch
+collision) — this prevents conflicts when multiple worktrees or
+continuous-mode sessions overlap.
+
+Use `depends-on` frontmatter to control execution order. Without it, plans
+run in filesystem order (typically alphabetical).
+
 ## Learnings System
 
 Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs
