@@ -31,7 +31,7 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueCloseOnComplete","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns"] | index($k) | not)' "$config_path")
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns"] | index($k) | not)' "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -109,13 +109,6 @@ load_config() {
     value=$(_json_str "mode")
     validate_enum "$value" "$config_path: 'mode'" "branch" "pr" "patch"
     CONFIG_MODE="$value"
-  fi
-
-  # --- issueCloseOnComplete (boolean) ---
-  if _json_has "issueCloseOnComplete"; then
-    value=$(_json_raw "issueCloseOnComplete")
-    validate_boolean "$value" "$config_path: 'issueCloseOnComplete'"
-    CONFIG_ISSUE_CLOSE_ON_COMPLETE="$value"
   fi
 
   # --- issueSource ("none" or "github") ---
@@ -213,9 +206,6 @@ apply_config() {
   if [[ -n "${CONFIG_MODE:-}" ]]; then
     MODE="$CONFIG_MODE"
   fi
-  if [[ -n "${CONFIG_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
-    ISSUE_CLOSE_ON_COMPLETE="$CONFIG_ISSUE_CLOSE_ON_COMPLETE"
-  fi
   if [[ -n "${CONFIG_ISSUE_SOURCE:-}" ]]; then
     ISSUE_SOURCE="$CONFIG_ISSUE_SOURCE"
   fi
@@ -288,10 +278,6 @@ apply_env_overrides() {
   fi
   if [[ -n "${RALPHAI_ISSUE_REPO:-}" ]]; then
     ISSUE_REPO="$RALPHAI_ISSUE_REPO"
-  fi
-  if [[ -n "${RALPHAI_ISSUE_CLOSE_ON_COMPLETE:-}" ]]; then
-    validate_boolean "$RALPHAI_ISSUE_CLOSE_ON_COMPLETE" "RALPHAI_ISSUE_CLOSE_ON_COMPLETE"
-    ISSUE_CLOSE_ON_COMPLETE="$RALPHAI_ISSUE_CLOSE_ON_COMPLETE"
   fi
   if [[ -n "${RALPHAI_ISSUE_COMMENT_PROGRESS:-}" ]]; then
     validate_boolean "$RALPHAI_ISSUE_COMMENT_PROGRESS" "RALPHAI_ISSUE_COMMENT_PROGRESS"

@@ -205,7 +205,7 @@ describe("ralphai command", () => {
     expect(issues).toContain("check_gh_available");
     expect(issues).toContain("detect_repo_from_url");
     const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain("DEFAULT_ISSUE_CLOSE_ON_COMPLETE");
+    expect(defaults).toContain("DEFAULT_ISSUE_SOURCE");
   });
 
   it("init --yes works without package.json", () => {
@@ -414,7 +414,6 @@ describe("ralphai command", () => {
       'DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"',
     );
     expect(defaults).toContain('DEFAULT_ISSUE_REPO=""');
-    expect(defaults).toContain('DEFAULT_ISSUE_CLOSE_ON_COMPLETE="true"');
     expect(defaults).toContain('DEFAULT_ISSUE_COMMENT_PROGRESS="true"');
   });
 
