@@ -29,6 +29,7 @@ ${BOLD}Commands:${RESET}
   worktree       Create or reuse an isolated git worktree
   status         Show pipeline and worktree status
   reset          Move in-progress plans back to backlog and clean up
+  purge          Delete archived artifacts from pipeline/out/
   update [tag]   Update ralphai to the latest (or specified) version
   teardown       Remove Ralphai from your project
   doctor         Check your ralphai setup for problems
@@ -61,6 +62,9 @@ ${BOLD}Worktree Options:${RESET}
 ${BOLD}Reset Options:${RESET}
   --yes, -y         Skip confirmation prompt
 
+${BOLD}Purge Options:${RESET}
+  --yes, -y         Skip confirmation prompt
+
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
   ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
@@ -75,6 +79,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai status                 ${DIM}# show pipeline and worktree status${RESET}
   ${DIM}$${RESET} ralphai reset                  ${DIM}# move in-progress plans back to backlog${RESET}
   ${DIM}$${RESET} ralphai reset --yes            ${DIM}# reset without confirmation${RESET}
+  ${DIM}$${RESET} ralphai purge --yes            ${DIM}# delete all archived artifacts${RESET}
   ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
   ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
   ${DIM}$${RESET} ralphai teardown --yes         ${DIM}# remove ralphai from project${RESET}
