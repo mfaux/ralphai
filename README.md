@@ -2,13 +2,25 @@
 
 Put your AI coding agent on autopilot.
 
-Ralphai takes plans (markdown files) from its backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans (or have your agent write them). Ralphai does the rest.
+Ralphai takes plans (markdown files) from a backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans, or have your agent write them. Ralphai does the rest.
+
+Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
+
+## Try It Now
+
+```bash
+npx ralphai init --yes           # scaffold .ralphai/ with a sample plan
+git checkout -b try-ralphai      # switch to a feature branch
+npx ralphai run                  # watch the agent complete the sample plan
+```
+
+`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required.
 
 ## Why Ralphai?
 
-AI coding agents get worse the longer they run. As the conversation grows, the model drops older context — it forgets what it tried, repeats mistakes, and drifts.
+AI coding agents get worse the longer they run. As the conversation grows, the model drops older context: it forgets what it tried, repeats mistakes, and drifts.
 
-Ralphai avoids this by starting each **turn** with a **fresh session**: just the plan and a progress log. No conversation history to lose, no drift.
+Ralphai avoids this by starting each turn with a **fresh session**: just the plan and a progress log. No conversation history to lose. No drift.
 
 - **No context rot** — turn 10 is as sharp as turn 1
 - **Fresh feedback** — real build output every cycle, never recalled from memory
@@ -19,12 +31,9 @@ Ralphai avoids this by starting each **turn** with a **fresh session**: just the
 ## Install
 
 ```bash
-npm install -g ralphai       # global (recommended)
-npm install -D ralphai       # local dev dependency
-npx ralphai                  # no install, runs latest
+npm install -g ralphai       # install globally for regular use
+npx ralphai                  # run without installing
 ```
-
-Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
 
 ## Get Started
 
@@ -36,55 +45,22 @@ ralphai init                 # scaffold .ralphai/ and ralphai.json
 
 Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts.
 
-All ralphai files are **gitignored by default** — your workflow config is personal. Commit the `.gitignore` update so git knows to ignore them:
-
-```bash
-git add .gitignore
-git commit -m "chore: add ralphai to .gitignore"
-```
-
-To share config with your team, use `--shared` to track `ralphai.json` in git:
-
-```bash
-ralphai init --shared        # keeps ralphai.json out of .gitignore
-git add .gitignore ralphai.json
-git commit -m "chore: track shared ralphai config"
-```
-
-## Try It Now
-
-```bash
-ralphai init --yes           # scaffold .ralphai/ with a sample plan
-git checkout -b try-ralphai  # switch to a feature branch
-ralphai run                  # watch the agent complete the sample plan
-```
-
-`init --yes` creates a sample plan in the backlog so you can see the full loop immediately — no plan writing required.
+All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
 
 ## Workflow
 
 ### 1. Write plans
 
-`init --yes` creates a sample plan automatically. For real work, ask your coding agent to create plan files in `.ralphai/pipeline/backlog/`. Point it at `.ralphai/PLANNING.md` for structure and examples.
+Ask your coding agent to create plan files in the Ralphai backlog, using `.ralphai/PLANNING.md` as a guide.
 
 ```
-Create a plan in the .ralphai backlog for adding dark mode support.
+Create a plan in the ralphai backlog for adding dark mode support.
 Use .ralphai/PLANNING.md as a guide.
 ```
 
-> **Tip:** `.ralphai/` is gitignored, so agents in normal chat sessions might be slow to discover it. Add a section like this to your project's `AGENTS.md` so agents know about ralphai outside of runs:
->
-> ```markdown
-> ## Ralphai
->
-> This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-> Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
-> the plan writing guide.
-> ```
-
 ### 2. Run
 
-Ralphai commits on your **current branch** by default. It refuses to run on `main`/`master` — switch to a feature branch first.
+Ralphai commits on your **current branch** by default. It refuses to run on `main`/`master`, so switch to a feature branch first.
 
 ```bash
 git checkout -b my-feature
@@ -120,11 +96,11 @@ Park unready plans in `wip/`. Ralphai ignores that folder.
 
 ### 4. Pause and resume
 
-Stop mid-run any time. Work stays in `in-progress/`. Resume with `ralphai run` — it auto-detects in-progress work. Use `ralphai status` to see what's queued, in progress, and any problems.
+Stop mid-run any time. Work stays in `in-progress/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `ralphai status` to see what's queued, in progress, and any problems.
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review entries and promote durable lessons to `AGENTS.md` or skill docs. [More →](docs/how-ralphai-works.md#learnings-system)
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review entries and promote durable lessons to `AGENTS.md` or skill docs. [More on learnings →](docs/how-ralphai-works.md#learnings-system)
 
 ## Supported Agents
 
