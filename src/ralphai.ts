@@ -1399,6 +1399,17 @@ async function runRalphaiInit(
     }
   }
 
+  // Warn if no feedback commands were detected — the agent won't get feedback
+  if (!answers.feedbackCommands.trim()) {
+    const msg =
+      "No build/test/lint scripts detected. Your agent won't get feedback between turns. Add feedbackCommands to ralphai.json.";
+    if (options.yes) {
+      console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
+    } else {
+      clack.log.warn(msg);
+    }
+  }
+
   scaffold(answers, cwd, { shared: options.shared });
 }
 

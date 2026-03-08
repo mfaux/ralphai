@@ -169,6 +169,16 @@ describe("ralphai command", () => {
     expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
   });
 
+  it("init --yes warns when no feedback commands are detected", () => {
+    // testDir has no package.json, so detectFeedbackCommands returns ""
+    const result = runCli(["init", "--yes"], testDir);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("No build/test/lint scripts detected");
+    expect(output).toContain("feedbackCommands");
+    // Should still scaffold successfully (warning, not error)
+    expect(existsSync(join(testDir, "ralphai.json"))).toBe(true);
+  });
+
   it("success output contains next steps", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], testDir));
 
