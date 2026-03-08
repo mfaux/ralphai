@@ -6,6 +6,12 @@ Project-specific guidance for AI coding agents working in this codebase.
 
 - **Great DX.** Every decision — CLI design, defaults, error messages, docs — should minimize the time from install to "wow, that worked."
 
+## File Size Limits
+
+- **Test files: max ~500 lines.** When a test file approaches this limit, split it by feature domain before adding more tests. When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one.
+- **Source files: max ~300 lines.** Extract modules when a file grows beyond this.
+- Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
+
 ## Dogfooding Ralphai
 
 Ralphai is an autonomous task runner for AI coding agents.
@@ -31,3 +37,7 @@ Tests that spawn bash scripts (e.g. the task runner via `RALPHAI_RUNNER_SCRIPT`)
 ### Batch task counting regexes must be anchored to headings
 
 The `update_receipt_tasks()` function in `runner/lib/receipt.sh` and `countCompletedTasks()` in `src/ralphai.ts` count batch task completions by matching `Tasks X-Y` patterns. These regexes must be anchored to `^### ` (H3 markdown headings) to avoid false matches on prose body text that references task ranges (e.g. "CLI parsing moves in Tasks 3-4").
+
+### Test file organization
+
+Tests are split by feature domain into separate files under `src/`. Each file has its own `describe` block and uses the `useTempGitDir()` helper from `test-utils.ts` for test isolation. When adding tests for a new feature, create a new test file rather than appending to an existing one.

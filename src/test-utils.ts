@@ -1,5 +1,8 @@
-import { execFileSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
+import { existsSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
+import { beforeEach, afterEach } from "vitest";
 
 const CLI_PATH = join(import.meta.dirname, "cli.ts");
 
@@ -43,4 +46,35 @@ export function runCli(
 export function runCliOutput(args: string[], cwd?: string): string {
   const result = runCli(args, cwd);
   return result.stdout || result.stderr;
+}
+
+/**
+ * Creates a temporary git-initialized directory for each test.
+ * Returns an object with a `dir` getter that always points to the current test's directory.
+ *
+ * Usage:
+ *   const ctx = useTempGitDir();
+ *   it("does something", () => { runCli(["init", "--yes"], ctx.dir); });
+ */
+export function useTempGitDir() {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `ralphai-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+    // Initialize a git repo so detectBaseBranch() works
+    execSync("git init", { cwd: testDir, stdio: "ignore" });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  return {
+    get dir() {
+      return testDir;
+    },
+  };
 }

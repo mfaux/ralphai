@@ -1,0 +1,1012 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
+import { join, dirname } from "path";
+import { tmpdir } from "os";
+import { execSync } from "child_process";
+import { fileURLToPath } from "url";
+import {
+  runCli,
+  runCliOutput,
+  stripLogo,
+  useTempGitDir,
+} from "./test-utils.ts";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------------------
+// GitHub Issues integration
+// ---------------------------------------------------------------------------
+
+describe("GitHub Issues integration", () => {
+  const ctx = useTempGitDir();
+
+  it("init --yes defaults issueSource to none in config", () => {
+    runCliOutput(["init", "--yes"], ctx.dir);
+
+    const parsed = JSON.parse(
+      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
+    );
+    expect(parsed.issueSource).toBe("none");
+  });
+
+  it("init --yes includes issueSource as none in JSON config", () => {
+    runCliOutput(["init", "--yes"], ctx.dir);
+
+    const parsed = JSON.parse(
+      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
+    );
+    // issueSource should be "none" by default (all 17 keys are explicit)
+    expect(parsed.issueSource).toBe("none");
+  });
+
+  it("init --yes output does not contain GitHub label info", () => {
+    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+
+    expect(output).not.toContain("GitHub labels");
+    expect(output).not.toContain("Label a GitHub issue");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// build_continuous_pr_body function
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")(
+  "build_continuous_pr_body function",
+  () => {
+    let prDir: string;
+    let backlogDir: string;
+
+    beforeEach(() => {
+      prDir = join(
+        tmpdir(),
+        `ralphai-pr-body-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      backlogDir = join(prDir, "backlog");
+      mkdirSync(backlogDir, { recursive: true });
+      // Initialize a git repo so git log works
+      execSync(
+        "git init && git config user.email 'test@test.com' && git config user.name 'Test' && git commit --allow-empty -m 'init'",
+        {
+          cwd: prDir,
+          stdio: "ignore",
+        },
+      );
+    });
+
+    afterEach(() => {
+      if (existsSync(prDir)) {
+        rmSync(prDir, { recursive: true, force: true });
+      }
+    });
+
+    /** Helper: run build_continuous_pr_body with given completed plans and backlog files */
+    function buildBody(
+      completedPlans: string[],
+      backlogFiles: string[],
+    ): string {
+      // Create backlog plan files
+      for (const f of backlogFiles) {
+        writeFileSync(join(backlogDir, f), `# ${f}\n`);
+      }
+
+      const completedArr = completedPlans
+        .map((p) => JSON.stringify(p))
+        .join(" ");
+      const script = `#!/bin/bash
+BACKLOG_DIR=${JSON.stringify(backlogDir)}
+BASE_BRANCH="main"
+COMPLETED_PLANS=(${completedArr})
+
+build_continuous_pr_body() {
+  local body=""
+
+  body+="## Completed Plans"$'\\n\\n'
+  if [[ \${#COMPLETED_PLANS[@]} -gt 0 ]]; then
+    for p in "\${COMPLETED_PLANS[@]}"; do
+      body+="- [x] $p"$'\\n'
+    done
+  else
+    body+="_None yet._"$'\\n'
+  fi
+
+  local remaining=()
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] && remaining+=("$(basename "$f")")
+  done
+
+  body+=$'\\n'"## Remaining Plans"$'\\n\\n'
+  if [[ \${#remaining[@]} -gt 0 ]]; then
+    for r in "\${remaining[@]}"; do
+      body+="- [ ] $r"$'\\n'
+    done
+  else
+    body+="_Backlog empty — all plans processed._"$'\\n'
+  fi
+
+  local commit_log
+  commit_log=$(git log "$BASE_BRANCH".."\$(git rev-parse --abbrev-ref HEAD)" --oneline --no-decorate 2>/dev/null || true)
+  body+=$'\\n'"## Commits"$'\\n\\n'
+  body+='\`\`\`'$'\\n'
+  body+="\${commit_log:-_No commits._}"$'\\n'
+  body+='\`\`\`'
+
+  echo "$body"
+}
+
+build_continuous_pr_body
+`;
+      const scriptFile = join(prDir, "test-pr-body.sh");
+      writeFileSync(scriptFile, script);
+      const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
+        cwd: prDir,
+        encoding: "utf-8",
+      });
+      return result;
+    }
+
+    it("lists completed plans with checkmarks", () => {
+      const body = buildBody(["prd-auth.md", "prd-api.md"], ["prd-ui.md"]);
+      expect(body).toContain("- [x] prd-auth.md");
+      expect(body).toContain("- [x] prd-api.md");
+    });
+
+    it("lists remaining backlog plans as unchecked", () => {
+      const body = buildBody(["prd-auth.md"], ["prd-ui.md", "prd-db.md"]);
+      expect(body).toContain("- [ ] prd-ui.md");
+      expect(body).toContain("- [ ] prd-db.md");
+    });
+
+    it("shows none-yet when no plans completed", () => {
+      const body = buildBody([], ["prd-ui.md"]);
+      expect(body).toContain("_None yet._");
+    });
+
+    it("shows backlog-empty when all plans processed", () => {
+      const body = buildBody(["prd-auth.md"], []);
+      expect(body).toContain("_Backlog empty — all plans processed._");
+    });
+
+    it("includes Commits section", () => {
+      const body = buildBody(["prd-auth.md"], []);
+      expect(body).toContain("## Commits");
+    });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Continuous+PR: runner template contains continuous PR functions
+// ---------------------------------------------------------------------------
+
+it("pr.sh contains continuous PR management functions", () => {
+  const prSh = readFileSync(
+    join(__dirname, "..", "runner", "lib", "pr.sh"),
+    "utf-8",
+  );
+  expect(prSh).toContain("build_continuous_pr_body()");
+  expect(prSh).toContain("create_continuous_pr()");
+  expect(prSh).toContain("update_continuous_pr()");
+  expect(prSh).toContain("finalize_continuous_pr()");
+});
+
+it("ralphai.sh tracks COMPLETED_PLANS and CONTINUOUS_BRANCH for continuous+PR", () => {
+  const ralphaiSh = readFileSync(
+    join(__dirname, "..", "runner", "ralphai.sh"),
+    "utf-8",
+  );
+  expect(ralphaiSh).toContain("COMPLETED_PLANS=()");
+  expect(ralphaiSh).toContain('CONTINUOUS_BRANCH=""');
+  expect(ralphaiSh).toContain('CONTINUOUS_PR_URL=""');
+});
+
+it("ralphai.sh routes to continuous PR functions when CONTINUOUS=true and MODE=pr", () => {
+  const ralphaiSh = readFileSync(
+    join(__dirname, "..", "runner", "ralphai.sh"),
+    "utf-8",
+  );
+  // First plan creates draft PR
+  expect(ralphaiSh).toContain("create_continuous_pr");
+  // Subsequent plans update PR
+  expect(ralphaiSh).toContain("update_continuous_pr");
+  // Backlog drained finalizes PR
+  expect(ralphaiSh).toContain("finalize_continuous_pr");
+});
+
+it("ralphai.sh reuses CONTINUOUS_BRANCH for subsequent plans in continuous+PR mode", () => {
+  const ralphaiSh = readFileSync(
+    join(__dirname, "..", "runner", "ralphai.sh"),
+    "utf-8",
+  );
+  // When continuous branch is already set, reuse it
+  expect(ralphaiSh).toContain(
+    'CONTINUOUS" == "true" && -n "$CONTINUOUS_BRANCH"',
+  );
+  expect(ralphaiSh).toContain('branch="$CONTINUOUS_BRANCH"');
+});
+
+it("no group mode references remain in runner scripts", () => {
+  const defaultsSh = readFileSync(
+    join(__dirname, "..", "runner", "lib", "defaults.sh"),
+    "utf-8",
+  );
+  const plansSh = readFileSync(
+    join(__dirname, "..", "runner", "lib", "plans.sh"),
+    "utf-8",
+  );
+  const prSh = readFileSync(
+    join(__dirname, "..", "runner", "lib", "pr.sh"),
+    "utf-8",
+  );
+  const ralphaiSh = readFileSync(
+    join(__dirname, "..", "runner", "ralphai.sh"),
+    "utf-8",
+  );
+
+  for (const [name, content] of [
+    ["defaults.sh", defaultsSh],
+    ["plans.sh", plansSh],
+    ["pr.sh", prSh],
+    ["ralphai.sh", ralphaiSh],
+  ]) {
+    expect(content).not.toContain("GROUP_NAME");
+    expect(content).not.toContain("GROUP_STATE_FILE");
+    expect(content).not.toContain("extract_group");
+    expect(content).not.toContain("group-state");
+    expect(content).not.toContain("collect_group_plans");
+    expect(content).not.toContain("advance_group_plan");
+    expect(content).not.toContain("create_group_pr");
+    expect(content).not.toContain("update_group_pr");
+    expect(content).not.toContain("finalize_group_pr");
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Status subcommand
+// ---------------------------------------------------------------------------
+
+describe("status subcommand", () => {
+  const ctx = useTempGitDir();
+
+  it("shows help text with status command listed", () => {
+    const result = runCli([], ctx.dir);
+    const output = stripLogo(result.stdout);
+    expect(output).toContain("status");
+  });
+
+  it("status fails when ralphai is not initialized", () => {
+    const result = runCli(["status"], ctx.dir);
+    const combined = result.stdout + result.stderr;
+    expect(result.exitCode).toBe(1);
+    expect(combined).toContain("not set up");
+  });
+
+  it("status shows empty pipeline", () => {
+    // Initialize ralphai
+    runCli(["init", "--yes"], ctx.dir);
+
+    // Remove sample plan to test truly empty pipeline
+    const samplePlan = join(
+      ctx.dir,
+      ".ralphai",
+      "pipeline",
+      "backlog",
+      "hello-ralphai.md",
+    );
+    if (existsSync(samplePlan)) rmSync(samplePlan);
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("Pipeline");
+    expect(output).toContain("Backlog");
+    expect(output).toContain("0 plans");
+    expect(output).toContain("In Progress");
+    expect(output).toContain("Completed");
+  });
+
+  it("status shows backlog plans", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-auth.md"),
+      "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
+    );
+    writeFileSync(
+      join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-search.md"),
+      "---\ndepends-on: [prd-auth.md]\n---\n\n# Search\n\n### Task 1: Index\n",
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("3 plans"); // hello-ralphai.md + prd-auth.md + prd-search.md
+    expect(output).toContain("prd-auth.md");
+    expect(output).toContain("prd-search.md");
+    expect(output).toContain("waiting on prd-auth.md");
+  });
+
+  it("status shows in-progress plan with task progress from receipt", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with 3 tasks
+    writeFileSync(
+      join(ipDir, "prd-dark-mode.md"),
+      "# Dark Mode\n\n### Task 1: Theme\n### Task 2: Toggle\n### Task 3: Persist\n",
+    );
+
+    // Progress file with 1 completed task
+    writeFileSync(
+      join(ipDir, "progress.md"),
+      "## Progress Log\n\n### Task 1: Theme\n\n**Status:** Complete\n",
+    );
+
+    // Receipt for this plan — includes tasks_completed
+    writeFileSync(
+      join(ipDir, "receipt-dark-mode.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=worktree",
+        "worktree_path=/tmp/wt-dark-mode",
+        "branch=ralphai/dark-mode",
+        "slug=dark-mode",
+        "turns_completed=2",
+        "tasks_completed=1",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("In Progress");
+    expect(output).toContain("1 plan");
+    expect(output).toContain("prd-dark-mode.md");
+    expect(output).toContain("1 of 3 tasks");
+    expect(output).toContain("worktree: prd-dark-mode");
+  });
+
+  it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with 2 tasks
+    writeFileSync(
+      join(ipDir, "prd-legacy.md"),
+      "# Legacy\n\n### Task 1: Migrate\n### Task 2: Validate\n",
+    );
+
+    // Receipt WITHOUT tasks_completed (backwards compatibility)
+    writeFileSync(
+      join(ipDir, "receipt-legacy.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/legacy",
+        "slug=legacy",
+        "turns_completed=1",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("0 of 2 tasks");
+  });
+
+  it("status shows tasks_completed from receipt, not progress.md", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with 4 tasks
+    writeFileSync(
+      join(ipDir, "prd-feature.md"),
+      "# Feature\n\n### Task 1: A\n### Task 2: B\n### Task 3: C\n### Task 4: D\n",
+    );
+
+    // Progress file with 2 completed tasks
+    writeFileSync(
+      join(ipDir, "progress.md"),
+      "## Progress Log\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
+    );
+
+    // Receipt says 3 tasks completed (receipt is authoritative)
+    writeFileSync(
+      join(ipDir, "receipt-feature.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/feature",
+        "slug=feature",
+        "turns_completed=3",
+        "tasks_completed=3",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    // Should show 3 (from receipt), not 2 (from progress.md parsing)
+    expect(output).toContain("3 of 4 tasks");
+  });
+
+  it("status shows turn progress when receipt has turns_budget", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with 2 tasks
+    writeFileSync(
+      join(ipDir, "prd-search.md"),
+      "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
+    );
+
+    // Receipt with turns_budget=5, turns_completed=2
+    writeFileSync(
+      join(ipDir, "receipt-search.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/search",
+        "slug=search",
+        "turns_budget=5",
+        "turns_completed=2",
+        "tasks_completed=1",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("turn 2 of 5");
+  });
+
+  it("status shows unlimited turns when turns_budget is 0", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with 1 task
+    writeFileSync(
+      join(ipDir, "prd-refactor.md"),
+      "# Refactor\n\n### Task 1: Cleanup\n",
+    );
+
+    // Receipt with turns_budget=0 (unlimited)
+    writeFileSync(
+      join(ipDir, "receipt-refactor.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/refactor",
+        "slug=refactor",
+        "turns_budget=0",
+        "turns_completed=4",
+        "tasks_completed=0",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("unlimited turns");
+  });
+
+  it("status shows no turns info for old receipt without turns_budget", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    writeFileSync(
+      join(ipDir, "prd-old-plan.md"),
+      "# Old Plan\n\n### Task 1: Stuff\n",
+    );
+
+    // Old receipt without turns_budget field — defaults to 0 in parseReceipt
+    writeFileSync(
+      join(ipDir, "receipt-old-plan.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/old-plan",
+        "slug=old-plan",
+        "turns_completed=1",
+        "tasks_completed=0",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    // Old receipts without turns_budget default to 0, which shows "unlimited turns"
+    expect(output).toContain("unlimited turns");
+  });
+
+  it("status shows orphaned receipt as a problem", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Receipt with no matching plan file
+    writeFileSync(
+      join(ipDir, "receipt-orphan.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/orphan",
+        "slug=orphan",
+        "turns_completed=0",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("Problems");
+    expect(output).toContain("Orphaned receipt: receipt-orphan.txt");
+  });
+
+  it("status counts completed plans from archive", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
+    mkdirSync(outDir, { recursive: true });
+
+    // Two archived plans (same slug, different timestamps)
+    writeFileSync(join(outDir, "prd-auth-20260306-120000.md"), "# Auth\n");
+    writeFileSync(join(outDir, "prd-search-20260306-130000.md"), "# Search\n");
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("Completed");
+    expect(output).toContain("2 plans");
+    // Completed plans list their deduplicated file names
+    expect(output).toContain("prd-auth.md");
+    expect(output).toContain("prd-search.md");
+  });
+
+  it("status pairs non-prd plan with receipt via plan_file field", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan without prd- prefix (e.g. hand-named plan)
+    writeFileSync(
+      join(ipDir, "remove-fallback-agents.md"),
+      "# Remove Fallback Agents\n\n### Task 1: Remove\n### Task 2: Test\n### Task 3: Docs\n",
+    );
+
+    // Receipt with plan_file field pointing to the non-prd plan
+    writeFileSync(
+      join(ipDir, "receipt-remove-fallback-agents.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/remove-fallback-agents",
+        "slug=remove-fallback-agents",
+        "plan_file=remove-fallback-agents.md",
+        "turns_completed=2",
+        "tasks_completed=2",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    // Plan shows up in in-progress with correct task progress
+    expect(output).toContain("remove-fallback-agents.md");
+    expect(output).toContain("2 of 3 tasks");
+    // No orphaned receipt warning
+    expect(output).not.toContain("Problems");
+    expect(output).not.toContain("Orphaned");
+  });
+
+  it("status pairs gh-prefixed plan with receipt via plan_file field", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan from issue intake (gh- prefix)
+    writeFileSync(
+      join(ipDir, "gh-42-search.md"),
+      "# Search Feature\n\n### Task 1: Index\n### Task 2: Query\n",
+    );
+
+    // Receipt with plan_file field for the gh-prefixed plan
+    writeFileSync(
+      join(ipDir, "receipt-gh-42-search.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=worktree",
+        "worktree_path=/tmp/wt-gh-42-search",
+        "branch=ralphai/gh-42-search",
+        "slug=gh-42-search",
+        "plan_file=gh-42-search.md",
+        "turns_completed=1",
+        "tasks_completed=1",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("gh-42-search.md");
+    expect(output).toContain("1 of 2 tasks");
+    expect(output).toContain("worktree: gh-42-search");
+    expect(output).not.toContain("Problems");
+    expect(output).not.toContain("Orphaned");
+  });
+
+  it("status backward compat: old receipt without plan_file matches prd-prefixed plan", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    // Plan with prd- prefix (existing convention)
+    writeFileSync(
+      join(ipDir, "prd-auth.md"),
+      "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
+    );
+
+    // Old receipt WITHOUT plan_file field — should fall back to prd-<slug>.md
+    writeFileSync(
+      join(ipDir, "receipt-auth.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/auth",
+        "slug=auth",
+        "turns_completed=3",
+        "tasks_completed=1",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("prd-auth.md");
+    expect(output).toContain("1 of 2 tasks");
+    // No orphaned receipt — backward compat fallback works
+    expect(output).not.toContain("Problems");
+    expect(output).not.toContain("Orphaned");
+  });
+
+  it("status counts completed non-prd plans from archive", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
+    mkdirSync(outDir, { recursive: true });
+
+    // Archived plans with various naming conventions
+    writeFileSync(
+      join(outDir, "remove-fallback-agents-20260306-120000.md"),
+      "# Remove Fallback Agents\n",
+    );
+    writeFileSync(
+      join(outDir, "gh-42-search-20260306-130000.md"),
+      "# Search\n",
+    );
+    writeFileSync(join(outDir, "prd-auth-20260306-140000.md"), "# Auth\n");
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("Completed");
+    expect(output).toContain("3 plans");
+    expect(output).toContain("remove-fallback-agents.md");
+    expect(output).toContain("gh-42-search.md");
+    expect(output).toContain("prd-auth.md");
+  });
+
+  it("status shows outcome when receipt has outcome field", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    writeFileSync(
+      join(ipDir, "prd-stuck-plan.md"),
+      "# Stuck Plan\n\n### Task 1: A\n### Task 2: B\n",
+    );
+
+    // Receipt with outcome=stuck
+    writeFileSync(
+      join(ipDir, "receipt-stuck-plan.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/stuck-plan",
+        "slug=stuck-plan",
+        "turns_budget=5",
+        "turns_completed=5",
+        "tasks_completed=1",
+        "outcome=stuck",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("[stuck]");
+    expect(output).not.toContain("[in progress]");
+  });
+
+  it("status shows [in progress] when receipt has no outcome", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    mkdirSync(ipDir, { recursive: true });
+
+    writeFileSync(join(ipDir, "prd-active.md"), "# Active\n\n### Task 1: Do\n");
+
+    // Receipt without outcome field
+    writeFileSync(
+      join(ipDir, "receipt-active.txt"),
+      [
+        "started_at=2026-03-07T12:00:00Z",
+        "source=main",
+        "branch=ralphai/active",
+        "slug=active",
+        "turns_budget=5",
+        "turns_completed=2",
+        "tasks_completed=0",
+      ].join("\n"),
+    );
+
+    const result = runCli(["status"], ctx.dir);
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("[in progress]");
+    expect(output).toContain("turn 2 of 5");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// update_receipt_tasks batch counting
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")(
+  "update_receipt_tasks batch counting",
+  () => {
+    const ctx = useTempGitDir();
+
+    const receiptShPath = join(__dirname, "..", "runner", "lib", "receipt.sh");
+
+    /** Helper: run update_receipt_tasks with given progress content and return tasks_completed */
+    function countTasks(progressContent: string): number {
+      const progressFile = join(ctx.dir, "progress.md");
+      const receiptFile = join(ctx.dir, "receipt.txt");
+      writeFileSync(progressFile, progressContent);
+      writeFileSync(receiptFile, "tasks_completed=0\n");
+
+      execSync(
+        `bash -c 'export RECEIPT_FILE=${JSON.stringify(receiptFile)}; export PROGRESS_FILE=${JSON.stringify(progressFile)}; source ${JSON.stringify(receiptShPath)}; update_receipt_tasks'`,
+        { cwd: ctx.dir, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
+
+      const receipt = readFileSync(receiptFile, "utf-8");
+      const match = receipt.match(/^tasks_completed=(\d+)/m);
+      return match ? parseInt(match[1]!, 10) : -1;
+    }
+
+    it("counts individual Status Complete markers", () => {
+      expect(
+        countTasks(
+          "## Progress\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
+        ),
+      ).toBe(2);
+    });
+
+    it("counts batch heading Tasks X-Y", () => {
+      expect(
+        countTasks(
+          "## Progress\n\n### Tasks 1-3: Batch\n**Status:** Complete\n",
+        ),
+      ).toBe(4); // 3 from batch (1-3) + 1 from Status Complete
+    });
+
+    it("does not count Tasks X-Y in prose body text", () => {
+      // Regression: prose mentioning "Tasks 3-4" was incorrectly counted as batch tasks
+      expect(
+        countTasks(
+          [
+            "## Progress",
+            "",
+            "### Task 1: Refactor",
+            "**Status:** Complete",
+            "",
+            "Refactored validation. CLI parsing moves in Tasks 3-4.",
+            "",
+            "### Task 2: Extract",
+            "**Status:** Complete",
+            "",
+            "Remaining size includes show-config which moves in Tasks 3-4.",
+          ].join("\n"),
+        ),
+      ).toBe(2); // Only 2 individual completions, prose mentions should be ignored
+    });
+
+    it("counts batch heading with en-dash Tasks X\u2013Y", () => {
+      expect(
+        countTasks("## Progress\n\n### Tasks 5\u20138: Later batch\n"),
+      ).toBe(4); // 8 - 5 + 1 = 4 from batch, no Status Complete
+    });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// doctor subcommand
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
+  const ctx = useTempGitDir();
+
+  it("shows help text with doctor command listed", () => {
+    const result = runCli([], ctx.dir);
+    const output = stripLogo(result.stdout);
+    expect(output).toContain("doctor");
+  });
+
+  it("doctor --help shows doctor-specific help", () => {
+    const result = runCli(["doctor", "--help"], ctx.dir);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("ralphai doctor");
+    expect(output).toContain("diagnostic");
+  });
+
+  it("doctor in fully initialized directory reports all checks passing", () => {
+    // Create an initial commit on main so detectBaseBranch and base branch check work
+    execSync(
+      "git config user.email 'test@test.com' && git config user.name 'Test'",
+      { cwd: ctx.dir, stdio: "ignore" },
+    );
+    execSync("git checkout -b main", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(ctx.dir, "seed.txt"), "seed");
+    execSync("git add -A && git commit -m 'init'", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+    runCli(["init", "--yes"], ctx.dir);
+
+    // Commit ralphai files so working tree is clean
+    execSync("git add -A && git commit -m 'add ralphai'", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    // Override agentCommand to something in PATH and feedbackCommands to a passing command
+    const configPath = join(ctx.dir, "ralphai.json");
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    config.agentCommand = "true";
+    config.feedbackCommands = ["true"];
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const output = result.stdout;
+
+    // All checks should pass
+    expect(output).toContain("\u2713"); // checkmark
+    expect(output).not.toContain("\u2717"); // x-mark
+    expect(output).toContain(".ralphai/ initialized");
+    expect(output).toContain("ralphai.json valid");
+    expect(output).toContain("git repo detected");
+    expect(output).toContain("agent: true");
+    expect(output).toContain("found in PATH");
+    expect(output).toContain("All checks passed");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("doctor without .ralphai/ reports first check as failed", () => {
+    // Don't run init — no .ralphai/ directory
+    // But we need a ralphai.json for config checks to not crash
+    // Actually, without .ralphai/ the doctor should still run and report failures
+
+    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const output = result.stdout;
+
+    expect(output).toContain("\u2717"); // x-mark
+    expect(output).toContain(".ralphai/ not found");
+    expect(result.exitCode).toBe(1);
+  });
+
+  it("doctor with unreachable agent command shows failure", () => {
+    runCli(["init", "--yes"], ctx.dir);
+
+    // Set an agent command that won't be found in PATH
+    const configPath = join(ctx.dir, "ralphai.json");
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    config.agentCommand = "nonexistent-agent-binary-xyz";
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const output = result.stdout;
+
+    expect(output).toContain("\u2717"); // x-mark
+    expect(output).toContain("nonexistent-agent-binary-xyz");
+    expect(output).toContain("not found in PATH");
+    expect(result.exitCode).toBe(1);
+  });
+
+  it("doctor exit code is 0 when only warnings (no failures)", () => {
+    // Create an initial commit on main so detectBaseBranch and base branch check work
+    execSync(
+      "git config user.email 'test@test.com' && git config user.name 'Test'",
+      { cwd: ctx.dir, stdio: "ignore" },
+    );
+    execSync("git checkout -b main", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(ctx.dir, "seed.txt"), "seed");
+    execSync("git add -A && git commit -m 'init'", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
+    runCli(["init", "--yes"], ctx.dir);
+
+    // Commit ralphai files so we have a clean base
+    execSync("git add -A && git commit -m 'add ralphai'", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    // Override agentCommand to something in PATH
+    const configPath = join(ctx.dir, "ralphai.json");
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    config.agentCommand = "true";
+    // Set feedback commands to something that fails (to produce a warning, not a failure)
+    config.feedbackCommands = ["false"];
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    // Make the working tree dirty (uncommitted change) — produces a warning
+    writeFileSync(join(ctx.dir, "dirty.txt"), "dirty");
+
+    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const output = result.stdout;
+
+    // Should have warnings but no failures
+    expect(output).toContain("\u26A0"); // warning sign
+    expect(output).toContain("warning");
+    // Exit code should be 0 (warnings don't count as failures)
+    expect(result.exitCode).toBe(0);
+  });
+});
