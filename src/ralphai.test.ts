@@ -2653,6 +2653,16 @@ echo "$MODE"
         stdio: ["pipe", "pipe", "pipe"],
       });
 
+      // Remove sample plan so the backlog is empty for this test
+      const samplePlan = join(
+        testDir,
+        ".ralphai",
+        "pipeline",
+        "backlog",
+        "hello-ralphai.md",
+      );
+      if (existsSync(samplePlan)) rmSync(samplePlan);
+
       const output = execFileSync(
         "node",
         [distCli, "run", "--dry-run", "--pr"],
@@ -3914,6 +3924,16 @@ build_continuous_pr_body
       // Initialize ralphai
       runCli(["init", "--yes"], testDir);
 
+      // Remove sample plan to test truly empty pipeline
+      const samplePlan = join(
+        testDir,
+        ".ralphai",
+        "pipeline",
+        "backlog",
+        "hello-ralphai.md",
+      );
+      if (existsSync(samplePlan)) rmSync(samplePlan);
+
       const result = runCli(["status"], testDir);
       const output = result.stdout + result.stderr;
 
@@ -3944,7 +3964,7 @@ build_continuous_pr_body
       const output = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
-      expect(output).toContain("2 plans");
+      expect(output).toContain("3 plans"); // hello-ralphai.md + prd-auth.md + prd-search.md
       expect(output).toContain("prd-auth.md");
       expect(output).toContain("prd-search.md");
       expect(output).toContain("waiting on prd-auth.md");
