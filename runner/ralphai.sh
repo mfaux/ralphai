@@ -314,10 +314,10 @@ while true; do
     fi
 
     # --- Turn summary: show task progress ---
-    _total_tasks=$(grep -c '^### Task' "${WIP_FILES[0]}" 2>/dev/null || echo "0")
+    _total_tasks=$(grep -c '^### Task' "${WIP_FILES[0]}" 2>/dev/null) || _total_tasks="0"
     _completed_tasks=0
     if [[ -f "$PROGRESS_FILE" ]]; then
-      _completed_tasks=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null || echo "0")
+      _completed_tasks=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null) || _completed_tasks="0"
     fi
     _current_task=$((_completed_tasks + 1))
     if [[ $_current_task -gt $_total_tasks ]]; then
