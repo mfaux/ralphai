@@ -532,23 +532,9 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   const mode = modeSelection as "branch" | "pr" | "patch";
 
-  // 6. Auto-commit (only for patch mode)
   let autoCommit = false;
-  if (mode === "patch") {
-    const autoCommitAnswer = await clack.confirm({
-      message: "Auto-commit between turns?",
-      initialValue: false,
-    });
 
-    if (clack.isCancel(autoCommitAnswer)) {
-      clack.cancel("Setup cancelled.");
-      return null;
-    }
-
-    autoCommit = autoCommitAnswer;
-  }
-
-  // 7. GitHub Issues integration
+  // 6. GitHub Issues integration
   const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: false,
@@ -567,7 +553,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     );
   }
 
-  // 8. Sample plan
+  // 7. Sample plan
   const createSamplePlan = await clack.confirm({
     message: "Create a sample plan to try your first run?",
     initialValue: true,
@@ -578,7 +564,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 9. Update AGENTS.md
+  // 8. Update AGENTS.md
   const agentsMdPath = join(cwd, "AGENTS.md");
   const agentsMdExists = existsSync(agentsMdPath);
   const agentsMdHasSection =
