@@ -1,5 +1,11 @@
 # Changelog
 
+## WIP
+
+### Fixes
+
+- **Init wizard no longer asks patch-mode users about auto-commit** — patch mode now consistently means "leave changes uncommitted" during setup. Advanced users can still enable `autoCommit` later through config or CLI flags.
+
 ## 0.5.0
 
 ### Features
