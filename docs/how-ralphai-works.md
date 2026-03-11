@@ -230,8 +230,9 @@ After a plan is archived to `out/`, the receipt moves with it.
 
 ## Learnings System
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs
-and reads it each turn to avoid repeating errors.
+Ralphai maintains two gitignored files for learning from mistakes:
 
-**After runs:** review entries, merge duplicates, and promote durable
-lessons to `AGENTS.md` or skill docs.
+- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes.
+- **`.ralphai/LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
+
+**After runs:** review candidates, promote useful ones, and prune stale learnings entries.

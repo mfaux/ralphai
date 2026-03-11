@@ -1,75 +1,27 @@
 # Writing Ralphai Plan Files
 
-Guide for writing plan files that Ralphai consumes. Plans go in `.ralphai/pipeline/backlog/`.
+Guide for coding agents writing plan files that Ralphai executes autonomously. Plans go in `.ralphai/pipeline/backlog/`.
 
-Plans not ready for execution go in `.ralphai/pipeline/wip/` — Ralphai ignores that directory.
+## How to Write a Plan
+
+1. **Understand the request.** Read what the user wants. Ask clarifying questions if the goal is ambiguous.
+2. **Pick a guide.** Choose the one that matches the work:
+   - **[Feature](plans/feature.md)** — new functionality
+   - **[Bug fix](plans/bugfix.md)** — something is broken
+   - **[Refactor](plans/refactor.md)** — structural change, no behavior change
+3. **Explore the codebase.** Before writing anything, find the files, functions, and line numbers relevant to the work. The plan must contain concrete references, not guesses.
+4. **Fill in the template.** Follow the guide's template. Every file path, function name, and line number you include saves Ralphai tokens it would otherwise spend exploring.
+5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>.md`.
 
 ## Core Principles
 
 1. **Define the end state, not the journey.** Specify what "done" looks like via acceptance criteria. Ralphai figures out how.
-2. **Small steps.** Each task should be one logical commit. If a task feels too large, break it down.
-3. **Vertical slices first.** The first task should deliver a minimal but working end-to-end path — the "skateboard." Subsequent tasks widen the slice.
+2. **Right-sized tasks.** Each task is a vertical slice: implementation + tests + doc updates in one commit. Don't split "add feature" / "test feature" / "document feature" into separate tasks. Don't make tasks so small that the per-turn overhead dwarfs the work.
+3. **Vertical slices first.** The first task should deliver a minimal but working end-to-end path. Subsequent tasks widen the slice.
 4. **Risky work first.** Architectural decisions, integration points, and unknowns go at the top. Polish and docs go last.
-5. **Explicit acceptance criteria.** Use `- [ ]` checkboxes. Without them, Ralphai declares victory early or skips edge cases.
-6. **Feedback loops are guardrails.** Every task must pass build, test, and lint before committing. The prompt enforces this.
+5. **Explicit acceptance criteria.** Use `- [ ]` checkboxes that describe observable behavior. Without them, Ralphai declares victory early or skips edge cases.
 
-## Plan Template
-
-```md
-# Plan: <Title>
-
-> <TL;DR — what this adds, what pattern it follows, why it matters. 2-4 sentences.>
-
-## Background
-
-<Current state of the codebase. What exists, what doesn't. Link to existing
-files, line numbers, prior plans. Be specific — every pointer saves tokens.>
-
-## References
-
-- <Link to specs, prior plans, upstream patterns>
-
-## Acceptance Criteria
-
-- [ ] <Observable behavior that proves the feature works>
-- [ ] <Another observable behavior>
-- [ ] All existing tests continue to pass
-- [ ] New tests cover the new functionality
-- [ ] AGENTS.md updated if work created knowledge future agents need
-- [ ] README.md updated if user-facing behavior changed
-
-## Implementation Tasks
-
-List tasks in dependency order — each task should leave a green build.
-
-### Task 1: <Title>
-
-**File:** `src/<file>.ts`
-
-**What:** <Describe the change. Name specific functions, interfaces, line
-numbers. The more precise, the fewer tokens spent exploring.>
-
-**Key insight:** <Non-obvious things — existing code that handles part of this,
-functions that need renaming, integration points.>
-
-### Task 2: <Title>
-
-...
-
-## Verification
-
-- Build, test, lint all pass
-- <End-to-end command that exercises the new feature>
-- <Specific behavioral checks>
-```
-
-### Adapting the template
-
-- **Bug fixes:** Task 1 should always be "write failing test." Include reproduction case (input, expected, actual) so Ralphai can translate it directly into a test.
-- **Refactors:** Add a Constraints section noting "no user-facing behavior changes" and rely on existing tests as the safety net.
-- **Wiring work:** Background should explicitly list what's already built vs what's missing, with file paths and line numbers, to prevent rebuilding existing infrastructure.
-
-## Writing Guidelines
+## Writing the Plan
 
 ### Be specific about locations
 
@@ -86,20 +38,33 @@ The install pipeline (`src/installer.ts`) already handles this case —
 it checks `item.type === 'foo'` at line 104. No changes needed here.
 ```
 
-### One task = one commit
+### Tasks are vertical slices
 
-Each task should result in exactly one commit. Multiple file changes are fine — but it should be one logical unit.
+Each task is one logical commit with implementation, tests, and doc updates together. The same context window that writes the code should also write the tests and update docs.
+
+Bad:
+```
+Task 1: Add parser
+Task 2: Test parser
+Task 3: Document parser
+```
+
+Good:
+```
+Task 1: Add parser with tests and doc updates
+```
 
 ### Order tasks for a green build
 
 1. Thin vertical slice first — types + function + wiring + test for one path
 2. Widen — additional cases, inputs, error handling
 3. Harden — edge cases, validation
-4. Docs last
 
-### Optional `depends-on` frontmatter
+## Advanced Options
 
-For cross-plan ordering:
+### `depends-on` frontmatter
+
+For cross-plan ordering. A plan is runnable only when all dependencies are archived in `.ralphai/pipeline/out/`.
 
 ```md
 ---
@@ -107,27 +72,6 @@ depends-on: [foundation.md, wiring.md]
 ---
 ```
 
-A plan is runnable only when all dependencies are archived in `out/`.
+### `source` frontmatter (auto-generated)
 
-### Optional `source` frontmatter (issue linking)
-
-```md
----
-source: github
-issue: 42
-issue-url: https://github.com/owner/repo/issues/42
----
-```
-
-On completion, Ralphai comments on and closes the linked GitHub issue.
-
-## Turn Sizing
-
-| Plan complexity                        | Recommended turns |
-| -------------------------------------- | ----------------- |
-| 3-5 small tasks                        | 5                 |
-| 6-10 tasks with wiring                 | 10-15             |
-| Large feature (10+ tasks, new modules) | 15-25             |
-| Structural refactor                    | 10-15             |
-
-Pass `--turns=0` for unlimited turns.
+Ralphai adds this automatically when it pulls a GitHub issue into a plan. On completion, Ralphai comments on the linked issue and removes the in-progress label. You don't need to add this manually.

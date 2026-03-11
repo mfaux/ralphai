@@ -100,7 +100,7 @@ Stop mid-run any time. Work stays in `in-progress/`. Resume with `ralphai run`, 
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) during runs. After a run, review entries and promote durable lessons to `AGENTS.md` or skill docs. [More on learnings →](docs/how-ralphai-works.md#learnings-system)
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings →](docs/how-ralphai-works.md#learnings-system)
 
 ## Supported Agents
 
