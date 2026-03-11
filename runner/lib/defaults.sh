@@ -16,6 +16,7 @@ DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent inv
 DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
 DEFAULT_CONTINUOUS="false"               # "true" to keep draining backlog after first plan
 DEFAULT_AUTO_COMMIT="false"              # "true" to auto-commit after turns / on resume (patch mode)
+DEFAULT_MAX_LEARNINGS=20                 # max entries kept in LEARNINGS.md (0 = unlimited)
 
 # --- Resolved settings (will be overridden by config/env/CLI) ---
 AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
@@ -32,6 +33,7 @@ ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
 TURN_TIMEOUT="$DEFAULT_TURN_TIMEOUT"
 PROMPT_MODE="$DEFAULT_PROMPT_MODE"
 AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"
+MAX_LEARNINGS="$DEFAULT_MAX_LEARNINGS"
 
 WIP_DIR=".ralphai/pipeline/in-progress"
 BACKLOG_DIR=".ralphai/pipeline/backlog"

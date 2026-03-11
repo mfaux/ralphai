@@ -80,6 +80,7 @@ if [[ "$SHOW_CONFIG" == true ]]; then
   fi
 
   turns_source=$(_setting_source "$CLI_TURNS" "RALPHAI_TURNS" "${CONFIG_TURNS:-}" "--turns=$CLI_TURNS")
+  max_learnings_source=$(_setting_source "" "RALPHAI_MAX_LEARNINGS" "${CONFIG_MAX_LEARNINGS:-}" "")
 
   echo "  agentCommand       = ${AGENT_COMMAND:-<none>}  ($agent_command_source)"
   echo "  feedbackCommands   = ${FEEDBACK_COMMANDS:-<none>}  ($feedback_commands_source)"
@@ -99,6 +100,11 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     echo "  turnTimeout        = off  ($timeout_source)"
   fi
   echo "  promptMode         = $PROMPT_MODE  ($prompt_mode_source)"
+  if [[ "$MAX_LEARNINGS" -gt 0 ]]; then
+    echo "  maxLearnings       = $MAX_LEARNINGS  ($max_learnings_source)"
+  else
+    echo "  maxLearnings       = unlimited  ($max_learnings_source)"
+  fi
   echo "  issueSource        = $ISSUE_SOURCE  ($issue_source_source)"
   if [[ "$ISSUE_SOURCE" != "none" ]]; then
     echo "  issueLabel         = $ISSUE_LABEL  ($issue_label_source)"

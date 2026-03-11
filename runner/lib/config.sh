@@ -31,7 +31,7 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns"] | index($k) | not)' "$config_path")
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns","maxLearnings"] | index($k) | not)' "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -186,6 +186,13 @@ load_config() {
     validate_nonneg_int "$value" "$config_path: 'turns'" "0 = unlimited"
     CONFIG_TURNS="$value"
   fi
+
+  # --- maxLearnings (non-negative integer, 0 = unlimited) ---
+  if _json_has "maxLearnings"; then
+    value=$(_json_raw "maxLearnings")
+    validate_nonneg_int "$value" "$config_path: 'maxLearnings'" "0 = unlimited"
+    CONFIG_MAX_LEARNINGS="$value"
+  fi
 }
 
 # --- Apply config file settings ---
@@ -235,6 +242,9 @@ apply_config() {
   fi
   if [[ -n "${CONFIG_TURNS:-}" ]]; then
     TURNS="$CONFIG_TURNS"
+  fi
+  if [[ -n "${CONFIG_MAX_LEARNINGS:-}" ]]; then
+    MAX_LEARNINGS="$CONFIG_MAX_LEARNINGS"
   fi
 }
 
@@ -298,6 +308,10 @@ apply_env_overrides() {
   if [[ -n "${RALPHAI_TURNS:-}" ]]; then
     validate_nonneg_int "$RALPHAI_TURNS" "RALPHAI_TURNS" "0 = unlimited"
     TURNS="$RALPHAI_TURNS"
+  fi
+  if [[ -n "${RALPHAI_MAX_LEARNINGS:-}" ]]; then
+    validate_nonneg_int "$RALPHAI_MAX_LEARNINGS" "RALPHAI_MAX_LEARNINGS" "0 = unlimited"
+    MAX_LEARNINGS="$RALPHAI_MAX_LEARNINGS"
   fi
 }
 

@@ -232,7 +232,7 @@ After a plan is archived to `out/`, the receipt moves with it.
 
 Ralphai maintains two gitignored files for learning from mistakes:
 
-- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes.
+- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `ralphai.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
 - **`.ralphai/LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
 
 **After runs:** review candidates, promote useful ones, and prune stale learnings entries.

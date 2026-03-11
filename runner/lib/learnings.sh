@@ -142,6 +142,44 @@ Potential durable lessons for human review and possible promotion into AGENTS.md
 SEED
 }
 
+# Prunes .ralphai/LEARNINGS.md to keep only the most recent MAX_LEARNINGS entries.
+# Entries are delimited by "### " headings. The file header (everything before the
+# first entry) is always preserved. No-op if the file doesn't exist or has fewer
+# entries than the limit.
+# Usage: prune_learnings_file
+prune_learnings_file() {
+  if [[ ! -f "$RALPHAI_LEARNINGS_FILE" ]]; then
+    return 0
+  fi
+
+  local max="${MAX_LEARNINGS:-20}"
+  if [[ "$max" -le 0 ]]; then
+    return 0
+  fi
+
+  # Count entry headings (lines starting with "### ")
+  local count
+  count=$(grep -c '^### ' "$RALPHAI_LEARNINGS_FILE" 2>/dev/null || echo 0)
+  if [[ "$count" -le "$max" ]]; then
+    return 0
+  fi
+
+  # Split: header = everything before first "### ", entries = rest
+  local header entries kept
+  header=$(sed '/^### /,$d' "$RALPHAI_LEARNINGS_FILE")
+
+  # Extract the last $max entries (each entry starts with "### ")
+  # Use awk to split on "### " boundaries and keep the tail
+  local drop=$(( count - max ))
+  kept=$(awk -v drop="$drop" '
+    /^### / { entry_num++ }
+    entry_num > drop { print }
+  ' "$RALPHAI_LEARNINGS_FILE")
+
+  # Rewrite the file: header + kept entries
+  printf '%s\n%s\n' "$header" "$kept" > "$RALPHAI_LEARNINGS_FILE"
+}
+
 # Processes the learnings block from agent output.
 # Extracts, parses, and appends if status is "logged".
 # Prints status messages for each outcome.
@@ -170,6 +208,7 @@ process_learnings() {
 
   if [[ "$LEARNING_STATUS" == "logged" ]]; then
     append_learning_entry
+    prune_learnings_file
     echo "Logged learning: ${LEARNING_TITLE}"
     return 0
   fi
