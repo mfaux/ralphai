@@ -350,7 +350,7 @@ $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PRO
    <summary of what was done>
    This format is required — ralphai parses it to track task completion.
 $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.
-ONLY WORK ON A SINGLE TASK.
+Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window. Log each completed task in progress.md with its own heading and status marker.
 If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes.
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
 <learnings>

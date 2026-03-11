@@ -82,6 +82,7 @@ Requires `gh` CLI. If `gh` is unavailable, hooks are silently skipped.
 | `README.md`             | This file                           |
 | `PLANNING.md`           | Guide for writing plan files        |
 | `LEARNINGS.md`          | Auto-written learnings (local-only) |
+| `LEARNING_CANDIDATES.md` | Candidate lessons for human review  |
 | `pipeline/wip/`         | Parked plans                        |
 | `pipeline/backlog/`     | Queued plans                        |
 | `pipeline/in-progress/` | Active plans + progress.md          |
@@ -103,9 +104,12 @@ Do **not** edit `CHANGELOG.md` unless explicitly asked.
 
 ## Learnings
 
-Ralphai logs mistakes to `LEARNINGS.md` (gitignored) during runs and reads it each turn to avoid repeating errors.
+Ralphai maintains two local-only files:
 
-After runs: review entries, merge duplicates, promote durable lessons to `AGENTS.md` or skill docs.
+- **`LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it each turn and applies durable lessons.
+- **`LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent never edits `AGENTS.md` automatically.
+
+After runs: review candidates, promote useful ones, and prune stale learnings entries.
 
 ## Configuration
 

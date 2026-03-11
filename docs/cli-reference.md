@@ -58,6 +58,20 @@ ralphai <command> [options]
 --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 ```
 
+### Turn Budget
+
+How many turns to allocate depends on plan complexity. Related tasks may be combined into a single turn if they won't fill the context window.
+
+| Plan complexity                        | Recommended `--turns` |
+| -------------------------------------- | --------------------- |
+| Bug fix (1-2 tasks)                    | 2-3                   |
+| Small feature (2-4 tasks)              | 3-5                   |
+| Medium feature (4-8 tasks)             | 5-10                  |
+| Large feature (8+ tasks, new modules)  | 10-20                 |
+| Structural refactor                    | 5-10                  |
+
+Pass `--turns=0` for unlimited turns.
+
 ## Worktree
 
 ```
@@ -91,6 +105,7 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
+| `RALPHAI_MAX_LEARNINGS`           | `maxLearnings`         |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
