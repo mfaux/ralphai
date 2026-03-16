@@ -19,13 +19,13 @@ ralphai run --help       # show all options
 Plans flow through four directories:
 
 ```
-wip/ (parked)    backlog/  →  in-progress/  →  out/
+parked/    backlog/  →  in-progress/  →  out/
 ```
 
-1. **`wip/`** — Not ready. Ralphai ignores this directory.
-2. **`backlog/`** — Queued plans. Ralphai picks dependency-ready plans automatically.
-3. **`in-progress/`** — Active work. Plan + `progress.md` live here. Files stay on interruption for resumption.
-4. **`out/`** — Archive. Moved here when the agent signals completion.
+1. **`parked/`** — Not ready. Ralphai ignores this directory.
+2. **`backlog/`** — Queued plans. Each plan lives in its own folder (for example `backlog/<slug>/<slug>.md`).
+3. **`in-progress/`** — Active work. Plan folder + `progress.md` live here (for example `in-progress/<slug>/`). Files stay on interruption for resumption.
+4. **`out/`** — Archive. Plan folders move here when the agent signals completion.
 
 All pipeline files are **gitignored** (local-only state).
 
@@ -77,16 +77,16 @@ Requires `gh` CLI. If `gh` is unavailable, hooks are silently skipped.
 
 ## Files
 
-| File / Directory        | Purpose                             |
-| ----------------------- | ----------------------------------- |
-| `README.md`             | This file                           |
-| `PLANNING.md`           | Guide for writing plan files        |
-| `LEARNINGS.md`          | Auto-written learnings (local-only) |
+| File / Directory         | Purpose                             |
+| ------------------------ | ----------------------------------- |
+| `README.md`              | This file                           |
+| `PLANNING.md`            | Guide for writing plan files        |
+| `LEARNINGS.md`           | Auto-written learnings (local-only) |
 | `LEARNING_CANDIDATES.md` | Candidate lessons for human review  |
-| `pipeline/wip/`         | Parked plans                        |
-| `pipeline/backlog/`     | Queued plans                        |
-| `pipeline/in-progress/` | Active plans + progress.md          |
-| `pipeline/out/`         | Completed plans archive             |
+| `pipeline/parked/`       | Parked plans                        |
+| `pipeline/backlog/`      | Queued plan folders                 |
+| `pipeline/in-progress/`  | Active plan folders + `progress.md` |
+| `pipeline/out/`          | Completed plan folders archive      |
 
 ## Conventions
 

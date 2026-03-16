@@ -2,6 +2,10 @@
 
 ## WIP
 
+### Breaking
+
+- **Per-plan pipeline folders** — plans now live in per-plan folders under `pipeline/backlog/` (for example `backlog/<slug>/<slug>.md`), and `wip/` is renamed to `parked/`. This release removes backward compatibility with the old file layout.
+
 ### Fixes
 
 - **Init wizard no longer asks patch-mode users about auto-commit** — patch mode now consistently means "leave changes uncommitted" during setup. Advanced users can still enable `autoCommit` later through config or CLI flags.
@@ -148,7 +152,7 @@ npx ralphai teardown && npm install -g ralphai@latest
 ### Refactors
 
 - Rename `plans/` to `plan-types/` and nest lifecycle dirs under `pipeline/` (#20)
-- Rename `drafts/` to `wip/` (#13)
+- Rename `drafts/` to `parked/` (#13)
 - Add `sync-ralphai` script for dogfooding template changes (#19)
 - Refactor publish workflow for version bump handling (#4)
 

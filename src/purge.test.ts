@@ -15,19 +15,11 @@ describe("purge command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-    mkdirSync(outDir, { recursive: true });
-    writeFileSync(
-      join(outDir, "my-feature-20260101-120000.md"),
-      "# My Feature",
-    );
-    writeFileSync(
-      join(outDir, "progress-my-feature-20260101-120000.md"),
-      "## Progress",
-    );
-    writeFileSync(
-      join(outDir, "receipt-my-feature-20260101-120000.txt"),
-      "slug=my-feature",
-    );
+    const planDir = join(outDir, "my-feature");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "my-feature.md"), "# My Feature");
+    writeFileSync(join(planDir, "progress.md"), "## Progress");
+    writeFileSync(join(planDir, "receipt.txt"), "slug=my-feature");
 
     const output = stripLogo(runCliOutput(["purge", "--yes"], ctx.dir));
 
@@ -58,21 +50,15 @@ describe("purge command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-    mkdirSync(outDir, { recursive: true });
-    writeFileSync(join(outDir, "feat-a-20260101-120000.md"), "# A");
-    writeFileSync(join(outDir, "feat-b-20260102-120000.md"), "# B");
-    writeFileSync(
-      join(outDir, "progress-feat-a-20260101-120000.md"),
-      "## Progress",
-    );
-    writeFileSync(
-      join(outDir, "receipt-feat-a-20260101-120000.txt"),
-      "slug=feat-a",
-    );
-    writeFileSync(
-      join(outDir, "receipt-feat-b-20260102-120000.txt"),
-      "slug=feat-b",
-    );
+    const planDirA = join(outDir, "feat-a");
+    const planDirB = join(outDir, "feat-b");
+    mkdirSync(planDirA, { recursive: true });
+    mkdirSync(planDirB, { recursive: true });
+    writeFileSync(join(planDirA, "feat-a.md"), "# A");
+    writeFileSync(join(planDirB, "feat-b.md"), "# B");
+    writeFileSync(join(planDirA, "progress.md"), "## Progress");
+    writeFileSync(join(planDirA, "receipt.txt"), "slug=feat-a");
+    writeFileSync(join(planDirB, "receipt.txt"), "slug=feat-b");
 
     const output = stripLogo(runCliOutput(["purge", "--yes"], ctx.dir));
 
@@ -109,8 +95,9 @@ describe("purge command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-    mkdirSync(outDir, { recursive: true });
-    writeFileSync(join(outDir, "plan-20260101-120000.md"), "# Plan");
+    const planDir = join(outDir, "plan");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "plan.md"), "# Plan");
 
     runCliOutput(["purge", "--yes"], ctx.dir);
 

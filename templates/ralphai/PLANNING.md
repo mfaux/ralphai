@@ -1,6 +1,6 @@
 # Writing Ralphai Plan Files
 
-Guide for coding agents writing plan files that Ralphai executes autonomously. Plans go in `.ralphai/pipeline/backlog/`.
+Guide for coding agents writing plan files that Ralphai executes autonomously. Plans go in `.ralphai/pipeline/backlog/<slug>/<slug>.md`.
 
 ## How to Write a Plan
 
@@ -11,7 +11,7 @@ Guide for coding agents writing plan files that Ralphai executes autonomously. P
    - **[Refactor](plans/refactor.md)** — structural change, no behavior change
 3. **Explore the codebase.** Before writing anything, find the files, functions, and line numbers relevant to the work. The plan must contain concrete references, not guesses.
 4. **Fill in the template.** Follow the guide's template. Every file path, function name, and line number you include saves Ralphai tokens it would otherwise spend exploring.
-5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>.md`.
+5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>/<slug>.md`.
 
 ## Core Principles
 
@@ -43,6 +43,7 @@ it checks `item.type === 'foo'` at line 104. No changes needed here.
 Each task is one logical commit with implementation, tests, and doc updates together. The same context window that writes the code should also write the tests and update docs.
 
 Bad:
+
 ```
 Task 1: Add parser
 Task 2: Test parser
@@ -50,6 +51,7 @@ Task 3: Document parser
 ```
 
 Good:
+
 ```
 Task 1: Add parser with tests and doc updates
 ```

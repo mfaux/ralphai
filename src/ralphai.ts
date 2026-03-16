@@ -752,19 +752,21 @@ function scaffold(
   writeFileSync(join(cwd, "ralphai.json"), config);
 
   // Create pipeline subdirectories (no .gitkeep — .ralphai/ is fully gitignored)
-  for (const subdir of ["backlog", "wip", "in-progress", "out"]) {
+  for (const subdir of ["backlog", "parked", "in-progress", "out"]) {
     mkdirSync(join(ralphaiDir, "pipeline", subdir), { recursive: true });
   }
 
   // Write sample plan if requested
-  const samplePlanPath = join(
+  const samplePlanDir = join(
     ralphaiDir,
     "pipeline",
     "backlog",
-    "hello-ralphai.md",
+    "hello-ralphai",
   );
+  const samplePlanPath = join(samplePlanDir, "hello-ralphai.md");
   const samplePlanCreated = answers.createSamplePlan === true;
   if (samplePlanCreated && !existsSync(samplePlanPath)) {
+    mkdirSync(samplePlanDir, { recursive: true });
     const samplePlanContent = `# Plan: Hello Ralphai
 
 > A tiny first plan to verify the full Ralphai loop — init, run, commit.
@@ -824,7 +826,7 @@ Each entry should include:
   const agentsMdSection = `## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-Plan files go in \`.ralphai/pipeline/backlog/\`. See \`.ralphai/PLANNING.md\` for
+Plan files go in per-plan folders under \`.ralphai/pipeline/backlog/\`. See \`.ralphai/PLANNING.md\` for
 the plan writing guide.
 `;
 
@@ -915,7 +917,7 @@ Project-specific guidance for AI coding agents working in this codebase.
     );
   }
   console.log(
-    `  .ralphai/pipeline/wip/     ${DIM}Park unready plans here${RESET}`,
+    `  .ralphai/pipeline/parked/  ${DIM}Park unready plans here${RESET}`,
   );
   if (labelResult) {
     if (labelResult.success) {
@@ -986,17 +988,8 @@ async function runRalphaiReset(
     return;
   }
 
-  const files = readdirSync(inProgressDir);
-  const planFiles = files.filter(
-    (f) =>
-      f.endsWith(".md") && f !== "progress.md" && !f.startsWith("progress-"),
-  );
-  const progressFiles = files.filter(
-    (f) => f === "progress.md" || f.startsWith("progress-"),
-  );
-  const receiptFiles = files.filter(
-    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
-  );
+  const planSlugs = listPlanFolders(inProgressDir);
+  const planFiles = planSlugs.map((slug) => `${slug}.md`);
 
   // Check for worktrees to clean
   let worktrees: WorktreeEntry[] = [];
@@ -1006,12 +999,7 @@ async function runRalphaiReset(
     // Not in a git repo or git not available
   }
 
-  if (
-    planFiles.length === 0 &&
-    progressFiles.length === 0 &&
-    receiptFiles.length === 0 &&
-    worktrees.length === 0
-  ) {
+  if (planFiles.length === 0 && worktrees.length === 0) {
     console.log("Nothing to reset — pipeline is already clean.");
     return;
   }
@@ -1028,14 +1016,9 @@ async function runRalphaiReset(
       console.log(`    ${DIM}${f}${RESET}`);
     }
   }
-  if (progressFiles.length > 0) {
+  if (planFiles.length > 0) {
     console.log(
-      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""} will be deleted${RESET}`,
-    );
-  }
-  if (receiptFiles.length > 0) {
-    console.log(
-      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""} will be deleted${RESET}`,
+      `  ${TEXT}Artifacts${RESET}   ${DIM}progress.md + receipt.txt removed per plan${RESET}`,
     );
   }
   if (worktrees.length > 0) {
@@ -1064,24 +1047,14 @@ async function runRalphaiReset(
 
   let actions = 0;
 
-  // 1. Move plan files back to backlog
-  for (const planFile of planFiles) {
-    const src = join(inProgressDir, planFile);
-    const dest = join(backlogDir, planFile);
+  // 1. Move plan folders back to backlog (remove progress/receipt first)
+  for (const slug of planSlugs) {
+    const src = join(inProgressDir, slug);
+    const dest = join(backlogDir, slug);
     mkdirSync(backlogDir, { recursive: true });
+    rmSync(join(src, "progress.md"), { force: true });
+    rmSync(join(src, "receipt.txt"), { force: true });
     renameSync(src, dest);
-    actions++;
-  }
-
-  // 2. Delete progress file(s)
-  for (const pf of progressFiles) {
-    rmSync(join(inProgressDir, pf), { force: true });
-    actions++;
-  }
-
-  // 3. Delete receipt files
-  for (const receiptFile of receiptFiles) {
-    rmSync(join(inProgressDir, receiptFile), { force: true });
     actions++;
   }
 
@@ -1131,14 +1104,9 @@ async function runRalphaiReset(
       `  ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved to backlog`,
     );
   }
-  if (progressFiles.length > 0) {
+  if (planFiles.length > 0) {
     console.log(
-      `  Deleted ${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}`,
-    );
-  }
-  if (receiptFiles.length > 0) {
-    console.log(
-      `  Deleted ${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}`,
+      `  Deleted progress.md and receipt.txt in ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""}`,
     );
   }
   if (worktrees.length > 0) {
@@ -1172,21 +1140,23 @@ async function runRalphaiPurge(
     return;
   }
 
-  const files = readdirSync(outDir);
-  if (files.length === 0) {
+  const entries = readdirSync(outDir, { withFileTypes: true });
+  const planDirs = entries.filter((entry) => entry.isDirectory());
+  if (planDirs.length === 0) {
     console.log("Nothing to purge — out/ is already empty.");
     return;
   }
 
-  const planFiles = files.filter(
-    (f) => f.endsWith(".md") && !f.startsWith("progress-"),
-  );
-  const progressFiles = files.filter(
-    (f) => f.endsWith(".md") && f.startsWith("progress-"),
-  );
-  const receiptFiles = files.filter(
-    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
-  );
+  const planFiles = planDirs.filter((entry) => {
+    const planPath = planPathForSlug(outDir, entry.name);
+    return existsSync(planPath);
+  }).length;
+  const progressFiles = planDirs.filter((entry) =>
+    existsSync(join(outDir, entry.name, "progress.md")),
+  ).length;
+  const receiptFiles = planDirs.filter((entry) =>
+    existsSync(join(outDir, entry.name, "receipt.txt")),
+  ).length;
 
   // Show what will be deleted
   console.log();
@@ -1194,19 +1164,19 @@ async function runRalphaiPurge(
     `${TEXT}The following archived artifacts will be deleted:${RESET}`,
   );
   console.log();
-  if (planFiles.length > 0) {
+  if (planFiles > 0) {
     console.log(
-      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles.length} archived plan${planFiles.length !== 1 ? "s" : ""}${RESET}`,
+      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles} archived plan${planFiles !== 1 ? "s" : ""}${RESET}`,
     );
   }
-  if (progressFiles.length > 0) {
+  if (progressFiles > 0) {
     console.log(
-      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}${RESET}`,
+      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles} progress file${progressFiles !== 1 ? "s" : ""}${RESET}`,
     );
   }
-  if (receiptFiles.length > 0) {
+  if (receiptFiles > 0) {
     console.log(
-      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}${RESET}`,
+      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles} receipt${receiptFiles !== 1 ? "s" : ""}${RESET}`,
     );
   }
   console.log();
@@ -1225,29 +1195,25 @@ async function runRalphaiPurge(
     }
   }
 
-  // Delete all files in out/
-  for (const file of files) {
-    rmSync(join(outDir, file), { force: true });
+  // Delete all plan folders in out/
+  for (const planDir of planDirs) {
+    rmSync(join(outDir, planDir.name), { recursive: true, force: true });
   }
 
   // Summary
   console.log(`${TEXT}Purged.${RESET}`);
   console.log();
   console.log(`${DIM}Deleted:${RESET}`);
-  if (planFiles.length > 0) {
+  if (planFiles > 0) {
+    console.log(`  ${planFiles} archived plan${planFiles !== 1 ? "s" : ""}`);
+  }
+  if (progressFiles > 0) {
     console.log(
-      `  ${planFiles.length} archived plan${planFiles.length !== 1 ? "s" : ""}`,
+      `  ${progressFiles} progress file${progressFiles !== 1 ? "s" : ""}`,
     );
   }
-  if (progressFiles.length > 0) {
-    console.log(
-      `  ${progressFiles.length} progress file${progressFiles.length !== 1 ? "s" : ""}`,
-    );
-  }
-  if (receiptFiles.length > 0) {
-    console.log(
-      `  ${receiptFiles.length} receipt${receiptFiles.length !== 1 ? "s" : ""}`,
-    );
+  if (receiptFiles > 0) {
+    console.log(`  ${receiptFiles} receipt${receiptFiles !== 1 ? "s" : ""}`);
   }
   console.log();
 }
@@ -1638,11 +1604,10 @@ function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
   const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
   if (!existsSync(inProgressDir)) return true;
 
-  const receiptFiles = readdirSync(inProgressDir).filter(
-    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
-  );
-  for (const receiptFile of receiptFiles) {
-    const receipt = parseReceipt(join(inProgressDir, receiptFile));
+  const planSlugs = listPlanFolders(inProgressDir);
+  for (const slug of planSlugs) {
+    const receiptPath = join(inProgressDir, slug, "receipt.txt");
+    const receipt = parseReceipt(receiptPath);
     if (!receipt) continue;
 
     if (receipt.source === "worktree" && !isWorktree) {
@@ -1729,19 +1694,25 @@ function selectPlanForWorktree(
     activeWorktrees.map((wt) => wt.branch.replace("ralphai/", "")),
   );
 
+  const resolvePlanInDir = (
+    baseDir: string,
+    planFile: string,
+  ): string | null => {
+    const slug = planFile.replace(/\.md$/, "");
+    const candidate = planPathForSlug(baseDir, slug);
+    return existsSync(candidate) ? candidate : null;
+  };
+
   // --- Specific plan requested ---
   if (specificPlan) {
-    const inProgressPath = join(inProgressDir, specificPlan);
-    if (existsSync(inProgressPath)) {
-      const slug = specificPlan.replace(/\.md$/, "");
+    const slug = specificPlan.replace(/\.md$/, "");
+    const inProgressPath = resolvePlanInDir(inProgressDir, specificPlan);
+    if (inProgressPath) {
       return { planFile: specificPlan, slug, source: "in-progress" };
     }
-    if (existsSync(backlogDir)) {
-      const planPath = join(backlogDir, specificPlan);
-      if (existsSync(planPath)) {
-        const slug = specificPlan.replace(/\.md$/, "");
-        return { planFile: specificPlan, slug, source: "backlog" };
-      }
+    const backlogPath = resolvePlanInDir(backlogDir, specificPlan);
+    if (backlogPath) {
+      return { planFile: specificPlan, slug, source: "backlog" };
     }
     console.error(
       `Plan '${specificPlan}' not found in backlog or in-progress.`,
@@ -1751,15 +1722,7 @@ function selectPlanForWorktree(
 
   // --- Auto-detect plan ---
 
-  // Filter in-progress plans: .md files excluding progress/receipt files
-  const inProgressPlans = existsSync(inProgressDir)
-    ? readdirSync(inProgressDir).filter(
-        (f) =>
-          f.endsWith(".md") &&
-          !f.startsWith("progress-") &&
-          !f.startsWith("receipt-"),
-      )
-    : [];
+  const inProgressPlans = listPlanFiles(inProgressDir);
 
   // Plans without an active worktree are "unattended" — resume first
   const unattendedPlans = inProgressPlans.filter(
@@ -1783,9 +1746,7 @@ function selectPlanForWorktree(
   }
 
   // No unattended plans — check backlog for new work
-  const backlogPlans = existsSync(backlogDir)
-    ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
-    : [];
+  const backlogPlans = listPlanFiles(backlogDir);
 
   if (backlogPlans.length > 0) {
     const firstPlan = backlogPlans[0]!;
@@ -1945,22 +1906,35 @@ function showWorktreeHelp(): void {
 }
 
 /**
- * Check if any plan file in `dir` has a slug (filename minus `.md`) matching
- * the given slug. Skips progress-* and receipt-* files.
+ * Check if a plan directory in `dir` matches the given slug.
  */
-function planExistsForSlug(dir: string, slug: string): boolean {
-  if (!existsSync(dir)) return false;
+function listPlanFolders(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   try {
-    return readdirSync(dir).some(
-      (f) =>
-        f.endsWith(".md") &&
-        !f.startsWith("progress-") &&
-        !f.startsWith("receipt-") &&
-        f.replace(/\.md$/, "") === slug,
-    );
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
   } catch {
-    return false;
+    return [];
   }
+}
+
+function planPathForSlug(dir: string, slug: string): string {
+  return join(dir, slug, `${slug}.md`);
+}
+
+function listPlanSlugs(dir: string): string[] {
+  return listPlanFolders(dir).filter((slug) =>
+    existsSync(planPathForSlug(dir, slug)),
+  );
+}
+
+function listPlanFiles(dir: string): string[] {
+  return listPlanSlugs(dir).map((slug) => `${slug}.md`);
+}
+
+function planExistsForSlug(dir: string, slug: string): boolean {
+  return existsSync(planPathForSlug(dir, slug));
 }
 
 function listWorktrees(cwd: string): void {
@@ -2024,16 +1998,14 @@ function cleanWorktrees(cwd: string): void {
         }
 
         // Archive receipt if one exists for this slug
-        const receiptFile = join(inProgressDir, `receipt-${slug}.txt`);
+        const planDir = join(inProgressDir, slug);
+        const receiptFile = join(planDir, "receipt.txt");
         if (existsSync(receiptFile)) {
-          mkdirSync(archiveDir, { recursive: true });
-          const timestamp = new Date()
-            .toISOString()
-            .replace(/[T:]/g, "-")
-            .replace(/\.\d+Z$/, "");
-          const dest = join(archiveDir, `receipt-${slug}-${timestamp}.txt`);
+          const destDir = join(archiveDir, slug);
+          mkdirSync(destDir, { recursive: true });
+          const dest = join(destDir, "receipt.txt");
           renameSync(receiptFile, dest);
-          console.log(`  Archived receipt: receipt-${slug}.txt`);
+          console.log(`  Archived receipt: ${slug}/receipt.txt`);
         }
 
         cleaned++;
@@ -2223,7 +2195,7 @@ function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   if (!existsSync(backlogDir)) {
     return { status: "warn", message: "backlog: directory not found" };
   }
-  const plans = readdirSync(backlogDir).filter((f) => f.endsWith(".md"));
+  const plans = listPlanSlugs(backlogDir);
   if (plans.length === 0) {
     return { status: "warn", message: "backlog: no plans queued" };
   }
@@ -2238,18 +2210,14 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
   if (!existsSync(inProgressDir)) {
     return { status: "pass", message: "no orphaned receipts" };
   }
-  const files = readdirSync(inProgressDir);
-  const receiptFiles = files.filter(
-    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
-  );
 
   const orphaned: string[] = [];
-  for (const rf of receiptFiles) {
-    const receipt = parseReceipt(join(inProgressDir, rf));
-    if (!receipt) continue;
-    const planFile = receipt.plan_file || `prd-${receipt.slug}.md`;
-    if (!existsSync(join(inProgressDir, planFile))) {
-      orphaned.push(rf);
+  for (const slug of listPlanFolders(inProgressDir)) {
+    const receiptPath = join(inProgressDir, slug, "receipt.txt");
+    if (!existsSync(receiptPath)) continue;
+    const planPath = join(inProgressDir, slug, `${slug}.md`);
+    if (!existsSync(planPath)) {
+      orphaned.push(`${slug}/receipt.txt`);
     }
   }
 
@@ -2422,38 +2390,22 @@ function runRalphaiStatus(cwd: string): void {
   const archiveDir = join(ralphaiDir, "pipeline", "out");
 
   // --- Collect data ---
-  const backlogPlans = existsSync(backlogDir)
-    ? readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
-    : [];
+  const backlogPlans = listPlanFiles(backlogDir);
 
-  const inProgressFiles = existsSync(inProgressDir)
-    ? readdirSync(inProgressDir)
-    : [];
-  const inProgressPlans = inProgressFiles.filter(
-    (f) =>
-      f.endsWith(".md") && f !== "progress.md" && !f.startsWith("progress-"),
-  );
-  const receiptFiles = inProgressFiles.filter(
-    (f) => f.startsWith("receipt-") && f.endsWith(".txt"),
+  const inProgressPlans = listPlanFiles(inProgressDir);
+  const receiptFiles = listPlanFolders(inProgressDir).filter((slug) =>
+    existsSync(join(inProgressDir, slug, "receipt.txt")),
   );
 
-  const completedFiles = existsSync(archiveDir)
-    ? readdirSync(archiveDir).filter((f) => f.endsWith(".md"))
-    : [];
-  // Deduplicate completed plans by removing timestamps
-  const completedSlugs = new Set(
-    completedFiles.map((f) => f.replace(/-\d{8}-\d{6}\.md$/, "")),
-  );
+  const completedSlugs = new Set(listPlanSlugs(archiveDir));
 
   // Build receipt lookup: plan filename → Receipt
   const receiptsByPlan = new Map<string, Receipt>();
-  for (const rf of receiptFiles) {
-    const slug = rf.replace(/^receipt-/, "").replace(/\.txt$/, "");
-    const receipt = parseReceipt(join(inProgressDir, rf));
+  for (const slug of receiptFiles) {
+    const receipt = parseReceipt(join(inProgressDir, slug, "receipt.txt"));
     if (receipt) {
-      // Key by plan_file when present; fall back to prd-<slug>.md for old receipts
-      const key = receipt.plan_file || `prd-${slug}.md`;
-      receiptsByPlan.set(key, receipt);
+      const planFile = receipt.plan_file || `${slug}.md`;
+      receiptsByPlan.set(planFile, receipt);
     }
   }
 
@@ -2468,7 +2420,9 @@ function runRalphaiStatus(cwd: string): void {
   );
   for (const plan of backlogPlans) {
     let suffix = "";
-    const deps = extractDependsOn(join(backlogDir, plan));
+    const deps = extractDependsOn(
+      join(backlogDir, plan.replace(/\.md$/, ""), plan),
+    );
     if (deps.length > 0) {
       suffix = `${DIM}waiting on ${deps.join(", ")}${RESET}`;
     }
@@ -2485,7 +2439,8 @@ function runRalphaiStatus(cwd: string): void {
     const parts: string[] = [];
 
     // Task progress
-    const totalTasks = countPlanTasks(join(inProgressDir, plan));
+    const slug = plan.replace(/\.md$/, "");
+    const totalTasks = countPlanTasks(join(inProgressDir, slug, plan));
     if (totalTasks > 0) {
       const completed = receipt?.tasks_completed ?? 0;
       parts.push(`${completed} of ${totalTasks} tasks`);
@@ -2504,8 +2459,7 @@ function runRalphaiStatus(cwd: string): void {
 
     // Worktree info from receipt
     if (receipt?.source === "worktree") {
-      const planSlug = plan.replace(/\.md$/, "");
-      parts.push(`worktree: ${planSlug}`);
+      parts.push(`worktree: ${slug}`);
     }
 
     // Outcome / status tag
@@ -2556,9 +2510,11 @@ function runRalphaiStatus(cwd: string): void {
 
   // Orphaned receipts: receipt exists but no matching plan file
   for (const [planFile, receipt] of receiptsByPlan) {
-    if (!existsSync(join(inProgressDir, planFile))) {
+    const slug = planFile.replace(/\.md$/, "");
+    const planPath = join(inProgressDir, slug, planFile);
+    if (!existsSync(planPath)) {
       problems.push(
-        `Orphaned receipt: receipt-${receipt.slug}.txt (no matching plan file)`,
+        `Orphaned receipt: ${slug}/receipt.txt (no matching plan file)`,
       );
     }
   }
@@ -2657,7 +2613,8 @@ async function runRalphaiWorktree(
     ".ralphai",
     "pipeline",
     "in-progress",
-    `receipt-${plan.slug}.txt`,
+    plan.slug,
+    "receipt.txt",
   );
   const receipt = parseReceipt(receiptPath);
   if (receipt && receipt.source === "main") {
