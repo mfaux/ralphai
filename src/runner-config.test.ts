@@ -1388,15 +1388,14 @@ echo "$MODE"
       });
 
       // Remove sample plan so the backlog is empty for this test
-      const samplePlanDir = join(
+      const samplePlanFile = join(
         ctx.dir,
         ".ralphai",
         "pipeline",
         "backlog",
-        "hello-ralphai",
+        "hello-ralphai.md",
       );
-      if (existsSync(samplePlanDir))
-        rmSync(samplePlanDir, { recursive: true, force: true });
+      if (existsSync(samplePlanFile)) rmSync(samplePlanFile, { force: true });
 
       const output = execFileSync(
         "node",

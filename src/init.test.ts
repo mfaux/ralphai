@@ -264,10 +264,10 @@ describe("init command", () => {
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(plans).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md",
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
     );
     expect(plans).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md",
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
     );
   });
 
@@ -459,7 +459,6 @@ describe("init command", () => {
       ".ralphai",
       "pipeline",
       "backlog",
-      "hello-ralphai",
       "hello-ralphai.md",
     );
     expect(existsSync(samplePlanPath)).toBe(true);
@@ -469,14 +468,7 @@ describe("init command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const samplePlan = readFileSync(
-      join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "backlog",
-        "hello-ralphai",
-        "hello-ralphai.md",
-      ),
+      join(ctx.dir, ".ralphai", "pipeline", "backlog", "hello-ralphai.md"),
       "utf-8",
     );
 
@@ -507,7 +499,6 @@ describe("init command", () => {
       ".ralphai",
       "pipeline",
       "backlog",
-      "hello-ralphai",
       "hello-ralphai.md",
     );
 

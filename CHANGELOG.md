@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- **Per-plan pipeline folders** — plans now live in per-plan folders under `pipeline/backlog/` (for example `backlog/<slug>/<slug>.md`), and `wip/` is renamed to `parked/`. This release removes backward compatibility with the old file layout.
+- **Flat-only backlog plans** — plans in `pipeline/backlog/` must be flat `.md` files (for example `backlog/my-plan.md`). The slug-folder format (`backlog/<slug>/<slug>.md`) is no longer supported in the backlog. The runner creates slug folders automatically when promoting a plan to `in-progress/`.
 
 ### Fixes
 

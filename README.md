@@ -93,7 +93,7 @@ parked/    backlog/  →  in-progress/  →  out/
 ```
 
 Park unready plans in `parked/`. Ralphai ignores that folder.
-Each plan lives in its own folder under `backlog/` (for example `backlog/<slug>/<slug>.md`).
+Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The runner creates a slug folder automatically when moving a plan to `in-progress/`.
 
 ### 4. Pause and resume
 

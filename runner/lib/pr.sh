@@ -139,11 +139,10 @@ build_continuous_pr_body() {
 
   # Remaining plans section (scan backlog)
   local remaining=()
-  for d in "$BACKLOG_DIR"/*; do
-    [[ -d "$d" ]] || continue
-    local plan_file
-    plan_file=$(plan_file_for_dir "$d") || continue
-    remaining+=("$(basename "$plan_file")")
+  local _remaining_plans=()
+  collect_backlog_plans _remaining_plans
+  for _rp in "${_remaining_plans[@]}"; do
+    remaining+=("$(basename "$_rp")")
   done
 
   body+=$'\n'"## Remaining Plans"$'\n\n'

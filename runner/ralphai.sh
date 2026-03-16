@@ -56,14 +56,13 @@ if [[ "$MODE" == "patch" ]]; then
     echo "  ralphai run --pr"
     # Peek at backlog to suggest a branch name
     _first_plan=""
-  for _d in "$BACKLOG_DIR"/*; do
-    [[ -d "$_d" ]] || continue
-    _plan_file=$(plan_file_for_dir "$_d") || continue
-    _first_plan="$_plan_file"
-    break
-  done
+  local _backlog_plans=()
+  collect_backlog_plans _backlog_plans
+  if [[ ${#_backlog_plans[@]} -gt 0 ]]; then
+    _first_plan="${_backlog_plans[0]}"
+  fi
   if [[ -n "$_first_plan" ]]; then
-    _slug=$(basename "$(dirname "$_first_plan")")
+    _slug=$(basename "$_first_plan" .md)
       echo ""
       if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
         echo "Or create a worktree on a feature branch:"
@@ -229,9 +228,10 @@ while true; do
       echo "Create a worktree on a feature branch instead:"
       slug=$(basename "$(dirname "${WIP_FILES[0]}")")
       echo "  git worktree add ../<dir> -b ralphai/${slug} $BASE_BRANCH"
-      # Roll back plan
-      rollback_dest="$BACKLOG_DIR/${slug}"
-      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
+      # Roll back plan: extract plan file back to backlog as flat file
+      rollback_dest="$BACKLOG_DIR/${slug}.md"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rm -rf "$(dirname "${WIP_FILES[0]}")"
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
     fi
@@ -258,9 +258,10 @@ while true; do
       echo "Fix: delete or rename the stale branch, then retry:"
       echo "  git branch -m ralphai ralphai-legacy   # rename"
       echo "  git branch -D ralphai                # or delete"
-      # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${slug}"
-      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
+      # Roll back: move plan file back to backlog as flat file
+      rollback_dest="$BACKLOG_DIR/${slug}.md"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rm -rf "$(dirname "${WIP_FILES[0]}")"
       echo ""
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
@@ -271,9 +272,10 @@ while true; do
       echo ""
       echo "SKIP: $COLLISION_REASON"
       echo "Plan '$plan_basename' already has open work. Skipping to next plan."
-      # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${slug}"
-      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
+      # Roll back: move plan file back to backlog as flat file
+      rollback_dest="$BACKLOG_DIR/${slug}.md"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rm -rf "$(dirname "${WIP_FILES[0]}")"
       echo "Rolled back: moved plan to $rollback_dest"
       SKIPPED_PLANS["$plan_basename"]=1
       continue
@@ -281,9 +283,10 @@ while true; do
     if ! git checkout -b "$branch"; then
       echo ""
       echo "ERROR: Failed to create branch '$branch'."
-      # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${slug}"
-      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
+      # Roll back: move plan file back to backlog as flat file
+      rollback_dest="$BACKLOG_DIR/${slug}.md"
+      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rm -rf "$(dirname "${WIP_FILES[0]}")"
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
     fi
