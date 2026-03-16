@@ -1,12 +1,15 @@
 # pr.sh — PR lifecycle: archive, create, continuous PR management
 # Sourced by ralphai.sh — do not execute directly.
 
-# --- Archive function: move PRD + progress from in-progress/ to out/ ---
+# --- Archive function: move plan folder from in-progress/ to out/ ---
 # Only called on actual completion (COMPLETE signal).
 archive_run() {
-  local timestamp
-  timestamp=$(date +%Y%m%d-%H%M%S)
   mkdir -p "$ARCHIVE_DIR"
+
+  local plan_dir
+  plan_dir=$(dirname "${WIP_FILES[0]}")
+  local plan_slug
+  plan_slug=$(basename "$plan_dir")
 
   # Read issue frontmatter before files are moved (needed for post-completion hooks)
   for f in "${WIP_FILES[@]}"; do
@@ -17,28 +20,10 @@ archive_run() {
     fi
   done
 
-  # Move progress file
-  if [[ -f "$PROGRESS_FILE" ]]; then
-    mv "$PROGRESS_FILE" "$ARCHIVE_DIR/progress-${PLAN_SLUG}-${timestamp}.md"
-    echo "Archived $PROGRESS_FILE -> $ARCHIVE_DIR/progress-${PLAN_SLUG}-${timestamp}.md"
-  fi
-
-  # Move receipt file
-  if [[ -n "${RECEIPT_FILE:-}" && -f "$RECEIPT_FILE" ]]; then
-    mv "$RECEIPT_FILE" "$ARCHIVE_DIR/receipt-${PLAN_SLUG}-${timestamp}.txt"
-    echo "Archived $RECEIPT_FILE -> $ARCHIVE_DIR/receipt-${PLAN_SLUG}-${timestamp}.txt"
-  fi
-
-  # Move PRD/plan files from in-progress/ to out/
-  for f in "${WIP_FILES[@]}"; do
-    if [[ -f "$f" ]]; then
-      local basename
-      basename=$(basename "$f")
-      local dest="$ARCHIVE_DIR/${basename%.md}-${timestamp}.md"
-      mv "$f" "$dest"
-      echo "Archived $f -> $dest"
-    fi
-  done
+  # Move plan folder from in-progress/ to out/
+  local dest="$ARCHIVE_DIR/$plan_slug"
+  mv "$plan_dir" "$dest"
+  echo "Archived $plan_dir -> $dest"
 
   # Plan files are gitignored (local-only state), so no git operations needed.
   # The mv commands above are the entire archive step.
@@ -88,12 +73,14 @@ create_pr() {
       break
     fi
   done
-  # If plan was already archived, check out/ for the timestamped copy
+  # If plan was already archived, check out/ for the plan file copy
   if [[ -z "$plan_content" ]]; then
-    local latest_archived
-    latest_archived=$(ls -t "$ARCHIVE_DIR"/*.md 2>/dev/null | head -1)
-    if [[ -n "$latest_archived" ]]; then
-      plan_content=$(cat "$latest_archived")
+    local plan_slug
+    plan_slug=$(basename "$(dirname "${WIP_FILES[0]}")")
+    local archived_plan
+    archived_plan="$ARCHIVE_DIR/$plan_slug/$(basename "${WIP_FILES[0]}")"
+    if [[ -f "$archived_plan" ]]; then
+      plan_content=$(cat "$archived_plan")
     fi
   fi
 
@@ -152,8 +139,11 @@ build_continuous_pr_body() {
 
   # Remaining plans section (scan backlog)
   local remaining=()
-  for f in "$BACKLOG_DIR"/*.md; do
-    [[ -f "$f" ]] && remaining+=("$(basename "$f")")
+  for d in "$BACKLOG_DIR"/*; do
+    [[ -d "$d" ]] || continue
+    local plan_file
+    plan_file=$(plan_file_for_dir "$d") || continue
+    remaining+=("$(basename "$plan_file")")
   done
 
   body+=$'\n'"## Remaining Plans"$'\n\n'
@@ -261,4 +251,3 @@ finalize_continuous_pr() {
 
   echo "PR ready for review: $CONTINUOUS_PR_URL"
 }
-

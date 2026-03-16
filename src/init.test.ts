@@ -37,7 +37,9 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"))).toBe(
       true,
     );
-    expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "wip"))).toBe(true);
+    expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "parked"))).toBe(
+      true,
+    );
     expect(
       existsSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress")),
     ).toBe(true);
@@ -262,10 +264,10 @@ describe("init command", () => {
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     // Both "nothing to do" messages should include the hint
     expect(plans).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md",
+      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md",
     );
     expect(plans).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md",
+      "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md",
     );
   });
 
@@ -457,6 +459,7 @@ describe("init command", () => {
       ".ralphai",
       "pipeline",
       "backlog",
+      "hello-ralphai",
       "hello-ralphai.md",
     );
     expect(existsSync(samplePlanPath)).toBe(true);
@@ -466,7 +469,14 @@ describe("init command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const samplePlan = readFileSync(
-      join(ctx.dir, ".ralphai", "pipeline", "backlog", "hello-ralphai.md"),
+      join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "backlog",
+        "hello-ralphai",
+        "hello-ralphai.md",
+      ),
       "utf-8",
     );
 
@@ -497,6 +507,7 @@ describe("init command", () => {
       ".ralphai",
       "pipeline",
       "backlog",
+      "hello-ralphai",
       "hello-ralphai.md",
     );
 
@@ -582,20 +593,21 @@ describe("init command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     // Add a plan file
-    writeFileSync(
-      join(ctx.dir, ".ralphai", "pipeline", "backlog", "old-plan.md"),
-      "# Old plan",
+    const planDir = join(
+      ctx.dir,
+      ".ralphai",
+      "pipeline",
+      "backlog",
+      "old-plan",
     );
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "old-plan.md"), "# Old plan");
 
     // Force re-scaffold
     runCliOutput(["init", "--force", "--yes"], ctx.dir);
 
     // Plan file should be gone (directory was deleted and recreated)
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "old-plan.md"),
-      ),
-    ).toBe(false);
+    expect(existsSync(join(planDir, "old-plan.md"))).toBe(false);
     expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"))).toBe(
       true,
     );

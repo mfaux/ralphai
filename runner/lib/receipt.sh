@@ -7,7 +7,7 @@
 # plan being resumed by `ralphai run` in the main repo) and to provide
 # status information.
 #
-# Receipt files live at: .ralphai/pipeline/in-progress/receipt-<slug>.txt
+# Receipt files live at: .ralphai/pipeline/in-progress/<slug>/receipt.txt
 # Format: key=value (one per line, no quoting needed).
 #
 # Fields:
@@ -15,7 +15,7 @@
 #   source           — "main" or "worktree"
 #   worktree_path    — absolute path to worktree (only when source=worktree)
 #   branch           — git branch name
-#   slug             — plan slug (derived from filename: basename minus .md)
+#   slug             — plan slug (derived from plan folder name)
 #   plan_file        — exact plan filename (basename, e.g. "dark-mode.md")
 #   turns_budget     — total turn budget for the run (resolved $TURNS; 0 = unlimited)
 #   turns_completed  — number of agent turns completed
@@ -28,16 +28,11 @@ resolve_receipt_path() {
   local plan_basename
   plan_basename=$(basename "${WIP_FILES[0]}")
   PLAN_BASENAME="$plan_basename"
-  PLAN_SLUG="${plan_basename%.md}"
-  RECEIPT_FILE="$WIP_DIR/receipt-${PLAN_SLUG}.txt"
-  PROGRESS_FILE="$WIP_DIR/progress-${PLAN_SLUG}.md"
-
-  # Backward-compat: migrate legacy progress.md → progress-<slug>.md
-  # when there is exactly one plan in-progress and the old file exists.
-  if [[ ! -f "$PROGRESS_FILE" && -f "$WIP_DIR/progress.md" ]]; then
-    mv "$WIP_DIR/progress.md" "$PROGRESS_FILE"
-    echo "Migrated progress.md -> $(basename "$PROGRESS_FILE")"
-  fi
+  local plan_dir
+  plan_dir=$(dirname "${WIP_FILES[0]}")
+  PLAN_SLUG=$(basename "$plan_dir")
+  RECEIPT_FILE="$plan_dir/receipt.txt"
+  PROGRESS_FILE="$plan_dir/progress.md"
 }
 
 # --- Write a new receipt file ---

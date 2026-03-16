@@ -107,7 +107,7 @@ describe("init AGENTS.md integration", () => {
       "This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.",
     );
     expect(agentsMd).toContain(
-      "Plan files go in `.ralphai/pipeline/backlog/`.",
+      "Plan files go in per-plan folders under `.ralphai/pipeline/backlog/`.",
     );
     expect(agentsMd).toContain(
       "See `.ralphai/PLANNING.md` for\nthe plan writing guide.",

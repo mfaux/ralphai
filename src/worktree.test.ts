@@ -168,7 +168,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         // Config falls back to main repo's absolute path (manual worktree without symlink)
         expect(result).toContain(`CONFIG_FILE=${mainRepo}/ralphai.json`);
         expect(result).toContain(
-          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/progress.md`,
+          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/<slug>/progress.md`,
         );
       } finally {
         try {
@@ -226,7 +226,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
         expect(result).toContain("CONFIG_FILE=ralphai.json");
         expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
+          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
         );
       } finally {
         try {
@@ -276,7 +276,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
         expect(result).toContain("CONFIG_FILE=ralphai.json");
         expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/progress.md",
+          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
         );
       } finally {
         try {
@@ -335,13 +335,10 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Initialize ralphai so the worktree guard runs (it checks before .ralphai)
       // Create a minimal .ralphai in main repo so worktree resolves
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-test.md"),
-        "# Test plan\n",
-      );
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const planDir = join(backlogDir, "prd-test");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-test.md"), "# Test plan\n");
 
       const result = runCli(["worktree"], worktreeDir);
       expect(result.exitCode).not.toBe(0);
@@ -421,7 +418,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         stdio: "ignore",
       });
 
-      // No .ralphai/pipeline/in-progress/prd-done-feature.md exists,
+      // No .ralphai/pipeline/in-progress/done-feature/done-feature.md exists,
       // so it should be cleaned
       const output = runCliOutput(["worktree", "clean"], ctx.dir);
       expect(output).toContain("Removing:");
@@ -444,19 +441,15 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       );
 
       // Create matching in-progress plan
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "in-progress",
-          "prd-active-feature.md",
-        ),
-        "# Active plan\n",
+      const inProgressDir = join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "in-progress",
       );
+      const planDir = join(inProgressDir, "prd-active-feature");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-active-feature.md"), "# Active plan\n");
 
       const output = runCliOutput(["worktree", "clean"], ctx.dir);
       expect(output).toContain("Keeping:");
@@ -474,17 +467,13 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       gitInitialCommit(ctx.dir);
 
       // Create .ralphai with two plans
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-first.md"),
-        "# First\n",
-      );
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-second.md"),
-        "# Second\n",
-      );
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const firstDir = join(backlogDir, "prd-first");
+      const secondDir = join(backlogDir, "prd-second");
+      mkdirSync(firstDir, { recursive: true });
+      mkdirSync(secondDir, { recursive: true });
+      writeFileSync(join(firstDir, "prd-first.md"), "# First\n");
+      writeFileSync(join(secondDir, "prd-second.md"), "# Second\n");
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");
@@ -507,13 +496,10 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       gitInitialCommit(ctx.dir);
 
       // Create .ralphai with a plan
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-symlink-test.md"),
-        "# Symlink test\n",
-      );
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const planDir = join(backlogDir, "prd-symlink-test");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-symlink-test.md"), "# Symlink test\n");
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");
@@ -547,17 +533,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       gitInitialCommit(ctx.dir);
 
       // Create .ralphai with a plan
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const planDir = join(backlogDir, "prd-config-symlink");
+      mkdirSync(planDir, { recursive: true });
       writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "backlog",
-          "prd-config-symlink.md",
-        ),
+        join(planDir, "prd-config-symlink.md"),
         "# Config symlink test\n",
       );
 
@@ -597,17 +577,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       gitInitialCommit(ctx.dir);
 
       // Create .ralphai with a plan
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const planDir = join(backlogDir, "prd-committed-cfg");
+      mkdirSync(planDir, { recursive: true });
       writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "backlog",
-          "prd-committed-cfg.md",
-        ),
+        join(planDir, "prd-committed-cfg.md"),
         "# Committed config test\n",
       );
 
@@ -645,13 +619,10 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       gitInitialCommit(ctx.dir);
 
       // Create .ralphai with a plan (not git-tracked since .ralphai/ is gitignored)
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-tracked-test.md"),
-        "# Tracked test\n",
-      );
+      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+      const planDir = join(backlogDir, "prd-tracked-test");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-tracked-test.md"), "# Tracked test\n");
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");
@@ -736,13 +707,15 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
       gitInitialCommit(ctx.dir);
 
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "in-progress", "prd-resume.md"),
-        "# Resume test\n",
+      const inProgressDir = join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "in-progress",
       );
+      const planDir = join(inProgressDir, "prd-resume");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-resume.md"), "# Resume test\n");
 
       const worktreeDir = join(ctx.dir, "wt-resume");
       execSync(`git worktree add "${worktreeDir}" -b ralphai/prd-resume HEAD`, {
@@ -789,24 +762,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         join(ctx.dir, "ralphai.json"),
         JSON.stringify({ agentCommand: "claude -p" }) + "\n",
       );
-      writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "in-progress",
-          "prd-dark-mode.md",
-        ),
-        "# Dark mode\n",
+      const planDir = join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "in-progress",
+        "dark-mode",
       );
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "dark-mode.md"), "# Dark mode\n");
       writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "in-progress",
-          "receipt-dark-mode.txt",
-        ),
+        join(planDir, "receipt.txt"),
         [
           "started_at=2026-03-07T12:00:00Z",
           "source=worktree",
@@ -835,18 +801,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         join(ctx.dir, "ralphai.json"),
         JSON.stringify({ agentCommand: "claude -p" }) + "\n",
       );
-      writeFileSync(
-        join(ctx.dir, ".ralphai", "pipeline", "in-progress", "prd-search.md"),
-        "# Search\n",
+      const planDir = join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "in-progress",
+        "prd-search",
       );
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-search.md"), "# Search\n");
       writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "in-progress",
-          "receipt-prd-search.txt",
-        ),
+        join(planDir, "receipt.txt"),
         [
           "started_at=2026-03-07T12:00:00Z",
           "source=main",
@@ -881,14 +846,16 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       });
 
       // Write a receipt for the slug "done"
+      const planDir = join(
+        ctx.dir,
+        ".ralphai",
+        "pipeline",
+        "in-progress",
+        "done",
+      );
+      mkdirSync(planDir, { recursive: true });
       writeFileSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "in-progress",
-          "receipt-done.txt",
-        ),
+        join(planDir, "receipt.txt"),
         [
           "started_at=2026-03-07T12:00:00Z",
           "source=worktree",
@@ -903,7 +870,7 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
-      expect(combined).toContain("Archived receipt: receipt-done.txt");
+      expect(combined).toContain("Archived receipt: done/receipt.txt");
 
       // Receipt should no longer exist in in-progress
       expect(
@@ -913,7 +880,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
             ".ralphai",
             "pipeline",
             "in-progress",
-            "receipt-done.txt",
+            "done",
+            "receipt.txt",
           ),
         ),
       ).toBe(false);
@@ -921,11 +889,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       // Receipt should exist in out/
       const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
       expect(existsSync(outDir)).toBe(true);
-      const outFiles = readdirSync(outDir);
-      const archivedReceipt = outFiles.find((f: string) =>
-        f.startsWith("receipt-done-"),
-      );
-      expect(archivedReceipt).toBeDefined();
+      const archivedReceipt = join(outDir, "done", "receipt.txt");
+      expect(existsSync(archivedReceipt)).toBe(true);
     });
   });
 });

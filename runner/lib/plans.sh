@@ -84,18 +84,15 @@ extract_depends_on() {
 dependency_status() {
   local dep_base
   dep_base=$(basename "$1")
+  local dep_slug
+  dep_slug="${dep_base%.md}"
 
-  if [[ -f "$ARCHIVE_DIR/$dep_base" ]]; then
+  if [[ -d "$ARCHIVE_DIR/$dep_slug" ]]; then
     echo "done"
     return 0
   fi
 
-  if compgen -G "$ARCHIVE_DIR/${dep_base%.md}-*.md" >/dev/null; then
-    echo "done"
-    return 0
-  fi
-
-  if [[ -f "$WIP_DIR/$dep_base" || -f "$BACKLOG_DIR/$dep_base" ]]; then
+  if [[ -d "$WIP_DIR/$dep_slug" || -d "$BACKLOG_DIR/$dep_slug" ]]; then
     echo "pending"
     return 0
   fi
@@ -144,6 +141,19 @@ plan_readiness() {
   echo "blocked:$joined"
 }
 
+# --- Resolve plan file path inside a plan directory ---
+plan_file_for_dir() {
+  local dir="$1"
+  local slug
+  slug=$(basename "$dir")
+  local candidate="$dir/${slug}.md"
+  if [[ -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+  return 1
+}
+
 # --- Detect plan: find in-progress work or pick from backlog ---
 # Sets: WIP_FILES, FILE_REFS, RESUMING
 detect_plan() {
@@ -152,7 +162,7 @@ detect_plan() {
   RESUMING=false
 
   # Check for in-progress plan files
-  local wip_plans=()
+  local in_progress_plans=()
   if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     # In worktree mode, only consider the plan matching this branch.
     # Multiple worktrees share the same .ralphai/ directory via symlink,
@@ -160,26 +170,27 @@ detect_plan() {
     local _branch
     _branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
     local _slug="${_branch#ralphai/}"
-    for _f in "$WIP_DIR"/*.md; do
-      [[ -f "$_f" ]] || continue
-      local _base
-      _base=$(basename "$_f")
-      [[ "$_base" == progress-* || "$_base" == receipt-* ]] && continue
-      if [[ "${_base%.md}" == "$_slug" ]]; then
-        wip_plans+=("$_f")
-        break
+    local _dir="$WIP_DIR/$_slug"
+    if [[ -d "$_dir" ]]; then
+      local _plan_file
+      _plan_file=$(plan_file_for_dir "$_dir") || _plan_file=""
+      if [[ -n "$_plan_file" ]]; then
+        in_progress_plans+=("$_plan_file")
       fi
-    done
+    fi
   else
-    for f in "$WIP_DIR"/*.md; do
-      [[ -f "$f" ]] && wip_plans+=("$f")
+    for d in "$WIP_DIR"/*; do
+      [[ -d "$d" ]] || continue
+      local plan_file
+      plan_file=$(plan_file_for_dir "$d") || continue
+      in_progress_plans+=("$plan_file")
     done
   fi
 
-  if [[ ${#wip_plans[@]} -gt 0 ]]; then
+  if [[ ${#in_progress_plans[@]} -gt 0 ]]; then
     # Resume in-progress work
     RESUMING=true
-    WIP_FILES=("${wip_plans[@]}")
+    WIP_FILES=("${in_progress_plans[@]}")
     for f in "${WIP_FILES[@]}"; do
       FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
     done
@@ -189,22 +200,28 @@ detect_plan() {
 
   # Check backlog
   local backlog_plans=()
-  for f in "$BACKLOG_DIR"/*.md; do
-    [[ -f "$f" ]] && backlog_plans+=("$f")
+  for d in "$BACKLOG_DIR"/*; do
+    [[ -d "$d" ]] || continue
+    local plan_file
+    plan_file=$(plan_file_for_dir "$d") || continue
+    backlog_plans+=("$plan_file")
   done
 
   if [[ ${#backlog_plans[@]} -eq 0 ]]; then
     if pull_github_issues; then
       # Re-scan backlog after pulling issue
-      for f in "$BACKLOG_DIR"/*.md; do
-        [[ -f "$f" ]] && backlog_plans+=("$f")
+      for d in "$BACKLOG_DIR"/*; do
+        [[ -d "$d" ]] || continue
+        local plan_file
+        plan_file=$(plan_file_for_dir "$d") || continue
+        backlog_plans+=("$plan_file")
       done
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/ — see .ralphai/PLANNING.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md"
       return 1
     fi
   fi
@@ -271,21 +288,30 @@ detect_plan() {
     echo "[dry-run] Would select: $chosen"
     local chosen_base
     chosen_base=$(basename "$chosen")
-    WIP_FILES=("$chosen")
-    FILE_REFS=" $(format_file_ref "$chosen")"
+    local chosen_dir
+    chosen_dir=$(dirname "$chosen")
+    local dest_dir
+    dest_dir="$WIP_DIR/$(basename "$chosen_dir")"
+    local dest_plan
+    dest_plan="$dest_dir/$chosen_base"
+    WIP_FILES=("$dest_plan")
+    FILE_REFS=" $(format_file_ref "$dest_plan")"
     RESUMING=false
-    echo "[dry-run] Would move: $chosen -> $WIP_DIR/$chosen_base"
+    echo "[dry-run] Would move: $chosen_dir -> $dest_dir"
   else
     # Move chosen plan to in-progress
     mkdir -p "$WIP_DIR"
-    local dest_basename
-    dest_basename=$(basename "$chosen")
-    local dest="$WIP_DIR/$dest_basename"
-    mv "$chosen" "$dest"
-    echo "Moved $chosen -> $dest"
+    local chosen_dir
+    chosen_dir=$(dirname "$chosen")
+    local dest_dir
+    dest_dir="$WIP_DIR/$(basename "$chosen_dir")"
+    mv "$chosen_dir" "$dest_dir"
+    echo "Moved $chosen_dir -> $dest_dir"
 
-    WIP_FILES=("$dest")
-    FILE_REFS=" $(format_file_ref "$dest")"
+    local dest_plan
+    dest_plan="$dest_dir/$(basename "$chosen")"
+    WIP_FILES=("$dest_plan")
+    FILE_REFS=" $(format_file_ref "$dest_plan")"
     RESUMING=false
   fi
   return 0

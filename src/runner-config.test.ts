@@ -201,9 +201,11 @@ ${cleanupFile}
         const result = formatRef({
           promptMode: "auto",
           agentType: "claude",
-          filepath: ".ralphai/pipeline/in-progress/prd-foo.md",
+          filepath: ".ralphai/pipeline/in-progress/prd-foo/prd-foo.md",
         });
-        expect(result).toBe("@.ralphai/pipeline/in-progress/prd-foo.md");
+        expect(result).toBe(
+          "@.ralphai/pipeline/in-progress/prd-foo/prd-foo.md",
+        );
       });
 
       it("auto mode with opencode agent returns @filepath", () => {
@@ -1210,9 +1212,9 @@ echo "$MODE"
     // detect_plan: FILE_REFS uses format_file_ref
     expect(plans).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
     // detect_plan: dry-run chosen
-    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$chosen")"');
+    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest_plan")"');
     // detect_plan: normal chosen
-    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest")"');
+    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest_plan")"');
     // LEARNINGS_REF uses format_file_ref
     expect(prompt).toContain(
       'LEARNINGS_REF=" $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"',
@@ -1386,14 +1388,15 @@ echo "$MODE"
       });
 
       // Remove sample plan so the backlog is empty for this test
-      const samplePlan = join(
+      const samplePlanDir = join(
         ctx.dir,
         ".ralphai",
         "pipeline",
         "backlog",
-        "hello-ralphai.md",
+        "hello-ralphai",
       );
-      if (existsSync(samplePlan)) rmSync(samplePlan);
+      if (existsSync(samplePlanDir))
+        rmSync(samplePlanDir, { recursive: true, force: true });
 
       const output = execFileSync(
         "node",

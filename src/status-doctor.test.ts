@@ -285,14 +285,15 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     // Remove sample plan to test truly empty pipeline
-    const samplePlan = join(
+    const samplePlanDir = join(
       ctx.dir,
       ".ralphai",
       "pipeline",
       "backlog",
-      "hello-ralphai.md",
+      "hello-ralphai",
     );
-    if (existsSync(samplePlan)) rmSync(samplePlan);
+    if (existsSync(samplePlanDir))
+      rmSync(samplePlanDir, { recursive: true, force: true });
 
     const result = runCli(["status"], ctx.dir);
     const output = result.stdout + result.stderr;
@@ -308,15 +309,17 @@ describe("status subcommand", () => {
   it("status shows backlog plans", () => {
     runCli(["init", "--yes"], ctx.dir);
 
-    mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-      recursive: true,
-    });
+    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    const authDir = join(backlogDir, "prd-auth");
+    const searchDir = join(backlogDir, "prd-search");
+    mkdirSync(authDir, { recursive: true });
+    mkdirSync(searchDir, { recursive: true });
     writeFileSync(
-      join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-auth.md"),
+      join(authDir, "prd-auth.md"),
       "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
     );
     writeFileSync(
-      join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-search.md"),
+      join(searchDir, "prd-search.md"),
       "---\ndepends-on: [prd-auth.md]\n---\n\n# Search\n\n### Task 1: Index\n",
     );
 
@@ -334,23 +337,24 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-dark-mode");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan with 3 tasks
     writeFileSync(
-      join(ipDir, "prd-dark-mode.md"),
+      join(planDir, "prd-dark-mode.md"),
       "# Dark Mode\n\n### Task 1: Theme\n### Task 2: Toggle\n### Task 3: Persist\n",
     );
 
     // Progress file with 1 completed task
     writeFileSync(
-      join(ipDir, "progress.md"),
+      join(planDir, "progress.md"),
       "## Progress Log\n\n### Task 1: Theme\n\n**Status:** Complete\n",
     );
 
     // Receipt for this plan — includes tasks_completed
     writeFileSync(
-      join(ipDir, "receipt-dark-mode.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=worktree",
@@ -377,17 +381,18 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-legacy");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan with 2 tasks
     writeFileSync(
-      join(ipDir, "prd-legacy.md"),
+      join(planDir, "prd-legacy.md"),
       "# Legacy\n\n### Task 1: Migrate\n### Task 2: Validate\n",
     );
 
     // Receipt WITHOUT tasks_completed (backwards compatibility)
     writeFileSync(
-      join(ipDir, "receipt-legacy.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -408,23 +413,24 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-feature");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan with 4 tasks
     writeFileSync(
-      join(ipDir, "prd-feature.md"),
+      join(planDir, "prd-feature.md"),
       "# Feature\n\n### Task 1: A\n### Task 2: B\n### Task 3: C\n### Task 4: D\n",
     );
 
     // Progress file with 2 completed tasks
     writeFileSync(
-      join(ipDir, "progress.md"),
+      join(planDir, "progress.md"),
       "## Progress Log\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
     );
 
     // Receipt says 3 tasks completed (receipt is authoritative)
     writeFileSync(
-      join(ipDir, "receipt-feature.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -447,17 +453,18 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-search");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan with 2 tasks
     writeFileSync(
-      join(ipDir, "prd-search.md"),
+      join(planDir, "prd-search.md"),
       "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
     );
 
     // Receipt with turns_budget=5, turns_completed=2
     writeFileSync(
-      join(ipDir, "receipt-search.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -480,17 +487,18 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-refactor");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan with 1 task
     writeFileSync(
-      join(ipDir, "prd-refactor.md"),
+      join(planDir, "prd-refactor.md"),
       "# Refactor\n\n### Task 1: Cleanup\n",
     );
 
     // Receipt with turns_budget=0 (unlimited)
     writeFileSync(
-      join(ipDir, "receipt-refactor.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -513,16 +521,17 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-old-plan");
+    mkdirSync(planDir, { recursive: true });
 
     writeFileSync(
-      join(ipDir, "prd-old-plan.md"),
+      join(planDir, "prd-old-plan.md"),
       "# Old Plan\n\n### Task 1: Stuff\n",
     );
 
     // Old receipt without turns_budget field — defaults to 0 in parseReceipt
     writeFileSync(
-      join(ipDir, "receipt-old-plan.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -545,11 +554,12 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const orphanDir = join(ipDir, "orphan");
+    mkdirSync(orphanDir, { recursive: true });
 
     // Receipt with no matching plan file
     writeFileSync(
-      join(ipDir, "receipt-orphan.txt"),
+      join(orphanDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -564,18 +574,21 @@ describe("status subcommand", () => {
 
     expect(result.exitCode).toBe(0);
     expect(output).toContain("Problems");
-    expect(output).toContain("Orphaned receipt: receipt-orphan.txt");
+    expect(output).toContain("Orphaned receipt: orphan/receipt.txt");
   });
 
   it("status counts completed plans from archive", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-    mkdirSync(outDir, { recursive: true });
+    const authDir = join(outDir, "prd-auth");
+    const searchDir = join(outDir, "prd-search");
+    mkdirSync(authDir, { recursive: true });
+    mkdirSync(searchDir, { recursive: true });
 
-    // Two archived plans (same slug, different timestamps)
-    writeFileSync(join(outDir, "prd-auth-20260306-120000.md"), "# Auth\n");
-    writeFileSync(join(outDir, "prd-search-20260306-130000.md"), "# Search\n");
+    // Two archived plans
+    writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
+    writeFileSync(join(searchDir, "prd-search.md"), "# Search\n");
 
     const result = runCli(["status"], ctx.dir);
     const output = result.stdout + result.stderr;
@@ -592,17 +605,18 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "remove-fallback-agents");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan without prd- prefix (e.g. hand-named plan)
     writeFileSync(
-      join(ipDir, "remove-fallback-agents.md"),
+      join(planDir, "remove-fallback-agents.md"),
       "# Remove Fallback Agents\n\n### Task 1: Remove\n### Task 2: Test\n### Task 3: Docs\n",
     );
 
     // Receipt with plan_file field pointing to the non-prd plan
     writeFileSync(
-      join(ipDir, "receipt-remove-fallback-agents.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -630,17 +644,18 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "gh-42-search");
+    mkdirSync(planDir, { recursive: true });
 
     // Plan from issue intake (gh- prefix)
     writeFileSync(
-      join(ipDir, "gh-42-search.md"),
+      join(planDir, "gh-42-search.md"),
       "# Search Feature\n\n### Task 1: Index\n### Task 2: Query\n",
     );
 
     // Receipt with plan_file field for the gh-prefixed plan
     writeFileSync(
-      join(ipDir, "receipt-gh-42-search.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=worktree",
@@ -664,58 +679,24 @@ describe("status subcommand", () => {
     expect(output).not.toContain("Orphaned");
   });
 
-  it("status backward compat: old receipt without plan_file matches prd-prefixed plan", () => {
-    runCli(["init", "--yes"], ctx.dir);
-
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
-
-    // Plan with prd- prefix (existing convention)
-    writeFileSync(
-      join(ipDir, "prd-auth.md"),
-      "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
-    );
-
-    // Old receipt WITHOUT plan_file field — should fall back to prd-<slug>.md
-    writeFileSync(
-      join(ipDir, "receipt-auth.txt"),
-      [
-        "started_at=2026-03-07T12:00:00Z",
-        "source=main",
-        "branch=ralphai/auth",
-        "slug=auth",
-        "turns_completed=3",
-        "tasks_completed=1",
-      ].join("\n"),
-    );
-
-    const result = runCli(["status"], ctx.dir);
-    const output = result.stdout + result.stderr;
-
-    expect(result.exitCode).toBe(0);
-    expect(output).toContain("prd-auth.md");
-    expect(output).toContain("1 of 2 tasks");
-    // No orphaned receipt — backward compat fallback works
-    expect(output).not.toContain("Problems");
-    expect(output).not.toContain("Orphaned");
-  });
-
   it("status counts completed non-prd plans from archive", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-    mkdirSync(outDir, { recursive: true });
+    const agentsDir = join(outDir, "remove-fallback-agents");
+    const searchDir = join(outDir, "gh-42-search");
+    const authDir = join(outDir, "prd-auth");
+    mkdirSync(agentsDir, { recursive: true });
+    mkdirSync(searchDir, { recursive: true });
+    mkdirSync(authDir, { recursive: true });
 
     // Archived plans with various naming conventions
     writeFileSync(
-      join(outDir, "remove-fallback-agents-20260306-120000.md"),
+      join(agentsDir, "remove-fallback-agents.md"),
       "# Remove Fallback Agents\n",
     );
-    writeFileSync(
-      join(outDir, "gh-42-search-20260306-130000.md"),
-      "# Search\n",
-    );
-    writeFileSync(join(outDir, "prd-auth-20260306-140000.md"), "# Auth\n");
+    writeFileSync(join(searchDir, "gh-42-search.md"), "# Search\n");
+    writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
 
     const result = runCli(["status"], ctx.dir);
     const output = result.stdout + result.stderr;
@@ -732,16 +713,17 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-stuck-plan");
+    mkdirSync(planDir, { recursive: true });
 
     writeFileSync(
-      join(ipDir, "prd-stuck-plan.md"),
+      join(planDir, "prd-stuck-plan.md"),
       "# Stuck Plan\n\n### Task 1: A\n### Task 2: B\n",
     );
 
     // Receipt with outcome=stuck
     writeFileSync(
-      join(ipDir, "receipt-stuck-plan.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",
@@ -766,13 +748,17 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    mkdirSync(ipDir, { recursive: true });
+    const planDir = join(ipDir, "prd-active");
+    mkdirSync(planDir, { recursive: true });
 
-    writeFileSync(join(ipDir, "prd-active.md"), "# Active\n\n### Task 1: Do\n");
+    writeFileSync(
+      join(planDir, "prd-active.md"),
+      "# Active\n\n### Task 1: Do\n",
+    );
 
     // Receipt without outcome field
     writeFileSync(
-      join(ipDir, "receipt-active.txt"),
+      join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
         "source=main",

@@ -89,14 +89,15 @@ ralphai worktree clean              # remove completed worktrees
 Plans flow through the pipeline:
 
 ```
-wip/ (parked)    backlog/  →  in-progress/  →  out/
+parked/    backlog/  →  in-progress/  →  out/
 ```
 
-Park unready plans in `wip/`. Ralphai ignores that folder.
+Park unready plans in `parked/`. Ralphai ignores that folder.
+Each plan lives in its own folder under `backlog/` (for example `backlog/<slug>/<slug>.md`).
 
 ### 4. Pause and resume
 
-Stop mid-run any time. Work stays in `in-progress/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `ralphai status` to see what's queued, in progress, and any problems.
+Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `ralphai status` to see what's queued, in progress, and any problems.
 
 ### 5. Close the learnings loop
 

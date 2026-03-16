@@ -20,11 +20,10 @@ Project-specific guidance for AI coding agents working in this codebase.
 - **Source files: max ~300 lines.** Extract modules when a file grows beyond this.
 - Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
 
-
 ## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-Plan files go in `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
+Plan files go in per-plan folders under `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
 the plan writing guide.
 
 ## Learnings

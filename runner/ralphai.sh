@@ -5,8 +5,8 @@
 # Usage: ralphai run [--turns=<n>] [--dry-run] [--resume] [--agent-command=<cmd>] [--feedback-commands=<list>] [--base-branch=<branch>] [--branch] [--pr] [--patch] [--max-stuck=<n>] [--show-config] [--help]
 #
 # Auto-detects what to work on:
-#   1. If .ralphai/pipeline/in-progress/ has plan files → resume on the current ralphai/* branch
-#   2. Otherwise, pick the best plan from .ralphai/pipeline/backlog/ (LLM-selected if multiple)
+#   1. If .ralphai/pipeline/in-progress/ has plan folders → resume on the current ralphai/* branch
+#   2. Otherwise, pick the best plan from .ralphai/pipeline/backlog/
 #
 # On completion (branch mode, the default): creates an isolated ralphai/<slug>
 # branch, commits changes, but does not push or create a PR.
@@ -56,12 +56,14 @@ if [[ "$MODE" == "patch" ]]; then
     echo "  ralphai run --pr"
     # Peek at backlog to suggest a branch name
     _first_plan=""
-    for _f in "$BACKLOG_DIR"/*.md; do
-      [[ -f "$_f" ]] && _first_plan="$_f" && break
-    done
-    if [[ -n "$_first_plan" ]]; then
-      _slug=$(basename "$_first_plan")
-      _slug="${_slug%.md}"
+  for _d in "$BACKLOG_DIR"/*; do
+    [[ -d "$_d" ]] || continue
+    _plan_file=$(plan_file_for_dir "$_d") || continue
+    _first_plan="$_plan_file"
+    break
+  done
+  if [[ -n "$_first_plan" ]]; then
+    _slug=$(basename "$(dirname "$_first_plan")")
       echo ""
       if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
         echo "Or create a worktree on a feature branch:"
@@ -99,6 +101,8 @@ if [[ "$DRY_RUN" == true ]]; then
     exit 0
   fi
 
+  resolve_receipt_path
+
   PLAN_DESC=$(plan_description "${WIP_FILES[0]}")
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
@@ -120,7 +124,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   elif [[ "$MODE" == "branch" ]]; then
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename%.md}"
+    slug=$(basename "$(dirname "${WIP_FILES[0]}")")
     branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
@@ -135,7 +139,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would initialize: $PROGRESS_FILE"
   else
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename%.md}"
+    slug=$(basename "$(dirname "${WIP_FILES[0]}")")
     branch="ralphai/${slug}"
     if git show-ref --verify --quiet "refs/heads/ralphai"; then
       echo "[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '$branch'."
@@ -198,7 +202,7 @@ while true; do
     echo "Patch mode: working on current branch '$branch' (changes will be left uncommitted)"
 
     # Initialize progress file
-    mkdir -p "$WIP_DIR"
+    mkdir -p "$(dirname "$PROGRESS_FILE")"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
@@ -209,7 +213,7 @@ while true; do
     echo "Continuous mode: continuing on branch '$branch'"
 
     # Re-initialize progress file for the new plan
-    mkdir -p "$WIP_DIR"
+    mkdir -p "$(dirname "$PROGRESS_FILE")"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
@@ -223,18 +227,18 @@ while true; do
     if [[ "$branch" == "$BASE_BRANCH" ]]; then
       echo "ERROR: Running in a worktree on the base branch '$BASE_BRANCH'."
       echo "Create a worktree on a feature branch instead:"
-      slug="${plan_basename%.md}"
+      slug=$(basename "$(dirname "${WIP_FILES[0]}")")
       echo "  git worktree add ../<dir> -b ralphai/${slug} $BASE_BRANCH"
       # Roll back plan
-      rollback_dest="$BACKLOG_DIR/${plan_basename}"
-      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rollback_dest="$BACKLOG_DIR/${slug}"
+      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
     fi
     echo "Worktree mode: working on existing branch '$branch' (no checkout)"
 
     # Initialize progress file
-    mkdir -p "$WIP_DIR"
+    mkdir -p "$(dirname "$PROGRESS_FILE")"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"
@@ -242,7 +246,7 @@ while true; do
   else
     git checkout "$BASE_BRANCH"
     plan_basename=$(basename "${WIP_FILES[0]}")
-    slug="${plan_basename%.md}"
+    slug=$(basename "$(dirname "${WIP_FILES[0]}")")
     branch="ralphai/${slug}"
 
     # Guard: a bare "ralphai" branch blocks all "ralphai/*" branches (git ref hierarchy conflict)
@@ -255,8 +259,8 @@ while true; do
       echo "  git branch -m ralphai ralphai-legacy   # rename"
       echo "  git branch -D ralphai                # or delete"
       # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${plan_basename}"
-      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rollback_dest="$BACKLOG_DIR/${slug}"
+      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
       echo ""
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
@@ -268,8 +272,8 @@ while true; do
       echo "SKIP: $COLLISION_REASON"
       echo "Plan '$plan_basename' already has open work. Skipping to next plan."
       # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${plan_basename}"
-      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rollback_dest="$BACKLOG_DIR/${slug}"
+      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
       echo "Rolled back: moved plan to $rollback_dest"
       SKIPPED_PLANS["$plan_basename"]=1
       continue
@@ -278,8 +282,8 @@ while true; do
       echo ""
       echo "ERROR: Failed to create branch '$branch'."
       # Roll back: move plan file back to backlog
-      rollback_dest="$BACKLOG_DIR/${plan_basename}"
-      mv "${WIP_FILES[0]}" "$rollback_dest"
+      rollback_dest="$BACKLOG_DIR/${slug}"
+      mv "$(dirname "${WIP_FILES[0]}")" "$rollback_dest"
       echo "Rolled back: moved plan to $rollback_dest"
       exit 1
     fi
@@ -291,7 +295,7 @@ while true; do
     fi
 
     # Initialize progress file
-    mkdir -p "$WIP_DIR"
+    mkdir -p "$(dirname "$PROGRESS_FILE")"
     echo "## Progress Log" > "$PROGRESS_FILE"
     echo "" >> "$PROGRESS_FILE"
     echo "Initialized $PROGRESS_FILE"

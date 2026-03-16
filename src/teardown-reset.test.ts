@@ -68,7 +68,9 @@ describe("reset command", () => {
 
     // Simulate an in-progress plan
     const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    writeFileSync(join(inProgressDir, "prd-my-feature.md"), "# My Feature");
+    const planDir = join(inProgressDir, "prd-my-feature");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "prd-my-feature.md"), "# My Feature");
 
     const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
 
@@ -76,77 +78,100 @@ describe("reset command", () => {
     // Plan should be back in backlog
     expect(
       existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-my-feature.md"),
+        join(
+          ctx.dir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-my-feature",
+          "prd-my-feature.md",
+        ),
       ),
     ).toBe(true);
     // Plan should NOT be in in-progress
-    expect(existsSync(join(inProgressDir, "prd-my-feature.md"))).toBe(false);
+    expect(existsSync(join(inProgressDir, "prd-my-feature"))).toBe(false);
   });
 
   it("reset --yes deletes progress files", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+    const planDir = join(inProgressDir, "prd-test");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "prd-test.md"), "# Test");
     writeFileSync(
-      join(inProgressDir, "progress-test.md"),
+      join(planDir, "progress.md"),
       "## Progress Log\n### Task 1:\n**Status:** Complete",
     );
 
     runCliOutput(["reset", "--yes"], ctx.dir);
 
-    expect(existsSync(join(inProgressDir, "progress-test.md"))).toBe(false);
+    expect(existsSync(join(inProgressDir, "prd-test", "progress.md"))).toBe(
+      false,
+    );
   });
 
   it("reset --yes deletes receipt files", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+    const planDir = join(inProgressDir, "prd-test");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "prd-test.md"), "# Test");
     writeFileSync(
-      join(inProgressDir, "receipt-test.txt"),
+      join(planDir, "receipt.txt"),
       "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nturns_completed=3",
     );
 
     runCliOutput(["reset", "--yes"], ctx.dir);
 
-    expect(existsSync(join(inProgressDir, "receipt-test.txt"))).toBe(false);
+    expect(existsSync(join(inProgressDir, "prd-test", "receipt.txt"))).toBe(
+      false,
+    );
   });
 
   it("reset --yes handles multiple plans, progress, and receipts", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    writeFileSync(join(inProgressDir, "prd-feature-a.md"), "# Feature A");
-    writeFileSync(join(inProgressDir, "prd-feature-b.md"), "# Feature B");
-    writeFileSync(
-      join(inProgressDir, "progress-feature-a.md"),
-      "## Progress Log",
-    );
-    writeFileSync(
-      join(inProgressDir, "receipt-feature-a.txt"),
-      "slug=feature-a",
-    );
-    writeFileSync(
-      join(inProgressDir, "receipt-feature-b.txt"),
-      "slug=feature-b",
-    );
+    const planDirA = join(inProgressDir, "prd-feature-a");
+    const planDirB = join(inProgressDir, "prd-feature-b");
+    mkdirSync(planDirA, { recursive: true });
+    mkdirSync(planDirB, { recursive: true });
+    writeFileSync(join(planDirA, "prd-feature-a.md"), "# Feature A");
+    writeFileSync(join(planDirB, "prd-feature-b.md"), "# Feature B");
+    writeFileSync(join(planDirA, "progress.md"), "## Progress Log");
+    writeFileSync(join(planDirA, "receipt.txt"), "slug=feature-a");
+    writeFileSync(join(planDirB, "receipt.txt"), "slug=feature-b");
 
     const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
 
     expect(output).toContain("2 plans moved to backlog");
-    expect(output).toContain("Deleted 1 progress file");
-    expect(output).toContain("Deleted 2 receipts");
+    expect(output).toContain("Deleted progress.md and receipt.txt in 2 plans");
 
     // Both plans should be in backlog
     expect(
       existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-a.md"),
+        join(
+          ctx.dir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-feature-a",
+          "prd-feature-a.md",
+        ),
       ),
     ).toBe(true);
     expect(
       existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-b.md"),
+        join(
+          ctx.dir,
+          ".ralphai",
+          "pipeline",
+          "backlog",
+          "prd-feature-b",
+          "prd-feature-b.md",
+        ),
       ),
     ).toBe(true);
 
@@ -175,7 +200,9 @@ describe("reset command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
-    writeFileSync(join(inProgressDir, "prd-test.md"), "# Test");
+    const planDir = join(inProgressDir, "prd-test");
+    mkdirSync(planDir, { recursive: true });
+    writeFileSync(join(planDir, "prd-test.md"), "# Test");
 
     runCliOutput(["reset", "--yes"], ctx.dir);
 

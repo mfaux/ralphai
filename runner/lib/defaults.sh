@@ -38,8 +38,9 @@ MAX_LEARNINGS="$DEFAULT_MAX_LEARNINGS"
 WIP_DIR=".ralphai/pipeline/in-progress"
 BACKLOG_DIR=".ralphai/pipeline/backlog"
 ARCHIVE_DIR=".ralphai/pipeline/out"
+PARKED_DIR=".ralphai/pipeline/parked"
 CONFIG_FILE="ralphai.json"
-PROGRESS_FILE="$WIP_DIR/progress.md"
+PROGRESS_FILE="$WIP_DIR/<slug>/progress.md"
 
 # --- Worktree detection ---
 RALPHAI_IS_WORKTREE=false
@@ -72,8 +73,9 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     WIP_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/in-progress"
     BACKLOG_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/backlog"
     ARCHIVE_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/out"
+    PARKED_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/parked"
     CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/ralphai.json"
-    PROGRESS_FILE="$WIP_DIR/progress.md"
+    PROGRESS_FILE="$WIP_DIR/<slug>/progress.md"
   fi
 fi
 

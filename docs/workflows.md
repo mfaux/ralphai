@@ -40,7 +40,7 @@ Runs a single turn to verify the agent understands the plan before committing to
 ## Resume after editing a stuck plan
 
 ```bash
-# Edit the plan or progress file in .ralphai/pipeline/in-progress/
+# Edit the plan or progress file in .ralphai/pipeline/in-progress/<slug>/
 ralphai run
 ```
 

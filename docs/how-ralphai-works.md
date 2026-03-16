@@ -64,7 +64,7 @@ If **N consecutive turns** produce no new commits, Ralphai aborts. Default
 threshold is 3. Configurable via `maxStuck` in `ralphai.json`,
 `RALPHAI_MAX_STUCK`, or `--max-stuck`.
 
-The plan stays in `in-progress/` so you can inspect and resume.
+The plan stays in `in-progress/<slug>/` so you can inspect and resume.
 
 ## Continuous Mode
 
@@ -110,7 +110,7 @@ The PR body looks like:
 ### Failure handling
 
 - **Stuck** (N turns with no commits): Ralphai pushes partial work to the
-  continuous branch and exits. The plan stays in `in-progress/` for
+  continuous branch and exits. The plan stays in `in-progress/<slug>/` for
   inspection and resumption.
 - **Turn budget exhausted** (completed all turns without the agent
   signaling completion): same behavior — partial work is pushed and
@@ -139,15 +139,16 @@ starting — collisions skip to the next plan.
 ## Plan Lifecycle
 
 ```
-wip/       (parked — Ralphai ignores)
+parked/    (ignored by Ralphai)
 backlog/  →  in-progress/  →  out/
 ```
 
-- **`backlog/`** — the queue. Ralphai picks dependency-ready plans
+- **`backlog/`** — the queue. Each plan is a folder containing the plan file.
+  Ralphai picks dependency-ready plans
   (oldest first when multiple are ready).
-- **`in-progress/`** — active work. Plan + `progress.md` live here. Files
-  stay on interruption for resumption.
-- **`out/`** — archive. Moved here when the agent signals completion.
+- **`in-progress/`** — active work. The plan folder contains the plan file and
+  `progress.md`. Files stay on interruption for resumption.
+- **`out/`** — archive. Plan folders move here when the agent signals completion.
 
 Plans can declare `depends-on` in YAML frontmatter. A plan runs only when
 all dependencies are in `out/`.
@@ -162,7 +163,7 @@ depends-on: [foundation.md, wiring.md]
 
 When Ralphai looks for work, it follows this priority:
 
-1. **In-progress plans first** — if `in-progress/` contains a plan file,
+1. **In-progress plans first** — if `in-progress/` contains any plan folder,
    Ralphai resumes it (no selection needed).
 2. **Backlog selection** — otherwise, Ralphai scans `backlog/` for
    dependency-ready plans (all `depends-on` entries archived in `out/`).
@@ -182,10 +183,9 @@ run in filesystem order (typically alphabetical).
 
 ## Receipt Files
 
-When a run starts, Ralphai creates a **receipt file** in
-`pipeline/in-progress/` that tracks run metadata. The receipt is updated
-after each turn and used by `ralphai status` to show progress and
-diagnostics.
+When a run starts, Ralphai creates a **receipt file** inside the plan
+folder in `pipeline/in-progress/<slug>/`. The receipt is updated after each turn
+and used by `ralphai status` to show progress and diagnostics.
 
 Receipt files are plain text, one `key=value` per line:
 
@@ -224,7 +224,7 @@ tasks_completed=2
   the run originated (`source`, `worktree_path`, `branch`).
 - **Status diagnostics** — `ralphai status` reads receipt files
   automatically. If you need more detail, inspect the receipt directly at
-  `.ralphai/pipeline/in-progress/receipt-<slug>.txt`.
+  `.ralphai/pipeline/in-progress/<slug>/receipt.txt`.
 
 After a plan is archived to `out/`, the receipt moves with it.
 

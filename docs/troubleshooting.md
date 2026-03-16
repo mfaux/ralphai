@@ -4,13 +4,13 @@ Common issues and how to resolve them.
 
 ## "My plan is stuck"
 
-Ralphai aborts when it detects 3 consecutive turns with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/` so you can resume after fixing the issue.
+Ralphai aborts when it detects 3 consecutive turns with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
 
 **Steps:**
 
 1. Check `.ralphai/LEARNINGS.md` for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
-2. Open the progress file in `pipeline/in-progress/progress-<slug>.md` to see what the agent attempted and where it got stuck.
-3. Edit the plan file in `pipeline/in-progress/<slug>.md` — simplify the stuck task, add hints, or break it into smaller steps.
+2. Open the progress file in `pipeline/in-progress/<slug>/progress.md` to see what the agent attempted and where it got stuck.
+3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the stuck task, add hints, or break it into smaller steps.
 4. Resume: `ralphai run --resume`
 
 The `--resume` flag auto-commits any dirty working tree state and continues from where the agent left off, preserving the existing progress file.
