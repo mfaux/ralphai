@@ -23,7 +23,7 @@ parked/    backlog/  →  in-progress/  →  out/
 ```
 
 1. **`parked/`** — Not ready. Ralphai ignores this directory.
-2. **`backlog/`** — Queued plans. Each plan lives in its own folder (for example `backlog/<slug>/<slug>.md`).
+2. **`backlog/`** — Queued plans (for example `backlog/my-plan.md`). The runner creates a slug folder automatically when moving a plan to `in-progress/`.
 3. **`in-progress/`** — Active work. Plan folder + `progress.md` live here (for example `in-progress/<slug>/`). Files stay on interruption for resumption.
 4. **`out/`** — Archive. Plan folders move here when the agent signals completion.
 
@@ -84,7 +84,7 @@ Requires `gh` CLI. If `gh` is unavailable, hooks are silently skipped.
 | `LEARNINGS.md`           | Auto-written learnings (local-only) |
 | `LEARNING_CANDIDATES.md` | Candidate lessons for human review  |
 | `pipeline/parked/`       | Parked plans                        |
-| `pipeline/backlog/`      | Queued plan folders                 |
+| `pipeline/backlog/`      | Queued plan files                   |
 | `pipeline/in-progress/`  | Active plan folders + `progress.md` |
 | `pipeline/out/`          | Completed plan folders archive      |
 

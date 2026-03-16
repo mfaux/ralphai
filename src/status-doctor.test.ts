@@ -310,16 +310,12 @@ describe("status subcommand", () => {
     runCli(["init", "--yes"], ctx.dir);
 
     const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-    const authDir = join(backlogDir, "prd-auth");
-    const searchDir = join(backlogDir, "prd-search");
-    mkdirSync(authDir, { recursive: true });
-    mkdirSync(searchDir, { recursive: true });
     writeFileSync(
-      join(authDir, "prd-auth.md"),
+      join(backlogDir, "prd-auth.md"),
       "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
     );
     writeFileSync(
-      join(searchDir, "prd-search.md"),
+      join(backlogDir, "prd-search.md"),
       "---\ndepends-on: [prd-auth.md]\n---\n\n# Search\n\n### Task 1: Index\n",
     );
 

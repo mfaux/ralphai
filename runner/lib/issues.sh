@@ -68,11 +68,11 @@ pull_github_issues() {
 
   slug=$(slugify "$title")
   filename="gh-${number}-${slug}.md"
-  local plan_dir="$BACKLOG_DIR/${filename%.md}"
+  local plan_path="$BACKLOG_DIR/$filename"
 
-  # Write plan file with frontmatter
-  mkdir -p "$plan_dir"
-  cat > "$plan_dir/$filename" <<PLAN_EOF
+  # Write plan file as flat file in backlog
+  mkdir -p "$BACKLOG_DIR"
+  cat > "$plan_path" <<PLAN_EOF
 ---
 source: github
 issue: ${number}

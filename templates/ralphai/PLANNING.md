@@ -1,6 +1,6 @@
 # Writing Ralphai Plan Files
 
-Guide for coding agents writing plan files that Ralphai executes autonomously. Plans go in `.ralphai/pipeline/backlog/<slug>/<slug>.md`.
+Guide for coding agents writing plan files that Ralphai executes autonomously. Plans go in `.ralphai/pipeline/backlog/<slug>.md`.
 
 ## How to Write a Plan
 
@@ -11,7 +11,7 @@ Guide for coding agents writing plan files that Ralphai executes autonomously. P
    - **[Refactor](plans/refactor.md)** — structural change, no behavior change
 3. **Explore the codebase.** Before writing anything, find the files, functions, and line numbers relevant to the work. The plan must contain concrete references, not guesses.
 4. **Fill in the template.** Follow the guide's template. Every file path, function name, and line number you include saves Ralphai tokens it would otherwise spend exploring.
-5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>/<slug>.md`.
+5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>.md`.
 
 ## Core Principles
 

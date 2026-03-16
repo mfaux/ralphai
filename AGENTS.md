@@ -23,8 +23,8 @@ Project-specific guidance for AI coding agents working in this codebase.
 ## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-Plan files go in per-plan folders under `.ralphai/pipeline/backlog/`. See `.ralphai/PLANNING.md` for
-the plan writing guide.
+Plan files go in `.ralphai/pipeline/backlog/` as flat `.md` files (e.g., `backlog/my-plan.md`).
+See `.ralphai/PLANNING.md` for the plan writing guide.
 
 ## Learnings
 
@@ -47,3 +47,7 @@ The `update_receipt_tasks()` function in `runner/lib/receipt.sh` and `countCompl
 ### Test file organization
 
 Tests are split by feature domain into separate files under `src/`. Each file has its own `describe` block and uses the `useTempGitDir()` helper from `test-utils.ts` for test isolation. When adding tests for a new feature, create a new test file rather than appending to an existing one.
+
+### Flat backlog plan files
+
+Plan files in `.ralphai/pipeline/backlog/` must be flat `.md` files (e.g., `backlog/my-plan.md`). The runner creates the slug folder automatically when moving a plan to `in-progress/`. Slug-folders in the backlog directory are not discovered.

@@ -92,7 +92,7 @@ dependency_status() {
     return 0
   fi
 
-  if [[ -d "$WIP_DIR/$dep_slug" || -d "$BACKLOG_DIR/$dep_slug" ]]; then
+  if [[ -d "$WIP_DIR/$dep_slug" || -f "$BACKLOG_DIR/$dep_base" ]]; then
     echo "pending"
     return 0
   fi
@@ -141,7 +141,7 @@ plan_readiness() {
   echo "blocked:$joined"
 }
 
-# --- Resolve plan file path inside a plan directory ---
+# --- Resolve plan file path inside a slug-folder (in-progress/out only) ---
 plan_file_for_dir() {
   local dir="$1"
   local slug
@@ -152,6 +152,19 @@ plan_file_for_dir() {
     return 0
   fi
   return 1
+}
+
+# --- Collect backlog plans (flat .md files only) ---
+# Populates the named array with plan file paths.
+# Backlog only supports flat files: <backlog>/<slug>.md
+collect_backlog_plans() {
+  local -n _out_plans=$1
+  _out_plans=()
+
+  for f in "$BACKLOG_DIR"/*.md; do
+    [[ -f "$f" ]] || continue
+    _out_plans+=("$f")
+  done
 }
 
 # --- Detect plan: find in-progress work or pick from backlog ---
@@ -200,28 +213,18 @@ detect_plan() {
 
   # Check backlog
   local backlog_plans=()
-  for d in "$BACKLOG_DIR"/*; do
-    [[ -d "$d" ]] || continue
-    local plan_file
-    plan_file=$(plan_file_for_dir "$d") || continue
-    backlog_plans+=("$plan_file")
-  done
+  collect_backlog_plans backlog_plans
 
   if [[ ${#backlog_plans[@]} -eq 0 ]]; then
     if pull_github_issues; then
       # Re-scan backlog after pulling issue
-      for d in "$BACKLOG_DIR"/*; do
-        [[ -d "$d" ]] || continue
-        local plan_file
-        plan_file=$(plan_file_for_dir "$d") || continue
-        backlog_plans+=("$plan_file")
-      done
+      collect_backlog_plans backlog_plans
       if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md"
+        echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md"
         return 1
       fi
     else
-      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>/<slug>.md — see .ralphai/PLANNING.md"
+      echo "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md"
       return 1
     fi
   fi
@@ -284,32 +287,27 @@ detect_plan() {
     echo "Multiple dependency-ready backlog plans found (${#ready_plans[@]}). Picking oldest: $(basename "$chosen")"
   fi
 
+  # Backlog plans are always flat files: <backlog>/<slug>.md
+  local slug
+  slug="${chosen##*/}"  # basename
+  slug="${slug%.md}"
+
+  local dest_dir="$WIP_DIR/$slug"
+  local dest_plan="$dest_dir/$slug.md"
+
   if [[ "$DRY_RUN" == true ]]; then
     echo "[dry-run] Would select: $chosen"
-    local chosen_base
-    chosen_base=$(basename "$chosen")
-    local chosen_dir
-    chosen_dir=$(dirname "$chosen")
-    local dest_dir
-    dest_dir="$WIP_DIR/$(basename "$chosen_dir")"
-    local dest_plan
-    dest_plan="$dest_dir/$chosen_base"
     WIP_FILES=("$dest_plan")
     FILE_REFS=" $(format_file_ref "$dest_plan")"
     RESUMING=false
-    echo "[dry-run] Would move: $chosen_dir -> $dest_dir"
+    echo "[dry-run] Would promote flat file: $chosen -> $dest_plan"
   else
-    # Move chosen plan to in-progress
+    # Move chosen plan to in-progress (promote flat file to slug-folder)
     mkdir -p "$WIP_DIR"
-    local chosen_dir
-    chosen_dir=$(dirname "$chosen")
-    local dest_dir
-    dest_dir="$WIP_DIR/$(basename "$chosen_dir")"
-    mv "$chosen_dir" "$dest_dir"
-    echo "Moved $chosen_dir -> $dest_dir"
+    mkdir -p "$dest_dir"
+    mv "$chosen" "$dest_plan"
+    echo "Promoted flat file: $chosen -> $dest_plan"
 
-    local dest_plan
-    dest_plan="$dest_dir/$(basename "$chosen")"
     WIP_FILES=("$dest_plan")
     FILE_REFS=" $(format_file_ref "$dest_plan")"
     RESUMING=false

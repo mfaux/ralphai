@@ -757,16 +757,14 @@ function scaffold(
   }
 
   // Write sample plan if requested
-  const samplePlanDir = join(
+  const samplePlanPath = join(
     ralphaiDir,
     "pipeline",
     "backlog",
-    "hello-ralphai",
+    "hello-ralphai.md",
   );
-  const samplePlanPath = join(samplePlanDir, "hello-ralphai.md");
   const samplePlanCreated = answers.createSamplePlan === true;
   if (samplePlanCreated && !existsSync(samplePlanPath)) {
-    mkdirSync(samplePlanDir, { recursive: true });
     const samplePlanContent = `# Plan: Hello Ralphai
 
 > A tiny first plan to verify the full Ralphai loop — init, run, commit.
@@ -826,7 +824,7 @@ Each entry should include:
   const agentsMdSection = `## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-Plan files go in per-plan folders under \`.ralphai/pipeline/backlog/\`. See \`.ralphai/PLANNING.md\` for
+Plan files go in \`.ralphai/pipeline/backlog/\`. See \`.ralphai/PLANNING.md\` for
 the plan writing guide.
 `;
 
@@ -1047,14 +1045,18 @@ async function runRalphaiReset(
 
   let actions = 0;
 
-  // 1. Move plan folders back to backlog (remove progress/receipt first)
+  // 1. Extract plan files from in-progress slug-folders back to backlog as flat files
   for (const slug of planSlugs) {
     const src = join(inProgressDir, slug);
-    const dest = join(backlogDir, slug);
+    const planFile = join(src, `${slug}.md`);
+    const dest = join(backlogDir, `${slug}.md`);
     mkdirSync(backlogDir, { recursive: true });
     rmSync(join(src, "progress.md"), { force: true });
     rmSync(join(src, "receipt.txt"), { force: true });
-    renameSync(src, dest);
+    if (existsSync(planFile)) {
+      renameSync(planFile, dest);
+    }
+    rmSync(src, { recursive: true, force: true });
     actions++;
   }
 
@@ -1699,8 +1701,7 @@ function selectPlanForWorktree(
     planFile: string,
   ): string | null => {
     const slug = planFile.replace(/\.md$/, "");
-    const candidate = planPathForSlug(baseDir, slug);
-    return existsSync(candidate) ? candidate : null;
+    return resolvePlanPath(baseDir, slug);
   };
 
   // --- Specific plan requested ---
@@ -1746,7 +1747,7 @@ function selectPlanForWorktree(
   }
 
   // No unattended plans — check backlog for new work
-  const backlogPlans = listPlanFiles(backlogDir);
+  const backlogPlans = listPlanFiles(backlogDir, true);
 
   if (backlogPlans.length > 0) {
     const firstPlan = backlogPlans[0]!;
@@ -1906,7 +1907,7 @@ function showWorktreeHelp(): void {
 }
 
 /**
- * Check if a plan directory in `dir` matches the given slug.
+ * List subdirectory names in `dir`.
  */
 function listPlanFolders(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -1923,18 +1924,64 @@ function planPathForSlug(dir: string, slug: string): string {
   return join(dir, slug, `${slug}.md`);
 }
 
-function listPlanSlugs(dir: string): string[] {
-  return listPlanFolders(dir).filter((slug) =>
-    existsSync(planPathForSlug(dir, slug)),
-  );
+/**
+ * List plan slugs in `dir`.
+ * - Slug-folder plans (`<slug>/<slug>.md`): used by in-progress and out.
+ * - Flat `.md` files (`<slug>.md`): used by backlog.
+ * Pass `flatOnly: true` for backlog to skip slug-folder scanning.
+ */
+function listPlanSlugs(dir: string, flatOnly = false): string[] {
+  if (!existsSync(dir)) return [];
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+
+  // Slug-folder plans: <dir>/<slug>/<slug>.md (in-progress, out)
+  if (!flatOnly) {
+    for (const folder of listPlanFolders(dir)) {
+      if (existsSync(planPathForSlug(dir, folder))) {
+        seen.add(folder);
+        slugs.push(folder);
+      }
+    }
+  }
+
+  // Flat files: <dir>/<slug>.md (backlog)
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const slug = entry.name.replace(/\.md$/, "");
+      if (!seen.has(slug)) {
+        seen.add(slug);
+        slugs.push(slug);
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+
+  return slugs;
 }
 
-function listPlanFiles(dir: string): string[] {
-  return listPlanSlugs(dir).map((slug) => `${slug}.md`);
+function listPlanFiles(dir: string, flatOnly = false): string[] {
+  return listPlanSlugs(dir, flatOnly).map((slug) => `${slug}.md`);
+}
+
+/**
+ * Resolve the path to a plan file for a given slug in `dir`.
+ * Checks slug-folder (`<dir>/<slug>/<slug>.md`) for in-progress/out,
+ * then flat file (`<dir>/<slug>.md`) for backlog.
+ * Returns the path if found, null otherwise.
+ */
+function resolvePlanPath(dir: string, slug: string): string | null {
+  const folderPath = planPathForSlug(dir, slug);
+  if (existsSync(folderPath)) return folderPath;
+  const flatPath = join(dir, `${slug}.md`);
+  if (existsSync(flatPath)) return flatPath;
+  return null;
 }
 
 function planExistsForSlug(dir: string, slug: string): boolean {
-  return existsSync(planPathForSlug(dir, slug));
+  return resolvePlanPath(dir, slug) !== null;
 }
 
 function listWorktrees(cwd: string): void {
@@ -2195,7 +2242,7 @@ function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   if (!existsSync(backlogDir)) {
     return { status: "warn", message: "backlog: directory not found" };
   }
-  const plans = listPlanSlugs(backlogDir);
+  const plans = listPlanSlugs(backlogDir, true);
   if (plans.length === 0) {
     return { status: "warn", message: "backlog: no plans queued" };
   }
@@ -2390,7 +2437,7 @@ function runRalphaiStatus(cwd: string): void {
   const archiveDir = join(ralphaiDir, "pipeline", "out");
 
   // --- Collect data ---
-  const backlogPlans = listPlanFiles(backlogDir);
+  const backlogPlans = listPlanFiles(backlogDir, true);
 
   const inProgressPlans = listPlanFiles(inProgressDir);
   const receiptFiles = listPlanFolders(inProgressDir).filter((slug) =>
@@ -2420,9 +2467,9 @@ function runRalphaiStatus(cwd: string): void {
   );
   for (const plan of backlogPlans) {
     let suffix = "";
-    const deps = extractDependsOn(
-      join(backlogDir, plan.replace(/\.md$/, ""), plan),
-    );
+    const slug = plan.replace(/\.md$/, "");
+    const planPath = resolvePlanPath(backlogDir, slug);
+    const deps = planPath ? extractDependsOn(planPath) : [];
     if (deps.length > 0) {
       suffix = `${DIM}waiting on ${deps.join(", ")}${RESET}`;
     }

@@ -75,19 +75,18 @@ describe("reset command", () => {
     const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
 
     expect(output).toContain("Pipeline reset");
-    // Plan should be back in backlog
+    // Plan should be back in backlog as a flat file
     expect(
       existsSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "backlog",
-          "prd-my-feature",
-          "prd-my-feature.md",
-        ),
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-my-feature.md"),
       ),
     ).toBe(true);
+    // Slug-folder should NOT exist in backlog
+    expect(
+      existsSync(
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-my-feature"),
+      ),
+    ).toBe(false);
     // Plan should NOT be in in-progress
     expect(existsSync(join(inProgressDir, "prd-my-feature"))).toBe(false);
   });
@@ -149,31 +148,28 @@ describe("reset command", () => {
     expect(output).toContain("2 plans moved to backlog");
     expect(output).toContain("Deleted progress.md and receipt.txt in 2 plans");
 
-    // Both plans should be in backlog
+    // Both plans should be in backlog as flat files
     expect(
       existsSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "backlog",
-          "prd-feature-a",
-          "prd-feature-a.md",
-        ),
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-a.md"),
       ),
     ).toBe(true);
     expect(
       existsSync(
-        join(
-          ctx.dir,
-          ".ralphai",
-          "pipeline",
-          "backlog",
-          "prd-feature-b",
-          "prd-feature-b.md",
-        ),
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-b.md"),
       ),
     ).toBe(true);
+    // Slug-folders should NOT exist in backlog
+    expect(
+      existsSync(
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-a"),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-b"),
+      ),
+    ).toBe(false);
 
     // in-progress should be clean (empty)
     const remaining = readdirSync(inProgressDir);

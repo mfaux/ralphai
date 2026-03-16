@@ -336,9 +336,8 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       // Initialize ralphai so the worktree guard runs (it checks before .ralphai)
       // Create a minimal .ralphai in main repo so worktree resolves
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const planDir = join(backlogDir, "prd-test");
-      mkdirSync(planDir, { recursive: true });
-      writeFileSync(join(planDir, "prd-test.md"), "# Test plan\n");
+      mkdirSync(backlogDir, { recursive: true });
+      writeFileSync(join(backlogDir, "prd-test.md"), "# Test plan\n");
 
       const result = runCli(["worktree"], worktreeDir);
       expect(result.exitCode).not.toBe(0);
@@ -468,12 +467,9 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Create .ralphai with two plans
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const firstDir = join(backlogDir, "prd-first");
-      const secondDir = join(backlogDir, "prd-second");
-      mkdirSync(firstDir, { recursive: true });
-      mkdirSync(secondDir, { recursive: true });
-      writeFileSync(join(firstDir, "prd-first.md"), "# First\n");
-      writeFileSync(join(secondDir, "prd-second.md"), "# Second\n");
+      mkdirSync(backlogDir, { recursive: true });
+      writeFileSync(join(backlogDir, "prd-first.md"), "# First\n");
+      writeFileSync(join(backlogDir, "prd-second.md"), "# Second\n");
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");
@@ -497,9 +493,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Create .ralphai with a plan
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const planDir = join(backlogDir, "prd-symlink-test");
-      mkdirSync(planDir, { recursive: true });
-      writeFileSync(join(planDir, "prd-symlink-test.md"), "# Symlink test\n");
+      mkdirSync(backlogDir, { recursive: true });
+      writeFileSync(
+        join(backlogDir, "prd-symlink-test.md"),
+        "# Symlink test\n",
+      );
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");
@@ -534,10 +532,9 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Create .ralphai with a plan
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const planDir = join(backlogDir, "prd-config-symlink");
-      mkdirSync(planDir, { recursive: true });
+      mkdirSync(backlogDir, { recursive: true });
       writeFileSync(
-        join(planDir, "prd-config-symlink.md"),
+        join(backlogDir, "prd-config-symlink.md"),
         "# Config symlink test\n",
       );
 
@@ -578,10 +575,9 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Create .ralphai with a plan
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const planDir = join(backlogDir, "prd-committed-cfg");
-      mkdirSync(planDir, { recursive: true });
+      mkdirSync(backlogDir, { recursive: true });
       writeFileSync(
-        join(planDir, "prd-committed-cfg.md"),
+        join(backlogDir, "prd-committed-cfg.md"),
         "# Committed config test\n",
       );
 
@@ -620,9 +616,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
 
       // Create .ralphai with a plan (not git-tracked since .ralphai/ is gitignored)
       const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      const planDir = join(backlogDir, "prd-tracked-test");
-      mkdirSync(planDir, { recursive: true });
-      writeFileSync(join(planDir, "prd-tracked-test.md"), "# Tracked test\n");
+      mkdirSync(backlogDir, { recursive: true });
+      writeFileSync(
+        join(backlogDir, "prd-tracked-test.md"),
+        "# Tracked test\n",
+      );
 
       // Use a stub runner that just exits 0
       const stubScript = join(ctx.dir, "stub-runner.sh");

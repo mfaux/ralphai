@@ -143,7 +143,7 @@ parked/    (ignored by Ralphai)
 backlog/  →  in-progress/  →  out/
 ```
 
-- **`backlog/`** — the queue. Each plan is a folder containing the plan file.
+- **`backlog/`** — the queue. Plans are flat `.md` files (e.g., `backlog/my-plan.md`).
   Ralphai picks dependency-ready plans
   (oldest first when multiple are ready).
 - **`in-progress/`** — active work. The plan folder contains the plan file and
