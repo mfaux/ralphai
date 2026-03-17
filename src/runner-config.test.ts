@@ -1382,7 +1382,7 @@ echo "$MODE"
         stdio: "ignore",
       });
 
-      execSync("pnpm build", {
+      execSync("bun run build", {
         cwd: repoRoot,
         stdio: ["pipe", "pipe", "pipe"],
       });
