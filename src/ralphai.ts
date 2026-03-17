@@ -2490,6 +2490,48 @@ function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   });
 }
 
+function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
+  const configPath = join(cwd, "ralphai.json");
+  let workspaces: Record<string, { feedbackCommands?: string[] }>;
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    workspaces = config.workspaces;
+  } catch {
+    return [];
+  }
+
+  if (!workspaces || typeof workspaces !== "object") {
+    return [];
+  }
+
+  const results: DoctorCheckResult[] = [];
+  for (const [wsPath, wsConfig] of Object.entries(workspaces)) {
+    const commands = wsConfig?.feedbackCommands;
+    if (!commands || !Array.isArray(commands) || commands.length === 0) {
+      continue;
+    }
+    for (const cmd of commands) {
+      try {
+        execSync(cmd, {
+          cwd,
+          stdio: ["pipe", "pipe", "pipe"],
+          timeout: 60000,
+        });
+        results.push({
+          status: "pass" as const,
+          message: `feedback (${wsPath}): ${cmd} — exits 0`,
+        });
+      } catch {
+        results.push({
+          status: "warn" as const,
+          message: `feedback (${wsPath}): ${cmd} — exits non-zero`,
+        });
+      }
+    }
+  }
+  return results;
+}
+
 function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   const backlogDir = join(cwd, ".ralphai", "pipeline", "backlog");
   if (!existsSync(backlogDir)) {
@@ -2560,6 +2602,11 @@ function runRalphaiDoctor(cwd: string): void {
   // 7. Feedback commands (only if config exists)
   if (results[1]!.status !== "fail") {
     results.push(...checkFeedbackCommands(cwd));
+  }
+
+  // 7b. Workspace feedback commands (only if config exists)
+  if (results[1]!.status !== "fail") {
+    results.push(...checkWorkspaceFeedbackCommands(cwd));
   }
 
   // 8. Backlog has plans (only if .ralphai/ exists)

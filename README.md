@@ -105,6 +105,8 @@ Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable 
 
 ## Monorepo Support
 
+`ralphai init` automatically detects workspace packages from `pnpm-workspace.yaml` or the `workspaces` field in `package.json`. In interactive mode, it offers to add per-workspace feedback commands to `ralphai.json`. In `--yes` mode, it prints the detected workspaces and relies on automatic scope filtering at runtime.
+
 Plans can target a specific package by adding `scope` to the frontmatter:
 
 ```md
@@ -114,6 +116,8 @@ scope: packages/web
 ```
 
 When a plan has a scope, Ralphai rewrites feedback commands using the package manager's workspace filter (e.g., `pnpm --filter @org/web build`). The agent prompt includes a hint to focus on the scoped directory.
+
+`ralphai status` annotates each plan with its scope when declared, and `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config exists (failures produce warnings, not hard errors).
 
 For custom per-package overrides, add a `workspaces` key to `ralphai.json`:
 
