@@ -62,13 +62,13 @@ ralphai <command> [options]
 
 How many turns to allocate depends on plan complexity. Related tasks may be combined into a single turn if they won't fill the context window.
 
-| Plan complexity                        | Recommended `--turns` |
-| -------------------------------------- | --------------------- |
-| Bug fix (1-2 tasks)                    | 2-3                   |
-| Small feature (2-4 tasks)              | 3-5                   |
-| Medium feature (4-8 tasks)             | 5-10                  |
-| Large feature (8+ tasks, new modules)  | 10-20                 |
-| Structural refactor                    | 5-10                  |
+| Plan complexity                       | Recommended `--turns` |
+| ------------------------------------- | --------------------- |
+| Bug fix (1-2 tasks)                   | 2-3                   |
+| Small feature (2-4 tasks)             | 3-5                   |
+| Medium feature (4-8 tasks)            | 5-10                  |
+| Large feature (8+ tasks, new modules) | 10-20                 |
+| Structural refactor                   | 5-10                  |
 
 Pass `--turns=0` for unlimited turns.
 
@@ -127,3 +127,31 @@ prompt sent to the agent. Set it via `--prompt-mode`, `RALPHAI_PROMPT_MODE`, or
 
 **When to change:** If your agent doesn't support `@path` file references, set
 `promptMode` to `"inline"`. Otherwise, leave it at `"auto"`.
+
+### Workspaces (Monorepo)
+
+The `workspaces` key in `ralphai.json` provides per-package feedback command
+overrides for monorepo projects. Each key is a relative path matching a plan's
+`scope` frontmatter value.
+
+```json
+{
+  "feedbackCommands": ["pnpm build", "pnpm test"],
+  "workspaces": {
+    "packages/web": {
+      "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"]
+    },
+    "packages/api": {
+      "feedbackCommands": ["pnpm --filter api build"]
+    }
+  }
+}
+```
+
+When a plan declares `scope: packages/web`, the runner checks for a matching
+`workspaces` entry. If found, those feedback commands replace the top-level
+ones. If no entry matches, the runner derives scoped commands automatically
+from the detected package manager.
+
+The `workspaces` key is optional. Without it, scoped plans still get
+automatically derived feedback commands based on the lockfile and package name.

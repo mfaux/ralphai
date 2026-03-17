@@ -79,6 +79,9 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
   fi
 fi
 
+PLAN_SCOPE=""
+CONFIG_WORKSPACES=""
+
 DRY_RUN=false
 RESUME=false
 TURNS=""

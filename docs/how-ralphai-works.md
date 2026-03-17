@@ -228,6 +228,42 @@ tasks_completed=2
 
 After a plan is archived to `out/`, the receipt moves with it.
 
+## Monorepo Scope
+
+In monorepo projects, plans can declare which package they target using `scope` frontmatter:
+
+```md
+---
+scope: packages/web
+---
+```
+
+When a plan has a scope, the runner:
+
+1. **Reads the package name** from `<scope>/package.json`.
+2. **Detects the root package manager** by checking for lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, `package-lock.json`).
+3. **Rewrites feedback commands** using the PM's workspace filter: `pnpm --filter <name>`, `yarn workspace <name>`, `npm -w <name>`, or `bun --filter <name>`.
+4. **Adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory.
+
+Commands that don't start with the detected package manager (e.g., `make test`) pass through unchanged.
+
+### Workspace Overrides
+
+When automatic derivation is insufficient, use the `workspaces` config key in `ralphai.json` to provide explicit per-package feedback commands:
+
+```json
+{
+  "feedbackCommands": ["pnpm build", "pnpm test"],
+  "workspaces": {
+    "packages/web": {
+      "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"]
+    }
+  }
+}
+```
+
+Workspace overrides take precedence over automatic derivation. Plans without a scope use the top-level feedback commands unchanged.
+
 ## Learnings System
 
 Ralphai maintains two gitignored files for learning from mistakes:

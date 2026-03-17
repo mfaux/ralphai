@@ -1,6 +1,22 @@
 # plans.sh — Plan dependency helpers and plan detection
 # Sourced by ralphai.sh — do not execute directly.
 
+# --- Scope extraction (optional frontmatter: scope) ---
+# Reads the `scope` field from a plan file's YAML frontmatter.
+# Prints the value (a relative path like `packages/web`) to stdout.
+# Prints nothing if `scope` is not present or the file has no frontmatter.
+extract_scope() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  if head -1 "$file" | grep -q '^---$'; then
+    local value
+    value=$(sed -n '/^---$/,/^---$/{ /^scope:/{ s/^scope:[[:space:]]*//; p; } }' "$file")
+    # Trim trailing whitespace
+    value="${value%"${value##*[![:space:]]}"}"
+    echo "$value"
+  fi
+}
+
 # --- Plan dependency helpers (optional frontmatter: depends-on) ---
 # Supported forms in markdown frontmatter:
 #   depends-on: [prd-a.md, prd-b.md]

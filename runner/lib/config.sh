@@ -31,7 +31,7 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns","maxLearnings"] | index($k) | not)' "$config_path")
+  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns","maxLearnings","workspaces"] | index($k) | not)' "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -192,6 +192,39 @@ load_config() {
     value=$(_json_raw "maxLearnings")
     validate_nonneg_int "$value" "$config_path: 'maxLearnings'" "0 = unlimited"
     CONFIG_MAX_LEARNINGS="$value"
+  fi
+
+  # --- workspaces (object of per-package overrides) ---
+  if _json_has "workspaces"; then
+    local ws_type
+    ws_type=$(jq -r '.workspaces | type' "$config_path")
+    if [[ "$ws_type" != "object" ]]; then
+      echo "ERROR: $config_path: 'workspaces' must be an object, got $ws_type"
+      exit 1
+    fi
+    # Validate each workspace entry is an object with valid feedbackCommands
+    local ws_keys
+    ws_keys=$(jq -r '.workspaces | keys[]' "$config_path")
+    while IFS= read -r ws_key; do
+      [[ -z "$ws_key" ]] && continue
+      local ws_entry_type
+      ws_entry_type=$(jq -r --arg k "$ws_key" '.workspaces[$k] | type' "$config_path")
+      if [[ "$ws_entry_type" != "object" ]]; then
+        echo "ERROR: $config_path: workspaces['$ws_key'] must be an object, got $ws_entry_type"
+        exit 1
+      fi
+      # Validate feedbackCommands if present
+      if jq -e --arg k "$ws_key" '.workspaces[$k] | has("feedbackCommands")' "$config_path" >/dev/null 2>&1; then
+        local ws_fc_type
+        ws_fc_type=$(jq -r --arg k "$ws_key" '.workspaces[$k].feedbackCommands | type' "$config_path")
+        if [[ "$ws_fc_type" != "array" && "$ws_fc_type" != "string" ]]; then
+          echo "ERROR: $config_path: workspaces['$ws_key'].feedbackCommands must be an array of strings or a comma-separated string, got $ws_fc_type"
+          exit 1
+        fi
+      fi
+    done <<< "$ws_keys"
+    # Store the raw JSON for later jq queries at scope-resolution time
+    CONFIG_WORKSPACES=$(jq -c '.workspaces' "$config_path")
   fi
 }
 

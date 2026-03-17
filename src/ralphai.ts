@@ -15,6 +15,7 @@ import { fileURLToPath } from "url";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
+import { extractScope } from "./frontmatter.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -2421,6 +2422,9 @@ function extractDependsOn(planPath: string): string[] {
     .filter(Boolean);
 }
 
+// extractScope is imported from ./frontmatter.ts (re-exported for backward compat)
+export { extractScope } from "./frontmatter.ts";
+
 function runRalphaiStatus(cwd: string): void {
   // Resolve .ralphai/ — works from main repo or worktree
   const ralphaiRoot = resolveRalphaiDir(cwd);
@@ -2470,8 +2474,16 @@ function runRalphaiStatus(cwd: string): void {
     const slug = plan.replace(/\.md$/, "");
     const planPath = resolvePlanPath(backlogDir, slug);
     const deps = planPath ? extractDependsOn(planPath) : [];
+    const scope = planPath ? extractScope(planPath) : "";
+    const suffixParts: string[] = [];
+    if (scope) {
+      suffixParts.push(`scope: ${scope}`);
+    }
     if (deps.length > 0) {
-      suffix = `${DIM}waiting on ${deps.join(", ")}${RESET}`;
+      suffixParts.push(`waiting on ${deps.join(", ")}`);
+    }
+    if (suffixParts.length > 0) {
+      suffix = `${DIM}${suffixParts.join("  ")}${RESET}`;
     }
     console.log(`    ${DIM}${plan}${RESET}${suffix ? "  " + suffix : ""}`);
   }
@@ -2485,9 +2497,16 @@ function runRalphaiStatus(cwd: string): void {
     const receipt = receiptsByPlan.get(plan);
     const parts: string[] = [];
 
-    // Task progress
+    // Scope info
     const slug = plan.replace(/\.md$/, "");
-    const totalTasks = countPlanTasks(join(inProgressDir, slug, plan));
+    const planFilePath = join(inProgressDir, slug, plan);
+    const scope = extractScope(planFilePath);
+    if (scope) {
+      parts.push(`scope: ${scope}`);
+    }
+
+    // Task progress
+    const totalTasks = countPlanTasks(planFilePath);
     if (totalTasks > 0) {
       const completed = receipt?.tasks_completed ?? 0;
       parts.push(`${completed} of ${totalTasks} tasks`);
