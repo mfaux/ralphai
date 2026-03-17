@@ -66,10 +66,11 @@ threshold is 3. Configurable via `maxStuck` in `ralphai.json`,
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume.
 
-Stuck detection relies on commits. In **patch mode** (where changes are
-uncommitted by default), enable `--auto-commit` so that each turn's changes
-produce a commit for stuck detection to track. Without auto-commit, patch mode
-triggers the stuck threshold every turn.
+In **patch mode** (`--patch`), where no commits are created, stuck detection
+instead checks whether the working tree changed between turns. Ralphai
+computes a hash of `git diff HEAD` after each turn. If the diff is identical
+across N consecutive turns, Ralphai aborts. Branch and PR modes continue to
+use commit-based detection.
 
 ## Continuous Mode
 

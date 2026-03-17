@@ -322,6 +322,7 @@ while true; do
   # --- Turn loop (per-plan) ---
   stuck_count=0
   last_hash=$(git rev-parse HEAD)
+  last_diff_hash=""
   completed=false
 
   i=0
@@ -370,9 +371,9 @@ $(if [[ -n "$LEARNINGS_STEP" ]]; then echo "7"; else echo "6"; fi). Update ${PRO
    **Status:** Complete
    <summary of what was done>
    This format is required — ralphai parses it to track task completion.
-$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.
+$(if [[ -n "$LEARNINGS_STEP" ]]; then echo "8"; else echo "7"; fi). $(if [[ "$MODE" == "patch" ]]; then echo "Leave all changes uncommitted in the working tree. Do NOT run git add or git commit."; else echo "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes."; fi)
 Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window. Log each completed task in progress.md with its own heading and status marker.
-If all tasks are complete, output <promise>COMPLETE</promise> — but ONLY after committing. Never output COMPLETE with uncommitted changes.
+If all tasks are complete, output <promise>COMPLETE</promise> — $(if [[ "$MODE" == "patch" ]]; then echo "no commit is needed in patch mode."; else echo "but ONLY after committing. Never output COMPLETE with uncommitted changes."; fi)
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
 <learnings>
 <entry>
@@ -418,24 +419,43 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     fi
 
     # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
-    current_hash=$(git rev-parse HEAD)
-    if [[ "$current_hash" == "$last_hash" ]]; then
-      stuck_count=$((stuck_count + 1))
-      echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."
-      if [[ $stuck_count -ge $MAX_STUCK ]]; then
-        echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
-        echo "Branch: $branch"
-        echo "Plan files remain in $WIP_DIR/ — resume with another run."
-        # In continuous+PR mode, push partial work
-        if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
-          echo "Pushing partial work to continuous branch..."
-          git push origin "$branch" 2>&1 || true
+    if [[ "$MODE" == "patch" ]]; then
+      # Patch mode: no commits are created, so compare working-tree diff hash
+      current_diff_hash=$(git diff HEAD 2>/dev/null | sha256sum | cut -d' ' -f1)
+      if [[ "$current_diff_hash" == "$last_diff_hash" ]]; then
+        stuck_count=$((stuck_count + 1))
+        echo "WARNING: No working-tree changes this turn ($stuck_count/$MAX_STUCK)."
+        if [[ $stuck_count -ge $MAX_STUCK ]]; then
+          echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
+          echo "Branch: $branch"
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          exit 1
         fi
-        exit 1
+      else
+        stuck_count=0
+        last_diff_hash="$current_diff_hash"
       fi
     else
-      stuck_count=0
-      last_hash="$current_hash"
+      # Branch/PR mode: compare commit hashes
+      current_hash=$(git rev-parse HEAD)
+      if [[ "$current_hash" == "$last_hash" ]]; then
+        stuck_count=$((stuck_count + 1))
+        echo "WARNING: No new commits this turn ($stuck_count/$MAX_STUCK)."
+        if [[ $stuck_count -ge $MAX_STUCK ]]; then
+          echo "ERROR: $MAX_STUCK consecutive turns with no progress. Aborting."
+          echo "Branch: $branch"
+          echo "Plan files remain in $WIP_DIR/ — resume with another run."
+          # In continuous+PR mode, push partial work
+          if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" && -n "$CONTINUOUS_BRANCH" ]]; then
+            echo "Pushing partial work to continuous branch..."
+            git push origin "$branch" 2>&1 || true
+          fi
+          exit 1
+        fi
+      else
+        stuck_count=0
+        last_hash="$current_hash"
+      fi
     fi
 
     # --- Auto-commit dirty state (AFTER stuck detection) ---
