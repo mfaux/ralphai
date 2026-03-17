@@ -5,6 +5,7 @@ For fixing bugs. Read [PLANNING.md](../PLANNING.md) first for shared principles.
 ## Before Writing the Plan
 
 Explore the codebase to find:
+
 - The code path where the bug occurs (file, function, line number)
 - How to reproduce it (exact input, command, or test case)
 - Existing tests that cover the area (to understand what's already validated)
@@ -17,6 +18,15 @@ If you can identify the root cause, include it. If not, describe where the bug s
 # Plan: Fix <bug description>
 
 > <What's broken, what should happen instead. 1-2 sentences.>
+
+## <!-- Optional frontmatter for plan ordering and monorepo scope:
+
+depends-on: [prerequisite-plan.md]
+scope: packages/web
+
+---
+
+-->
 
 ## Reproduction
 
@@ -55,6 +65,7 @@ code to make it pass.
 Bug fixes should be 1-2 tasks. Don't over-decompose:
 
 **Too granular:**
+
 ```
 Task 1: Write failing test
 Task 2: Fix the bug
@@ -62,6 +73,7 @@ Task 3: Verify no regressions
 ```
 
 **Right-sized:**
+
 ```
 Task 1: Reproduce and fix — write failing test, fix root cause
 ```

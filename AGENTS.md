@@ -4,7 +4,7 @@ Project-specific guidance for AI coding agents working in this codebase.
 
 ## Guiding Principles
 
-- **Great DX.** Every decision — CLI design, defaults, error messages, docs — should minimize the time from install to "wow, that worked."
+- **Great DX.** Every decision, from CLI design and defaults to error messages and docs, should minimize the time from install to "wow, that worked."
 
 ## Documentation Style
 
@@ -17,7 +17,7 @@ Project-specific guidance for AI coding agents working in this codebase.
 ## File Size Limits
 
 - **Test files: max ~500 lines.** When a test file approaches this limit, split it by feature domain before adding more tests. When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one.
-- **Source files: max ~300 lines.** Extract modules when a file grows beyond this.
+- **Source files: max ~300 lines.** Extract modules when a file grows beyond this. Note: `src/ralphai.ts` currently exceeds this limit and is a candidate for decomposition. Follow this guideline for new files and when refactoring.
 - Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
 
 ## Ralphai

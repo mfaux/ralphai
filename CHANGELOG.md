@@ -25,6 +25,10 @@
 - Restructure README for faster onboarding (#79)
 - Fix branch mode description, expand reset section, reorganize CLI reference (#88)
 
+### Chores
+
+- Switch default package manager from pnpm to bun (#89)
+
 ## 0.5.0
 
 ### Features
