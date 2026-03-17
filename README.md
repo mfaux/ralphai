@@ -13,7 +13,7 @@ npx ralphai init --yes           # scaffold .ralphai/ with a sample plan
 npx ralphai run                  # watch the agent complete the sample plan
 ```
 
-`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required. It defaults to **OpenCode** as the agent command. Use `--agent-command=<cmd>` to pick a different agent (e.g. `--agent-command='claude -p'`).
+`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required. It auto-detects installed agents, checking **Claude Code** and **OpenCode** first, then other supported agents. Falls back to OpenCode if none are found. Use `--agent-command=<cmd>` to override (e.g. `--agent-command='claude -p'`).
 
 ## Why Ralphai?
 
@@ -42,7 +42,7 @@ In your project repository:
 ralphai init                 # scaffold .ralphai/ and ralphai.json
 ```
 
-Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts (defaults to OpenCode as the agent command).
+Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts and auto-detect your installed agent.
 
 All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
 

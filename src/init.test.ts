@@ -69,12 +69,14 @@ describe("init command", () => {
     expect(learnings).toContain("AGENTS.md");
   });
 
-  it("init --yes generates config with default agent command", () => {
+  it("init --yes generates config with auto-detected or default agent command", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
     const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    // Agent command is auto-detected from PATH or falls back to OpenCode
+    expect(typeof parsed.agentCommand).toBe("string");
+    expect(parsed.agentCommand.length).toBeGreaterThan(0);
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed).not.toHaveProperty("protectedBranches");
     // feedbackCommands should be an empty array when not detected
@@ -96,7 +98,9 @@ describe("init command", () => {
     expect(Object.keys(parsed)).toHaveLength(14);
 
     // Core settings from wizard
-    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    // Agent command is auto-detected from PATH or falls back to OpenCode
+    expect(typeof parsed.agentCommand).toBe("string");
+    expect(parsed.agentCommand.length).toBeGreaterThan(0);
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed.feedbackCommands).toEqual([]);
 
@@ -157,8 +161,8 @@ describe("init command", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
     // Summary should contain the header and detected values
     expect(output).toContain("Detected:");
-    // Default agent command
-    expect(output).toContain("opencode run --agent build");
+    // Agent line shows auto-detected or fallback command
+    expect(output).toMatch(/Agent:.*\S/);
     // Base branch (detected from git)
     expect(output).toMatch(/Branch:.*main|master/);
     // Feedback should show (none) since ctx.dir has no package.json
@@ -553,10 +557,10 @@ describe("init command", () => {
 
     expect(output).toContain("Ralphai initialized");
 
-    // Config should have been overwritten with defaults
+    // Config should have been overwritten with auto-detected defaults
     const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.agentCommand).toBe("opencode run --agent build");
+    // Agent command is auto-detected, so just verify it's not the custom one
     expect(parsed.agentCommand).not.toBe("my-agent");
   });
 

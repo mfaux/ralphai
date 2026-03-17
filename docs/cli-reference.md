@@ -26,7 +26,7 @@ ralphai <command> [options]
 ## Init
 
 ```
---yes, -y              Skip prompts, use defaults
+--yes, -y              Skip prompts; auto-detect agent (Claude Code → OpenCode → others)
 --force                Re-scaffold from scratch
 --shared               Track ralphai.json in git (for team-shared config)
 --agent-command=CMD    Set the agent command

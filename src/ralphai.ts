@@ -1430,6 +1430,29 @@ function checkAgentCommandInPath(agentCommand: string): string | null {
   }
 }
 
+/**
+ * Probe the system for an installed agent binary from AGENT_PRESETS.
+ * Checks Claude Code and OpenCode first (actively tested), then the rest.
+ * Returns the first preset whose binary is found in PATH, or null.
+ */
+function detectInstalledAgent(): { label: string; command: string } | null {
+  const probeOrder = [
+    AGENT_PRESETS.find((p) => p.label === "Claude Code"),
+    AGENT_PRESETS.find((p) => p.label === "OpenCode"),
+    ...AGENT_PRESETS.filter(
+      (p) => p.label !== "Claude Code" && p.label !== "OpenCode",
+    ),
+  ].filter((p): p is { label: string; command: string } => p !== undefined);
+
+  for (const preset of probeOrder) {
+    // checkAgentCommandInPath returns null when the binary IS found
+    if (!checkAgentCommandInPath(preset.command)) {
+      return preset;
+    }
+  }
+  return null;
+}
+
 async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
@@ -1482,8 +1505,25 @@ async function runRalphaiInit(
       existsSync(agentsMdPath) &&
       /^## Ralphai\b/m.test(readFileSync(agentsMdPath, "utf-8"));
 
+    // Resolve agent command: explicit flag > auto-detect > fallback
+    let agentCommand = options.agentCommand;
+    if (!agentCommand) {
+      const detected = detectInstalledAgent();
+      if (detected) {
+        agentCommand = detected.command;
+        console.log(
+          `${DIM}Detected ${detected.label}${RESET} ${TEXT}— using '${detected.command}'${RESET}`,
+        );
+      } else {
+        agentCommand = "opencode run --agent build";
+        console.log(
+          `${TEXT}No supported agent found in PATH — defaulting to OpenCode. Override with --agent-command=<cmd>${RESET}`,
+        );
+      }
+    }
+
     answers = {
-      agentCommand: options.agentCommand || "opencode run --agent build",
+      agentCommand,
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectFeedbackCommands(cwd),
       turns: 5,
