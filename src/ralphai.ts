@@ -63,6 +63,7 @@ interface WizardAnswers {
   issueSource: "none" | "github";
   createSamplePlan?: boolean;
   updateAgentsMd?: boolean;
+  workspaces?: Record<string, { feedbackCommands: string[] }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +261,152 @@ function detectPackageManager(cwd: string): DetectedPM | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Workspace discovery
+// ---------------------------------------------------------------------------
+
+interface WorkspacePackage {
+  name: string;
+  path: string;
+}
+
+/**
+ * Parse pnpm-workspace.yaml to extract the `packages` globs.
+ * Uses a simple line-based parser to avoid a YAML dependency.
+ */
+function parsePnpmWorkspaceGlobs(content: string): string[] {
+  const globs: string[] = [];
+  let inPackages = false;
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (/^packages\s*:/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages) {
+      if (line.startsWith("- ")) {
+        const value = line
+          .slice(2)
+          .trim()
+          .replace(/^["']|["']$/g, "");
+        if (value) globs.push(value);
+      } else if (line !== "" && !line.startsWith("#")) {
+        // End of packages list (new top-level key)
+        break;
+      }
+    }
+  }
+  return globs;
+}
+
+/**
+ * Expand simple workspace globs (e.g. "packages/*") into directories
+ * that contain a package.json. Only supports trailing /* patterns and
+ * bare directory names. Does not handle ** or other complex globs.
+ */
+function expandWorkspaceGlobs(
+  cwd: string,
+  globs: string[],
+): WorkspacePackage[] {
+  const packages: WorkspacePackage[] = [];
+  const seen = new Set<string>();
+
+  for (const glob of globs) {
+    // Strip negation globs (e.g. "!packages/internal")
+    if (glob.startsWith("!")) continue;
+
+    // Handle "dir/*" pattern — list immediate children of dir
+    if (glob.endsWith("/*")) {
+      const parent = glob.slice(0, -2);
+      const parentDir = join(cwd, parent);
+      if (!existsSync(parentDir)) continue;
+      let entries: string[];
+      try {
+        entries = readdirSync(parentDir);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        const pkgDir = join(parentDir, entry);
+        const pkgJsonPath = join(pkgDir, "package.json");
+        if (!existsSync(pkgJsonPath)) continue;
+        try {
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+          const name = typeof pkg.name === "string" ? pkg.name : entry;
+          const rel = `${parent}/${entry}`;
+          if (!seen.has(rel)) {
+            seen.add(rel);
+            packages.push({ name, path: rel });
+          }
+        } catch {
+          // Skip packages with invalid package.json
+        }
+      }
+    } else {
+      // Bare directory — treat as a single workspace
+      const pkgJsonPath = join(cwd, glob, "package.json");
+      if (!existsSync(pkgJsonPath)) continue;
+      try {
+        const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+        const name = typeof pkg.name === "string" ? pkg.name : glob;
+        if (!seen.has(glob)) {
+          seen.add(glob);
+          packages.push({ name, path: glob });
+        }
+      } catch {
+        // Skip
+      }
+    }
+  }
+
+  return packages;
+}
+
+/**
+ * Detect monorepo workspace packages.
+ *
+ * Detection sources (checked in order):
+ * 1. `pnpm-workspace.yaml` — read `packages` globs
+ * 2. `package.json` `workspaces` field (yarn/npm/bun)
+ *
+ * Returns an array of { name, path } for each discovered package.
+ */
+function detectWorkspaces(cwd: string): WorkspacePackage[] {
+  // 1. pnpm-workspace.yaml
+  const pnpmWsPath = join(cwd, "pnpm-workspace.yaml");
+  if (existsSync(pnpmWsPath)) {
+    try {
+      const content = readFileSync(pnpmWsPath, "utf-8");
+      const globs = parsePnpmWorkspaceGlobs(content);
+      if (globs.length > 0) {
+        return expandWorkspaceGlobs(cwd, globs);
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  // 2. package.json workspaces field
+  const pkgPath = join(cwd, "package.json");
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      const workspaces = pkg.workspaces;
+      if (Array.isArray(workspaces)) {
+        return expandWorkspaceGlobs(cwd, workspaces);
+      }
+      // Yarn also supports { packages: [...] } object form
+      if (workspaces && Array.isArray(workspaces.packages)) {
+        return expandWorkspaceGlobs(cwd, workspaces.packages);
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  return [];
+}
+
 /** Well-known script names to look for, in display order. */
 const SCRIPT_CANDIDATES = [
   "build",
@@ -334,6 +481,52 @@ function detectFeedbackCommands(cwd: string): string {
   }
 
   return commands.join(",");
+}
+
+/**
+ * Derive scoped feedback commands for a workspace package.
+ * Maps root-level feedback commands to their filtered equivalents
+ * using the detected package manager.
+ */
+function deriveScopedFeedback(
+  pm: DetectedPM,
+  rootCommands: string[],
+  packageName: string,
+): string[] {
+  return rootCommands.map((cmd) => {
+    const parts = cmd.trim().split(/\s+/);
+    const runner = parts[0];
+    // Only rewrite commands that match the detected package manager
+    if (runner !== pm.manager) return cmd;
+
+    switch (pm.manager) {
+      case "pnpm": {
+        // "pnpm build" → "pnpm --filter <name> build"
+        // "pnpm run test" → "pnpm --filter <name> run test"
+        const rest = parts.slice(1);
+        // Remove "run" prefix if present — pnpm --filter <name> test works
+        const filtered = rest.filter((p) => p !== "run");
+        return `pnpm --filter ${packageName} ${filtered.join(" ")}`;
+      }
+      case "yarn": {
+        // "yarn build" → "yarn workspace <name> build"
+        const rest = parts.slice(1);
+        return `yarn workspace ${packageName} ${rest.join(" ")}`;
+      }
+      case "npm": {
+        // "npm run build" → "npm -w <name> run build"
+        const rest = parts.slice(1);
+        return `npm -w ${packageName} ${rest.join(" ")}`;
+      }
+      case "bun": {
+        // "bun run build" → "bun --filter <name> run build"
+        const rest = parts.slice(1);
+        return `bun --filter ${packageName} ${rest.join(" ")}`;
+      }
+      default:
+        return cmd;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +924,14 @@ function scaffold(
         .filter((cmd) => cmd.length > 0)
     : [];
 
-  const configObj: Record<string, string | string[] | number | boolean> = {
+  const configObj: Record<
+    string,
+    | string
+    | string[]
+    | number
+    | boolean
+    | Record<string, { feedbackCommands: string[] }>
+  > = {
     agentCommand: answers.agentCommand,
     feedbackCommands,
     baseBranch: answers.baseBranch,
@@ -747,6 +947,11 @@ function scaffold(
     issueRepo: "",
     issueCommentProgress: true,
   };
+
+  // Conditionally include workspaces to keep config clean for single-project repos
+  if (answers.workspaces && Object.keys(answers.workspaces).length > 0) {
+    configObj.workspaces = answers.workspaces;
+  }
 
   const config = JSON.stringify(configObj, null, 2) + "\n";
 
@@ -1508,6 +1713,19 @@ async function runRalphaiInit(
     console.log(
       `  ${DIM}Manager:${RESET}   ${TEXT}${detectedPM?.manager ?? "(none)"}${RESET}`,
     );
+
+    // Workspace detection for --yes mode
+    const workspaces = detectWorkspaces(cwd);
+    if (workspaces.length > 0) {
+      const names = workspaces.map((ws) => ws.name).join(", ");
+      console.log(
+        `  ${DIM}Workspaces:${RESET} ${TEXT}${workspaces.length} packages${RESET} ${DIM}(${names})${RESET}`,
+      );
+      console.log(
+        `${DIM}  Feedback commands will be auto-filtered by scope. Run ${TEXT}ralphai init${DIM} interactively to customize per-workspace commands.${RESET}`,
+      );
+    }
+
     console.log();
   } else {
     // Interactive wizard
@@ -1517,6 +1735,40 @@ async function runRalphaiInit(
       return;
     }
     answers = wizardResult;
+
+    // Workspace detection for interactive mode
+    const workspaces = detectWorkspaces(cwd);
+    if (workspaces.length > 0) {
+      const names = workspaces.map((ws) => ws.name).join(", ");
+      clack.log.info(
+        `Detected ${workspaces.length} workspace packages: ${names}`,
+      );
+
+      const addWorkspaces = await clack.confirm({
+        message:
+          "Add workspace-specific feedback commands to config? (recommended for large monorepos)",
+      });
+
+      if (!clack.isCancel(addWorkspaces) && addWorkspaces) {
+        const pm = detectPackageManager(cwd);
+        const rootCommands = answers.feedbackCommands
+          .split(",")
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0);
+
+        const wsConfig: Record<string, { feedbackCommands: string[] }> = {};
+        for (const ws of workspaces) {
+          if (pm && rootCommands.length > 0) {
+            wsConfig[ws.path] = {
+              feedbackCommands: deriveScopedFeedback(pm, rootCommands, ws.name),
+            };
+          } else {
+            wsConfig[ws.path] = { feedbackCommands: [] };
+          }
+        }
+        answers.workspaces = wsConfig;
+      }
+    }
   }
 
   // Warn if the agent binary isn't in PATH (soft warning, not a hard error)
