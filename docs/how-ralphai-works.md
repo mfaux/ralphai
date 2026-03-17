@@ -66,6 +66,11 @@ threshold is 3. Configurable via `maxStuck` in `ralphai.json`,
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume.
 
+Stuck detection relies on commits. In **patch mode** (where changes are
+uncommitted by default), enable `--auto-commit` so that each turn's changes
+produce a commit for stuck detection to track. Without auto-commit, patch mode
+triggers the stuck threshold every turn.
+
 ## Continuous Mode
 
 By default, Ralphai stops after one plan. With `--continuous` (or
@@ -126,12 +131,14 @@ and the turn counts toward the stuck budget. Default: 0 (no timeout).
 
 ## Branch Isolation
 
-Two modes:
+Three modes:
 
-- **Branch mode** (default): commits on your current branch. No branch
-  creation, no PR. Refuses to run on `main`/`master`.
+- **Branch mode** (default, `--branch`): creates a `ralphai/<plan-slug>` branch
+  from the base branch, commits all work there. No push, no PR.
 - **PR mode** (`--pr`): creates a `ralphai/<plan-slug>` branch from the base
   branch, does all work there, and opens a PR on completion via `gh`.
+- **Patch mode** (`--patch`): works on the current branch, leaves changes
+  uncommitted. Refuses to run on `main`/`master`.
 
 PR mode checks for branch collisions (local, remote, open PR) before
 starting — collisions skip to the next plan.

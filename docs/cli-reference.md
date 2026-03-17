@@ -34,6 +34,16 @@ ralphai <command> [options]
 
 ## Run
 
+### Mode Selection
+
+```
+--branch                          Branch mode (default): create isolated branch, commit, no PR
+--pr                              PR mode: create branch, push, and open PR
+--patch                           Patch mode: leave changes uncommitted in working tree
+```
+
+### General Options
+
 ```
 --turns=<n>                       Turns per plan (default: 5, 0 = unlimited)
 --dry-run, -n                     Preview what would happen without changing anything
@@ -41,16 +51,23 @@ ralphai <command> [options]
 --agent-command=<command>         Override agent CLI command
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)
---branch                          Branch mode (default): create isolated branch, commit, no PR
---pr                              PR mode: create branch, push, and open PR
---patch                           Patch mode: leave changes uncommitted in working tree
 --continuous                      Keep processing backlog plans after the first completes
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
 --turn-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
---auto-commit                     Enable auto-commit of agent changes (per-turn and resume recovery)
---no-auto-commit                  Disable auto-commit (default)
 --prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
 --show-config                     Print resolved settings and exit
+```
+
+### Patch Mode Options
+
+```
+--auto-commit                     Enable auto-commit of agent changes (per-turn and resume recovery)
+--no-auto-commit                  Disable auto-commit (default)
+```
+
+### Issue Tracking
+
+```
 --issue-source=<source>           Issue source: 'none' or 'github' (default: none)
 --issue-label=<label>             Label to filter issues (default: ralphai)
 --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)
@@ -86,6 +103,14 @@ worktree clean    Remove completed/orphaned worktrees
 ```
 --yes, -y         Skip confirmation prompt
 ```
+
+Resets pipeline state so you can start fresh:
+
+- **Plans** — moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
+- **Artifacts** — deletes `progress.md` and `receipt.txt` for each in-progress plan
+- **Worktrees** — removes ralphai-managed worktrees and force-deletes their branches
+
+Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
 
 ## Configuration
 
