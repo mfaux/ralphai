@@ -10,11 +10,10 @@ Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
 
 ```bash
 npx ralphai init --yes           # scaffold .ralphai/ with a sample plan
-git checkout -b try-ralphai      # switch to a feature branch
 npx ralphai run                  # watch the agent complete the sample plan
 ```
 
-`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required.
+`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required. It auto-detects installed agents, checking **Claude Code** and **OpenCode** first, then other supported agents. Falls back to OpenCode if none are found. Use `--agent-command=<cmd>` to override (e.g. `--agent-command='claude -p'`).
 
 ## Why Ralphai?
 
@@ -43,7 +42,7 @@ In your project repository:
 ralphai init                 # scaffold .ralphai/ and ralphai.json
 ```
 
-Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts.
+Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts and auto-detect your installed agent.
 
 All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
 
@@ -60,10 +59,9 @@ Use .ralphai/PLANNING.md as a guide.
 
 ### 2. Run
 
-Ralphai commits on your **current branch** by default. It refuses to run on `main`/`master`, so switch to a feature branch first.
+Ralphai creates a **`ralphai/<plan-slug>`** branch from your base branch by default, so there is no need to create a feature branch yourself.
 
 ```bash
-git checkout -b my-feature
 ralphai run
 ```
 
