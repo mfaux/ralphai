@@ -238,6 +238,12 @@ scope: packages/web
 ---
 ```
 
+### Workspace Detection
+
+`ralphai init` detects workspace packages by reading `pnpm-workspace.yaml` globs or the `workspaces` field in `package.json`. In interactive mode, it asks whether to add per-workspace feedback commands to the config. In `--yes` mode, it prints the discovered workspaces and skips config generation (root feedback commands are auto-filtered by scope at runtime).
+
+### Scoped Feedback
+
 When a plan has a scope, the runner:
 
 1. **Reads the package name** from `<scope>/package.json`.
@@ -246,6 +252,14 @@ When a plan has a scope, the runner:
 4. **Adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory.
 
 Commands that don't start with the detected package manager (e.g., `make test`) pass through unchanged.
+
+### Doctor Validation
+
+`ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Each workspace command runs from the repo root. Failures produce warnings (not hard errors), since the workspace may not be installed yet.
+
+### Status Display
+
+`ralphai status` shows the scope of each plan when declared. Scoped plans display a `scope: <path>` annotation next to the plan name.
 
 ### Workspace Overrides
 

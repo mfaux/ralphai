@@ -32,6 +32,8 @@ ralphai <command> [options]
 --agent-command=CMD    Set the agent command
 ```
 
+In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml` or `package.json` `workspaces`. In interactive mode, it offers to generate per-workspace feedback commands. In `--yes` mode, it prints workspace info without adding config (commands are auto-filtered by scope at runtime).
+
 ## Run
 
 ```
