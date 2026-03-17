@@ -4,7 +4,7 @@ Put your AI coding agent on autopilot.
 
 Ralphai takes plans (markdown files) from a backlog and drives any CLI-based coding agent to implement them, with branch isolation, feedback loops, and stuck detection built in. You write the plans, or have your agent write them. Ralphai does the rest.
 
-Requires Node.js 18+ and a [supported CLI agent](#supported-agents).
+Requires Node.js 18+ (or Bun/Deno) and a [supported CLI agent](#supported-agents).
 
 ## Try It Now
 
@@ -71,6 +71,9 @@ Each turn: the agent reads the plan, implements the next task, runs build/test/l
 ralphai run --turns=3    # 3 turns per plan (default: 5)
 ralphai run --turns=0    # unlimited turns
 ralphai run --pr         # create a ralphai/* branch and open a PR
+ralphai run --patch      # leave changes uncommitted (requires feature branch)
+ralphai run --continuous # keep processing backlog plans after the first
+ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
 
@@ -95,11 +98,36 @@ Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The
 
 ### 4. Pause and resume
 
-Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `ralphai status` to see what's queued, in progress, and any problems.
+Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
+
+```bash
+ralphai status           # see what's queued, in progress, and any problems
+ralphai doctor           # validate your setup (agent, feedback commands, config)
+ralphai reset            # move in-progress plans back to backlog
+ralphai purge            # delete archived artifacts from pipeline/out/
+```
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings →](docs/how-ralphai-works.md#learnings-system)
+Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
+
+## GitHub Issues Integration
+
+Ralphai can pull plans from GitHub issues when the backlog is empty. Label issues with `ralphai` (configurable), and Ralphai converts them into plan files, runs them, and comments progress back on the issue.
+
+```bash
+ralphai run --issue-source=github              # pull labeled issues
+ralphai run --issue-label=ai-task              # custom label filter
+```
+
+Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `ralphai.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
+
+## Manage Your Installation
+
+```bash
+ralphai update           # update to the latest version
+ralphai teardown         # remove Ralphai from your project
+```
 
 ## Monorepo Support
 

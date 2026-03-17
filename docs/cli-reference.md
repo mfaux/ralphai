@@ -13,6 +13,8 @@ ralphai <command> [options]
 | `worktree`     | Run in an isolated git worktree                     |
 | `status`       | Show pipeline and worktree status                   |
 | `reset`        | Move in-progress plans back to backlog and clean up |
+| `purge`        | Delete archived artifacts from `pipeline/out/`      |
+| `doctor`       | Check your Ralphai setup for problems               |
 | `update [tag]` | Update ralphai to the latest (or specified) version |
 | `teardown`     | Remove Ralphai from your project                    |
 
@@ -21,6 +23,7 @@ ralphai <command> [options]
 ```
 --help, -h        Show help
 --version, -v     Show version
+--no-color        Disable colored output (also respects NO_COLOR env var)
 ```
 
 ## Init
@@ -113,6 +116,38 @@ Resets pipeline state so you can start fresh:
 - **Worktrees** — removes ralphai-managed worktrees and force-deletes their branches
 
 Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
+
+## Purge
+
+```
+--yes, -y         Skip confirmation prompt
+```
+
+Deletes all archived plan artifacts from `pipeline/out/`. Use this to clean up after completed runs.
+
+## Doctor
+
+Validates your Ralphai setup with diagnostic checks:
+
+1. `.ralphai/` directory exists
+2. `ralphai.json` is valid JSON with recognized keys
+3. Git repository detected
+4. Working tree is clean
+5. Base branch exists
+6. Agent command is in `PATH`
+7. Feedback commands run successfully
+8. Backlog has plans
+9. No orphaned receipts in `in-progress/`
+
+When a `workspaces` config key exists, doctor also validates per-workspace feedback commands. Workspace failures produce warnings, not hard errors.
+
+## Teardown
+
+```
+--yes, -y         Skip confirmation prompt
+```
+
+Removes Ralphai from your project: deletes `.ralphai/`, `ralphai.json`, and cleans up `.gitignore` entries.
 
 ## Configuration
 

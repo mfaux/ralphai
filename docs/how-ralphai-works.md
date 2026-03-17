@@ -23,7 +23,10 @@ Turn 50 gets exactly the same quality of context as turn 1.
 ## Feedback Loop
 
 Each turn, the agent runs your project's real build, test, and lint
-commands — not cached results, not model-generated guesses.
+commands — not cached results, not model-generated guesses. The retry
+loop is agent-internal: the runner provides the feedback commands in the
+prompt, and the agent runs them, fixes errors, and iterates within a
+single turn.
 
 ```
     ┌─────────────────────────────────────┐
@@ -47,12 +50,14 @@ commands — not cached results, not model-generated guesses.
                  └─────┬─────┘
                        │ no
                        ▼
-                 ┌───────────┐
-                 │  Commit   │
-                 └─────┬─────┘
+                 ┌────────────┐
+                 │  Commit *  │
+                 └─────┬──────┘
                        ▼
                    Next turn
                 (fresh session)
+
+* In patch mode (--patch), changes are left uncommitted.
 ```
 
 Feedback commands are auto-detected during `ralphai init` or configured
@@ -178,7 +183,7 @@ When Ralphai looks for work, it follows this priority:
    Plans with unsatisfied dependencies are skipped with a diagnostic
    message showing which dependencies are blocking.
 3. **Single ready plan** — auto-selected.
-4. **Multiple ready plans** — the oldest plan by filesystem order is
+4. **Multiple ready plans** — the first plan in alphabetical order is
    picked. (Ralphai logs how many plans were ready and which one it
    chose.)
 
@@ -187,7 +192,7 @@ collision) — this prevents conflicts when multiple worktrees or
 continuous-mode sessions overlap.
 
 Use `depends-on` frontmatter to control execution order. Without it, plans
-run in filesystem order (typically alphabetical).
+run in alphabetical order.
 
 ## Receipt Files
 
@@ -210,23 +215,22 @@ tasks_completed=2
 
 ### Field Reference
 
-| Field             | Example                           | Meaning                                                          |
-| ----------------- | --------------------------------- | ---------------------------------------------------------------- |
-| `started_at`      | `2026-03-08T14:22:00Z`            | ISO 8601 UTC timestamp of when the run started                   |
-| `source`          | `main` / `worktree`               | Whether the run started in the main repo or a worktree           |
-| `worktree_path`   | `/home/user/wt/dark-mode`         | Absolute path to worktree (only present when `source=worktree`)  |
-| `branch`          | `ralphai/dark-mode`               | Git branch the run is on                                         |
-| `slug`            | `dark-mode`                       | Plan slug (filename minus `.md`)                                 |
-| `plan_file`       | `dark-mode.md`                    | Source plan filename                                             |
-| `turns_budget`    | `5`                               | Max turns configured for the run (0 = unlimited)                 |
-| `turns_completed` | `3`                               | Number of agent turns executed so far                            |
-| `tasks_completed` | `2`                               | Number of plan tasks marked complete (parsed from progress file) |
-| `outcome`         | `completed` / `stuck` / `timeout` | How the run ended (absent while still running)                   |
+| Field             | Example                   | Meaning                                                          |
+| ----------------- | ------------------------- | ---------------------------------------------------------------- |
+| `started_at`      | `2026-03-08T14:22:00Z`    | ISO 8601 UTC timestamp of when the run started                   |
+| `source`          | `main` / `worktree`       | Whether the run started in the main repo or a worktree           |
+| `worktree_path`   | `/home/user/wt/dark-mode` | Absolute path to worktree (only present when `source=worktree`)  |
+| `branch`          | `ralphai/dark-mode`       | Git branch the run is on                                         |
+| `slug`            | `dark-mode`               | Plan slug (filename minus `.md`)                                 |
+| `plan_file`       | `dark-mode.md`            | Source plan filename                                             |
+| `turns_budget`    | `5`                       | Max turns configured for the run (0 = unlimited)                 |
+| `turns_completed` | `3`                       | Number of agent turns executed so far                            |
+| `tasks_completed` | `2`                       | Number of plan tasks marked complete (parsed from progress file) |
 
 ### When to Check Receipts
 
 - **Run stopped unexpectedly** — check `turns_completed` vs `turns_budget`
-  to see if the turn budget was exhausted, and `outcome` for the reason.
+  to see if the turn budget was exhausted.
 - **Cross-source conflict** — if `ralphai run` refuses to start because a
   plan is running in a worktree (or vice versa), the receipt shows where
   the run originated (`source`, `worktree_path`, `branch`).
@@ -255,7 +259,7 @@ scope: packages/web
 When a plan has a scope, the runner:
 
 1. **Reads the package name** from `<scope>/package.json`.
-2. **Detects the root package manager** by checking for lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, `package-lock.json`).
+2. **Detects the root package manager** by checking for lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb` / `bun.lock`, `package-lock.json`).
 3. **Rewrites feedback commands** using the PM's workspace filter: `pnpm --filter <name>`, `yarn workspace <name>`, `npm -w <name>`, or `bun --filter <name>`.
 4. **Adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory.
 

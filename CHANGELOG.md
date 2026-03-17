@@ -1,14 +1,33 @@
 # Changelog
 
-## WIP
+## 0.6.0
 
 ### Breaking
 
-- **Flat-only backlog plans** — plans in `pipeline/backlog/` must be flat `.md` files (for example `backlog/my-plan.md`). The slug-folder format (`backlog/<slug>/<slug>.md`) is no longer supported in the backlog. The runner creates slug folders automatically when promoting a plan to `in-progress/`.
+- **Flat-only backlog plans** — plans in `pipeline/backlog/` must be flat `.md` files (for example `backlog/my-plan.md`). The slug-folder format (`backlog/<slug>/<slug>.md`) is no longer supported in the backlog. The runner creates slug folders automatically when promoting a plan to `in-progress/`. (#84)
+
+### Features
+
+- **Monorepo scope awareness** — plans can declare `scope: <path>` in YAML frontmatter to target a specific package. The runner derives scoped feedback commands from pnpm `--filter`, yarn `workspace`, npm `-w`, or bun `--filter`. A `workspaces` config key provides per-package overrides. (#86)
+- **Monorepo init and doctor integration** — `ralphai init` detects workspace packages from `pnpm-workspace.yaml` and `package.json` workspaces. `ralphai doctor` validates workspace feedback commands. `ralphai status` shows scope for backlog and in-progress plans. (#87)
+- **Auto-detect installed agent in `--yes` mode** — `ralphai init --yes` now probes for installed agents (Claude Code, OpenCode, etc.) instead of hardcoding OpenCode. Falls back to OpenCode with a helpful message when no agent is found. (#88)
+- **Grouped plan artifacts** — plan artifacts (receipt, progress, worktree) are now grouped per plan for simpler lifecycle moves through the pipeline. (#83)
+- **Learning candidates file and auto-pruning** — new `LEARNING_CANDIDATES.md` template queues potential learnings for curation. Learnings auto-prune to the most recent entries when exceeding `maxLearnings` (default 20, configurable via `ralphai.json` or `RALPHAI_MAX_LEARNINGS`). (#82)
 
 ### Fixes
 
-- **Init wizard no longer asks patch-mode users about auto-commit** — patch mode now consistently means "leave changes uncommitted" during setup. Advanced users can still enable `autoCommit` later through config or CLI flags.
+- **Init wizard no longer asks patch-mode users about auto-commit** — patch mode now consistently means "leave changes uncommitted" during setup. Advanced users can still enable `autoCommit` later through config or CLI flags. (#81)
+- **Diff-hash stuck detection in patch mode** — patch mode never creates commits, so commit-based stuck detection always triggered false aborts. Now uses working-tree diff hashing (`sha256` of `git diff HEAD`) to detect actual progress. (#88)
+- Handle zero-count task progress in patch mode (#80)
+
+### Docs
+
+- Restructure README for faster onboarding (#79)
+- Fix branch mode description, expand reset section, reorganize CLI reference (#88)
+
+### Chores
+
+- Switch default package manager from pnpm to bun (#89)
 
 ## 0.5.0
 

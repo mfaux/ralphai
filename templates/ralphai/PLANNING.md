@@ -6,9 +6,12 @@ Guide for coding agents writing plan files that Ralphai executes autonomously. P
 
 1. **Understand the request.** Read what the user wants. Ask clarifying questions if the goal is ambiguous.
 2. **Pick a guide.** Choose the one that matches the work:
-   - **[Feature](plans/feature.md)** — new functionality
-   - **[Bug fix](plans/bugfix.md)** — something is broken
-   - **[Refactor](plans/refactor.md)** — structural change, no behavior change
+   - **Feature** — new functionality
+   - **Bug fix** — something is broken
+   - **Refactor** — structural change, no behavior change
+
+   See the [plan templates](https://github.com/mfaux/ralphai/tree/main/templates/ralphai/plans) for detailed templates with examples.
+
 3. **Explore the codebase.** Before writing anything, find the files, functions, and line numbers relevant to the work. The plan must contain concrete references, not guesses.
 4. **Fill in the template.** Follow the guide's template. Every file path, function name, and line number you include saves Ralphai tokens it would otherwise spend exploring.
 5. **Write the plan file** to `.ralphai/pipeline/backlog/<slug>.md`.
@@ -77,3 +80,15 @@ depends-on: [foundation.md, wiring.md]
 ### `source` frontmatter (auto-generated)
 
 Ralphai adds this automatically when it pulls a GitHub issue into a plan. On completion, Ralphai comments on the linked issue and removes the in-progress label. You don't need to add this manually.
+
+### `scope` frontmatter (monorepo)
+
+For plans that target a specific package in a monorepo. The runner derives scoped feedback commands automatically from the package manager's workspace filter.
+
+```md
+---
+scope: packages/web
+---
+```
+
+When `scope` is set, Ralphai rewrites feedback commands (e.g., `pnpm --filter @org/web build`) and adds a hint to the agent prompt to focus on the scoped directory. Use the `workspaces` key in `ralphai.json` for custom per-package overrides when automatic derivation is insufficient.
