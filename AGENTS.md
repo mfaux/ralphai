@@ -51,3 +51,7 @@ Tests are split by feature domain into separate files under `src/`. Each file ha
 ### Flat backlog plan files
 
 Plan files in `.ralphai/pipeline/backlog/` must be flat `.md` files (e.g., `backlog/my-plan.md`). The runner creates the slug folder automatically when moving a plan to `in-progress/`. Slug-folders in the backlog directory are not discovered.
+
+### Monorepo scope frontmatter
+
+Plans can declare `scope: <path>` in YAML frontmatter to target a specific package in a monorepo. The runner derives scoped feedback commands from the package manager's filter mechanism (pnpm `--filter`, yarn `workspace`, npm `-w`, bun `--filter`). The `workspaces` config key in `ralphai.json` provides per-package overrides when derivation is insufficient. The `extractScope()` TypeScript function lives in `src/frontmatter.ts` and is re-exported from `src/ralphai.ts`.

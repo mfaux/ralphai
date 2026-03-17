@@ -129,6 +129,11 @@ if [[ "$SHOW_CONFIG" == true ]]; then
 
   if [[ -f "$CONFIG_FILE" ]]; then
     echo "Config file: $CONFIG_FILE (loaded)"
+    if [[ -n "${CONFIG_WORKSPACES:-}" ]]; then
+      echo ""
+      echo "Workspaces (per-package overrides):"
+      echo "$CONFIG_WORKSPACES" | jq -r 'to_entries[] | "  \(.key): feedbackCommands=\(.value.feedbackCommands // "none" | if type == "array" then join(", ") else . end)"' 2>/dev/null || true
+    fi
   else
     echo "Config file: $CONFIG_FILE (not found, using defaults)"
   fi

@@ -103,6 +103,30 @@ Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai
 
 Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings →](docs/how-ralphai-works.md#learnings-system)
 
+## Monorepo Support
+
+Plans can target a specific package by adding `scope` to the frontmatter:
+
+```md
+---
+scope: packages/web
+---
+```
+
+When a plan has a scope, Ralphai rewrites feedback commands using the package manager's workspace filter (e.g., `pnpm --filter @org/web build`). The agent prompt includes a hint to focus on the scoped directory.
+
+For custom per-package overrides, add a `workspaces` key to `ralphai.json`:
+
+```json
+{
+  "workspaces": {
+    "packages/web": {
+      "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"]
+    }
+  }
+}
+```
+
 ## Supported Agents
 
 Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code** and **OpenCode** are actively tested.

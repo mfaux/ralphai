@@ -30,6 +30,7 @@ source "$RALPHAI_LIB_DIR/issues.sh"
 source "$RALPHAI_LIB_DIR/git.sh"
 source "$RALPHAI_LIB_DIR/plans.sh"
 source "$RALPHAI_LIB_DIR/prompt.sh"
+source "$RALPHAI_LIB_DIR/scope.sh"
 source "$RALPHAI_LIB_DIR/learnings.sh"
 source "$RALPHAI_LIB_DIR/pr.sh"
 source "$RALPHAI_LIB_DIR/receipt.sh"
@@ -100,11 +101,19 @@ if [[ "$DRY_RUN" == true ]]; then
     exit 0
   fi
 
+  # Extract scope from plan frontmatter
+  PLAN_SCOPE=$(extract_scope "${WIP_FILES[0]}")
+  resolve_scoped_feedback
+  build_scope_hint
+
   resolve_receipt_path
 
   PLAN_DESC=$(plan_description "${WIP_FILES[0]}")
   echo "[dry-run] Plan: $(basename "${WIP_FILES[0]}")"
   echo "[dry-run] Description: $PLAN_DESC"
+  if [[ -n "$PLAN_SCOPE" ]]; then
+    echo "[dry-run] Scope: $PLAN_SCOPE"
+  fi
 
   if [[ "$CONTINUOUS" == "true" && "$MODE" == "pr" ]]; then
     echo "[dry-run] Continuous+PR mode: all backlog plans will run on a single branch with one PR."
@@ -177,6 +186,11 @@ while true; do
 
   # Get a description for merge commit messages
   PLAN_DESC=$(plan_description "${WIP_FILES[0]}")
+
+  # Extract scope from plan frontmatter
+  PLAN_SCOPE=$(extract_scope "${WIP_FILES[0]}")
+  resolve_scoped_feedback
+  build_scope_hint
 
   # --- Receipt: resolve path and check for cross-source conflicts ---
   resolve_receipt_path
@@ -338,7 +352,7 @@ while true; do
       fi
     fi
 
-    PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}
+    PROMPT="${FILE_REFS} $(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}${SCOPE_HINT}
 1. Read the referenced files and the progress file.${LEARNINGS_HINT}
 2. Find the highest-priority incomplete task (see prioritization rules in the plan).
 3. Implement it with small, focused changes. Testing strategy depends on task type:
