@@ -51,10 +51,12 @@
     "obuild": "^0.4.22",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.17",
+    "@types/bun": "latest"
   },
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "pnpm@10.17.1"
+  "packageManager": "pnpm@10.17.1",
+  "private": true
 }

@@ -1,11 +1,14 @@
 {
   "agentCommand": "opencode run --agent build",
-  "feedbackCommands": ["pnpm build", "pnpm test", "pnpm type-check"],
+  "feedbackCommands": [
+    "bun run build",
+    "bun test",
+    "bun run type-check"
+  ],
   "baseBranch": "main",
-  "turns": 10,
+  "turns": 0,
   "mode": "pr",
   "autoCommit": false,
-  "maxStuck": 3,
   "turnTimeout": 0,
   "promptMode": "auto",
   "continuous": false,
