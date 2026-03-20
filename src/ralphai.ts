@@ -24,7 +24,11 @@ import {
   deriveScopedFeedback,
   detectProject,
 } from "./project-detection.ts";
-import type { DetectedPM, WorkspacePackage } from "./project-detection.ts";
+import type {
+  DetectedPM,
+  DetectedProject,
+  WorkspacePackage,
+} from "./project-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -340,15 +344,15 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 3. Feedback commands (auto-detected from package manager + scripts)
-  const detectedFeedback = detectFeedbackCommands(cwd);
-  const pm = detectPackageManager(cwd);
-  const feedbackPlaceholder = pm
-    ? `${pm.runPrefix} build, ${pm.manager} test, ${pm.runPrefix} lint`
-    : "npm run build, npm test, npm run lint";
+  // 3. Feedback commands (auto-detected from project type)
+  const project = detectProject(cwd);
+  const detectedFeedback = project ? project.feedbackCommands.join(",") : "";
+  const feedbackPlaceholder = project
+    ? project.feedbackCommands.join(", ") || "<build command>, <test command>"
+    : "<build command>, <test command>";
   const feedbackCommands = await clack.text({
     message: detectedFeedback
-      ? `Feedback commands (auto-detected for ${pm!.manager}):`
+      ? `Feedback commands (auto-detected for ${project!.label}):`
       : "Feedback commands (comma-separated, or leave empty):",
     initialValue: detectedFeedback || undefined,
     placeholder: detectedFeedback ? undefined : feedbackPlaceholder,
@@ -1407,10 +1411,15 @@ async function runRalphaiInit(
       }
     }
 
+    const detectedProject = detectProject(cwd);
+    const detectedFeedbackStr = detectedProject
+      ? detectedProject.feedbackCommands.join(",")
+      : "";
+
     answers = {
       agentCommand,
       baseBranch: detectBaseBranch(cwd),
-      feedbackCommands: detectFeedbackCommands(cwd),
+      feedbackCommands: detectedFeedbackStr,
       turns: 5,
       mode: "branch",
       autoCommit: false,
@@ -1420,7 +1429,6 @@ async function runRalphaiInit(
     };
 
     // Print detection summary so users can verify auto-detected values
-    const detectedPM = detectPackageManager(cwd);
     const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
     console.log(`${DIM}Detected:${RESET}`);
     console.log(
@@ -1431,7 +1439,7 @@ async function runRalphaiInit(
     );
     console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
     console.log(
-      `  ${DIM}Manager:${RESET}   ${TEXT}${detectedPM?.manager ?? "(none)"}${RESET}`,
+      `  ${DIM}Project:${RESET}   ${TEXT}${detectedProject?.label ?? "(none)"}${RESET}`,
     );
 
     // Workspace detection for --yes mode
