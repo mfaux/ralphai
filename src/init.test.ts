@@ -167,8 +167,8 @@ describe("init command", () => {
     expect(output).toMatch(/Branch:.*main|master/);
     // Feedback should show (none) since ctx.dir has no package.json
     expect(output).toContain("(none)");
-    // Manager should also show (none) since no package.json
-    expect(output).toMatch(/Manager:.*\(none\)/);
+    // Project should also show (none) since no package.json
+    expect(output).toMatch(/Project:.*\(none\)/);
   });
 
   it("init --yes detection summary shows custom agent command", () => {

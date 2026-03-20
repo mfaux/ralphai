@@ -5,6 +5,7 @@ Project-specific guidance for AI coding agents working in this codebase.
 ## Guiding Principles
 
 - **Great DX.** Every decision, from CLI design and defaults to error messages and docs, should minimize the time from install to "wow, that worked."
+- **Keep docs in sync.** When changing user-facing behavior (CLI output, config keys, supported ecosystems, monorepo handling), update the relevant docs (`README.md`, `docs/`, CLI help text) in the same change. Don't leave doc updates as a follow-up.
 
 ## Documentation Style
 
@@ -27,6 +28,12 @@ The `--dry-run` / `-n` flag must never cause side effects. When adding code that
 ## Conventional Commits
 
 This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Use the `type(scope): description` format for both **commit messages** and **branch names** (e.g., `feat/add-export`, `fix/null-check`). Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
+
+## Project Detection
+
+Ralphai detects the project ecosystem automatically. The detection logic lives in `src/project-detection.ts` (not `src/ralphai.ts`). The shell runner's ecosystem detection is in `runner/lib/scope.sh` (`_detect_ecosystem()`).
+
+Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Python, Java/Kotlin (basic detection). Node always takes priority when multiple ecosystem markers are present.
 
 ## Ralphai
 

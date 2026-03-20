@@ -44,7 +44,7 @@ The agent is instructed to run feedback commands each turn, but the commands the
 2. Run each command manually to confirm it works — if a command fails outside of ralphai, it will fail inside too.
 3. Run `ralphai doctor` to validate your setup. It checks each feedback command and reports pass/fail.
 
-If `feedbackCommands` is empty, `ralphai init` auto-detects commands from your `package.json` scripts (looks for `build`, `test`, `type-check`, `typecheck`, `lint`, `format:check`).
+If `feedbackCommands` is empty, `ralphai init` auto-detects commands based on your project ecosystem. For Node.js, it reads `package.json` scripts (looks for `build`, `test`, `type-check`, `typecheck`, `lint`, `format:check`). For .NET, it suggests `dotnet build` and `dotnet test`. Other ecosystems (Go, Rust, Python, Java/Kotlin) get similar defaults.
 
 ## "Wrong agent was used"
 

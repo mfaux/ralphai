@@ -35,7 +35,7 @@ ralphai <command> [options]
 --agent-command=CMD    Set the agent command
 ```
 
-In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml` or `package.json` `workspaces`. In interactive mode, it offers to generate per-workspace feedback commands. In `--yes` mode, it prints workspace info without adding config (commands are auto-filtered by scope at runtime).
+In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (for .NET projects). In interactive mode, it offers to generate per-workspace feedback commands. In `--yes` mode, it prints workspace info without adding config (commands are auto-filtered by scope at runtime).
 
 ## Run
 
@@ -212,8 +212,13 @@ overrides for monorepo projects. Each key is a relative path matching a plan's
 
 When a plan declares `scope: packages/web`, the runner checks for a matching
 `workspaces` entry. If found, those feedback commands replace the top-level
-ones. If no entry matches, the runner derives scoped commands automatically
-from the detected package manager.
+ones. If no entry matches, the runner derives scoped commands automatically:
+
+- **Node.js** — uses the package manager's workspace filter (detected from lockfiles).
+- **C# / .NET** — appends the scope path to dotnet commands (e.g., `dotnet build src/Api`).
+- **Other ecosystems** — commands pass through unchanged.
+
+Workspaces are discovered from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (which list `.csproj` projects). When multiple ecosystems coexist, Ralphai detects all of them and merges their feedback commands.
 
 The `workspaces` key is optional. Without it, scoped plans still get
-automatically derived feedback commands based on the lockfile and package name.
+automatically derived feedback commands.

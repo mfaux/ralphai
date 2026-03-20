@@ -369,3 +369,160 @@ echo "HINT_START\${SCOPE_HINT}HINT_END"
     expect(result).toBe("HINT_STARTHINT_END");
   });
 });
+
+// ---------------------------------------------------------------------------
+// _detect_ecosystem() — multi-language ecosystem detection
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")(
+  "_detect_ecosystem (bash)",
+  () => {
+    const ctx = useTempGitDir();
+
+    function detectEcosystem(files: string[]): string {
+      // Create marker files
+      for (const f of files) {
+        writeFileSync(join(ctx.dir, f), "");
+      }
+
+      const result = runBash(
+        `
+source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
+_detect_ecosystem
+echo "$_RALPHAI_ECOSYSTEM"
+`,
+        ctx.dir,
+      ).trim();
+
+      // Clean up marker files
+      for (const f of files) {
+        try {
+          rmSync(join(ctx.dir, f));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      return result;
+    }
+
+    it("detects node from package.json", () => {
+      expect(detectEcosystem(["package.json"])).toBe("node");
+    });
+
+    it("detects node from pnpm-lock.yaml", () => {
+      expect(detectEcosystem(["pnpm-lock.yaml"])).toBe("node");
+    });
+
+    it("detects dotnet from .sln file", () => {
+      expect(detectEcosystem(["Foo.sln"])).toBe("dotnet");
+    });
+
+    it("detects dotnet from .csproj file", () => {
+      expect(detectEcosystem(["Foo.csproj"])).toBe("dotnet");
+    });
+
+    it("detects go from go.mod", () => {
+      expect(detectEcosystem(["go.mod"])).toBe("go");
+    });
+
+    it("detects rust from Cargo.toml", () => {
+      expect(detectEcosystem(["Cargo.toml"])).toBe("rust");
+    });
+
+    it("detects java from pom.xml", () => {
+      expect(detectEcosystem(["pom.xml"])).toBe("java");
+    });
+
+    it("detects java from build.gradle", () => {
+      expect(detectEcosystem(["build.gradle"])).toBe("java");
+    });
+
+    it("detects python from pyproject.toml", () => {
+      expect(detectEcosystem(["pyproject.toml"])).toBe("python");
+    });
+
+    it("returns unknown for empty directory", () => {
+      expect(detectEcosystem([])).toBe("unknown");
+    });
+
+    it("node wins over dotnet when both present", () => {
+      expect(detectEcosystem(["package.json", "Foo.csproj"])).toBe("node");
+    });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// resolve_scoped_feedback() — non-JS ecosystem passthrough
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")(
+  "resolve_scoped_feedback non-JS ecosystems (bash)",
+  () => {
+    const ctx = useTempGitDir();
+
+    it("scopes dotnet commands to PLAN_SCOPE path", () => {
+      // Create a .sln file at root so _detect_ecosystem returns "dotnet"
+      writeFileSync(join(ctx.dir, "Foo.sln"), "");
+      // Create scoped directory (no package.json needed for non-node)
+      const scopeDir = join(ctx.dir, "src/MyProject");
+      mkdirSync(scopeDir, { recursive: true });
+
+      const result = runBash(
+        `
+source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
+
+DETECTED_AGENT_TYPE="claude"
+AGENT_COMMAND="claude -p"
+detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
+
+source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
+
+PLAN_SCOPE="src/MyProject"
+FEEDBACK_COMMANDS="dotnet build,dotnet test"
+CONFIG_WORKSPACES=""
+
+resolve_scoped_feedback
+echo "\$FEEDBACK_COMMANDS"
+`,
+        ctx.dir,
+      ).trim();
+
+      expect(result).toBe(
+        "dotnet build src/MyProject,dotnet test src/MyProject",
+      );
+    });
+
+    it("passes go commands through unchanged", () => {
+      writeFileSync(join(ctx.dir, "go.mod"), "module example.com/foo");
+      const scopeDir = join(ctx.dir, "cmd/server");
+      mkdirSync(scopeDir, { recursive: true });
+
+      const result = runBash(
+        `
+source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
+
+DETECTED_AGENT_TYPE="claude"
+AGENT_COMMAND="claude -p"
+detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
+
+source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
+
+PLAN_SCOPE="cmd/server"
+FEEDBACK_COMMANDS="go build ./...,go test ./..."
+CONFIG_WORKSPACES=""
+
+resolve_scoped_feedback
+echo "\$FEEDBACK_COMMANDS"
+`,
+        ctx.dir,
+      ).trim();
+
+      expect(result).toBe("go build ./...,go test ./...");
+    });
+  },
+);

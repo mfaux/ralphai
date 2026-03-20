@@ -17,6 +17,19 @@ import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope } from "./frontmatter.ts";
+import {
+  detectPackageManager,
+  detectFeedbackCommands,
+  detectWorkspaces,
+  deriveScopedFeedback,
+  deriveDotnetScopedFeedback,
+  detectProject,
+} from "./project-detection.ts";
+import type {
+  DetectedPM,
+  DetectedProject,
+  WorkspacePackage,
+} from "./project-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -202,335 +215,6 @@ function parseWorktreeArgs(args: string[]): WorktreeOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Package manager detection
-// ---------------------------------------------------------------------------
-
-type PackageManager = "npm" | "pnpm" | "yarn" | "bun" | "deno";
-
-interface DetectedPM {
-  manager: PackageManager;
-  /** Prefix for running scripts, e.g. "pnpm" or "bun run" */
-  runPrefix: string;
-}
-
-/**
- * Detect the project's package manager by checking for lock files and config
- * files in priority order. Returns null for non-JS/TS projects.
- */
-function detectPackageManager(cwd: string): DetectedPM | null {
-  const has = (file: string) => existsSync(join(cwd, file));
-
-  // Deno — checked first since deno.json is unambiguous
-  if (has("deno.json") || has("deno.jsonc")) {
-    return { manager: "deno", runPrefix: "deno task" };
-  }
-
-  // Lock-file based detection (most reliable)
-  if (has("bun.lockb") || has("bun.lock")) {
-    return { manager: "bun", runPrefix: "bun run" };
-  }
-  if (has("pnpm-lock.yaml") || has("pnpm-workspace.yaml")) {
-    return { manager: "pnpm", runPrefix: "pnpm" };
-  }
-  if (has("yarn.lock")) {
-    return { manager: "yarn", runPrefix: "yarn" };
-  }
-  if (has("package-lock.json")) {
-    return { manager: "npm", runPrefix: "npm run" };
-  }
-
-  // Fallback: check packageManager field in package.json
-  const pkgPath = join(cwd, "package.json");
-  if (has("package.json")) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      if (typeof pkg.packageManager === "string") {
-        const name = pkg.packageManager.split("@")[0] as string;
-        if (name === "pnpm") return { manager: "pnpm", runPrefix: "pnpm" };
-        if (name === "yarn") return { manager: "yarn", runPrefix: "yarn" };
-        if (name === "bun") return { manager: "bun", runPrefix: "bun run" };
-        if (name === "npm") return { manager: "npm", runPrefix: "npm run" };
-      }
-      // package.json exists but no packageManager field — default to npm
-      return { manager: "npm", runPrefix: "npm run" };
-    } catch {
-      return { manager: "npm", runPrefix: "npm run" };
-    }
-  }
-
-  // No JS/TS project signals found
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Workspace discovery
-// ---------------------------------------------------------------------------
-
-interface WorkspacePackage {
-  name: string;
-  path: string;
-}
-
-/**
- * Parse pnpm-workspace.yaml to extract the `packages` globs.
- * Uses a simple line-based parser to avoid a YAML dependency.
- */
-function parsePnpmWorkspaceGlobs(content: string): string[] {
-  const globs: string[] = [];
-  let inPackages = false;
-  for (const raw of content.split("\n")) {
-    const line = raw.trim();
-    if (/^packages\s*:/.test(line)) {
-      inPackages = true;
-      continue;
-    }
-    if (inPackages) {
-      if (line.startsWith("- ")) {
-        const value = line
-          .slice(2)
-          .trim()
-          .replace(/^["']|["']$/g, "");
-        if (value) globs.push(value);
-      } else if (line !== "" && !line.startsWith("#")) {
-        // End of packages list (new top-level key)
-        break;
-      }
-    }
-  }
-  return globs;
-}
-
-/**
- * Expand simple workspace globs (e.g. "packages/*") into directories
- * that contain a package.json. Only supports trailing /* patterns and
- * bare directory names. Does not handle ** or other complex globs.
- */
-function expandWorkspaceGlobs(
-  cwd: string,
-  globs: string[],
-): WorkspacePackage[] {
-  const packages: WorkspacePackage[] = [];
-  const seen = new Set<string>();
-
-  for (const glob of globs) {
-    // Strip negation globs (e.g. "!packages/internal")
-    if (glob.startsWith("!")) continue;
-
-    // Handle "dir/*" pattern — list immediate children of dir
-    if (glob.endsWith("/*")) {
-      const parent = glob.slice(0, -2);
-      const parentDir = join(cwd, parent);
-      if (!existsSync(parentDir)) continue;
-      let entries: string[];
-      try {
-        entries = readdirSync(parentDir);
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        const pkgDir = join(parentDir, entry);
-        const pkgJsonPath = join(pkgDir, "package.json");
-        if (!existsSync(pkgJsonPath)) continue;
-        try {
-          const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-          const name = typeof pkg.name === "string" ? pkg.name : entry;
-          const rel = `${parent}/${entry}`;
-          if (!seen.has(rel)) {
-            seen.add(rel);
-            packages.push({ name, path: rel });
-          }
-        } catch {
-          // Skip packages with invalid package.json
-        }
-      }
-    } else {
-      // Bare directory — treat as a single workspace
-      const pkgJsonPath = join(cwd, glob, "package.json");
-      if (!existsSync(pkgJsonPath)) continue;
-      try {
-        const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-        const name = typeof pkg.name === "string" ? pkg.name : glob;
-        if (!seen.has(glob)) {
-          seen.add(glob);
-          packages.push({ name, path: glob });
-        }
-      } catch {
-        // Skip
-      }
-    }
-  }
-
-  return packages;
-}
-
-/**
- * Detect monorepo workspace packages.
- *
- * Detection sources (checked in order):
- * 1. `pnpm-workspace.yaml` — read `packages` globs
- * 2. `package.json` `workspaces` field (yarn/npm/bun)
- *
- * Returns an array of { name, path } for each discovered package.
- */
-function detectWorkspaces(cwd: string): WorkspacePackage[] {
-  // 1. pnpm-workspace.yaml
-  const pnpmWsPath = join(cwd, "pnpm-workspace.yaml");
-  if (existsSync(pnpmWsPath)) {
-    try {
-      const content = readFileSync(pnpmWsPath, "utf-8");
-      const globs = parsePnpmWorkspaceGlobs(content);
-      if (globs.length > 0) {
-        return expandWorkspaceGlobs(cwd, globs);
-      }
-    } catch {
-      // Fall through
-    }
-  }
-
-  // 2. package.json workspaces field
-  const pkgPath = join(cwd, "package.json");
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      const workspaces = pkg.workspaces;
-      if (Array.isArray(workspaces)) {
-        return expandWorkspaceGlobs(cwd, workspaces);
-      }
-      // Yarn also supports { packages: [...] } object form
-      if (workspaces && Array.isArray(workspaces.packages)) {
-        return expandWorkspaceGlobs(cwd, workspaces.packages);
-      }
-    } catch {
-      // Fall through
-    }
-  }
-
-  return [];
-}
-
-/** Well-known script names to look for, in display order. */
-const SCRIPT_CANDIDATES = [
-  "build",
-  "test",
-  "type-check",
-  "typecheck",
-  "lint",
-  "format:check",
-];
-
-/**
- * Detect feedback commands by inspecting the project's package.json scripts
- * (or deno.json tasks) and mapping them through the detected package manager.
- * Returns a comma-separated string suitable for the feedbackCommands config key,
- * or an empty string if nothing useful is detected.
- */
-function detectFeedbackCommands(cwd: string): string {
-  const pm = detectPackageManager(cwd);
-  if (!pm) return "";
-
-  const commands: string[] = [];
-
-  if (pm.manager === "deno") {
-    // Read tasks from deno.json / deno.jsonc
-    for (const name of ["deno.json", "deno.jsonc"]) {
-      const denoPath = join(cwd, name);
-      if (!existsSync(denoPath)) continue;
-      try {
-        const deno = JSON.parse(readFileSync(denoPath, "utf-8"));
-        const tasks = deno.tasks;
-        if (tasks && typeof tasks === "object") {
-          for (const script of SCRIPT_CANDIDATES) {
-            if (script in tasks) {
-              commands.push(`deno task ${script}`);
-            }
-          }
-        }
-      } catch {
-        // ignore parse errors
-      }
-      break; // only read the first one found
-    }
-    // deno has a built-in test runner even without a task
-    if (
-      !commands.some((c) => c.includes("test")) &&
-      existsSync(join(cwd, "deno.json"))
-    ) {
-      commands.push("deno test");
-    }
-  } else {
-    // npm/pnpm/yarn/bun — read scripts from package.json
-    const pkgPath = join(cwd, "package.json");
-    if (!existsSync(pkgPath)) return "";
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      const scripts = pkg.scripts;
-      if (scripts && typeof scripts === "object") {
-        // For test, npm/pnpm/yarn/bun all support the short form (e.g. "pnpm test")
-        const testShorthand = ["npm", "pnpm", "yarn", "bun"];
-        for (const script of SCRIPT_CANDIDATES) {
-          if (!(script in scripts)) continue;
-          if (script === "test" && testShorthand.includes(pm.manager)) {
-            commands.push(`${pm.manager} test`);
-          } else {
-            commands.push(`${pm.runPrefix} ${script}`);
-          }
-        }
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }
-
-  return commands.join(",");
-}
-
-/**
- * Derive scoped feedback commands for a workspace package.
- * Maps root-level feedback commands to their filtered equivalents
- * using the detected package manager.
- */
-function deriveScopedFeedback(
-  pm: DetectedPM,
-  rootCommands: string[],
-  packageName: string,
-): string[] {
-  return rootCommands.map((cmd) => {
-    const parts = cmd.trim().split(/\s+/);
-    const runner = parts[0];
-    // Only rewrite commands that match the detected package manager
-    if (runner !== pm.manager) return cmd;
-
-    switch (pm.manager) {
-      case "pnpm": {
-        // "pnpm build" → "pnpm --filter <name> build"
-        // "pnpm run test" → "pnpm --filter <name> run test"
-        const rest = parts.slice(1);
-        // Remove "run" prefix if present — pnpm --filter <name> test works
-        const filtered = rest.filter((p) => p !== "run");
-        return `pnpm --filter ${packageName} ${filtered.join(" ")}`;
-      }
-      case "yarn": {
-        // "yarn build" → "yarn workspace <name> build"
-        const rest = parts.slice(1);
-        return `yarn workspace ${packageName} ${rest.join(" ")}`;
-      }
-      case "npm": {
-        // "npm run build" → "npm -w <name> run build"
-        const rest = parts.slice(1);
-        return `npm -w ${packageName} ${rest.join(" ")}`;
-      }
-      case "bun": {
-        // "bun run build" → "bun --filter <name> run build"
-        const rest = parts.slice(1);
-        return `bun --filter ${packageName} ${rest.join(" ")}`;
-      }
-      default:
-        return cmd;
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Git error extraction
 // ---------------------------------------------------------------------------
 
@@ -661,15 +345,15 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 3. Feedback commands (auto-detected from package manager + scripts)
-  const detectedFeedback = detectFeedbackCommands(cwd);
-  const pm = detectPackageManager(cwd);
-  const feedbackPlaceholder = pm
-    ? `${pm.runPrefix} build, ${pm.manager} test, ${pm.runPrefix} lint`
-    : "npm run build, npm test, npm run lint";
+  // 3. Feedback commands (auto-detected from project type)
+  const project = detectProject(cwd);
+  const detectedFeedback = project ? project.feedbackCommands.join(",") : "";
+  const feedbackPlaceholder = project
+    ? project.feedbackCommands.join(", ") || "<build command>, <test command>"
+    : "<build command>, <test command>";
   const feedbackCommands = await clack.text({
     message: detectedFeedback
-      ? `Feedback commands (auto-detected for ${pm!.manager}):`
+      ? `Feedback commands (auto-detected for ${project!.label}):`
       : "Feedback commands (comma-separated, or leave empty):",
     initialValue: detectedFeedback || undefined,
     placeholder: detectedFeedback ? undefined : feedbackPlaceholder,
@@ -1728,10 +1412,15 @@ async function runRalphaiInit(
       }
     }
 
+    const detectedProject = detectProject(cwd);
+    const detectedFeedbackStr = detectedProject
+      ? detectedProject.feedbackCommands.join(",")
+      : "";
+
     answers = {
       agentCommand,
       baseBranch: detectBaseBranch(cwd),
-      feedbackCommands: detectFeedbackCommands(cwd),
+      feedbackCommands: detectedFeedbackStr,
       turns: 5,
       mode: "branch",
       autoCommit: false,
@@ -1741,7 +1430,6 @@ async function runRalphaiInit(
     };
 
     // Print detection summary so users can verify auto-detected values
-    const detectedPM = detectPackageManager(cwd);
     const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
     console.log(`${DIM}Detected:${RESET}`);
     console.log(
@@ -1752,7 +1440,7 @@ async function runRalphaiInit(
     );
     console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
     console.log(
-      `  ${DIM}Manager:${RESET}   ${TEXT}${detectedPM?.manager ?? "(none)"}${RESET}`,
+      `  ${DIM}Project:${RESET}   ${TEXT}${detectedProject?.label ?? "(none)"}${RESET}`,
     );
 
     // Workspace detection for --yes mode
@@ -1799,9 +1487,18 @@ async function runRalphaiInit(
 
         const wsConfig: Record<string, { feedbackCommands: string[] }> = {};
         for (const ws of workspaces) {
-          if (pm && rootCommands.length > 0) {
+          if (rootCommands.length === 0) {
+            wsConfig[ws.path] = { feedbackCommands: [] };
+          } else if (pm) {
             wsConfig[ws.path] = {
               feedbackCommands: deriveScopedFeedback(pm, rootCommands, ws.name),
+            };
+          } else if (rootCommands.some((c) => c.startsWith("dotnet "))) {
+            wsConfig[ws.path] = {
+              feedbackCommands: deriveDotnetScopedFeedback(
+                rootCommands,
+                ws.path,
+              ),
             };
           } else {
             wsConfig[ws.path] = { feedbackCommands: [] };
