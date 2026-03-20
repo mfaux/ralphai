@@ -42,7 +42,7 @@ In your project repository:
 ralphai init                 # scaffold .ralphai/ and ralphai.json
 ```
 
-Ralphai detects your package manager and build scripts automatically. Use `--yes` to skip prompts and auto-detect your installed agent.
+Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** (full support, including monorepo workspace scoping), **C# / .NET**, **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). Use `--yes` to skip prompts and auto-detect your installed agent.
 
 All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
 

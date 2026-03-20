@@ -28,6 +28,12 @@ The `--dry-run` / `-n` flag must never cause side effects. When adding code that
 
 This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Use the `type(scope): description` format for both **commit messages** and **branch names** (e.g., `feat/add-export`, `fix/null-check`). Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
 
+## Project Detection
+
+Ralphai detects the project ecosystem automatically. The detection logic lives in `src/project-detection.ts` (not `src/ralphai.ts`). The shell runner's ecosystem detection is in `runner/lib/scope.sh` (`_detect_ecosystem()`).
+
+Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Python, Java/Kotlin (basic detection). Node always takes priority when multiple ecosystem markers are present.
+
 ## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.

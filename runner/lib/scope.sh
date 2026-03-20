@@ -2,8 +2,58 @@
 # Sourced by ralphai.sh after prompt.sh. Provides resolve_scoped_feedback().
 # Depends on: PLAN_SCOPE, CONFIG_WORKSPACES, FEEDBACK_COMMANDS
 
+# --- Detect the project ecosystem ---
+# Sets _RALPHAI_ECOSYSTEM to: node, dotnet, go, rust, java, python, or unknown.
+# Uses the same priority order as the TypeScript detectProject() function.
+_detect_ecosystem() {
+  # Node.js — check JS lockfiles and package.json first (highest priority)
+  if [[ -f "pnpm-lock.yaml" || -f "pnpm-workspace.yaml" || \
+        -f "yarn.lock" || -f "bun.lockb" || -f "bun.lock" || \
+        -f "package-lock.json" || -f "deno.json" || -f "deno.jsonc" || \
+        -f "package.json" ]]; then
+    _RALPHAI_ECOSYSTEM="node"
+    return
+  fi
+
+  # .NET — .sln or .csproj
+  local f
+  for f in *.sln *.csproj; do
+    if [[ -f "$f" ]]; then
+      _RALPHAI_ECOSYSTEM="dotnet"
+      return
+    fi
+  done
+
+  # Go
+  if [[ -f "go.mod" ]]; then
+    _RALPHAI_ECOSYSTEM="go"
+    return
+  fi
+
+  # Rust
+  if [[ -f "Cargo.toml" ]]; then
+    _RALPHAI_ECOSYSTEM="rust"
+    return
+  fi
+
+  # Java / Kotlin — Maven or Gradle
+  if [[ -f "pom.xml" || -f "build.gradle" || -f "build.gradle.kts" ]]; then
+    _RALPHAI_ECOSYSTEM="java"
+    return
+  fi
+
+  # Python
+  if [[ -f "pyproject.toml" || -f "setup.py" || -f "requirements.txt" ]]; then
+    _RALPHAI_ECOSYSTEM="python"
+    return
+  fi
+
+  _RALPHAI_ECOSYSTEM="unknown"
+}
+
 # --- Detect the root package manager from lockfiles ---
 # Prints: pnpm, yarn, npm, or bun. Falls back to npm if none detected.
+# Only meaningful when _RALPHAI_ECOSYSTEM is "node".
 _detect_pm_from_lockfiles() {
   if [[ -f "pnpm-lock.yaml" ]]; then
     echo "pnpm"
@@ -20,10 +70,18 @@ _detect_pm_from_lockfiles() {
 
 # --- Rewrite a single feedback command for a scoped package ---
 # Usage: _rewrite_command <pm> <package_name> <command>
+# Only applies to the "node" ecosystem. For non-JS ecosystems, returns
+# the command unchanged (they don't use package-manager workspace filters).
 # Only rewrites commands that start with the detected package manager.
 # Other commands (e.g. `make test`) pass through unchanged.
 _rewrite_command() {
   local pm="$1" pkg_name="$2" cmd="$3"
+
+  # Non-JS ecosystems: pass through unchanged
+  if [[ "${_RALPHAI_ECOSYSTEM:-unknown}" != "node" ]]; then
+    echo "$cmd"
+    return
+  fi
 
   # Only rewrite if command starts with the package manager name
   if [[ "$cmd" != "$pm"* ]]; then
@@ -57,6 +115,9 @@ resolve_scoped_feedback() {
     return 0
   fi
 
+  # Detect the project ecosystem
+  _detect_ecosystem
+
   # Check for workspace override first
   if [[ -n "$CONFIG_WORKSPACES" ]]; then
     local ws_fc
@@ -77,6 +138,12 @@ resolve_scoped_feedback() {
 
   # No workspace override — derive scoped commands from package manager
   if [[ -z "$FEEDBACK_COMMANDS" ]]; then
+    return 0
+  fi
+
+  # Non-node ecosystems don't use PM-based workspace filtering.
+  # Return the commands as-is (e.g. "dotnet build" stays "dotnet build").
+  if [[ "$_RALPHAI_ECOSYSTEM" != "node" ]]; then
     return 0
   fi
 
