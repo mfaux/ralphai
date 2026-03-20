@@ -1,6 +1,7 @@
 import { execSync, spawn } from "child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   copyFileSync,
   writeFileSync,
@@ -2612,6 +2613,31 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
   return { status: "pass", message: "no orphaned receipts" };
 }
 
+function checkWorktreeSymlink(cwd: string): DoctorCheckResult {
+  if (!isGitWorktree(cwd)) {
+    return {
+      status: "pass",
+      message: "not a worktree (symlink check skipped)",
+    };
+  }
+  const ralphaiPath = join(cwd, ".ralphai");
+  if (!existsSync(ralphaiPath)) {
+    return { status: "pass", message: "worktree: no local .ralphai/ (ok)" };
+  }
+  try {
+    if (lstatSync(ralphaiPath).isSymbolicLink()) {
+      return { status: "pass", message: "worktree: .ralphai/ is a symlink" };
+    }
+  } catch {
+    return { status: "pass", message: "worktree: .ralphai/ check skipped" };
+  }
+  return {
+    status: "warn",
+    message:
+      ".ralphai/ is a directory in this worktree (not a symlink) — local plans will be ignored",
+  };
+}
+
 function runRalphaiDoctor(cwd: string): void {
   const results: DoctorCheckResult[] = [];
 
@@ -2623,6 +2649,11 @@ function runRalphaiDoctor(cwd: string): void {
 
   // 3. Git repo detected
   results.push(checkGitRepo(cwd));
+
+  // 3b. Worktree .ralphai/ symlink check (only if git repo detected)
+  if (results[2]!.status !== "fail") {
+    results.push(checkWorktreeSymlink(cwd));
+  }
 
   // 4. Working tree clean (only if git repo detected)
   if (results[2]!.status !== "fail") {

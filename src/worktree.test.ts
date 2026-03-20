@@ -892,3 +892,107 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Doctor: worktree .ralphai/ symlink check
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")(
+  "doctor worktree symlink check",
+  () => {
+    let mainRepo: string;
+    let worktreeDir: string;
+
+    beforeEach(() => {
+      mainRepo = join(
+        tmpdir(),
+        `ralphai-doc-wt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(mainRepo, { recursive: true });
+      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+      execSync("git config user.name 'Test'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git config user.email 'test@test.com'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git checkout -b main", { cwd: mainRepo, stdio: "ignore" });
+      writeFileSync(join(mainRepo, "seed.txt"), "seed");
+      execSync("git add -A && git commit -m init", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+
+      // Initialize ralphai in the main repo
+      runCli(["init", "--yes"], mainRepo);
+      // Set agentCommand to something in PATH so doctor doesn't fail on that
+      const configPath = join(mainRepo, "ralphai.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      config.agentCommand = "true";
+      config.feedbackCommands = ["true"];
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      execSync("git add -A && git commit -m 'add ralphai'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+
+      // Create a worktree
+      worktreeDir = join(
+        tmpdir(),
+        `ralphai-doc-tree-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      execSync(
+        `git worktree add ${JSON.stringify(worktreeDir)} -b ralphai/test-wt`,
+        { cwd: mainRepo, stdio: "ignore" },
+      );
+    });
+
+    afterEach(() => {
+      try {
+        execSync(`git worktree remove ${JSON.stringify(worktreeDir)} --force`, {
+          cwd: mainRepo,
+          stdio: "ignore",
+        });
+      } catch {
+        /* ignore */
+      }
+      if (existsSync(mainRepo)) {
+        rmSync(mainRepo, { recursive: true, force: true });
+      }
+      if (existsSync(worktreeDir)) {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      }
+    });
+
+    it("doctor warns when worktree has a real .ralphai/ directory (not a symlink)", () => {
+      // Place a real .ralphai/ directory in the worktree (not a symlink)
+      mkdirSync(join(worktreeDir, ".ralphai", "pipeline", "backlog"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(worktreeDir, ".ralphai", "pipeline", "backlog", "my-plan.md"),
+        "# Plan\n",
+      );
+
+      const result = runCli(["doctor"], worktreeDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).toContain("not a symlink");
+      expect(output).toContain("local plans will be ignored");
+      expect(output).toContain("\u26A0"); // warning sign
+    });
+
+    it("doctor does not warn when worktree has .ralphai/ as a symlink", () => {
+      // Create a proper symlink in the worktree
+      symlinkSync(join(mainRepo, ".ralphai"), join(worktreeDir, ".ralphai"));
+
+      const result = runCli(["doctor"], worktreeDir, { NO_COLOR: "1" });
+      const output = result.stdout;
+
+      expect(output).not.toContain("not a symlink");
+      expect(output).toContain(".ralphai/ is a symlink");
+    });
+  },
+);
