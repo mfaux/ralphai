@@ -20,6 +20,10 @@ Project-specific guidance for AI coding agents working in this codebase.
 - **Source files: max ~300 lines.** Extract modules when a file grows beyond this. Note: `src/ralphai.ts` currently exceeds this limit and is a candidate for decomposition. Follow this guideline for new files and when refactoring.
 - Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
 
+## Dry-Run Safety
+
+The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the bash runner is spawned (TypeScript CLI layer) or before the `DRY_RUN` check in `ralphai.sh`, verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
+
 ## Conventional Commits
 
 This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Use the `type(scope): description` format for both **commit messages** and **branch names** (e.g., `feat/add-export`, `fix/null-check`). Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
