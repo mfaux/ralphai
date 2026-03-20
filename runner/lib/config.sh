@@ -3,7 +3,7 @@
 # and apply_env_overrides(). CLI parsing is in cli.sh.
 
 # --- Config file loader ---
-# Parses ralphai.json (JSON format via jq).
+# Parses ralphai.json (JSON format via Node.js).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
 # CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
@@ -16,14 +16,14 @@ load_config() {
   fi
 
   # Validate JSON syntax
-  if ! jq empty "$config_path" 2>/dev/null; then
+  if ! _json_q "" "$config_path" 2>/dev/null; then
     echo "ERROR: $config_path: invalid JSON"
     exit 1
   fi
 
   # Must be a JSON object
   local json_type
-  json_type=$(jq -r 'type' "$config_path")
+  json_type=$(_json_q "const t=typeof data; console.log(data===null?'null':Array.isArray(data)?'array':t)" "$config_path")
   if [[ "$json_type" != "object" ]]; then
     echo "ERROR: $config_path: expected a JSON object, got $json_type"
     exit 1
@@ -31,7 +31,10 @@ load_config() {
 
   # Check for unknown keys
   local unknown_keys
-  unknown_keys=$(jq -r 'keys[] | select(. as $k | ["agentCommand","feedbackCommands","baseBranch","maxStuck","mode","issueSource","issueLabel","issueInProgressLabel","issueRepo","issueCommentProgress","turnTimeout","promptMode","continuous","autoCommit","turns","maxLearnings","workspaces"] | index($k) | not)' "$config_path")
+  unknown_keys=$(_json_q "
+    const allowed = ['agentCommand','feedbackCommands','baseBranch','maxStuck','mode','issueSource','issueLabel','issueInProgressLabel','issueRepo','issueCommentProgress','turnTimeout','promptMode','continuous','autoCommit','turns','maxLearnings','workspaces'];
+    Object.keys(data).filter(k => !allowed.includes(k)).forEach(k => console.log(k));
+  " "$config_path")
   if [[ -n "$unknown_keys" ]]; then
     local first_unknown
     first_unknown=$(echo "$unknown_keys" | head -1)
@@ -40,17 +43,17 @@ load_config() {
 
   # Helper: read a string value from JSON (returns empty if key is missing or null)
   _json_str() {
-    jq -r "if has(\"$1\") then .$1 // \"\" else \"\" end" "$config_path"
+    _json_q "const v = data[process.argv[2]]; console.log(v == null ? '' : String(v))" "$config_path" "$1"
   }
 
   # Helper: read a raw value (preserves type info for validation)
   _json_raw() {
-    jq -r "if has(\"$1\") then (.$1 | tostring) else \"\" end" "$config_path"
+    _json_q "const v = data[process.argv[2]]; console.log(v === undefined ? '' : String(v))" "$config_path" "$1"
   }
 
   # Helper: check if key exists
   _json_has() {
-    jq -e "has(\"$1\")" "$config_path" >/dev/null 2>&1
+    _json_q "process.exit(process.argv[2] in data ? 0 : 1)" "$config_path" "$1"
   }
 
   local value
@@ -68,10 +71,10 @@ load_config() {
   # --- feedbackCommands (array of strings or comma-separated string) ---
   if _json_has "feedbackCommands"; then
     local fc_type
-    fc_type=$(jq -r '.feedbackCommands | type' "$config_path")
+    fc_type=$(_json_q "const v = data.feedbackCommands; console.log(Array.isArray(v) ? 'array' : typeof v)" "$config_path")
     if [[ "$fc_type" == "array" ]]; then
       # Join array elements with commas (matches internal format)
-      value=$(jq -r '.feedbackCommands | join(",")' "$config_path")
+      value=$(_json_q "console.log(data.feedbackCommands.join(','))" "$config_path")
       validate_comma_list "$value" "$config_path: 'feedbackCommands' array"
     elif [[ "$fc_type" == "string" ]]; then
       value=$(_json_str "feedbackCommands")
@@ -197,34 +200,34 @@ load_config() {
   # --- workspaces (object of per-package overrides) ---
   if _json_has "workspaces"; then
     local ws_type
-    ws_type=$(jq -r '.workspaces | type' "$config_path")
+    ws_type=$(_json_q "const v = data.workspaces; console.log(v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)" "$config_path")
     if [[ "$ws_type" != "object" ]]; then
       echo "ERROR: $config_path: 'workspaces' must be an object, got $ws_type"
       exit 1
     fi
     # Validate each workspace entry is an object with valid feedbackCommands
     local ws_keys
-    ws_keys=$(jq -r '.workspaces | keys[]' "$config_path")
+    ws_keys=$(_json_q "Object.keys(data.workspaces).forEach(k => console.log(k))" "$config_path")
     while IFS= read -r ws_key; do
       [[ -z "$ws_key" ]] && continue
       local ws_entry_type
-      ws_entry_type=$(jq -r --arg k "$ws_key" '.workspaces[$k] | type' "$config_path")
+      ws_entry_type=$(_json_q "const v = data.workspaces[process.argv[2]]; console.log(v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)" "$config_path" "$ws_key")
       if [[ "$ws_entry_type" != "object" ]]; then
         echo "ERROR: $config_path: workspaces['$ws_key'] must be an object, got $ws_entry_type"
         exit 1
       fi
       # Validate feedbackCommands if present
-      if jq -e --arg k "$ws_key" '.workspaces[$k] | has("feedbackCommands")' "$config_path" >/dev/null 2>&1; then
+      if _json_q "process.exit('feedbackCommands' in data.workspaces[process.argv[2]] ? 0 : 1)" "$config_path" "$ws_key"; then
         local ws_fc_type
-        ws_fc_type=$(jq -r --arg k "$ws_key" '.workspaces[$k].feedbackCommands | type' "$config_path")
+        ws_fc_type=$(_json_q "const v = data.workspaces[process.argv[2]].feedbackCommands; console.log(Array.isArray(v) ? 'array' : typeof v)" "$config_path" "$ws_key")
         if [[ "$ws_fc_type" != "array" && "$ws_fc_type" != "string" ]]; then
           echo "ERROR: $config_path: workspaces['$ws_key'].feedbackCommands must be an array of strings or a comma-separated string, got $ws_fc_type"
           exit 1
         fi
       fi
     done <<< "$ws_keys"
-    # Store the raw JSON for later jq queries at scope-resolution time
-    CONFIG_WORKSPACES=$(jq -c '.workspaces' "$config_path")
+    # Store the raw JSON for later queries at scope-resolution time
+    CONFIG_WORKSPACES=$(_json_q "console.log(JSON.stringify(data.workspaces))" "$config_path")
   fi
 }
 

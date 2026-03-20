@@ -23,6 +23,7 @@ set -e
 RALPHAI_LIB_DIR="$(dirname "$0")/lib"
 source "$RALPHAI_LIB_DIR/defaults.sh"
 source "$RALPHAI_LIB_DIR/validate.sh"
+source "$RALPHAI_LIB_DIR/json.sh"
 source "$RALPHAI_LIB_DIR/config.sh"
 source "$RALPHAI_LIB_DIR/cli.sh"
 source "$RALPHAI_LIB_DIR/show_config.sh"
@@ -396,11 +397,24 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     agent_output_file=$(mktemp)
     set +e
     if [[ "$TURN_TIMEOUT" -gt 0 ]]; then
-      timeout "$TURN_TIMEOUT" $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
-      agent_exit=${PIPESTATUS[0]}
-      if [[ $agent_exit -eq 124 ]]; then
-        echo ""
-        echo "WARNING: Agent command timed out after ${TURN_TIMEOUT}s."
+      # Resolve a portable timeout command (GNU timeout or macOS gtimeout)
+      local timeout_cmd=""
+      if command -v timeout &>/dev/null; then
+        timeout_cmd="timeout"
+      elif command -v gtimeout &>/dev/null; then
+        timeout_cmd="gtimeout"
+      fi
+      if [[ -n "$timeout_cmd" ]]; then
+        $timeout_cmd "$TURN_TIMEOUT" $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
+        agent_exit=${PIPESTATUS[0]}
+        if [[ $agent_exit -eq 124 ]]; then
+          echo ""
+          echo "WARNING: Agent command timed out after ${TURN_TIMEOUT}s."
+        fi
+      else
+        echo "WARNING: turnTimeout=${TURN_TIMEOUT}s requested but neither 'timeout' nor 'gtimeout' is available. Running without timeout."
+        $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
+        agent_exit=${PIPESTATUS[0]}
       fi
     else
       $AGENT_COMMAND "$PROMPT" 2>&1 | tee "$agent_output_file"
@@ -421,7 +435,7 @@ The <learnings> block is mandatory in every response. Ralphai will parse it and 
     # --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
     if [[ "$MODE" == "patch" ]]; then
       # Patch mode: no commits are created, so compare working-tree diff hash
-      current_diff_hash=$(git diff HEAD 2>/dev/null | sha256sum | cut -d' ' -f1)
+      current_diff_hash=$(git diff HEAD 2>/dev/null | git hash-object --stdin)
       if [[ "$current_diff_hash" == "$last_diff_hash" ]]; then
         stuck_count=$((stuck_count + 1))
         echo "WARNING: No working-tree changes this turn ($stuck_count/$MAX_STUCK)."

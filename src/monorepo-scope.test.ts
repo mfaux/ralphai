@@ -112,12 +112,13 @@ describe.skipIf(process.platform === "win32")(
       const configFile = join(ctx.dir, "ralphai.json");
       writeFileSync(configFile, configContent);
 
-      // Source defaults + config, pass config path as positional arg
+      // Source defaults + json + config, pass config path as positional arg
       const output = runBash(`
 source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "config.sh"))}
 load_config ${JSON.stringify(configFile)}
-echo "WORKSPACES=\$CONFIG_WORKSPACES"
+echo "WORKSPACES=$CONFIG_WORKSPACES"
 `);
       expect(output).not.toContain("unknown config key");
       expect(output).toContain("packages/web");
@@ -137,6 +138,7 @@ echo "WORKSPACES=\$CONFIG_WORKSPACES"
       try {
         runBash(`
 source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "config.sh"))}
 load_config ${JSON.stringify(configFile)}
 `);
@@ -194,6 +196,7 @@ AGENT_COMMAND="claude -p"
 detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
 
 source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
 
 PLAN_SCOPE="${opts.scope}"
@@ -305,6 +308,7 @@ AGENT_COMMAND="claude -p"
 detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
 
 source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
 
 PLAN_SCOPE=""
@@ -335,6 +339,7 @@ AGENT_COMMAND="claude -p"
 detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
 
 source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
 
 PLAN_SCOPE="packages/web"
@@ -354,6 +359,7 @@ AGENT_COMMAND="claude -p"
 detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
 
 source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
 
 PLAN_SCOPE=""

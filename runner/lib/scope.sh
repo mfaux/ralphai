@@ -60,11 +60,13 @@ resolve_scoped_feedback() {
   # Check for workspace override first
   if [[ -n "$CONFIG_WORKSPACES" ]]; then
     local ws_fc
-    ws_fc=$(echo "$CONFIG_WORKSPACES" | jq -r --arg scope "$PLAN_SCOPE" '
-      if has($scope) and .[$scope].feedbackCommands then
-        (.[$scope].feedbackCommands | if type == "array" then join(",") else . end)
-      else empty end
-    ' 2>/dev/null) || ws_fc=""
+    ws_fc=$(echo "$CONFIG_WORKSPACES" | _json_q_stdin "
+      const scope = process.argv[1];
+      if (scope in data && data[scope].feedbackCommands) {
+        const fc = data[scope].feedbackCommands;
+        console.log(Array.isArray(fc) ? fc.join(',') : fc);
+      }
+    " "$PLAN_SCOPE" 2>/dev/null) || ws_fc=""
 
     if [[ -n "$ws_fc" ]]; then
       FEEDBACK_COMMANDS="$ws_fc"
@@ -86,7 +88,7 @@ resolve_scoped_feedback() {
   fi
 
   local pkg_name
-  pkg_name=$(jq -r '.name // empty' "$pkg_json" 2>/dev/null) || pkg_name=""
+  pkg_name=$(_json_q "if (data.name) console.log(data.name)" "$pkg_json" 2>/dev/null) || pkg_name=""
   if [[ -z "$pkg_name" ]]; then
     return 0
   fi
