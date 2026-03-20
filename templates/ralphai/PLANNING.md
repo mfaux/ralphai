@@ -10,7 +10,7 @@ Guide for coding agents writing plan files that Ralphai executes autonomously. P
    - **Bug fix** — something is broken
    - **Refactor** — structural change, no behavior change
 
-   See the [plan templates](https://github.com/mfaux/ralphai/tree/main/templates/ralphai/plans) for detailed templates with examples.
+   See the [plan templates](plans/) for detailed templates with examples.
 
 3. **Explore the codebase.** Before writing anything, find the files, functions, and line numbers relevant to the work. The plan must contain concrete references, not guesses.
 4. **Fill in the template.** Follow the guide's template. Every file path, function name, and line number you include saves Ralphai tokens it would otherwise spend exploring.
