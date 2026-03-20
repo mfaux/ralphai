@@ -93,14 +93,22 @@ describe("CLI help and flags", () => {
   // Top-level help surfaces run flags
   // -------------------------------------------------------------------------
 
-  it("--help shows common run flags", () => {
+  it("--help shows command-specific help hint and quick-start examples", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("--turns");
-    expect(result.stdout).toContain("--dry-run");
-    expect(result.stdout).toContain("--pr");
-    expect(result.stdout).toContain("--resume");
-    expect(result.stdout).toContain("--continuous");
+    expect(result.stdout).toContain("ralphai <command> --help");
+    expect(result.stdout).toContain("ralphai init");
+    expect(result.stdout).toContain("ralphai run");
+    expect(result.stdout).toContain("ralphai run --pr");
+  });
+
+  it("--help does not show subcommand-specific flags", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).not.toContain("--turns");
+    expect(result.stdout).not.toContain("--dry-run");
+    expect(result.stdout).not.toContain("--resume");
+    expect(result.stdout).not.toContain("--continuous");
   });
 
   // -------------------------------------------------------------------------

@@ -20,70 +20,30 @@ function getVersion(): string {
 }
 
 function showHelp(): void {
-  console.log(`
-${BOLD}Usage:${RESET} ralphai <command> [options]
+  console.log(`${BOLD}Usage:${RESET} ralphai <command> [options]
 
 ${BOLD}Commands:${RESET}
-  init           Set up Ralphai in your project (interactive wizard)
-  run            Start the Ralphai task runner
-  worktree       Create or reuse an isolated git worktree
-  status         Show pipeline and worktree status
-  reset          Move in-progress plans back to backlog and clean up
-  purge          Delete archived artifacts from pipeline/out/
-  update [tag]   Update ralphai to the latest (or specified) version
-  teardown       Remove Ralphai from your project
-  doctor         Check your ralphai setup for problems
+  init         Set up Ralphai in your project (interactive wizard)
+  run          Start the Ralphai task runner
+  worktree     Run in an isolated git worktree
+  status       Show pipeline and worktree status
+  reset        Move in-progress plans back to backlog and clean up
+  purge        Delete archived artifacts from pipeline/out/
+  update       Update ralphai to the latest (or specified) version
+  teardown     Remove Ralphai from your project
+  doctor       Check your ralphai setup for problems
 
 ${BOLD}Options:${RESET}
-  --help, -h        Show this help message
-  --version, -v     Show version number
-  --no-color        Disable colored output (also: NO_COLOR env var)
+  --help, -h      Show this help message
+  --version, -v   Show version number
+  --no-color      Disable colored output (also: NO_COLOR env var)
 
-${BOLD}Init Options:${RESET}
-  --yes, -y              Skip prompts and use defaults
-  --force                Re-scaffold from scratch (deletes existing .ralphai/)
-  --shared               Track ralphai.json in git (for team-shared config)
-  --agent-command=CMD    Set the agent command (default: opencode run --agent build)
-
-${BOLD}Run Options:${RESET}
-  --turns=N              Number of turns per plan (default: 5, 0 = unlimited)
-  --dry-run              Preview which plans would run without executing
-  --pr                   Create a branch and open a PR after completing the plan
-  --resume               Resume the last in-progress plan
-  --continuous           Run plans in a loop until the backlog is empty
-  Run 'ralphai run --help' for all runner options.
-
-${BOLD}Worktree Options:${RESET}
-  --plan=<file>     Target a specific backlog plan (default: auto-detect)
-  --dir=<path>      Worktree directory (default: ../.ralphai-worktrees/<slug>)
-  worktree list     Show active ralphai-managed worktrees
-  worktree clean    Remove completed/orphaned worktrees
-
-${BOLD}Reset Options:${RESET}
-  --yes, -y         Skip confirmation prompt
-
-${BOLD}Purge Options:${RESET}
-  --yes, -y         Skip confirmation prompt
+Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} ralphai init                  ${DIM}# interactive setup${RESET}
-  ${DIM}$${RESET} ralphai init --yes             ${DIM}# setup with defaults${RESET}
-  ${DIM}$${RESET} ralphai run                    ${DIM}# run with defaults (5 turns per plan)${RESET}
-  ${DIM}$${RESET} ralphai run --turns=3          ${DIM}# 3 turns per plan${RESET}
-  ${DIM}$${RESET} ralphai run --dry-run          ${DIM}# preview only${RESET}
-  ${DIM}$${RESET} ralphai run --pr               ${DIM}# create branch and open PR${RESET}
-  ${DIM}$${RESET} ralphai worktree               ${DIM}# run next plan in an isolated worktree${RESET}
-  ${DIM}$${RESET} ralphai worktree --turns=3     ${DIM}# run in a worktree with 3 turns per plan${RESET}
-  ${DIM}$${RESET} ralphai worktree list           ${DIM}# show active ralphai worktrees${RESET}
-  ${DIM}$${RESET} ralphai worktree clean          ${DIM}# remove completed worktrees${RESET}
-  ${DIM}$${RESET} ralphai status                 ${DIM}# show pipeline and worktree status${RESET}
-  ${DIM}$${RESET} ralphai reset                  ${DIM}# move in-progress plans back to backlog${RESET}
-  ${DIM}$${RESET} ralphai reset --yes            ${DIM}# reset without confirmation${RESET}
-  ${DIM}$${RESET} ralphai purge --yes            ${DIM}# delete all archived artifacts${RESET}
-  ${DIM}$${RESET} ralphai update                 ${DIM}# update ralphai to latest${RESET}
-  ${DIM}$${RESET} ralphai update beta            ${DIM}# install beta version${RESET}
-  ${DIM}$${RESET} ralphai teardown --yes         ${DIM}# remove ralphai from project${RESET}
-`);
+  ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
+  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan${RESET}
+  ${DIM}$${RESET} ralphai run --pr      ${DIM}# run and open a PR${RESET}`);
 }
 
 async function main(): Promise<void> {
