@@ -18,18 +18,11 @@ import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope } from "./frontmatter.ts";
 import {
-  detectPackageManager,
   detectFeedbackCommands,
   detectWorkspaces,
-  deriveScopedFeedback,
-  deriveDotnetScopedFeedback,
   detectProject,
 } from "./project-detection.ts";
-import type {
-  DetectedPM,
-  DetectedProject,
-  WorkspacePackage,
-} from "./project-detection.ts";
+import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1465,47 +1458,18 @@ async function runRalphaiInit(
     }
     answers = wizardResult;
 
-    // Workspace detection for interactive mode
+    // Workspace detection for interactive mode — show summary, no config generation.
+    // Scoped feedback is auto-derived at runtime; the workspaces config key is an
+    // escape hatch users add manually when they need custom overrides.
     const workspaces = detectWorkspaces(cwd);
     if (workspaces.length > 0) {
       const names = workspaces.map((ws) => ws.name).join(", ");
       clack.log.info(
         `Detected ${workspaces.length} workspace packages: ${names}`,
       );
-
-      const addWorkspaces = await clack.confirm({
-        message:
-          "Add workspace-specific feedback commands to config? (recommended for large monorepos)",
-      });
-
-      if (!clack.isCancel(addWorkspaces) && addWorkspaces) {
-        const pm = detectPackageManager(cwd);
-        const rootCommands = answers.feedbackCommands
-          .split(",")
-          .map((c) => c.trim())
-          .filter((c) => c.length > 0);
-
-        const wsConfig: Record<string, { feedbackCommands: string[] }> = {};
-        for (const ws of workspaces) {
-          if (rootCommands.length === 0) {
-            wsConfig[ws.path] = { feedbackCommands: [] };
-          } else if (pm) {
-            wsConfig[ws.path] = {
-              feedbackCommands: deriveScopedFeedback(pm, rootCommands, ws.name),
-            };
-          } else if (rootCommands.some((c) => c.startsWith("dotnet "))) {
-            wsConfig[ws.path] = {
-              feedbackCommands: deriveDotnetScopedFeedback(
-                rootCommands,
-                ws.path,
-              ),
-            };
-          } else {
-            wsConfig[ws.path] = { feedbackCommands: [] };
-          }
-        }
-        answers.workspaces = wsConfig;
-      }
+      clack.log.info(
+        "Feedback commands will be auto-filtered by scope at runtime. Add custom overrides to the workspaces key in ralphai.json if needed.",
+      );
     }
   }
 

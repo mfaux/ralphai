@@ -303,7 +303,7 @@ ${cleanupFile}
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Config file loader reads promptMode from JSON
-    expect(config).toContain('"promptMode"');
+    expect(config).toContain("'promptMode' in data");
     expect(config).toContain("CONFIG_PROMPT_MODE=");
     // Env var override
     expect(config).toContain("RALPHAI_PROMPT_MODE");
@@ -478,7 +478,7 @@ echo "$PROMPT_MODE"
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Config file loader reads continuous from JSON
-    expect(config).toContain('"continuous"');
+    expect(config).toContain("'continuous' in data");
     expect(config).toContain("CONFIG_CONTINUOUS=");
     // Env var override
     expect(config).toContain("RALPHAI_CONTINUOUS");
@@ -655,7 +655,7 @@ echo "$CONTINUOUS"
 
     const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
     // Config file loader reads autoCommit from JSON
-    expect(config).toContain('"autoCommit"');
+    expect(config).toContain("'autoCommit' in data");
     expect(config).toContain("CONFIG_AUTO_COMMIT=");
     // Env var override
     expect(config).toContain("RALPHAI_AUTO_COMMIT");
@@ -901,9 +901,7 @@ echo "$AUTO_COMMIT"
       join(__dirname, "..", "runner", "lib", "config.sh"),
       "utf-8",
     );
-    expect(config).toContain(
-      'validate_enum "$value" "$config_path: \'mode\'" "branch" "pr" "patch"',
-    );
+    expect(config).toContain("!['branch','pr','patch'].includes(v)");
   });
 
   it("scaffolded config.sh validates RALPHAI_MODE env var as branch|pr|patch", () => {

@@ -131,7 +131,7 @@ ralphai teardown         # remove Ralphai from your project
 
 ## Monorepo Support
 
-`ralphai init` automatically detects workspace packages from `pnpm-workspace.yaml`, the `workspaces` field in `package.json`, or `.sln` files (for .NET projects). In interactive mode, it offers to add per-workspace feedback commands to `ralphai.json`. In `--yes` mode, it prints the detected workspaces and relies on automatic scope filtering at runtime.
+`ralphai init` automatically detects workspace packages from `pnpm-workspace.yaml`, the `workspaces` field in `package.json`, or `.sln` files (for .NET projects). In mixed repos (e.g., Node.js + .NET), workspaces from both ecosystems are merged. Both `--yes` and interactive modes display detected workspaces and rely on automatic scope filtering at runtime.
 
 Plans can target a specific package by adding `scope` to the frontmatter:
 

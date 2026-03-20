@@ -3,7 +3,8 @@
 # and apply_env_overrides(). CLI parsing is in cli.sh.
 
 # --- Config file loader ---
-# Parses ralphai.json (JSON format via Node.js).
+# Parses ralphai.json in a single Node.js invocation (avoiding ~35 separate
+# node -e calls that accumulated ~15-30 s on Windows due to V8 startup cost).
 # Sets CONFIG_AGENT_COMMAND, CONFIG_FEEDBACK_COMMANDS, CONFIG_BASE_BRANCH,
 # CONFIG_MAX_STUCK, CONFIG_MODE, CONFIG_PROMPT_MODE when present.
 # Fails fast on unknown keys or invalid values.
@@ -15,220 +16,223 @@ load_config() {
     return 0
   fi
 
-  # Validate JSON syntax
-  if ! _json_q "" "$config_path" 2>/dev/null; then
-    echo "ERROR: $config_path: invalid JSON"
+  # Single Node.js invocation: validate + extract all config values.
+  # Output format: one "KEY=VALUE" per line for simple values,
+  # "KEY_JSON=<json>" for complex objects, "WARNING:msg" for warnings,
+  # "ERROR:msg" for fatal errors.
+  local node_output
+  if ! node_output=$(node -e "
+    'use strict';
+    const fs = require('fs');
+    const file = process.argv[1];
+    let raw;
+    try { raw = fs.readFileSync(file, 'utf-8'); } catch (e) {
+      console.log('ERROR:' + file + ': cannot read file: ' + e.message);
+      process.exit(0);
+    }
+    let data;
+    try { data = JSON.parse(raw); } catch (e) {
+      console.log('ERROR:' + file + ': invalid JSON');
+      process.exit(0);
+    }
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      const t = data === null ? 'null' : Array.isArray(data) ? 'array' : typeof data;
+      console.log('ERROR:' + file + ': expected a JSON object, got ' + t);
+      process.exit(0);
+    }
+    const allowed = new Set(['agentCommand','feedbackCommands','baseBranch','maxStuck','mode','issueSource','issueLabel','issueInProgressLabel','issueRepo','issueCommentProgress','turnTimeout','promptMode','continuous','autoCommit','turns','maxLearnings','workspaces']);
+    const unknown = Object.keys(data).filter(k => !allowed.has(k));
+    if (unknown.length > 0) console.log('WARNING:' + file + \": ignoring unknown config key '\" + unknown[0] + \"'\");
+    function emit(key, val) { console.log(key + '=' + val); }
+    function err(msg) { console.log('ERROR:' + file + ': ' + msg); process.exit(0); }
+
+    // agentCommand (string, non-empty)
+    if ('agentCommand' in data) {
+      const v = data.agentCommand;
+      if (typeof v !== 'string' || v === '') err(\"'agentCommand' must be a non-empty string\");
+      else emit('CONFIG_AGENT_COMMAND', v);
+    }
+
+    // feedbackCommands (array of strings or comma-separated string)
+    if ('feedbackCommands' in data) {
+      const v = data.feedbackCommands;
+      if (Array.isArray(v)) {
+        const joined = v.join(',');
+        // Validate no empty entries
+        if (v.some(s => typeof s !== 'string' || s.trim() === ''))
+          err(\"'feedbackCommands' array contains an empty entry\");
+        else emit('CONFIG_FEEDBACK_COMMANDS', joined);
+      } else if (typeof v === 'string') {
+        emit('CONFIG_FEEDBACK_COMMANDS', v);
+      } else {
+        err(\"'feedbackCommands' must be an array of strings or a comma-separated string, got \" + typeof v);
+      }
+    }
+
+    // baseBranch (string, non-empty, no spaces)
+    if ('baseBranch' in data) {
+      const v = String(data.baseBranch || '');
+      if (v === '') err(\"'baseBranch' must be a non-empty branch name\");
+      else if (/\s/.test(v)) err(\"'baseBranch' must be a single token without spaces, got '\" + v + \"'\");
+      else emit('CONFIG_BASE_BRANCH', v);
+    }
+
+    // maxStuck (positive integer)
+    if ('maxStuck' in data) {
+      const v = data.maxStuck;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1)
+        err(\"'maxStuck' must be a positive integer, got '\" + v + \"'\");
+      else emit('CONFIG_MAX_STUCK', v);
+    }
+
+    // mode (enum)
+    if ('mode' in data) {
+      const v = String(data.mode || '');
+      if (!['branch','pr','patch'].includes(v))
+        err(\"'mode' must be 'branch', 'pr', or 'patch', got '\" + v + \"'\");
+      else emit('CONFIG_MODE', v);
+    }
+
+    // issueSource (enum)
+    if ('issueSource' in data) {
+      const v = String(data.issueSource || '');
+      if (!['none','github'].includes(v))
+        err(\"'issueSource' must be 'none' or 'github', got '\" + v + \"'\");
+      else emit('CONFIG_ISSUE_SOURCE', v);
+    }
+
+    // issueLabel (string, non-empty)
+    if ('issueLabel' in data) {
+      const v = String(data.issueLabel || '');
+      if (v === '') err(\"'issueLabel' must be a non-empty label name\");
+      else emit('CONFIG_ISSUE_LABEL', v);
+    }
+
+    // issueInProgressLabel (string, non-empty)
+    if ('issueInProgressLabel' in data) {
+      const v = String(data.issueInProgressLabel || '');
+      if (v === '') err(\"'issueInProgressLabel' must be a non-empty label name\");
+      else emit('CONFIG_ISSUE_IN_PROGRESS_LABEL', v);
+    }
+
+    // issueRepo (string, can be empty)
+    if ('issueRepo' in data) {
+      emit('CONFIG_ISSUE_REPO', String(data.issueRepo || ''));
+    }
+
+    // issueCommentProgress (boolean)
+    if ('issueCommentProgress' in data) {
+      const v = data.issueCommentProgress;
+      if (typeof v !== 'boolean')
+        err(\"'issueCommentProgress' must be 'true' or 'false', got '\" + v + \"'\");
+      else emit('CONFIG_ISSUE_COMMENT_PROGRESS', v);
+    }
+
+    // turnTimeout (non-negative integer)
+    if ('turnTimeout' in data) {
+      const v = data.turnTimeout;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0)
+        err(\"'turnTimeout' must be a non-negative integer (seconds), got '\" + v + \"'\");
+      else emit('CONFIG_TURN_TIMEOUT', v);
+    }
+
+    // promptMode (enum)
+    if ('promptMode' in data) {
+      const v = String(data.promptMode || '');
+      if (!['auto','at-path','inline'].includes(v))
+        err(\"'promptMode' must be 'auto', 'at-path', or 'inline', got '\" + v + \"'\");
+      else emit('CONFIG_PROMPT_MODE', v);
+    }
+
+    // continuous (boolean)
+    if ('continuous' in data) {
+      const v = data.continuous;
+      if (typeof v !== 'boolean')
+        err(\"'continuous' must be 'true' or 'false', got '\" + v + \"'\");
+      else emit('CONFIG_CONTINUOUS', v);
+    }
+
+    // autoCommit (boolean)
+    if ('autoCommit' in data) {
+      const v = data.autoCommit;
+      if (typeof v !== 'boolean')
+        err(\"'autoCommit' must be 'true' or 'false', got '\" + v + \"'\");
+      else emit('CONFIG_AUTO_COMMIT', v);
+    }
+
+    // turns (non-negative integer, 0 = unlimited)
+    if ('turns' in data) {
+      const v = data.turns;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0)
+        err(\"'turns' must be a non-negative integer (0 = unlimited), got '\" + v + \"'\");
+      else emit('CONFIG_TURNS', v);
+    }
+
+    // maxLearnings (non-negative integer, 0 = unlimited)
+    if ('maxLearnings' in data) {
+      const v = data.maxLearnings;
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0)
+        err(\"'maxLearnings' must be a non-negative integer (0 = unlimited), got '\" + v + \"'\");
+      else emit('CONFIG_MAX_LEARNINGS', v);
+    }
+
+    // workspaces (object of per-package overrides)
+    if ('workspaces' in data) {
+      const ws = data.workspaces;
+      if (ws === null || typeof ws !== 'object' || Array.isArray(ws)) {
+        const t = ws === null ? 'null' : Array.isArray(ws) ? 'array' : typeof ws;
+        err(\"'workspaces' must be an object, got \" + t);
+      } else {
+        for (const k of Object.keys(ws)) {
+          const entry = ws[k];
+          if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+            const t = entry === null ? 'null' : Array.isArray(entry) ? 'array' : typeof entry;
+            err(\"workspaces['\" + k + \"'] must be an object, got \" + t);
+          }
+          if (entry && 'feedbackCommands' in entry) {
+            const fc = entry.feedbackCommands;
+            if (!Array.isArray(fc) && typeof fc !== 'string')
+              err(\"workspaces['\" + k + \"'].feedbackCommands must be an array of strings or a comma-separated string, got \" + typeof fc);
+          }
+        }
+        emit('CONFIG_WORKSPACES_JSON', JSON.stringify(ws));
+      }
+    }
+  " "$config_path" 2>/dev/null); then
+    echo "ERROR: $config_path: failed to parse config"
     exit 1
   fi
 
-  # Must be a JSON object
-  local json_type
-  json_type=$(_json_q "const t=typeof data; console.log(data===null?'null':Array.isArray(data)?'array':t)" "$config_path")
-  if [[ "$json_type" != "object" ]]; then
-    echo "ERROR: $config_path: expected a JSON object, got $json_type"
-    exit 1
-  fi
-
-  # Check for unknown keys
-  local unknown_keys
-  unknown_keys=$(_json_q "
-    const allowed = ['agentCommand','feedbackCommands','baseBranch','maxStuck','mode','issueSource','issueLabel','issueInProgressLabel','issueRepo','issueCommentProgress','turnTimeout','promptMode','continuous','autoCommit','turns','maxLearnings','workspaces'];
-    Object.keys(data).filter(k => !allowed.includes(k)).forEach(k => console.log(k));
-  " "$config_path")
-  if [[ -n "$unknown_keys" ]]; then
-    local first_unknown
-    first_unknown=$(echo "$unknown_keys" | head -1)
-    echo "WARNING: $config_path: ignoring unknown config key '$first_unknown'"
-  fi
-
-  # Helper: read a string value from JSON (returns empty if key is missing or null)
-  _json_str() {
-    _json_q "const v = data[process.argv[2]]; console.log(v == null ? '' : String(v))" "$config_path" "$1"
-  }
-
-  # Helper: read a raw value (preserves type info for validation)
-  _json_raw() {
-    _json_q "const v = data[process.argv[2]]; console.log(v === undefined ? '' : String(v))" "$config_path" "$1"
-  }
-
-  # Helper: check if key exists
-  _json_has() {
-    _json_q "process.exit(process.argv[2] in data ? 0 : 1)" "$config_path" "$1"
-  }
-
-  local value
-
-  # --- agentCommand (string, non-empty) ---
-  if _json_has "agentCommand"; then
-    value=$(_json_str "agentCommand")
-    if [[ -z "$value" ]]; then
-      echo "ERROR: $config_path: 'agentCommand' must be a non-empty string"
-      exit 1
-    fi
-    CONFIG_AGENT_COMMAND="$value"
-  fi
-
-  # --- feedbackCommands (array of strings or comma-separated string) ---
-  if _json_has "feedbackCommands"; then
-    local fc_type
-    fc_type=$(_json_q "const v = data.feedbackCommands; console.log(Array.isArray(v) ? 'array' : typeof v)" "$config_path")
-    if [[ "$fc_type" == "array" ]]; then
-      # Join array elements with commas (matches internal format)
-      value=$(_json_q "console.log(data.feedbackCommands.join(','))" "$config_path")
-      validate_comma_list "$value" "$config_path: 'feedbackCommands' array"
-    elif [[ "$fc_type" == "string" ]]; then
-      value=$(_json_str "feedbackCommands")
-      validate_comma_list "$value" "$config_path: 'feedbackCommands'"
-    else
-      echo "ERROR: $config_path: 'feedbackCommands' must be an array of strings or a comma-separated string, got $fc_type"
-      exit 1
-    fi
-    CONFIG_FEEDBACK_COMMANDS="$value"
-  fi
-
-  # --- baseBranch (string, non-empty, no spaces) ---
-  if _json_has "baseBranch"; then
-    value=$(_json_str "baseBranch")
-    if [[ -z "$value" ]]; then
-      echo "ERROR: $config_path: 'baseBranch' must be a non-empty branch name"
-      exit 1
-    fi
-    if [[ "$value" =~ [[:space:]] ]]; then
-      echo "ERROR: $config_path: 'baseBranch' must be a single token without spaces, got '$value'"
-      exit 1
-    fi
-    CONFIG_BASE_BRANCH="$value"
-  fi
-
-  # --- maxStuck (positive integer) ---
-  if _json_has "maxStuck"; then
-    value=$(_json_raw "maxStuck")
-    validate_positive_int "$value" "$config_path: 'maxStuck'"
-    CONFIG_MAX_STUCK="$value"
-  fi
-
-  # --- mode ("branch", "pr", or "patch") ---
-  if _json_has "mode"; then
-    value=$(_json_str "mode")
-    validate_enum "$value" "$config_path: 'mode'" "branch" "pr" "patch"
-    CONFIG_MODE="$value"
-  fi
-
-  # --- issueSource ("none" or "github") ---
-  if _json_has "issueSource"; then
-    value=$(_json_str "issueSource")
-    validate_enum "$value" "$config_path: 'issueSource'" "none" "github"
-    CONFIG_ISSUE_SOURCE="$value"
-  fi
-
-  # --- issueLabel (string, non-empty) ---
-  if _json_has "issueLabel"; then
-    value=$(_json_str "issueLabel")
-    if [[ -z "$value" ]]; then
-      echo "ERROR: $config_path: 'issueLabel' must be a non-empty label name"
-      exit 1
-    fi
-    CONFIG_ISSUE_LABEL="$value"
-  fi
-
-  # --- issueInProgressLabel (string, non-empty) ---
-  if _json_has "issueInProgressLabel"; then
-    value=$(_json_str "issueInProgressLabel")
-    if [[ -z "$value" ]]; then
-      echo "ERROR: $config_path: 'issueInProgressLabel' must be a non-empty label name"
-      exit 1
-    fi
-    CONFIG_ISSUE_IN_PROGRESS_LABEL="$value"
-  fi
-
-  # --- issueRepo (string, can be empty) ---
-  if _json_has "issueRepo"; then
-    value=$(_json_str "issueRepo")
-    CONFIG_ISSUE_REPO="$value"
-  fi
-
-  # --- issueCommentProgress (boolean) ---
-  if _json_has "issueCommentProgress"; then
-    value=$(_json_raw "issueCommentProgress")
-    validate_boolean "$value" "$config_path: 'issueCommentProgress'"
-    CONFIG_ISSUE_COMMENT_PROGRESS="$value"
-  fi
-
-  # --- turnTimeout (non-negative integer) ---
-  if _json_has "turnTimeout"; then
-    value=$(_json_raw "turnTimeout")
-    validate_nonneg_int "$value" "$config_path: 'turnTimeout'" "seconds"
-    CONFIG_TURN_TIMEOUT="$value"
-  fi
-
-  # --- promptMode ("auto", "at-path", or "inline") ---
-  if _json_has "promptMode"; then
-    value=$(_json_str "promptMode")
-    validate_enum "$value" "$config_path: 'promptMode'" "auto" "at-path" "inline"
-    CONFIG_PROMPT_MODE="$value"
-  fi
-
-  # --- continuous (boolean) ---
-  if _json_has "continuous"; then
-    value=$(_json_raw "continuous")
-    validate_boolean "$value" "$config_path: 'continuous'"
-    CONFIG_CONTINUOUS="$value"
-  fi
-
-
-  # --- autoCommit (boolean) ---
-  if _json_has "autoCommit"; then
-    value=$(_json_raw "autoCommit")
-    validate_boolean "$value" "$config_path: 'autoCommit'"
-    CONFIG_AUTO_COMMIT="$value"
-  fi
-
-  # --- turns (non-negative integer, 0 = unlimited) ---
-  if _json_has "turns"; then
-    value=$(_json_raw "turns")
-    validate_nonneg_int "$value" "$config_path: 'turns'" "0 = unlimited"
-    CONFIG_TURNS="$value"
-  fi
-
-  # --- maxLearnings (non-negative integer, 0 = unlimited) ---
-  if _json_has "maxLearnings"; then
-    value=$(_json_raw "maxLearnings")
-    validate_nonneg_int "$value" "$config_path: 'maxLearnings'" "0 = unlimited"
-    CONFIG_MAX_LEARNINGS="$value"
-  fi
-
-  # --- workspaces (object of per-package overrides) ---
-  if _json_has "workspaces"; then
-    local ws_type
-    ws_type=$(_json_q "const v = data.workspaces; console.log(v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)" "$config_path")
-    if [[ "$ws_type" != "object" ]]; then
-      echo "ERROR: $config_path: 'workspaces' must be an object, got $ws_type"
-      exit 1
-    fi
-    # Validate each workspace entry is an object with valid feedbackCommands
-    local ws_keys
-    ws_keys=$(_json_q "Object.keys(data.workspaces).forEach(k => console.log(k))" "$config_path")
-    while IFS= read -r ws_key; do
-      [[ -z "$ws_key" ]] && continue
-      local ws_entry_type
-      ws_entry_type=$(_json_q "const v = data.workspaces[process.argv[2]]; console.log(v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)" "$config_path" "$ws_key")
-      if [[ "$ws_entry_type" != "object" ]]; then
-        echo "ERROR: $config_path: workspaces['$ws_key'] must be an object, got $ws_entry_type"
+  # Process the node output line by line
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    case "$line" in
+      ERROR:*)
+        echo "${line#ERROR:}"
         exit 1
-      fi
-      # Validate feedbackCommands if present
-      if _json_q "process.exit('feedbackCommands' in data.workspaces[process.argv[2]] ? 0 : 1)" "$config_path" "$ws_key"; then
-        local ws_fc_type
-        ws_fc_type=$(_json_q "const v = data.workspaces[process.argv[2]].feedbackCommands; console.log(Array.isArray(v) ? 'array' : typeof v)" "$config_path" "$ws_key")
-        if [[ "$ws_fc_type" != "array" && "$ws_fc_type" != "string" ]]; then
-          echo "ERROR: $config_path: workspaces['$ws_key'].feedbackCommands must be an array of strings or a comma-separated string, got $ws_fc_type"
-          exit 1
-        fi
-      fi
-    done <<< "$ws_keys"
-    # Store the raw JSON for later queries at scope-resolution time
-    CONFIG_WORKSPACES=$(_json_q "console.log(JSON.stringify(data.workspaces))" "$config_path")
-  fi
+        ;;
+      WARNING:*)
+        echo "${line#WARNING:}"
+        ;;
+      CONFIG_AGENT_COMMAND=*)       CONFIG_AGENT_COMMAND="${line#CONFIG_AGENT_COMMAND=}" ;;
+      CONFIG_FEEDBACK_COMMANDS=*)   CONFIG_FEEDBACK_COMMANDS="${line#CONFIG_FEEDBACK_COMMANDS=}" ;;
+      CONFIG_BASE_BRANCH=*)         CONFIG_BASE_BRANCH="${line#CONFIG_BASE_BRANCH=}" ;;
+      CONFIG_MAX_STUCK=*)           CONFIG_MAX_STUCK="${line#CONFIG_MAX_STUCK=}" ;;
+      CONFIG_MODE=*)                CONFIG_MODE="${line#CONFIG_MODE=}" ;;
+      CONFIG_ISSUE_SOURCE=*)        CONFIG_ISSUE_SOURCE="${line#CONFIG_ISSUE_SOURCE=}" ;;
+      CONFIG_ISSUE_LABEL=*)         CONFIG_ISSUE_LABEL="${line#CONFIG_ISSUE_LABEL=}" ;;
+      CONFIG_ISSUE_IN_PROGRESS_LABEL=*) CONFIG_ISSUE_IN_PROGRESS_LABEL="${line#CONFIG_ISSUE_IN_PROGRESS_LABEL=}" ;;
+      CONFIG_ISSUE_REPO=*)          CONFIG_ISSUE_REPO="${line#CONFIG_ISSUE_REPO=}" ;;
+      CONFIG_ISSUE_COMMENT_PROGRESS=*) CONFIG_ISSUE_COMMENT_PROGRESS="${line#CONFIG_ISSUE_COMMENT_PROGRESS=}" ;;
+      CONFIG_TURN_TIMEOUT=*)        CONFIG_TURN_TIMEOUT="${line#CONFIG_TURN_TIMEOUT=}" ;;
+      CONFIG_PROMPT_MODE=*)         CONFIG_PROMPT_MODE="${line#CONFIG_PROMPT_MODE=}" ;;
+      CONFIG_CONTINUOUS=*)          CONFIG_CONTINUOUS="${line#CONFIG_CONTINUOUS=}" ;;
+      CONFIG_AUTO_COMMIT=*)         CONFIG_AUTO_COMMIT="${line#CONFIG_AUTO_COMMIT=}" ;;
+      CONFIG_TURNS=*)               CONFIG_TURNS="${line#CONFIG_TURNS=}" ;;
+      CONFIG_MAX_LEARNINGS=*)       CONFIG_MAX_LEARNINGS="${line#CONFIG_MAX_LEARNINGS=}" ;;
+      CONFIG_WORKSPACES_JSON=*)     CONFIG_WORKSPACES="${line#CONFIG_WORKSPACES_JSON=}" ;;
+    esac
+  done <<< "$node_output"
 }
 
 # --- Apply config file settings ---

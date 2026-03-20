@@ -35,7 +35,7 @@ ralphai <command> [options]
 --agent-command=CMD    Set the agent command
 ```
 
-In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (for .NET projects). In interactive mode, it offers to generate per-workspace feedback commands. In `--yes` mode, it prints workspace info without adding config (commands are auto-filtered by scope at runtime).
+In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (for .NET projects). In mixed repos, workspaces from all ecosystems are merged. Both modes display workspace info without adding config; feedback commands are auto-filtered by scope at runtime.
 
 ## Run
 

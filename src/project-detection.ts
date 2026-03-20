@@ -200,6 +200,8 @@ function expandWorkspaceGlobs(
  * Returns an array of { name, path } for each discovered package.
  */
 export function detectWorkspaces(cwd: string): WorkspacePackage[] {
+  let nodeWorkspaces: WorkspacePackage[] = [];
+
   // 1. pnpm-workspace.yaml
   const pnpmWsPath = join(cwd, "pnpm-workspace.yaml");
   if (existsSync(pnpmWsPath)) {
@@ -207,46 +209,61 @@ export function detectWorkspaces(cwd: string): WorkspacePackage[] {
       const content = readFileSync(pnpmWsPath, "utf-8");
       const globs = parsePnpmWorkspaceGlobs(content);
       if (globs.length > 0) {
-        return expandWorkspaceGlobs(cwd, globs);
+        nodeWorkspaces = expandWorkspaceGlobs(cwd, globs);
       }
     } catch {
       // Fall through
     }
   }
 
-  // 2. package.json workspaces field
-  const pkgPath = join(cwd, "package.json");
-  if (existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-      const workspaces = pkg.workspaces;
-      if (Array.isArray(workspaces)) {
-        return expandWorkspaceGlobs(cwd, workspaces);
+  // 2. package.json workspaces field (only if pnpm didn't find anything)
+  if (nodeWorkspaces.length === 0) {
+    const pkgPath = join(cwd, "package.json");
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+        const workspaces = pkg.workspaces;
+        if (Array.isArray(workspaces)) {
+          nodeWorkspaces = expandWorkspaceGlobs(cwd, workspaces);
+        } else if (workspaces && Array.isArray(workspaces.packages)) {
+          // Yarn also supports { packages: [...] } object form
+          nodeWorkspaces = expandWorkspaceGlobs(cwd, workspaces.packages);
+        }
+      } catch {
+        // Fall through
       }
-      // Yarn also supports { packages: [...] } object form
-      if (workspaces && Array.isArray(workspaces.packages)) {
-        return expandWorkspaceGlobs(cwd, workspaces.packages);
-      }
-    } catch {
-      // Fall through
     }
   }
 
-  // 3. .sln file — parse Project entries to discover .csproj sub-projects
+  // 3. .sln file — parse Project entries to discover .csproj sub-projects.
+  //    Merged with Node workspaces when both exist (mixed repos).
+  let dotnetWorkspaces: WorkspacePackage[] = [];
   const slnFiles = findSlnFiles(cwd);
   if (slnFiles.length > 0) {
     try {
       const content = readFileSync(join(cwd, slnFiles[0]!), "utf-8");
       const projects = parseSolutionProjects(content);
       if (projects.length > 0) {
-        return projects;
+        dotnetWorkspaces = projects;
       }
     } catch {
       // Fall through
     }
   }
 
-  return [];
+  // Merge and deduplicate by path (Node workspaces listed first)
+  if (nodeWorkspaces.length === 0) return dotnetWorkspaces;
+  if (dotnetWorkspaces.length === 0) return nodeWorkspaces;
+
+  const seen = new Set(nodeWorkspaces.map((ws) => ws.path));
+  const merged = [...nodeWorkspaces];
+  for (const ws of dotnetWorkspaces) {
+    if (!seen.has(ws.path)) {
+      seen.add(ws.path);
+      merged.push(ws);
+    }
+  }
+  return merged;
 }
 
 // ---------------------------------------------------------------------------

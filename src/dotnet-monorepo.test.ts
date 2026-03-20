@@ -220,7 +220,7 @@ describe("detectWorkspaces for .NET", () => {
     expect(detectWorkspaces(ctx.dir)).toEqual([]);
   });
 
-  it("prefers Node workspaces over .sln when both exist", () => {
+  it("merges Node workspaces and .sln projects when both exist", () => {
     // Node workspace setup
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -237,8 +237,31 @@ describe("detectWorkspaces for .NET", () => {
     writeFileSync(join(ctx.dir, "App.sln"), slnText);
 
     const workspaces = detectWorkspaces(ctx.dir);
-    // Node workspaces should win (checked first)
-    expect(workspaces).toEqual([{ name: "@org/web", path: "packages/web" }]);
+    // Node workspaces listed first, .NET projects appended
+    expect(workspaces).toEqual([
+      { name: "@org/web", path: "packages/web" },
+      { name: "Api", path: "src/Api" },
+    ]);
+  });
+
+  it("deduplicates by path when Node and .sln overlap", () => {
+    // A workspace path that appears in both Node and .sln
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", workspaces: ["src/*"] }),
+    );
+    mkdirSync(join(ctx.dir, "src", "Api"), { recursive: true });
+    writeFileSync(
+      join(ctx.dir, "src", "Api", "package.json"),
+      JSON.stringify({ name: "@org/api" }),
+    );
+
+    const slnText = slnContent([{ name: "Api", path: "src\\Api\\Api.csproj" }]);
+    writeFileSync(join(ctx.dir, "App.sln"), slnText);
+
+    const workspaces = detectWorkspaces(ctx.dir);
+    // Should appear only once (Node version wins)
+    expect(workspaces).toEqual([{ name: "@org/api", path: "src/Api" }]);
   });
 });
 
@@ -437,6 +460,48 @@ echo "\$FEEDBACK_COMMANDS"
 
       expect(result).toBe("dotnet build src/MyProject,make lint");
     });
+
+    it("scopes dotnet commands in a mixed node+dotnet repo", () => {
+      // Node markers so _detect_ecosystem returns "node"
+      writeFileSync(
+        join(ctx.dir, "package.json"),
+        JSON.stringify({ name: "root" }),
+      );
+      writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+      // .sln also present
+      writeFileSync(join(ctx.dir, "Foo.sln"), "");
+      // Scope target is a dotnet project (no package.json inside)
+      const scopeDir = join(ctx.dir, "src/Api");
+      mkdirSync(scopeDir, { recursive: true });
+
+      const result = runBash(
+        `
+source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
+
+DETECTED_AGENT_TYPE="claude"
+AGENT_COMMAND="claude -p"
+detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
+
+source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
+source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
+
+PLAN_SCOPE="src/Api"
+FEEDBACK_COMMANDS="pnpm build,pnpm test,dotnet build,dotnet test"
+CONFIG_WORKSPACES=""
+
+resolve_scoped_feedback
+echo "\$FEEDBACK_COMMANDS"
+`,
+        ctx.dir,
+      ).trim();
+
+      // dotnet commands get scoped; pnpm commands pass through unchanged
+      // (no package.json in scope dir, so pnpm can't be rewritten)
+      expect(result).toBe(
+        "pnpm build,pnpm test,dotnet build src/Api,dotnet test src/Api",
+      );
+    });
   },
 );
 
@@ -485,5 +550,51 @@ describe("init --yes dotnet monorepo", () => {
     expect(config.feedbackCommands).toContain("pnpm test");
     expect(config.feedbackCommands).toContain("dotnet build");
     expect(config.feedbackCommands).toContain("dotnet test");
+  });
+
+  it("init --yes does not write workspaces to config for .NET monorepo", () => {
+    const content = slnContent([
+      { name: "Api", path: "src\\Api\\Api.csproj" },
+      { name: "Domain", path: "src\\Domain\\Domain.csproj" },
+      { name: "Tests", path: "test\\Tests\\Tests.csproj" },
+    ]);
+    writeFileSync(join(ctx.dir, "MySolution.sln"), content);
+
+    runCliOutput(["init", "--yes"], ctx.dir);
+
+    const config = JSON.parse(
+      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
+    );
+    expect(config.workspaces).toBeUndefined();
+  });
+
+  it("init --yes with mixed repo shows all workspaces from both ecosystems", () => {
+    // Node workspace setup
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "pnpm-workspace.yaml"),
+      "packages:\n  - 'packages/*'\n",
+    );
+    const webDir = join(ctx.dir, "packages", "web");
+    mkdirSync(webDir, { recursive: true });
+    writeFileSync(
+      join(webDir, "package.json"),
+      JSON.stringify({ name: "@org/web" }),
+    );
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { build: "tsc" } }),
+    );
+
+    // .sln setup with distinct projects
+    const slnText = slnContent([{ name: "Api", path: "src\\Api\\Api.csproj" }]);
+    writeFileSync(join(ctx.dir, "MyApp.sln"), slnText);
+
+    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+
+    // Should mention both Node and .NET workspaces
+    expect(output).toContain("2 packages");
+    expect(output).toContain("@org/web");
+    expect(output).toContain("Api");
   });
 });
