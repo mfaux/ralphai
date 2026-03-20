@@ -76,7 +76,7 @@ update_receipt_turn() {
   current=$(sed -n 's/^turns_completed=//p' "$RECEIPT_FILE")
   current=${current:-0}
   local next=$((current + 1))
-  sed -i "s/^turns_completed=.*/turns_completed=$next/" "$RECEIPT_FILE"
+  sed "s/^turns_completed=.*/turns_completed=$next/" "$RECEIPT_FILE" > "$RECEIPT_FILE.tmp" && mv "$RECEIPT_FILE.tmp" "$RECEIPT_FILE"
 }
 
 # --- Recount tasks_completed from progress.md ---
@@ -112,7 +112,7 @@ update_receipt_tasks() {
 
   # Update or append tasks_completed in the receipt
   if grep -q '^tasks_completed=' "$RECEIPT_FILE"; then
-    sed -i "s/^tasks_completed=.*/tasks_completed=$count/" "$RECEIPT_FILE"
+    sed "s/^tasks_completed=.*/tasks_completed=$count/" "$RECEIPT_FILE" > "$RECEIPT_FILE.tmp" && mv "$RECEIPT_FILE.tmp" "$RECEIPT_FILE"
   else
     echo "tasks_completed=$count" >> "$RECEIPT_FILE"
   fi

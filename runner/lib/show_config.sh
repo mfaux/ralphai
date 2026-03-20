@@ -132,7 +132,13 @@ if [[ "$SHOW_CONFIG" == true ]]; then
     if [[ -n "${CONFIG_WORKSPACES:-}" ]]; then
       echo ""
       echo "Workspaces (per-package overrides):"
-      echo "$CONFIG_WORKSPACES" | jq -r 'to_entries[] | "  \(.key): feedbackCommands=\(.value.feedbackCommands // "none" | if type == "array" then join(", ") else . end)"' 2>/dev/null || true
+      echo "$CONFIG_WORKSPACES" | _json_q_stdin "
+        Object.entries(data).forEach(([k, v]) => {
+          const fc = v.feedbackCommands;
+          const s = fc == null ? 'none' : Array.isArray(fc) ? fc.join(', ') : String(fc);
+          console.log('  ' + k + ': feedbackCommands=' + s);
+        });
+      " 2>/dev/null || true
     fi
   else
     echo "Config file: $CONFIG_FILE (not found, using defaults)"
