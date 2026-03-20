@@ -56,6 +56,30 @@ export function runCliOutput(args: string[], cwd?: string): string {
  *   const ctx = useTempGitDir();
  *   it("does something", () => { runCli(["init", "--yes"], ctx.dir); });
  */
+/**
+ * Creates a temporary directory for each test (no git init).
+ * Useful for unit tests that only need a filesystem sandbox.
+ */
+export function useTempDir() {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), "ralphai-test-"));
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  return {
+    get dir() {
+      return testDir;
+    },
+  };
+}
+
 export function useTempGitDir() {
   let testDir: string;
 
