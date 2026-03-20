@@ -232,6 +232,12 @@ detect_plan() {
   collect_backlog_plans backlog_plans
 
   if [[ ${#backlog_plans[@]} -eq 0 ]]; then
+    # Skip issue pull during dry-run — it creates files and modifies
+    # GitHub issue labels, which violates the dry-run contract.
+    if [[ "$DRY_RUN" == true ]]; then
+      echo "[dry-run] Backlog is empty. Would attempt to pull a GitHub issue (if configured)."
+      return 1
+    fi
     if pull_github_issues; then
       # Re-scan backlog after pulling issue
       collect_backlog_plans backlog_plans
