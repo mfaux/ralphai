@@ -70,39 +70,49 @@ _detect_pm_from_lockfiles() {
 
 # --- Rewrite a single feedback command for a scoped package ---
 # Usage: _rewrite_command <pm> <package_name> <command>
-# Only applies to the "node" ecosystem. For non-JS ecosystems, returns
-# the command unchanged (they don't use package-manager workspace filters).
-# Only rewrites commands that start with the detected package manager.
-# Other commands (e.g. `make test`) pass through unchanged.
+# For the "node" ecosystem, rewrites PM-based workspace filters.
+# For "dotnet", appends the project path to dotnet commands.
+# Other ecosystems and non-matching commands pass through unchanged.
 _rewrite_command() {
   local pm="$1" pkg_name="$2" cmd="$3"
 
-  # Non-JS ecosystems: pass through unchanged
-  if [[ "${_RALPHAI_ECOSYSTEM:-unknown}" != "node" ]]; then
-    echo "$cmd"
-    return
-  fi
+  case "${_RALPHAI_ECOSYSTEM:-unknown}" in
+    node)
+      # Only rewrite if command starts with the package manager name
+      if [[ "$cmd" != "$pm"* ]]; then
+        echo "$cmd"
+        return
+      fi
 
-  # Only rewrite if command starts with the package manager name
-  if [[ "$cmd" != "$pm"* ]]; then
-    echo "$cmd"
-    return
-  fi
+      # Strip the pm prefix and optional "run" keyword to get the script name
+      local rest="${cmd#"$pm"}"
+      rest="${rest#" "}"
+      # Handle "pm run <script>" pattern
+      if [[ "$rest" == "run "* ]]; then
+        rest="${rest#"run "}"
+      fi
 
-  # Strip the pm prefix and optional "run" keyword to get the script name
-  local rest="${cmd#"$pm"}"
-  rest="${rest#" "}"
-  # Handle "pm run <script>" pattern
-  if [[ "$rest" == "run "* ]]; then
-    rest="${rest#"run "}"
-  fi
+      case "$pm" in
+        pnpm) echo "pnpm --filter $pkg_name $rest" ;;
+        yarn) echo "yarn workspace $pkg_name $rest" ;;
+        npm)  echo "npm -w $pkg_name run $rest" ;;
+        bun)  echo "bun --filter $pkg_name $rest" ;;
+        *)    echo "$cmd" ;;
+      esac
+      ;;
 
-  case "$pm" in
-    pnpm) echo "pnpm --filter $pkg_name $rest" ;;
-    yarn) echo "yarn workspace $pkg_name $rest" ;;
-    npm)  echo "npm -w $pkg_name run $rest" ;;
-    bun)  echo "bun --filter $pkg_name $rest" ;;
-    *)    echo "$cmd" ;;
+    dotnet)
+      # Rewrite "dotnet build" → "dotnet build <scope>" etc.
+      if [[ "$cmd" == "dotnet "* ]]; then
+        echo "$cmd $PLAN_SCOPE"
+      else
+        echo "$cmd"
+      fi
+      ;;
+
+    *)
+      echo "$cmd"
+      ;;
   esac
 }
 
@@ -136,32 +146,35 @@ resolve_scoped_feedback() {
     fi
   fi
 
-  # No workspace override — derive scoped commands from package manager
+  # No workspace override — derive scoped commands from detected ecosystem
   if [[ -z "$FEEDBACK_COMMANDS" ]]; then
     return 0
   fi
 
-  # Non-node ecosystems don't use PM-based workspace filtering.
-  # Return the commands as-is (e.g. "dotnet build" stays "dotnet build").
-  if [[ "$_RALPHAI_ECOSYSTEM" != "node" ]]; then
+  # Ecosystems that don't support scoping pass through unchanged
+  if [[ "$_RALPHAI_ECOSYSTEM" != "node" && "$_RALPHAI_ECOSYSTEM" != "dotnet" ]]; then
     return 0
   fi
 
-  # Read the package name from the scoped directory's package.json
-  local pkg_json="$PLAN_SCOPE/package.json"
-  if [[ ! -f "$pkg_json" ]]; then
-    # No package.json in scope directory — can't derive scoped commands
-    return 0
-  fi
+  # For dotnet, we can scope directly using PLAN_SCOPE as the project path.
+  # For node, we need the package name from the scoped directory's package.json.
+  local pkg_name=""
+  local pm=""
 
-  local pkg_name
-  pkg_name=$(_json_q "if (data.name) console.log(data.name)" "$pkg_json" 2>/dev/null) || pkg_name=""
-  if [[ -z "$pkg_name" ]]; then
-    return 0
-  fi
+  if [[ "$_RALPHAI_ECOSYSTEM" == "node" ]]; then
+    local pkg_json="$PLAN_SCOPE/package.json"
+    if [[ ! -f "$pkg_json" ]]; then
+      # No package.json in scope directory — can't derive scoped commands
+      return 0
+    fi
 
-  local pm
-  pm=$(_detect_pm_from_lockfiles)
+    pkg_name=$(_json_q "if (data.name) console.log(data.name)" "$pkg_json" 2>/dev/null) || pkg_name=""
+    if [[ -z "$pkg_name" ]]; then
+      return 0
+    fi
+
+    pm=$(_detect_pm_from_lockfiles)
+  fi
 
   # Rewrite each feedback command
   local rewritten=()

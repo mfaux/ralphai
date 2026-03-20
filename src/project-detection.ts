@@ -34,8 +34,10 @@ export interface DetectedProject {
   feedbackCommands: string[];
   /** Package manager name (node ecosystem only) */
   manager?: PackageManager;
-  /** Detected workspace packages (node monorepos) */
+  /** Detected workspace packages (monorepos) */
   workspaces?: WorkspacePackage[];
+  /** Other ecosystems detected alongside the primary one */
+  additionalEcosystems?: DetectedProject[];
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +195,7 @@ function expandWorkspaceGlobs(
  * Detection sources (checked in order):
  * 1. `pnpm-workspace.yaml` — read `packages` globs
  * 2. `package.json` `workspaces` field (yarn/npm/bun)
+ * 3. `.sln` file — parse Project entries to discover .csproj sub-projects
  *
  * Returns an array of { name, path } for each discovered package.
  */
@@ -223,6 +226,20 @@ export function detectWorkspaces(cwd: string): WorkspacePackage[] {
       // Yarn also supports { packages: [...] } object form
       if (workspaces && Array.isArray(workspaces.packages)) {
         return expandWorkspaceGlobs(cwd, workspaces.packages);
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  // 3. .sln file — parse Project entries to discover .csproj sub-projects
+  const slnFiles = findSlnFiles(cwd);
+  if (slnFiles.length > 0) {
+    try {
+      const content = readFileSync(join(cwd, slnFiles[0]!), "utf-8");
+      const projects = parseSolutionProjects(content);
+      if (projects.length > 0) {
+        return projects;
       }
     } catch {
       // Fall through
@@ -358,6 +375,25 @@ export function deriveScopedFeedback(
   });
 }
 
+/**
+ * Derive scoped feedback commands for a dotnet sub-project.
+ * Rewrites `dotnet build` → `dotnet build <projectPath>` and
+ * `dotnet test` → `dotnet test <projectPath>`.
+ */
+export function deriveDotnetScopedFeedback(
+  rootCommands: string[],
+  projectPath: string,
+): string[] {
+  return rootCommands.map((cmd) => {
+    const trimmed = cmd.trim();
+    // Only rewrite dotnet commands
+    if (!trimmed.startsWith("dotnet ")) return cmd;
+
+    // "dotnet build" → "dotnet build <path>", "dotnet test" → "dotnet test <path>"
+    return `${trimmed} ${projectPath}`;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Node project detection (wraps PM + feedback into DetectedProject)
 // ---------------------------------------------------------------------------
@@ -389,28 +425,95 @@ export function detectNodeProject(cwd: string): DetectedProject | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Parse a .sln file to extract project entries.
+ * Returns an array of { name, path } where path is the directory containing
+ * the .csproj file, relative to the solution root (using forward slashes).
+ *
+ * .sln Project lines look like:
+ *   Project("{FAE04EC0-...}") = "MyProject", "src\MyProject\MyProject.csproj", "{GUID}"
+ */
+export function parseSolutionProjects(content: string): WorkspacePackage[] {
+  const projects: WorkspacePackage[] = [];
+  const seen = new Set<string>();
+
+  // Match: Project("...") = "Name", "relative\path\to\File.csproj", "..."
+  const projectLineRe =
+    /^Project\("[^"]*"\)\s*=\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,/gm;
+
+  let match;
+  while ((match = projectLineRe.exec(content)) !== null) {
+    const name = match[1] as string;
+    const rawPath = match[2] as string;
+
+    // Only include .csproj entries (skip solution folders and other types)
+    if (!rawPath.endsWith(".csproj")) continue;
+
+    // Convert backslashes to forward slashes and get the directory
+    const normalizedPath = rawPath.replace(/\\/g, "/");
+    const projectDir = normalizedPath.includes("/")
+      ? normalizedPath.slice(0, normalizedPath.lastIndexOf("/"))
+      : ".";
+
+    if (!seen.has(projectDir)) {
+      seen.add(projectDir);
+      projects.push({ name, path: projectDir });
+    }
+  }
+
+  return projects;
+}
+
+/**
+ * Find .sln files in the given directory.
+ * Returns the filenames (not full paths) of any .sln files found.
+ */
+function findSlnFiles(cwd: string): string[] {
+  try {
+    return readdirSync(cwd).filter((f) => f.endsWith(".sln"));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Detect a C# / .NET project by looking for .sln or .csproj files.
  * Prefers solution files over individual project files.
+ * When a .sln is found, parses it to discover sub-projects as workspaces.
  */
 export function detectDotnetProject(cwd: string): DetectedProject | null {
-  const has = (pattern: string) => {
-    try {
-      return readdirSync(cwd).some((f) => f.endsWith(pattern));
-    } catch {
-      return false;
-    }
-  };
+  const slnFiles = findSlnFiles(cwd);
 
-  if (has(".sln")) {
+  if (slnFiles.length > 0) {
+    // Parse the first .sln to discover sub-projects
+    let workspaces: WorkspacePackage[] | undefined;
+    try {
+      const slnContent = readFileSync(join(cwd, slnFiles[0]!), "utf-8");
+      const projects = parseSolutionProjects(slnContent);
+      if (projects.length > 0) {
+        workspaces = projects;
+      }
+    } catch {
+      // Fall back to no workspace discovery
+    }
+
     return {
       ecosystem: "dotnet",
       label: "dotnet (solution)",
       runPrefix: "dotnet",
       feedbackCommands: ["dotnet build", "dotnet test"],
+      workspaces,
     };
   }
 
-  if (has(".csproj")) {
+  const hasCsproj = (() => {
+    try {
+      return readdirSync(cwd).some((f) => f.endsWith(".csproj"));
+    } catch {
+      return false;
+    }
+  })();
+
+  if (hasCsproj) {
     return {
       ecosystem: "dotnet",
       label: "dotnet (project)",
@@ -551,16 +654,42 @@ export function detectJavaProject(cwd: string): DetectedProject | null {
  * Returns the first match, or null if no ecosystem is detected.
  *
  * Priority order: node > dotnet > go > rust > java > python.
- * Node always wins if present. After that, specificity of the marker file
- * determines priority.
+ * Node always wins if present. When multiple ecosystems are detected,
+ * secondary ecosystems are listed in `additionalEcosystems` and their
+ * feedback commands are merged into the primary result.
  */
 export function detectProject(cwd: string): DetectedProject | null {
-  return (
-    detectNodeProject(cwd) ??
-    detectDotnetProject(cwd) ??
-    detectGoProject(cwd) ??
-    detectRustProject(cwd) ??
-    detectJavaProject(cwd) ??
-    detectPythonProject(cwd)
-  );
+  const detectors = [
+    detectNodeProject,
+    detectDotnetProject,
+    detectGoProject,
+    detectRustProject,
+    detectJavaProject,
+    detectPythonProject,
+  ];
+
+  let primary: DetectedProject | null = null;
+  const additional: DetectedProject[] = [];
+
+  for (const detect of detectors) {
+    const result = detect(cwd);
+    if (!result) continue;
+    if (!primary) {
+      primary = result;
+    } else {
+      additional.push(result);
+    }
+  }
+
+  if (!primary) return null;
+
+  if (additional.length > 0) {
+    primary.additionalEcosystems = additional;
+    // Merge feedback commands from additional ecosystems
+    for (const eco of additional) {
+      primary.feedbackCommands.push(...eco.feedbackCommands);
+    }
+  }
+
+  return primary;
 }

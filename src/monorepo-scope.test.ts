@@ -461,7 +461,7 @@ describe.skipIf(process.platform === "win32")(
   () => {
     const ctx = useTempGitDir();
 
-    it("passes dotnet commands through unchanged (no PM rewriting)", () => {
+    it("scopes dotnet commands to PLAN_SCOPE path", () => {
       // Create a .sln file at root so _detect_ecosystem returns "dotnet"
       writeFileSync(join(ctx.dir, "Foo.sln"), "");
       // Create scoped directory (no package.json needed for non-node)
@@ -490,7 +490,9 @@ echo "\$FEEDBACK_COMMANDS"
         ctx.dir,
       ).trim();
 
-      expect(result).toBe("dotnet build,dotnet test");
+      expect(result).toBe(
+        "dotnet build src/MyProject,dotnet test src/MyProject",
+      );
     });
 
     it("passes go commands through unchanged", () => {

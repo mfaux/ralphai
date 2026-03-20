@@ -22,6 +22,7 @@ import {
   detectFeedbackCommands,
   detectWorkspaces,
   deriveScopedFeedback,
+  deriveDotnetScopedFeedback,
   detectProject,
 } from "./project-detection.ts";
 import type {
@@ -1486,9 +1487,18 @@ async function runRalphaiInit(
 
         const wsConfig: Record<string, { feedbackCommands: string[] }> = {};
         for (const ws of workspaces) {
-          if (pm && rootCommands.length > 0) {
+          if (rootCommands.length === 0) {
+            wsConfig[ws.path] = { feedbackCommands: [] };
+          } else if (pm) {
             wsConfig[ws.path] = {
               feedbackCommands: deriveScopedFeedback(pm, rootCommands, ws.name),
+            };
+          } else if (rootCommands.some((c) => c.startsWith("dotnet "))) {
+            wsConfig[ws.path] = {
+              feedbackCommands: deriveDotnetScopedFeedback(
+                rootCommands,
+                ws.path,
+              ),
             };
           } else {
             wsConfig[ws.path] = { feedbackCommands: [] };
