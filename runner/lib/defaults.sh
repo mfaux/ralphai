@@ -76,6 +76,15 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
     PARKED_DIR="$RALPHAI_MAIN_WORKTREE/.ralphai/pipeline/parked"
     CONFIG_FILE="$RALPHAI_MAIN_WORKTREE/ralphai.json"
     PROGRESS_FILE="$WIP_DIR/<slug>/progress.md"
+
+    # Warn if .ralphai/ exists as a real directory — plans there will be ignored.
+    if [[ -d ".ralphai" ]]; then
+      echo "WARNING: .ralphai/ exists in this worktree but is not a symlink."
+      echo "  Pipeline dirs resolve to the main repo: $RALPHAI_MAIN_WORKTREE/.ralphai/"
+      echo "  Plans in $(pwd)/.ralphai/pipeline/backlog/ will be ignored."
+      echo "  Fix: replace with a symlink, or use 'ralphai worktree' to create worktrees."
+      echo ""
+    fi
   fi
 fi
 
