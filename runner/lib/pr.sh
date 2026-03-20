@@ -64,32 +64,18 @@ create_pr() {
     return 0
   fi
 
-  # Build PR body from plan content and commit log
+  # Build a user-facing PR body from the commit log.
+  # The plan file is an internal implementation detail and should not be
+  # included verbatim. Reviewers care about *what changed and why*, which
+  # the commit messages already capture.
   local pr_body=""
-  local plan_content=""
-  for f in "${WIP_FILES[@]}"; do
-    if [[ -f "$f" ]]; then
-      plan_content=$(cat "$f")
-      break
-    fi
-  done
-  # If plan was already archived, check out/ for the plan file copy
-  if [[ -z "$plan_content" ]]; then
-    local plan_slug
-    plan_slug=$(basename "$(dirname "${WIP_FILES[0]}")")
-    local archived_plan
-    archived_plan="$ARCHIVE_DIR/$plan_slug/$(basename "${WIP_FILES[0]}")"
-    if [[ -f "$archived_plan" ]]; then
-      plan_content=$(cat "$archived_plan")
-    fi
-  fi
 
   local commit_log
   commit_log=$(git log "$BASE_BRANCH".."$branch" --oneline --no-decorate 2>/dev/null || true)
 
-  pr_body="## Plan
+  pr_body="## Summary
 
-${plan_content:-_No plan content available._}
+${plan_desc}
 
 ## Commits
 
