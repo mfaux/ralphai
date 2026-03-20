@@ -20,38 +20,12 @@ Project-specific guidance for AI coding agents working in this codebase.
 - **Source files: max ~300 lines.** Extract modules when a file grows beyond this. Note: `src/ralphai.ts` currently exceeds this limit and is a candidate for decomposition. Follow this guideline for new files and when refactoring.
 - Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
 
+## Conventional Commits
+
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Use the `type(scope): description` format for both **commit messages** and **branch names** (e.g., `feat/add-export`, `fix/null-check`). Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
+
 ## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
 Plan files go in `.ralphai/pipeline/backlog/` as flat `.md` files (e.g., `backlog/my-plan.md`).
 See `.ralphai/PLANNING.md` for the plan writing guide.
-
-## Learnings
-
-### Plan file naming: no prefix required
-
-Plan files can be named freely — `dark-mode.md`, `gh-42-search.md`, `prd-auth.md` all work. The slug is derived as `filename minus .md` (no prefix stripping). Branch names follow: `dark-mode.md` → `ralphai/dark-mode`. Receipt files store a `plan_file=<basename>` field for explicit plan↔receipt matching.
-
-### Testing child process output capture
-
-`spawnSync` with `stdio: "inherit"` sends output directly to the parent's file descriptors, bypassing any pipe that a grandparent test harness sets up via `execFileSync`. Use `stdio: ["inherit", "pipe", "pipe"]` and manually write `result.stdout`/`result.stderr` to `process.stdout`/`process.stderr` when the CLI output needs to be capturable by tests.
-
-### Windows CI has no bash
-
-Tests that spawn bash scripts (e.g. the task runner via `RALPHAI_RUNNER_SCRIPT`) must be skipped on Windows. Use `describe.skipIf(process.platform === "win32")` — same pattern as the existing executable-permission tests.
-
-### Batch task counting regexes must be anchored to headings
-
-The `update_receipt_tasks()` function in `runner/lib/receipt.sh` and `countCompletedTasks()` in `src/ralphai.ts` count batch task completions by matching `Tasks X-Y` patterns. These regexes must be anchored to `^### ` (H3 markdown headings) to avoid false matches on prose body text that references task ranges (e.g. "CLI parsing moves in Tasks 3-4").
-
-### Test file organization
-
-Tests are split by feature domain into separate files under `src/`. Each file has its own `describe` block and uses the `useTempGitDir()` helper from `test-utils.ts` for test isolation. When adding tests for a new feature, create a new test file rather than appending to an existing one.
-
-### Flat backlog plan files
-
-Plan files in `.ralphai/pipeline/backlog/` must be flat `.md` files (e.g., `backlog/my-plan.md`). The runner creates the slug folder automatically when moving a plan to `in-progress/`. Slug-folders in the backlog directory are not discovered.
-
-### Monorepo scope frontmatter
-
-Plans can declare `scope: <path>` in YAML frontmatter to target a specific package in a monorepo. The runner derives scoped feedback commands from the package manager's filter mechanism (pnpm `--filter`, yarn `workspace`, npm `-w`, bun `--filter`). The `workspaces` config key in `ralphai.json` provides per-package overrides when derivation is insufficient. The `extractScope()` TypeScript function lives in `src/frontmatter.ts` and is re-exported from `src/ralphai.ts`.
