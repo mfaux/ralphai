@@ -83,7 +83,7 @@ Ralphai adds this automatically when it pulls a GitHub issue into a plan. On com
 
 ### `scope` frontmatter (monorepo)
 
-For plans that target a specific package in a monorepo. The runner derives scoped feedback commands automatically from the package manager's workspace filter.
+For plans that target a specific package in a monorepo. The runner derives scoped feedback commands automatically. For Node.js projects, this uses the package manager's workspace filter. For .NET projects, the scope path is appended to dotnet commands.
 
 ```md
 ---
@@ -91,4 +91,4 @@ scope: packages/web
 ---
 ```
 
-When `scope` is set, Ralphai rewrites feedback commands (e.g., `pnpm --filter @org/web build`) and adds a hint to the agent prompt to focus on the scoped directory. Use the `workspaces` key in `ralphai.json` for custom per-package overrides when automatic derivation is insufficient.
+When `scope` is set, Ralphai rewrites feedback commands (e.g., `pnpm --filter @org/web build` for Node.js, or `dotnet build src/Api` for .NET) and adds a hint to the agent prompt to focus on the scoped directory. Use the `workspaces` key in `ralphai.json` for custom per-package overrides when automatic derivation is insufficient.

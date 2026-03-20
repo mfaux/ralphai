@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+### Features
+
+- **.NET monorepo support** — `ralphai init` parses `.sln` files to discover `.csproj` projects as workspaces. Scoped plans rewrite `dotnet build` and `dotnet test` to target specific project paths (e.g., `dotnet build src/Api`).
+- **Mixed-repo detection** — when multiple ecosystems coexist (e.g., .NET + Node.js), Ralphai detects all of them and merges their feedback commands into a single list.
+
+### Fixes
+
+- **PR body uses plan description** — PR bodies now contain the plan's description and a commit log instead of dumping raw plan file content.
+
 ## 0.6.0
 
 ### Breaking

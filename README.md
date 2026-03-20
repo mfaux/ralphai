@@ -42,7 +42,7 @@ In your project repository:
 ralphai init                 # scaffold .ralphai/ and ralphai.json
 ```
 
-Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** (full support, including monorepo workspace scoping), **C# / .NET**, **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). Use `--yes` to skip prompts and auto-detect your installed agent.
+Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** and **C# / .NET** (full support, including monorepo workspace scoping), **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). When multiple ecosystems coexist (e.g., a .NET backend with a Node.js frontend), Ralphai detects all of them and merges their feedback commands. Use `--yes` to skip prompts and auto-detect your installed agent.
 
 All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
 
@@ -131,7 +131,7 @@ ralphai teardown         # remove Ralphai from your project
 
 ## Monorepo Support
 
-`ralphai init` automatically detects workspace packages from `pnpm-workspace.yaml` or the `workspaces` field in `package.json`. In interactive mode, it offers to add per-workspace feedback commands to `ralphai.json`. In `--yes` mode, it prints the detected workspaces and relies on automatic scope filtering at runtime.
+`ralphai init` automatically detects workspace packages from `pnpm-workspace.yaml`, the `workspaces` field in `package.json`, or `.sln` files (for .NET projects). In interactive mode, it offers to add per-workspace feedback commands to `ralphai.json`. In `--yes` mode, it prints the detected workspaces and relies on automatic scope filtering at runtime.
 
 Plans can target a specific package by adding `scope` to the frontmatter:
 
@@ -141,7 +141,7 @@ scope: packages/web
 ---
 ```
 
-When a plan has a scope, Ralphai rewrites feedback commands using the package manager's workspace filter (e.g., `pnpm --filter @org/web build`). The agent prompt includes a hint to focus on the scoped directory.
+When a plan has a scope, Ralphai rewrites feedback commands to target the scoped package. For Node.js, this uses the package manager's workspace filter (e.g., `pnpm --filter @org/web build`). For .NET, the project path is appended to dotnet commands (e.g., `dotnet build src/Api`).
 
 `ralphai status` annotates each plan with its scope when declared, and `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config exists (failures produce warnings, not hard errors).
 

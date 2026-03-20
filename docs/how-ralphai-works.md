@@ -142,7 +142,8 @@ Three modes:
 - **Branch mode** (default, `--branch`): creates a `ralphai/<plan-slug>` branch
   from the base branch, commits all work there. No push, no PR.
 - **PR mode** (`--pr`): creates a `ralphai/<plan-slug>` branch from the base
-  branch, does all work there, and opens a PR on completion via `gh`.
+  branch, does all work there, and opens a PR on completion via `gh`. The PR
+  body contains the plan's description and a commit log.
 - **Patch mode** (`--patch`): works on the current branch, leaves changes
   uncommitted. Refuses to run on `main`/`master`.
 
@@ -252,18 +253,29 @@ scope: packages/web
 
 ### Workspace Detection
 
-`ralphai init` detects workspace packages by reading `pnpm-workspace.yaml` globs or the `workspaces` field in `package.json`. In interactive mode, it asks whether to add per-workspace feedback commands to the config. In `--yes` mode, it prints the discovered workspaces and skips config generation (root feedback commands are auto-filtered by scope at runtime).
+`ralphai init` detects workspace packages from three sources: `pnpm-workspace.yaml` globs, the `workspaces` field in `package.json`, and `.sln` files (which list `.csproj` projects for .NET monorepos). In interactive mode, it asks whether to add per-workspace feedback commands to the config. In `--yes` mode, it prints the discovered workspaces and skips config generation (root feedback commands are auto-filtered by scope at runtime).
+
+### Multi-Ecosystem Detection
+
+When a repository contains markers for multiple ecosystems (e.g., a `.sln` file alongside a `package.json`), Ralphai detects all of them and merges their feedback commands into a single list. The primary ecosystem (Node.js when present, otherwise the first detected) determines the project type, and secondary ecosystems contribute additional feedback commands.
 
 ### Scoped Feedback
 
-When a plan has a scope, the runner:
+When a plan has a scope, the runner rewrites feedback commands to target the scoped package. The mechanism varies by ecosystem:
+
+**Node.js:**
 
 1. **Reads the package name** from `<scope>/package.json`.
 2. **Detects the root package manager** by checking for lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb` / `bun.lock`, `package-lock.json`).
 3. **Rewrites feedback commands** using the PM's workspace filter: `pnpm --filter <name>`, `yarn workspace <name>`, `npm -w <name>`, or `bun --filter <name>`.
-4. **Adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory.
 
-Commands that don't start with the detected package manager (e.g., `make test`) pass through unchanged.
+**C# / .NET:**
+
+1. **Appends the scope path** to dotnet commands: `dotnet build` becomes `dotnet build <scope>`, `dotnet test` becomes `dotnet test <scope>`.
+
+**Other ecosystems:** Commands pass through unchanged.
+
+In all cases, the runner **adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory. Commands that don't match the detected ecosystem (e.g., `make test`) also pass through unchanged.
 
 ### Doctor Validation
 
