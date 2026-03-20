@@ -5,6 +5,7 @@ Project-specific guidance for AI coding agents working in this codebase.
 ## Guiding Principles
 
 - **Great DX.** Every decision, from CLI design and defaults to error messages and docs, should minimize the time from install to "wow, that worked."
+- **Keep docs in sync.** When changing user-facing behavior (CLI output, config keys, supported ecosystems, monorepo handling), update the relevant docs (`README.md`, `docs/`, CLI help text) in the same change. Don't leave doc updates as a follow-up.
 
 ## Documentation Style
 
