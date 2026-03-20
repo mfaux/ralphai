@@ -72,9 +72,18 @@ _detect_pm_from_lockfiles() {
 # Usage: _rewrite_command <pm> <package_name> <command>
 # For the "node" ecosystem, rewrites PM-based workspace filters.
 # For "dotnet", appends the project path to dotnet commands.
+# In mixed repos (node primary with dotnet feedback), dotnet commands are
+# also scoped when the ecosystem is "node".
 # Other ecosystems and non-matching commands pass through unchanged.
 _rewrite_command() {
   local pm="$1" pkg_name="$2" cmd="$3"
+
+  # Dotnet commands are scoped regardless of the primary ecosystem,
+  # since detectProject() merges dotnet feedback into node in mixed repos.
+  if [[ "$cmd" == "dotnet "* ]]; then
+    echo "$cmd $PLAN_SCOPE"
+    return
+  fi
 
   case "${_RALPHAI_ECOSYSTEM:-unknown}" in
     node)
@@ -99,15 +108,6 @@ _rewrite_command() {
         bun)  echo "bun --filter $pkg_name $rest" ;;
         *)    echo "$cmd" ;;
       esac
-      ;;
-
-    dotnet)
-      # Rewrite "dotnet build" → "dotnet build <scope>" etc.
-      if [[ "$cmd" == "dotnet "* ]]; then
-        echo "$cmd $PLAN_SCOPE"
-      else
-        echo "$cmd"
-      fi
       ;;
 
     *)
@@ -156,24 +156,22 @@ resolve_scoped_feedback() {
     return 0
   fi
 
-  # For dotnet, we can scope directly using PLAN_SCOPE as the project path.
   # For node, we need the package name from the scoped directory's package.json.
+  # For dotnet (or dotnet commands in mixed repos), _rewrite_command handles
+  # scoping via PLAN_SCOPE directly — no package name needed.
   local pkg_name=""
   local pm=""
 
   if [[ "$_RALPHAI_ECOSYSTEM" == "node" ]]; then
     local pkg_json="$PLAN_SCOPE/package.json"
-    if [[ ! -f "$pkg_json" ]]; then
-      # No package.json in scope directory — can't derive scoped commands
-      return 0
+    if [[ -f "$pkg_json" ]]; then
+      pkg_name=$(_json_q "if (data.name) console.log(data.name)" "$pkg_json" 2>/dev/null) || pkg_name=""
+      if [[ -n "$pkg_name" ]]; then
+        pm=$(_detect_pm_from_lockfiles)
+      fi
     fi
-
-    pkg_name=$(_json_q "if (data.name) console.log(data.name)" "$pkg_json" 2>/dev/null) || pkg_name=""
-    if [[ -z "$pkg_name" ]]; then
-      return 0
-    fi
-
-    pm=$(_detect_pm_from_lockfiles)
+    # When no package.json (e.g., .NET sub-project in a mixed repo), fall
+    # through to the rewrite loop — _rewrite_command still scopes dotnet cmds.
   fi
 
   # Rewrite each feedback command

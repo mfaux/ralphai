@@ -253,7 +253,7 @@ scope: packages/web
 
 ### Workspace Detection
 
-`ralphai init` detects workspace packages from three sources: `pnpm-workspace.yaml` globs, the `workspaces` field in `package.json`, and `.sln` files (which list `.csproj` projects for .NET monorepos). In interactive mode, it asks whether to add per-workspace feedback commands to the config. In `--yes` mode, it prints the discovered workspaces and skips config generation (root feedback commands are auto-filtered by scope at runtime).
+`ralphai init` detects workspace packages from three sources: `pnpm-workspace.yaml` globs, the `workspaces` field in `package.json`, and `.sln` files (which list `.csproj` projects for .NET monorepos). In mixed repos, workspaces from all sources are merged (deduplicated by path). Both `--yes` and interactive modes display the detected workspaces and rely on automatic scope filtering at runtime. The `workspaces` config key is an escape hatch for custom per-package overrides; `init` does not generate it.
 
 ### Multi-Ecosystem Detection
 
@@ -274,6 +274,8 @@ When a plan has a scope, the runner rewrites feedback commands to target the sco
 1. **Appends the scope path** to dotnet commands: `dotnet build` becomes `dotnet build <scope>`, `dotnet test` becomes `dotnet test <scope>`.
 
 **Other ecosystems:** Commands pass through unchanged.
+
+**Mixed repos (e.g., Node.js + .NET):** Dotnet commands are scoped regardless of the primary ecosystem. If the scope directory contains a `package.json`, Node.js PM commands are also rewritten. This means a plan scoping to a .NET sub-project in a mixed repo gets `dotnet build <scope>` even when Node.js is the primary ecosystem.
 
 In all cases, the runner **adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory. Commands that don't match the detected ecosystem (e.g., `make test`) also pass through unchanged.
 
