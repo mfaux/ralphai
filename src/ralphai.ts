@@ -3003,6 +3003,24 @@ async function runRalphaiWorktree(
 
   // --- worktree run ---
 
+  // Dry-run: skip all worktree/branch/symlink creation and run the
+  // bash runner from the main repo so it can print the preview.
+  const isDryRun =
+    wtOpts.runArgs.includes("--dry-run") || wtOpts.runArgs.includes("-n");
+  if (isDryRun) {
+    const dryRunOptions: RalphaiOptions = {
+      ...options,
+      subcommand: "run",
+      runArgs: ["--pr", ...wtOpts.runArgs],
+    };
+    try {
+      await runRalphaiRunner(dryRunOptions, cwd);
+    } catch {
+      // runRalphaiRunner calls process.exit() internally
+    }
+    return;
+  }
+
   // Guard: must be in main repo, not a worktree
   if (isGitWorktree(cwd)) {
     console.error(`'ralphai worktree' must be run from the main repository.`);
