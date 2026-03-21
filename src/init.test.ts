@@ -33,6 +33,17 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, ".ralphai", "ralphai.sh"))).toBe(false);
     expect(existsSync(join(ctx.dir, ".ralphai", "lib"))).toBe(false);
 
+    // Plan template guides
+    expect(existsSync(join(ctx.dir, ".ralphai", "plans", "feature.md"))).toBe(
+      true,
+    );
+    expect(existsSync(join(ctx.dir, ".ralphai", "plans", "bugfix.md"))).toBe(
+      true,
+    );
+    expect(existsSync(join(ctx.dir, ".ralphai", "plans", "refactor.md"))).toBe(
+      true,
+    );
+
     // Pipeline subdirectories (no .gitkeep — .ralphai/ is fully gitignored)
     expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"))).toBe(
       true,
@@ -67,6 +78,20 @@ describe("init command", () => {
     expect(learnings).toContain("# Ralphai Learnings");
     expect(learnings).toContain("gitignored");
     expect(learnings).toContain("AGENTS.md");
+  });
+
+  it("init --yes copies plan template guides from source templates", () => {
+    runCliOutput(["init", "--yes"], ctx.dir);
+
+    const templatesDir = join(__dirname, "..", "templates", "ralphai", "plans");
+    for (const guide of ["feature.md", "bugfix.md", "refactor.md"]) {
+      const source = readFileSync(join(templatesDir, guide), "utf-8");
+      const scaffolded = readFileSync(
+        join(ctx.dir, ".ralphai", "plans", guide),
+        "utf-8",
+      );
+      expect(scaffolded).toBe(source);
+    }
   });
 
   it("init --yes generates config with auto-detected or default agent command", () => {
@@ -189,6 +214,7 @@ describe("init command", () => {
     expect(output).toContain("ralphai worktree");
     expect(output).toContain("ralphai.json");
     expect(output).toContain("PLANNING.md");
+    expect(output).toContain("plans/");
     expect(output).toContain("LEARNINGS.md");
   });
 

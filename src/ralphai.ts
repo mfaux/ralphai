@@ -594,6 +594,13 @@ function scaffold(
     join(ralphaiDir, "PLANNING.md"),
   );
 
+  // Copy plan template guides
+  const plansDir = join(ralphaiDir, "plans");
+  mkdirSync(plansDir, { recursive: true });
+  for (const guide of ["feature.md", "bugfix.md", "refactor.md"]) {
+    copyFileSync(join(templatesDir, "plans", guide), join(plansDir, guide));
+  }
+
   // Generate config (JSON format) — all 17 keys with explicit defaults
   const feedbackCommands = answers.feedbackCommands
     ? answers.feedbackCommands
@@ -789,6 +796,9 @@ Project-specific guidance for AI coding agents working in this codebase.
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
   console.log(`  .ralphai/PLANNING.md       ${DIM}How to write plans${RESET}`);
+  console.log(
+    `  .ralphai/plans/            ${DIM}Plan guides (feature, bugfix, refactor)${RESET}`,
+  );
   console.log(
     `  .ralphai/LEARNINGS.md      ${DIM}Ralphai-specific learnings${RESET}`,
   );
