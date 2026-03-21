@@ -1,10 +1,6 @@
 /**
  * Learnings parser and writer: extracts structured <learnings> blocks
  * from agent output and appends logged entries to .ralphai/LEARNINGS.md.
- *
- * Ported from runner/lib/learnings.sh (218 lines). Pure text processing
- * that TypeScript handles more cleanly than the original sed/awk/grep
- * pipeline.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname } from "path";

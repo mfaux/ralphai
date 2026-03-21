@@ -1,10 +1,6 @@
 /**
  * Prompt assembly: resolves prompt mode, formats file references, and builds
  * the full agent prompt string for each turn of the runner loop.
- *
- * Ported from runner/lib/prompt.sh (92 lines) and the prompt template in
- * runner/ralphai.sh (lines 357-395). The shell's conditional `if/else`
- * blocks become clean TypeScript conditionals.
  */
 import { existsSync, readFileSync } from "fs";
 
@@ -94,8 +90,7 @@ export function formatFileRef(
 /**
  * Build the full agent prompt for a single turn.
  *
- * The template mirrors the shell prompt in runner/ralphai.sh (lines 357-395)
- * with mode-aware conditionals for patch vs. branch/PR mode.
+ * Mode-aware conditionals handle patch vs. branch/PR mode differences.
  */
 export function assemblePrompt(options: AssemblePromptOptions): string {
   const {

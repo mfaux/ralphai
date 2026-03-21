@@ -18,7 +18,7 @@ describe("runner config", () => {
   describe.skipIf(process.platform === "win32")(
     "detect_agent_type mapping",
     () => {
-      /** Helper: source ralphai.sh's detect_agent_type and return the result */
+      /** Helper: inline bash detect_agent_type logic for testing */
       function detectAgent(agentCommand: string): string {
         // Extract just the function and call it with a given AGENT_COMMAND
         const result = execSync(
@@ -271,9 +271,9 @@ ${cleanupFile}
     "promptMode config precedence",
     () => {
       /**
-       * Helper: create a minimal bash script that sources the config loading
-       * functions from ralphai.sh and tests PROMPT_MODE resolution.
-       * We inline the relevant functions to avoid needing a full git repo.
+       * Helper: create a minimal bash script that tests PROMPT_MODE
+       * resolution. We inline the relevant logic to avoid needing a
+       * full git repo.
        */
       function resolvePromptMode(opts: {
         configValue?: string;
@@ -1126,7 +1126,7 @@ echo "$MODE"
       expect(result.stdout).toContain("(config (ralphai.json))");
     });
 
-    it("built CLI runs the TS runner directly (no bash runner)", () => {
+    it("built CLI runs the TS runner directly (no shell subprocess)", () => {
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
 

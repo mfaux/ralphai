@@ -1,8 +1,8 @@
 /**
  * Git helpers: dirty-state detection, branch collision, preflight checks.
  *
- * Ported from runner/lib/git.sh. Uses child_process.execSync for git
- * commands, matching the sequential nature of the runner loop.
+ * Uses child_process.execSync for git commands, matching the sequential
+ * nature of the runner loop.
  */
 import { createHash } from "crypto";
 import { execSync } from "child_process";
@@ -63,8 +63,7 @@ function ghAvailable(): boolean {
  * Check if the working tree has uncommitted changes.
  *
  * Excludes `.ralphai` (worktree symlink artifact) and `ralphai.json`
- * (untracked config symlink) from the untracked-files check, matching
- * `is_tree_dirty()` in runner/lib/git.sh.
+ * (untracked config symlink) from the untracked-files check.
  *
  * Returns true if the tree is dirty, false if clean.
  */
@@ -95,8 +94,6 @@ export function isTreeDirty(cwd: string): boolean {
  * Detect whether a branch already has open work (local branch, remote
  * branch, or open PR). Used to prevent branch/PR collisions when starting
  * a new plan.
- *
- * Matches `branch_has_open_work()` in runner/lib/git.sh.
  */
 export function branchHasOpenWork(
   branch: string,

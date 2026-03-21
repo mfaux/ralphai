@@ -1,9 +1,9 @@
 /**
  * GitHub Issues integration: pull issues as plan files, detect repos, slugify.
  *
- * Ported from runner/lib/issues.sh (121 lines). Uses child_process.execSync
- * for `gh` CLI calls, matching the sequential nature of the runner loop.
- * The `read_issue_frontmatter()` function is already ported in frontmatter.ts.
+ * Uses child_process.execSync for `gh` CLI calls, matching the sequential
+ * nature of the runner loop. The `read_issue_frontmatter()` function is
+ * already in frontmatter.ts.
  */
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
@@ -83,7 +83,6 @@ export function checkGhAvailable(): boolean {
 /**
  * Detect the GitHub repository (owner/repo) from config or the git remote.
  *
- * Matches `detect_issue_repo()` in runner/lib/issues.sh.
  * - If `configRepo` is non-empty, returns it as-is.
  * - Otherwise, parses `git remote get-url origin` for SSH or HTTPS patterns.
  *
@@ -116,9 +115,6 @@ export function detectIssueRepo(
 
 /**
  * Convert a string to a filename-safe lowercase slug (max 60 chars).
- *
- * Matches `slugify()` in runner/lib/issues.sh:
- *   tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | head -c 60
  */
 export function slugify(text: string): string {
   return text
@@ -131,8 +127,6 @@ export function slugify(text: string): string {
 /**
  * Pull the oldest open GitHub issue matching the configured label and
  * convert it to a plan file in the backlog directory.
- *
- * Matches `pull_github_issues()` in runner/lib/issues.sh (lines 36-101).
  *
  * Returns a result indicating whether a plan was created.
  */

@@ -23,7 +23,7 @@ Project-specific guidance for AI coding agents working in this codebase.
 
 ## Dry-Run Safety
 
-The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the bash runner is spawned (TypeScript CLI layer) or before the `DRY_RUN` check in `ralphai.sh`, verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
+The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the runner loop starts (in `src/runner.ts` or the CLI layer in `src/ralphai.ts`), verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
 
 ## Conventional Commits
 
@@ -31,7 +31,7 @@ This repo follows [Conventional Commits](https://www.conventionalcommits.org/). 
 
 ## Project Detection
 
-Ralphai detects the project ecosystem automatically. The detection logic lives in `src/project-detection.ts` (not `src/ralphai.ts`). The shell runner's ecosystem detection is in `runner/lib/scope.sh` (`_detect_ecosystem()`).
+Ralphai detects the project ecosystem automatically. The detection logic lives in `src/project-detection.ts` (not `src/ralphai.ts`). Scope rewriting at runtime is in `src/scope.ts`.
 
 Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Python, Java/Kotlin (basic detection). Node always takes priority when multiple ecosystem markers are present.
 

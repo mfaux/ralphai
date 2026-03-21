@@ -29,7 +29,8 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, ".ralphai", "PLANNING.md"))).toBe(true);
     expect(existsSync(join(ctx.dir, ".ralphai", "LEARNINGS.md"))).toBe(true);
 
-    // Shell scripts should NOT be scaffolded (they run from the package)
+    // Shell scripts should NOT be scaffolded
+    // (runner is now pure TypeScript, no shell scripts needed)
     expect(existsSync(join(ctx.dir, ".ralphai", "ralphai.sh"))).toBe(false);
     expect(existsSync(join(ctx.dir, ".ralphai", "lib"))).toBe(false);
 

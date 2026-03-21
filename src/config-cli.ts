@@ -135,7 +135,7 @@ try {
       const val = String(result.config[key].value ?? "");
       lines.push(`${shellVar}='${shellEscape(val)}'`);
     }
-    // Workspaces: store as raw JSON string for scope.sh
+    // Workspaces: store as raw JSON string for scope resolution
     const ws = result.config.workspaces.value;
     if (ws) {
       lines.push(`CONFIG_WORKSPACES='${shellEscape(JSON.stringify(ws))}'`);

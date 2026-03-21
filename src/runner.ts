@@ -1,10 +1,10 @@
 /**
  * TypeScript runner: the main orchestration loop for Ralphai.
  *
- * Replaces runner/ralphai.sh. Drives an AI coding agent to autonomously
- * implement tasks from plan files. Handles plan detection, turn management,
- * agent invocation, stuck detection, auto-commit, learnings processing,
- * and completion/PR lifecycle.
+ * Drives an AI coding agent to autonomously implement tasks from plan
+ * files. Handles plan detection, turn management, agent invocation,
+ * stuck detection, auto-commit, learnings processing, and completion/PR
+ * lifecycle.
  *
  * Exported entry point: `runRunner(options)`.
  */
@@ -412,8 +412,6 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
 
 /**
  * Run the Ralphai autonomous loop.
- *
- * This replaces the main `while true` loop in runner/ralphai.sh.
  */
 export async function runRunner(opts: RunnerOptions): Promise<void> {
   const { config, cwd, isWorktree, mainWorktree, dryRun, resume } = opts;

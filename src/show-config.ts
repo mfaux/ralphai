@@ -1,8 +1,5 @@
 /**
  * show-config.ts — Formats the --show-config output.
- *
- * Ported from runner/lib/show_config.sh.
- * Produces identical output to the shell version.
  */
 
 import type {
@@ -12,7 +9,7 @@ import type {
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
-// Agent type detection (ported from validate.sh detect_agent_type)
+// Agent type detection
 // ---------------------------------------------------------------------------
 
 const AGENT_PATTERNS: ReadonlyArray<[pattern: string, type: string]> = [
@@ -28,7 +25,6 @@ const AGENT_PATTERNS: ReadonlyArray<[pattern: string, type: string]> = [
 
 /**
  * Detect the agent type from the agent command string.
- * Matches validate.sh's detect_agent_type().
  */
 export function detectAgentType(agentCommand: string): string {
   if (!agentCommand) return "unknown";
@@ -40,7 +36,7 @@ export function detectAgentType(agentCommand: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Source label formatting (ported from show_config.sh _setting_source)
+// Source label formatting
 // ---------------------------------------------------------------------------
 
 /** Env var name for each config key. */
@@ -80,7 +76,6 @@ export interface FormatShowConfigInput {
 
 /**
  * Build the source label for a single config field.
- * Matches show_config.sh's _setting_source() helper.
  */
 function sourceLabel(
   key: keyof RalphaiConfig,
@@ -109,7 +104,6 @@ function sourceLabel(
 
 /**
  * Format the full --show-config output string.
- * Produces output identical to show_config.sh lines 27-147.
  */
 export function formatShowConfig(input: FormatShowConfigInput): string {
   const { config, configFilePath, configFileExists, worktree, workspaces } =

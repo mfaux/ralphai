@@ -1,9 +1,9 @@
 /**
  * PR lifecycle: archive completed plans, push branches, create/update/finalize PRs.
  *
- * Ported from runner/lib/pr.sh (238 lines). Uses child_process.execSync for
- * git and gh CLI calls. Functions return structured results instead of
- * printing directly, letting the caller decide how to display output.
+ * Uses child_process.execSync for git and gh CLI calls. Functions return
+ * structured results instead of printing directly, letting the caller
+ * decide how to display output.
  */
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, renameSync } from "fs";
@@ -100,7 +100,7 @@ export function pushBranch(
 
 /**
  * Move plan folder from in-progress to out, and optionally comment/relabel
- * the linked GitHub issue. Matches `archive_run()` in pr.sh.
+ * the linked GitHub issue.
  */
 export function archiveRun(options: ArchiveRunOptions): {
   archived: boolean;
@@ -163,7 +163,7 @@ export function archiveRun(options: ArchiveRunOptions): {
 // Standard PR (single-plan mode)
 // ---------------------------------------------------------------------------
 
-/** Push branch and create a PR. Matches `create_pr()` in pr.sh. */
+/** Push branch and create a PR. */
 export function createPr(options: CreatePrOptions): CreatePrResult {
   const { branch, baseBranch, planDescription, cwd } = options;
   const push = pushBranch(branch, cwd, true);

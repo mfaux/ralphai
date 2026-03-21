@@ -1178,7 +1178,7 @@ export async function runRalphai(args: string[]): Promise<void> {
   const cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
   const helpRequested = args.includes("--help") || args.includes("-h");
 
-  // Subcommands that reject unknown flags (run/worktree pass through to bash)
+  // Subcommands that reject unknown flags (run/worktree pass through to runner)
   const STRICT_SUBCOMMANDS = new Set([
     "init",
     "status",
@@ -2485,7 +2485,7 @@ async function runRalphaiWorktree(
   // --- worktree run ---
 
   // Dry-run: skip all worktree/branch/symlink creation and run the
-  // bash runner from the main repo so it can print the preview.
+  // runner from the main repo so it can print the preview.
   const isDryRun =
     wtOpts.runArgs.includes("--dry-run") || wtOpts.runArgs.includes("-n");
   if (isDryRun) {

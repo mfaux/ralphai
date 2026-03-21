@@ -1,11 +1,5 @@
 /**
- * Config module — TypeScript port of config loading and validation.
- *
- * Ported from:
- *   runner/lib/defaults.sh  — default values
- *   runner/lib/validate.sh  — validation helpers
- *   runner/lib/config.sh    — config file loading, env overrides
- *   runner/lib/cli.sh       — CLI arg parsing (config-related portion)
+ * Config module — loading, validation, and resolution.
  *
  * Provides a single resolveConfig() entry point that composes:
  *   defaults -> config file -> env vars -> CLI args
@@ -59,7 +53,7 @@ export type ResolvedConfig = {
 };
 
 // ---------------------------------------------------------------------------
-// Defaults (matches defaults.sh lines 4-19)
+// Defaults
 // ---------------------------------------------------------------------------
 
 export const DEFAULTS: Readonly<RalphaiConfig> = {
@@ -83,7 +77,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// Validation helpers (ported from validate.sh)
+// Validation helpers
 // ---------------------------------------------------------------------------
 
 export class ConfigError extends Error {
@@ -95,7 +89,7 @@ export class ConfigError extends Error {
 
 /**
  * Validate that `value` is one of the `allowed` values.
- * Error format matches validate.sh: "ERROR: <label> must be 'a', 'b', or 'c', got '<value>'"
+ * Error format: "ERROR: <label> must be 'a', 'b', or 'c', got '<value>'"
  */
 export function validateEnum(
   value: string,
@@ -118,7 +112,7 @@ export function validateEnum(
 
 /**
  * Validate that `value` is "true" or "false".
- * Matches validate.sh's validate_boolean().
+ * Validate a boolean string value.
  */
 export function validateBoolean(value: string, label: string): void {
   validateEnum(value, label, ["true", "false"]);
@@ -126,7 +120,7 @@ export function validateBoolean(value: string, label: string): void {
 
 /**
  * Validate that `value` is a positive integer (>= 1).
- * Matches validate.sh's validate_positive_int().
+ * Validate a positive integer string value.
  */
 export function validatePositiveInt(value: string, label: string): void {
   if (!/^[1-9][0-9]*$/.test(value)) {
@@ -138,7 +132,7 @@ export function validatePositiveInt(value: string, label: string): void {
 
 /**
  * Validate that `value` is a non-negative integer (>= 0).
- * Matches validate.sh's validate_nonneg_int().
+ * Validate a non-negative integer string value.
  */
 export function validateNonNegInt(
   value: string,
@@ -155,7 +149,7 @@ export function validateNonNegInt(
 
 /**
  * Validate a comma-separated list has no empty entries.
- * Matches validate.sh's validate_comma_list().
+ * Validate a comma-separated list string value.
  */
 export function validateCommaList(value: string, label: string): void {
   if (value === "") return;
@@ -168,10 +162,10 @@ export function validateCommaList(value: string, label: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Config file parsing (ported from config.sh load_config node -e block)
+// Config file parsing
 // ---------------------------------------------------------------------------
 
-/** Allowed keys in ralphai.json (matches config.sh line 43). */
+/** Allowed keys in ralphai.json. */
 const ALLOWED_CONFIG_KEYS = new Set([
   "agentCommand",
   "feedbackCommands",
@@ -412,7 +406,7 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
 }
 
 // ---------------------------------------------------------------------------
-// Env var overrides (ported from config.sh apply_env_overrides)
+// Env var overrides
 // ---------------------------------------------------------------------------
 
 /** Env var name -> config key mapping. */
@@ -439,7 +433,7 @@ const ENV_VAR_MAP: ReadonlyArray<
 
 /**
  * Extract config overrides from environment variables.
- * Validates values (matching config.sh apply_env_overrides behavior).
+ * Validates values and tracks source for --show-config.
  */
 export function applyEnvOverrides(
   env: Record<string, string | undefined>,
@@ -560,7 +554,7 @@ export function applyEnvOverrides(
 }
 
 // ---------------------------------------------------------------------------
-// CLI arg parsing (ported from cli.sh, config-relevant portion only)
+// CLI arg parsing (config-relevant portion only)
 // ---------------------------------------------------------------------------
 
 /** Parsed CLI arguments relevant to config resolution. */
@@ -572,7 +566,7 @@ export interface ParsedCLIArgs {
 
 /**
  * Parse CLI arguments and extract config overrides.
- * Matches cli.sh's argument parsing for config-related flags.
+ * Parses config-related CLI flags from the argument list.
  * Non-config flags (--dry-run, --resume, etc.) are ignored here.
  */
 export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {

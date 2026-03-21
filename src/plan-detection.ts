@@ -2,8 +2,7 @@
  * Plan detection and dependency resolution.
  *
  * Single source of truth for plan listing, dependency checking, and
- * plan selection logic. Functions moved from src/ralphai.ts and ported
- * from runner/lib/plans.sh.
+ * plan selection logic.
  */
 import {
   existsSync,
@@ -195,13 +194,12 @@ export function countCompletedTasks(progressPath: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Plan detection (ported from runner/lib/plans.sh)
+// Plan detection
 // ---------------------------------------------------------------------------
 
 /**
  * Collect backlog plans (flat `.md` files only).
  * Returns sorted array of absolute file paths.
- * Matches `plans.sh:collect_backlog_plans()` (lines 109-117).
  */
 export function collectBacklogPlans(backlogDir: string): string[] {
   if (!existsSync(backlogDir)) return [];
@@ -219,7 +217,6 @@ export function collectBacklogPlans(backlogDir: string): string[] {
  * Check dependency status for a plan slug.
  * Returns "done" if archived, "pending" if in backlog or in-progress,
  * "missing" if not found anywhere.
- * Matches `plans.sh:dependency_status()` (lines 33-50).
  */
 export function checkDependencyStatus(
   depSlug: string,
@@ -245,7 +242,6 @@ export function checkDependencyStatus(
 
 /**
  * Determine whether a backlog plan is ready based on depends-on metadata.
- * Matches `plans.sh:plan_readiness()` (lines 55-91).
  */
 export function planReadiness(
   planPath: string,
@@ -281,7 +277,6 @@ export function planReadiness(
 
 /**
  * Extract the first markdown heading from a plan file.
- * Matches `plans.sh:plan_description()` (lines 274-282).
  */
 export function getPlanDescription(planPath: string): string {
   if (!existsSync(planPath)) return "ralphai task";
@@ -297,7 +292,7 @@ export function getPlanDescription(planPath: string): string {
 /**
  * Detect the next plan to run.
  *
- * Algorithm (matches `plans.sh:detect_plan()` lines 121-271):
+ * Algorithm:
  * 1. Check for in-progress plans (resume).
  *    - In worktree mode, only consider the plan matching the current branch.
  *    - Otherwise, consider all in-progress slug-folders.
