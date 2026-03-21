@@ -16,7 +16,7 @@ import { fileURLToPath } from "url";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
-import { extractScope } from "./frontmatter.ts";
+import { extractScope, extractDependsOn } from "./frontmatter.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -2455,30 +2455,8 @@ function countCompletedTasks(progressPath: string): number {
   return count;
 }
 
-/**
- * Extract depends-on filenames from YAML frontmatter.
- * Supports: `depends-on: [a.md, b.md]` (inline array).
- */
-function extractDependsOn(planPath: string): string[] {
-  if (!existsSync(planPath)) return [];
-  const content = readFileSync(planPath, "utf-8");
-  if (!content.startsWith("---\n")) return [];
-
-  const endIdx = content.indexOf("\n---", 4);
-  if (endIdx === -1) return [];
-  const frontmatter = content.slice(4, endIdx);
-
-  const match = frontmatter.match(/^\s*depends-on:\s*\[([^\]]*)\]/m);
-  if (!match) return [];
-
-  return match[1]!
-    .split(",")
-    .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-    .filter(Boolean);
-}
-
-// extractScope is imported from ./frontmatter.ts (re-exported for backward compat)
-export { extractScope } from "./frontmatter.ts";
+// extractScope and extractDependsOn are imported from ./frontmatter.ts
+export { extractScope, extractDependsOn } from "./frontmatter.ts";
 
 function runRalphaiStatus(cwd: string): void {
   // Resolve .ralphai/ — works from main repo or worktree
