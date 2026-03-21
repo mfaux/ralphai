@@ -1,0 +1,516 @@
+/**
+ * Tests for src/runner.ts — the TypeScript runner orchestration loop.
+ *
+ * Focuses on testable internal helpers (shellSplit, spawnAgent) and
+ * key runner behaviors (dry-run, stuck detection, completion detection).
+ */
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+} from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { execSync } from "child_process";
+
+import {
+  shellSplit,
+  spawnAgent,
+  runRunner,
+  type RunnerOptions,
+} from "./runner.ts";
+import { type ResolvedConfig } from "./config.ts";
+
+// ---------------------------------------------------------------------------
+// shellSplit
+// ---------------------------------------------------------------------------
+
+describe("shellSplit", () => {
+  test("splits simple command", () => {
+    expect(shellSplit("claude -p")).toEqual(["claude", "-p"]);
+  });
+
+  test("splits command with single quotes", () => {
+    expect(shellSplit("echo 'hello world'")).toEqual(["echo", "hello world"]);
+  });
+
+  test("splits command with double quotes", () => {
+    expect(shellSplit('echo "hello world"')).toEqual(["echo", "hello world"]);
+  });
+
+  test("handles backslash escapes", () => {
+    expect(shellSplit("echo hello\\ world")).toEqual(["echo", "hello world"]);
+  });
+
+  test("handles mixed quotes", () => {
+    expect(shellSplit(`opencode run --agent 'build'`)).toEqual([
+      "opencode",
+      "run",
+      "--agent",
+      "build",
+    ]);
+  });
+
+  test("handles multiple spaces between args", () => {
+    expect(shellSplit("a   b   c")).toEqual(["a", "b", "c"]);
+  });
+
+  test("handles empty string", () => {
+    expect(shellSplit("")).toEqual([]);
+  });
+
+  test("handles single word", () => {
+    expect(shellSplit("codex")).toEqual(["codex"]);
+  });
+
+  test("handles quoted empty strings", () => {
+    expect(shellSplit('echo "" hello')).toEqual(["echo", "", "hello"]);
+  });
+
+  test("handles complex agent command", () => {
+    expect(shellSplit("opencode run --agent build")).toEqual([
+      "opencode",
+      "run",
+      "--agent",
+      "build",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spawnAgent
+// ---------------------------------------------------------------------------
+
+describe("spawnAgent", () => {
+  test("captures agent output", async () => {
+    const result = await spawnAgent(
+      "echo",
+      "hello from agent",
+      0,
+      process.cwd(),
+    );
+    expect(result.output.trim()).toBe("hello from agent");
+    expect(result.exitCode).toBe(0);
+    expect(result.timedOut).toBe(false);
+  });
+
+  test("captures non-zero exit code", async () => {
+    const result = await spawnAgent(
+      "bash -c 'echo oops; exit 42'",
+      "",
+      0,
+      process.cwd(),
+    );
+    expect(result.exitCode).toBe(42);
+    expect(result.timedOut).toBe(false);
+    expect(result.output).toContain("oops");
+  });
+
+  test("handles agent timeout", async () => {
+    const result = await spawnAgent("sleep", "60", 1, process.cwd());
+    expect(result.timedOut).toBe(true);
+    // Exit code may be 124 or platform-dependent on abort
+  }, 10000);
+
+  test("handles non-existent command", async () => {
+    const result = await spawnAgent(
+      "nonexistent_command_12345",
+      "arg",
+      0,
+      process.cwd(),
+    );
+    expect(result.exitCode).not.toBe(0);
+    expect(result.timedOut).toBe(false);
+  });
+
+  test("captures both stdout and stderr", async () => {
+    const result = await spawnAgent(
+      "bash -c 'echo out; echo err >&2'",
+      "",
+      0,
+      process.cwd(),
+    );
+    expect(result.output).toContain("out");
+    expect(result.output).toContain("err");
+    expect(result.exitCode).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for integration tests
+// ---------------------------------------------------------------------------
+
+function createTmpGitRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), "runner-test-"));
+  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync("git config user.email 'test@test.com'", {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  execSync("git config user.name 'Test'", { cwd: dir, stdio: "pipe" });
+  writeFileSync(join(dir, "README.md"), "# test\n");
+  execSync("git add -A && git commit -m 'init'", { cwd: dir, stdio: "pipe" });
+  return dir;
+}
+
+function setupPipeline(dir: string): {
+  ralphaiDir: string;
+  backlogDir: string;
+  wipDir: string;
+  archiveDir: string;
+} {
+  const ralphaiDir = join(dir, ".ralphai");
+  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+  const wipDir = join(ralphaiDir, "pipeline", "in-progress");
+  const archiveDir = join(ralphaiDir, "pipeline", "out");
+  mkdirSync(backlogDir, { recursive: true });
+  mkdirSync(wipDir, { recursive: true });
+  mkdirSync(archiveDir, { recursive: true });
+  return { ralphaiDir, backlogDir, wipDir, archiveDir };
+}
+
+function makeResolvedConfig(
+  overrides: Partial<Record<string, unknown>> = {},
+): ResolvedConfig {
+  const defaults: Record<string, unknown> = {
+    agentCommand: "echo",
+    feedbackCommands: "",
+    baseBranch: "main",
+    maxStuck: 3,
+    mode: "branch",
+    issueSource: "none",
+    issueLabel: "ralphai",
+    issueInProgressLabel: "ralphai:in-progress",
+    issueRepo: "",
+    issueCommentProgress: "true",
+    turnTimeout: 0,
+    promptMode: "auto",
+    continuous: "false",
+    autoCommit: "false",
+    turns: 1,
+    maxLearnings: 20,
+    workspaces: null,
+    ...overrides,
+  };
+
+  const resolved: Record<string, { value: unknown; source: string }> = {};
+  for (const [key, value] of Object.entries(defaults)) {
+    resolved[key] = { value, source: "default" };
+  }
+  return resolved as unknown as ResolvedConfig;
+}
+
+// ---------------------------------------------------------------------------
+// runRunner — dry-run mode
+// ---------------------------------------------------------------------------
+
+describe("runRunner — dry-run", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = createTmpGitRepo();
+  });
+
+  test("dry-run with no plans exits cleanly", async () => {
+    const { ralphaiDir } = setupPipeline(dir);
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig(),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: true,
+      resume: false,
+      allowDirty: false,
+    };
+
+    // Should not throw
+    await runRunner(opts);
+  });
+
+  test("dry-run with a backlog plan prints preview", async () => {
+    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+
+    writeFileSync(
+      join(backlogDir, "test-plan.md"),
+      "# Plan: Test Plan\n\n## Implementation Tasks\n\n### Task 1: Do something\n",
+    );
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig(),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: true,
+      resume: false,
+      allowDirty: false,
+    };
+
+    // dry-run should not create branches or modify state
+    await runRunner(opts);
+
+    // The plan should still be in backlog (dry-run doesn't promote)
+    expect(existsSync(join(backlogDir, "test-plan.md"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRunner — plan completion
+// ---------------------------------------------------------------------------
+
+describe("runRunner — completion", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = createTmpGitRepo();
+  });
+
+  test("detects COMPLETE marker and archives plan", async () => {
+    const { ralphaiDir, backlogDir, wipDir } = setupPipeline(dir);
+
+    writeFileSync(
+      join(backlogDir, "simple.md"),
+      "# Plan: Simple Plan\n\n## Implementation Tasks\n\n### Task 1: Test\n",
+    );
+
+    // Agent command that outputs the COMPLETE marker
+    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        turns: 1,
+        autoCommit: "true",
+      }),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    await runRunner(opts);
+
+    // Plan should have been archived
+    const archiveDir = join(ralphaiDir, "pipeline", "out");
+    expect(existsSync(join(archiveDir, "simple", "simple.md"))).toBe(true);
+    expect(existsSync(join(wipDir, "simple", "simple.md"))).toBe(false);
+  });
+
+  test("stuck detection triggers after maxStuck turns with no progress", async () => {
+    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+
+    writeFileSync(
+      join(backlogDir, "stuck.md"),
+      "# Plan: Stuck Plan\n\n### Task 1: Test\n",
+    );
+
+    // Agent that does nothing (no commits, no COMPLETE)
+    const agentScript = `bash -c 'echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        turns: 5,
+        maxStuck: 2,
+        autoCommit: "false",
+      }),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    // This should eventually exit with stuck detection
+    // (the stuck detection calls process.exit, so we need to handle that)
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error(`process.exit(${code})`);
+    }) as never;
+
+    try {
+      await runRunner(opts);
+    } catch (e) {
+      // Expected — process.exit throws
+    } finally {
+      process.exit = originalExit;
+    }
+
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRunner — patch mode guard
+// ---------------------------------------------------------------------------
+
+describe("runRunner — patch mode", () => {
+  test("patch mode on main branch exits with error", async () => {
+    const dir = createTmpGitRepo();
+    const { ralphaiDir } = setupPipeline(dir);
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({ mode: "patch" }),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error(`process.exit(${code})`);
+    }) as never;
+
+    try {
+      await runRunner(opts);
+    } catch {
+      // Expected
+    } finally {
+      process.exit = originalExit;
+    }
+
+    expect(exitCode).toBe(1);
+  });
+
+  test("patch mode stuck detection uses diff hash", async () => {
+    const dir = createTmpGitRepo();
+    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+
+    // Create a feature branch (patch mode can't run on main)
+    execSync("git checkout -b feature/test", { cwd: dir, stdio: "pipe" });
+
+    writeFileSync(
+      join(backlogDir, "patch-test.md"),
+      "# Plan: Patch Test\n\n### Task 1: Test\n",
+    );
+
+    // Agent that does nothing
+    const agentScript = `bash -c 'echo "no changes"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        mode: "patch",
+        turns: 5,
+        maxStuck: 2,
+      }),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error(`process.exit(${code})`);
+    }) as never;
+
+    try {
+      await runRunner(opts);
+    } catch {
+      // Expected — stuck detection exits
+    } finally {
+      process.exit = originalExit;
+    }
+
+    expect(exitCode).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRunner — empty backlog
+// ---------------------------------------------------------------------------
+
+describe("runRunner — no work", () => {
+  test("exits cleanly when backlog is empty", async () => {
+    const dir = createTmpGitRepo();
+    const { ralphaiDir } = setupPipeline(dir);
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig(),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    // Should not throw — just prints "nothing to do" and returns
+    await runRunner(opts);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRunner — auto-commit recovery
+// ---------------------------------------------------------------------------
+
+describe("runRunner — auto-commit", () => {
+  test("auto-commits dirty state when autoCommit is true", async () => {
+    const dir = createTmpGitRepo();
+    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+
+    // Create a tracked file for the agent to modify
+    writeFileSync(join(dir, "target.txt"), "original\n");
+    execSync("git add -A && git commit -m 'add target'", {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    writeFileSync(
+      join(backlogDir, "auto.md"),
+      "# Plan: Auto Commit Test\n\n### Task 1: Test\n",
+    );
+
+    // Agent that modifies an existing tracked file, then outputs COMPLETE
+    const agentScript = `bash -c 'echo modified >> target.txt; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        turns: 1,
+        autoCommit: "true",
+      }),
+      cwd: dir,
+      ralphaiDir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    await runRunner(opts);
+
+    // Check that an auto-commit was created
+    const log = execSync("git log --oneline", {
+      cwd: dir,
+      encoding: "utf-8",
+    });
+    expect(log).toContain("auto-commit");
+  });
+});
