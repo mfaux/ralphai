@@ -52,7 +52,7 @@ function initRepoWithRemote(dir: string): {
 
 /** Initialize a git repo with one commit (no remote). */
 function initRepo(dir: string): void {
-  execSync("git init", { cwd: dir, stdio: "ignore" });
+  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
   execSync('git config user.email "test@test.com"', {
     cwd: dir,
     stdio: "ignore",

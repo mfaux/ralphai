@@ -4,7 +4,7 @@
  * Focuses on testable internal helpers (shellSplit, spawnAgent) and
  * key runner behaviors (dry-run, stuck detection, completion detection).
  */
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import {
   mkdtempSync,
   mkdirSync,
