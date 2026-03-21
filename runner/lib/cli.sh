@@ -1,8 +1,8 @@
-# cli.sh — CLI argument parsing, config precedence orchestration,
+# cli.sh — CLI argument parsing, config resolution via TypeScript,
 # and agent command validation.
 # Sourced by ralphai.sh after config.sh. Runs at source-time.
-# Depends on: defaults.sh (DEFAULT_* vars), validate.sh (validate_* helpers),
-#             config.sh (load_config, apply_config, apply_env_overrides)
+# Depends on: defaults.sh (path constants, runtime flags),
+#             config.sh (resolve_config — calls the TS config-cli)
 
 print_usage() {
   echo "Usage: $0 [options]"
@@ -21,12 +21,12 @@ print_usage() {
   echo "  --allow-dirty                    Skip the clean working tree check"
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
-  echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
+  echo "  --base-branch=<branch>           Override base branch (default: main)"
   echo "  --branch                         Branch mode (default): create isolated branch, commit, no PR"
   echo "  --pr                             PR mode: create branch, push, and open PR"
   echo "  --patch                          Patch mode: leave changes uncommitted in working tree"
   echo "  --continuous                     Keep processing backlog plans after the first completes"
-  echo "  --max-stuck=<n>                  Override stuck threshold (default: $DEFAULT_MAX_STUCK)"
+  echo "  --max-stuck=<n>                  Override stuck threshold (default: 3)"
   echo "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)"
   echo "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)"
   echo "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)"
@@ -75,13 +75,10 @@ print_usage() {
   echo "  $0 --turns=10 --patch --base-branch=feature/big-thing  # leave changes uncommitted on a feature branch"
 }
 
-# --- Parse args ---
+# --- Parse non-config flags and reject unknown args ---
+# Config-related args are passed through to the TS config resolver.
 for arg in "$@"; do
   case "$arg" in
-    --turns=*)
-      CLI_TURNS="${arg#--turns=}"
-      validate_nonneg_int "$CLI_TURNS" "--turns"
-      ;;
     --help|-h)
       print_usage
       exit 0
@@ -98,85 +95,14 @@ for arg in "$@"; do
     --show-config)
       SHOW_CONFIG=true
       ;;
-    --agent-command=*)
-      CLI_AGENT_COMMAND="${arg#--agent-command=}"
-      if [[ -z "$CLI_AGENT_COMMAND" ]]; then
-        echo "ERROR: --agent-command requires a non-empty value (e.g. --agent-command='claude -p')"
-        exit 1
-      fi
-      ;;
-    --feedback-commands=*)
-      CLI_FEEDBACK_COMMANDS="${arg#--feedback-commands=}"
-      # Empty value is valid (disables feedback commands); validate entries if non-empty
-      if [[ -n "$CLI_FEEDBACK_COMMANDS" ]]; then
-        validate_comma_list "$CLI_FEEDBACK_COMMANDS" "--feedback-commands"
-      fi
-      ;;
-    --base-branch=*)
-      CLI_BASE_BRANCH="${arg#--base-branch=}"
-      if [[ -z "$CLI_BASE_BRANCH" ]]; then
-        echo "ERROR: --base-branch requires a non-empty value (e.g. --base-branch=main)"
-        exit 1
-      fi
-      if [[ "$CLI_BASE_BRANCH" =~ [[:space:]] ]]; then
-        echo "ERROR: --base-branch must be a single token without spaces, got '$CLI_BASE_BRANCH'"
-        exit 1
-      fi
-      ;;
-    --max-stuck=*)
-      CLI_MAX_STUCK="${arg#--max-stuck=}"
-      validate_positive_int "$CLI_MAX_STUCK" "--max-stuck"
-      ;;
-    --turn-timeout=*)
-      CLI_TURN_TIMEOUT="${arg#--turn-timeout=}"
-      validate_nonneg_int "$CLI_TURN_TIMEOUT" "--turn-timeout" "seconds"
-      ;;
-    --branch)
-      CLI_MODE="branch"
-      ;;
-    --pr)
-      CLI_MODE="pr"
-      ;;
-    --patch)
-      CLI_MODE="patch"
-      ;;
-    --continuous)
-      CLI_CONTINUOUS="true"
-      ;;
-    --auto-commit)
-      CLI_AUTO_COMMIT="true"
-      ;;
-    --no-auto-commit)
-      CLI_AUTO_COMMIT="false"
-      ;;
-    --prompt-mode=*)
-      CLI_PROMPT_MODE="${arg#--prompt-mode=}"
-      validate_enum "$CLI_PROMPT_MODE" "--prompt-mode" "auto" "at-path" "inline"
-      ;;
-    --issue-source=*)
-      CLI_ISSUE_SOURCE="${arg#--issue-source=}"
-      validate_enum "$CLI_ISSUE_SOURCE" "--issue-source" "none" "github"
-      ;;
-    --issue-label=*)
-      CLI_ISSUE_LABEL="${arg#--issue-label=}"
-      if [[ -z "$CLI_ISSUE_LABEL" ]]; then
-        echo "ERROR: --issue-label requires a non-empty value"
-        exit 1
-      fi
-      ;;
-    --issue-in-progress-label=*)
-      CLI_ISSUE_IN_PROGRESS_LABEL="${arg#--issue-in-progress-label=}"
-      if [[ -z "$CLI_ISSUE_IN_PROGRESS_LABEL" ]]; then
-        echo "ERROR: --issue-in-progress-label requires a non-empty value"
-        exit 1
-      fi
-      ;;
-    --issue-repo=*)
-      CLI_ISSUE_REPO="${arg#--issue-repo=}"
-      ;;
+    # Config args — recognized here to avoid "Unrecognized argument" errors,
+    # but actual parsing and validation is done by the TS config resolver.
+    --turns=*|--agent-command=*|--feedback-commands=*|--base-branch=*|\
+    --max-stuck=*|--turn-timeout=*|--branch|--pr|--patch|--continuous|\
+    --auto-commit|--no-auto-commit|--prompt-mode=*|--issue-source=*|\
+    --issue-label=*|--issue-in-progress-label=*|--issue-repo=*|\
     --issue-comment-progress=*)
-      CLI_ISSUE_COMMENT_PROGRESS="${arg#--issue-comment-progress=}"
-      validate_boolean "$CLI_ISSUE_COMMENT_PROGRESS" "--issue-comment-progress"
+      : # Handled by TS config resolver
       ;;
     *)
       echo "ERROR: Unrecognized argument: $arg"
@@ -186,67 +112,19 @@ for arg in "$@"; do
   esac
 done
 
-if [[ -z "$TURNS" ]]; then
-  TURNS="5"
+# --- Resolve config via TypeScript ---
+# The TS config-cli resolves: defaults -> config file -> env vars -> CLI args.
+# It handles all validation (enum checks, integer checks, etc.).
+if [[ "$SHOW_CONFIG" == true ]]; then
+  # --show-config: config-cli prints the formatted output directly.
+  # Pass worktree info via env vars for the show-config display.
+  export RALPHAI_IS_WORKTREE
+  export RALPHAI_MAIN_WORKTREE
+  node "$_CONFIG_CLI" "$CONFIG_FILE" --show-config "$@"
+  exit 0
 fi
 
-if ! [[ "$TURNS" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: turns must be a non-negative integer, got '$TURNS'"
-  exit 1
-fi
-
-# --- Load config and apply precedence ---
-# Precedence: CLI flags > env vars > config file > built-in defaults
-load_config "$CONFIG_FILE"
-apply_config
-apply_env_overrides
-
-# Apply CLI overrides last (highest priority)
-if [[ -n "$CLI_AGENT_COMMAND" ]]; then
-  AGENT_COMMAND="$CLI_AGENT_COMMAND"
-fi
-if [[ -n "$CLI_FEEDBACK_COMMANDS" ]]; then
-  FEEDBACK_COMMANDS="$CLI_FEEDBACK_COMMANDS"
-fi
-if [[ -n "$CLI_BASE_BRANCH" ]]; then
-  BASE_BRANCH="$CLI_BASE_BRANCH"
-fi
-if [[ -n "$CLI_MAX_STUCK" ]]; then
-  MAX_STUCK="$CLI_MAX_STUCK"
-fi
-if [[ -n "$CLI_TURNS" ]]; then
-  TURNS="$CLI_TURNS"
-fi
-if [[ -n "$CLI_MODE" ]]; then
-  MODE="$CLI_MODE"
-fi
-if [[ -n "$CLI_CONTINUOUS" ]]; then
-  CONTINUOUS="$CLI_CONTINUOUS"
-fi
-if [[ -n "$CLI_TURN_TIMEOUT" ]]; then
-  TURN_TIMEOUT="$CLI_TURN_TIMEOUT"
-fi
-if [[ -n "$CLI_ISSUE_SOURCE" ]]; then
-  ISSUE_SOURCE="$CLI_ISSUE_SOURCE"
-fi
-if [[ -n "$CLI_ISSUE_LABEL" ]]; then
-  ISSUE_LABEL="$CLI_ISSUE_LABEL"
-fi
-if [[ -n "$CLI_ISSUE_IN_PROGRESS_LABEL" ]]; then
-  ISSUE_IN_PROGRESS_LABEL="$CLI_ISSUE_IN_PROGRESS_LABEL"
-fi
-if [[ -n "$CLI_ISSUE_REPO" ]]; then
-  ISSUE_REPO="$CLI_ISSUE_REPO"
-fi
-if [[ -n "$CLI_ISSUE_COMMENT_PROGRESS" ]]; then
-  ISSUE_COMMENT_PROGRESS="$CLI_ISSUE_COMMENT_PROGRESS"
-fi
-if [[ -n "$CLI_PROMPT_MODE" ]]; then
-  PROMPT_MODE="$CLI_PROMPT_MODE"
-fi
-if [[ -n "$CLI_AUTO_COMMIT" ]]; then
-  AUTO_COMMIT="$CLI_AUTO_COMMIT"
-fi
+resolve_config "$@"
 
 # --- Validate agentCommand is set ---
 if [[ -z "$AGENT_COMMAND" ]]; then

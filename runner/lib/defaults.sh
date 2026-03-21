@@ -1,40 +1,11 @@
-# defaults.sh — Built-in defaults, resolved settings, path constants, and runtime flags.
+# defaults.sh — Path constants, worktree detection, CLI path variables,
+# and runtime flags.
 # Sourced by ralphai.sh. No functions — only variable declarations.
+#
+# Default config values and validation have moved to TypeScript (src/config.ts).
+# This file retains path constants, worktree detection, and runtime flags.
 
-# --- Built-in defaults ---
-DEFAULT_AGENT_COMMAND=""
-DEFAULT_FEEDBACK_COMMANDS=""
-DEFAULT_BASE_BRANCH="main"
-DEFAULT_MAX_STUCK=3
-DEFAULT_MODE="branch"                # "branch" (default), "pr", or "patch"
-DEFAULT_ISSUE_SOURCE="none"              # set to "github" to enable GitHub Issues integration
-DEFAULT_ISSUE_LABEL="ralphai"             # label to filter issues by
-DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"  # label applied when issue is picked up
-DEFAULT_ISSUE_REPO=""                    # owner/repo override (auto-detected from git remote)
-DEFAULT_ISSUE_COMMENT_PROGRESS="true"    # comment on issue during run
-DEFAULT_TURN_TIMEOUT=0                   # 0 = no timeout (seconds per agent invocation)
-DEFAULT_PROMPT_MODE="auto"               # "auto", "at-path", or "inline"
-DEFAULT_CONTINUOUS="false"               # "true" to keep draining backlog after first plan
-DEFAULT_AUTO_COMMIT="false"              # "true" to auto-commit after turns / on resume (patch mode)
-DEFAULT_MAX_LEARNINGS=20                 # max entries kept in LEARNINGS.md (0 = unlimited)
-
-# --- Resolved settings (will be overridden by config/env/CLI) ---
-AGENT_COMMAND="$DEFAULT_AGENT_COMMAND"
-FEEDBACK_COMMANDS="$DEFAULT_FEEDBACK_COMMANDS"
-MAX_STUCK="$DEFAULT_MAX_STUCK"
-BASE_BRANCH="$DEFAULT_BASE_BRANCH"
-MODE="$DEFAULT_MODE"
-CONTINUOUS="$DEFAULT_CONTINUOUS"
-ISSUE_SOURCE="$DEFAULT_ISSUE_SOURCE"
-ISSUE_LABEL="$DEFAULT_ISSUE_LABEL"
-ISSUE_IN_PROGRESS_LABEL="$DEFAULT_ISSUE_IN_PROGRESS_LABEL"
-ISSUE_REPO="$DEFAULT_ISSUE_REPO"
-ISSUE_COMMENT_PROGRESS="$DEFAULT_ISSUE_COMMENT_PROGRESS"
-TURN_TIMEOUT="$DEFAULT_TURN_TIMEOUT"
-PROMPT_MODE="$DEFAULT_PROMPT_MODE"
-AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"
-MAX_LEARNINGS="$DEFAULT_MAX_LEARNINGS"
-
+# --- Path constants ---
 WIP_DIR=".ralphai/pipeline/in-progress"
 BACKLOG_DIR=".ralphai/pipeline/backlog"
 ARCHIVE_DIR=".ralphai/pipeline/out"
@@ -88,40 +59,45 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
   fi
 fi
 
-# --- Frontmatter CLI path ---
+# --- CLI paths ---
 # All frontmatter parsing delegates to the TypeScript module via Node.
 # The compiled CLI lives at <package-root>/dist/frontmatter-cli.mjs.
 _FRONTMATTER_CLI="$RALPHAI_LIB_DIR/../../dist/frontmatter-cli.mjs"
 
-# --- Receipt CLI path ---
 # Receipt operations delegate to the TypeScript module via Node.
 _RECEIPT_CLI="$RALPHAI_LIB_DIR/../../dist/receipt-cli.mjs"
 
-# --- Scope CLI path ---
 # Scope/ecosystem detection delegates to the TypeScript module via Node.
 _SCOPE_CLI="$RALPHAI_LIB_DIR/../../dist/scope-cli.mjs"
 
+# Config resolution delegates to the TypeScript module via Node.
+_CONFIG_CLI="$RALPHAI_LIB_DIR/../../dist/config-cli.mjs"
+
+# --- Runtime flags and resolved settings ---
+# These are populated by cli.sh after calling the TS config resolver.
 PLAN_SCOPE=""
 CONFIG_WORKSPACES=""
 
 DRY_RUN=false
 RESUME=false
 ALLOW_DIRTY=false
-TURNS=""
-CONFIG_TURNS=""
-CLI_AGENT_COMMAND=""
-CLI_FEEDBACK_COMMANDS=""
-CLI_BASE_BRANCH=""
-CLI_MAX_STUCK=""
-CLI_MODE=""
-CLI_CONTINUOUS=""
-CLI_TURN_TIMEOUT=""
-CLI_ISSUE_SOURCE=""
-CLI_ISSUE_LABEL=""
-CLI_ISSUE_IN_PROGRESS_LABEL=""
-CLI_ISSUE_REPO=""
-CLI_ISSUE_COMMENT_PROGRESS=""
-CLI_PROMPT_MODE=""
-CLI_AUTO_COMMIT=""
-CLI_TURNS=""
 SHOW_CONFIG=false
+
+# Resolved config settings — set by cli.sh via the TS config resolver.
+# Initialized to empty strings; config-cli populates them.
+AGENT_COMMAND=""
+FEEDBACK_COMMANDS=""
+BASE_BRANCH="main"
+MAX_STUCK=3
+MODE="branch"
+CONTINUOUS="false"
+ISSUE_SOURCE="none"
+ISSUE_LABEL="ralphai"
+ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"
+ISSUE_REPO=""
+ISSUE_COMMENT_PROGRESS="true"
+TURN_TIMEOUT=0
+PROMPT_MODE="auto"
+AUTO_COMMIT="false"
+TURNS=""
+MAX_LEARNINGS=20

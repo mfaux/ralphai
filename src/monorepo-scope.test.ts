@@ -6,6 +6,7 @@ import { execSync } from "child_process";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { useTempGitDir } from "./test-utils.ts";
+import { parseConfigFile, ConfigError } from "./config.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIB_DIR = join(__dirname, "..", "runner", "lib");
@@ -92,67 +93,50 @@ extract_scope ${JSON.stringify(planFile)}
 // workspaces config key — accepted without unknown-key warning
 // ---------------------------------------------------------------------------
 
-describe.skipIf(process.platform === "win32")(
-  "workspaces config key (bash)",
-  () => {
-    const ctx = useTempGitDir();
+describe("workspaces config key", () => {
+  const ctx = useTempGitDir();
 
-    it("does not warn about unknown keys for workspaces", () => {
-      const configContent = JSON.stringify(
-        {
-          agentCommand: "echo test",
-          feedbackCommands: ["echo build"],
-          workspaces: {
-            "packages/web": {
-              feedbackCommands: ["pnpm --filter web build"],
-            },
+  it("does not warn about unknown keys for workspaces", () => {
+    const configContent = JSON.stringify(
+      {
+        agentCommand: "echo test",
+        feedbackCommands: ["echo build"],
+        workspaces: {
+          "packages/web": {
+            feedbackCommands: ["pnpm --filter web build"],
           },
         },
-        null,
-        2,
-      );
-      const configFile = join(ctx.dir, "ralphai.json");
-      writeFileSync(configFile, configContent);
+      },
+      null,
+      2,
+    );
+    const configFile = join(ctx.dir, "ralphai.json");
+    writeFileSync(configFile, configContent);
 
-      // Source defaults + json + config, pass config path as positional arg
-      const output = runBash(`
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "config.sh"))}
-load_config ${JSON.stringify(configFile)}
-echo "WORKSPACES=$CONFIG_WORKSPACES"
-`);
-      expect(output).not.toContain("unknown config key");
-      expect(output).toContain("packages/web");
-    });
+    // Config parsing is now handled by the TS config module
+    const result = parseConfigFile(configFile);
+    expect(result).not.toBeNull();
+    expect(result!.warnings.join(" ")).not.toContain("unknown config key");
+    expect(result!.values.workspaces).toBeDefined();
+    expect(result!.values.workspaces!["packages/web"]).toBeDefined();
+  });
 
-    it("rejects non-object workspaces value", () => {
-      const configFile = join(ctx.dir, "ralphai.json");
-      writeFileSync(
-        configFile,
-        JSON.stringify({
-          agentCommand: "echo test",
-          workspaces: "not-an-object",
-        }),
-      );
+  it("rejects non-object workspaces value", () => {
+    const configFile = join(ctx.dir, "ralphai.json");
+    writeFileSync(
+      configFile,
+      JSON.stringify({
+        agentCommand: "echo test",
+        workspaces: "not-an-object",
+      }),
+    );
 
-      let exitedWithError = false;
-      try {
-        runBash(`
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "config.sh"))}
-load_config ${JSON.stringify(configFile)}
-`);
-      } catch (err: any) {
-        exitedWithError = true;
-        const output = (err.stderr || "") + (err.stdout || "");
-        expect(output).toContain("'workspaces' must be an object");
-      }
-      expect(exitedWithError).toBe(true);
-    });
-  },
-);
+    // Config parsing is now handled by the TS config module
+    expect(() => parseConfigFile(configFile)).toThrow(
+      "'workspaces' must be an object",
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // resolve_scoped_feedback() — scoped command derivation

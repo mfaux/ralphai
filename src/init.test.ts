@@ -249,8 +249,9 @@ describe("init command", () => {
     expect(issues).toContain("read_issue_frontmatter");
     expect(issues).toContain("check_gh_available");
     expect(issues).toContain("detect_repo_from_url");
+    // defaults.sh initialises shell variables for issue settings
     const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain("DEFAULT_ISSUE_SOURCE");
+    expect(defaults).toContain("ISSUE_SOURCE");
   });
 
   it("init --yes works without package.json", () => {
@@ -305,8 +306,10 @@ describe("init command", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
     const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    // Should default TURNS to "5" when unset (no error, no conditional)
-    expect(cli).toContain('TURNS="5"');
+    // Help text mentions the default of 5 turns
+    expect(cli).toContain("Default: 5 turns per plan.");
+    // Turns are now resolved by the TS config-cli, not set directly in cli.sh
+    expect(cli).toContain("--turns=");
     // Should NOT contain the old error message for missing turns
     expect(cli).not.toContain("ERROR: Missing required <turns-per-plan>");
   });
@@ -394,16 +397,15 @@ describe("init command", () => {
     expect(ralphaiSh).toContain("Rolled back: moved plan to");
   });
 
-  it("scaffolded show_config.sh includes worktree status in --show-config output", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const showConfig = readFileSync(
-      join(templateLib, "show_config.sh"),
+  it("scaffolded show-config includes worktree status in --show-config output", () => {
+    // Worktree display is now handled by the TS show-config module.
+    // Verify the TS module exists and contains worktree formatting.
+    const showConfigTs = readFileSync(
+      join(__dirname, "show-config.ts"),
       "utf-8",
     );
-    // When in a worktree, --show-config should display worktree info
-    expect(showConfig).toContain("worktree           = true");
-    expect(showConfig).toContain("mainWorktree       = $RALPHAI_MAIN_WORKTREE");
+    expect(showConfigTs).toContain("worktree");
+    expect(showConfigTs).toContain("mainWorktree");
   });
 
   it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
@@ -439,30 +441,23 @@ describe("init command", () => {
     expect(ralphaiSh).toContain("Branch mode: changes committed on branch");
   });
 
-  it("scaffolded ralphai.sh warns on unknown config keys instead of erroring", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    // Unknown config keys should produce a warning, not an error
-    expect(config).toContain("WARNING:");
-    expect(config).toContain("ignoring unknown config key");
-    expect(config).not.toContain(
-      "unknown config key '$key'\"\n        echo \"Supported keys:",
-    );
+  it("scaffolded config resolution warns on unknown config keys instead of erroring", () => {
+    // Unknown config key warnings are now handled by the TS config module.
+    // Verify the TS config module handles unknown keys with a warning.
+    const configTs = readFileSync(join(__dirname, "config.ts"), "utf-8");
+    expect(configTs).toContain("unknown config key");
   });
 
   it("scaffolded ralphai.sh contains issue integration defaults", () => {
     const templateLib = join(__dirname, "..", "runner", "lib");
 
+    // defaults.sh initialises shell variables (no DEFAULT_ prefix now)
     const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    // Config defaults
-    expect(defaults).toContain('DEFAULT_ISSUE_SOURCE="none"');
-    expect(defaults).toContain('DEFAULT_ISSUE_LABEL="ralphai"');
-    expect(defaults).toContain(
-      'DEFAULT_ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"',
-    );
-    expect(defaults).toContain('DEFAULT_ISSUE_REPO=""');
-    expect(defaults).toContain('DEFAULT_ISSUE_COMMENT_PROGRESS="true"');
+    expect(defaults).toContain('ISSUE_SOURCE="none"');
+    expect(defaults).toContain('ISSUE_LABEL="ralphai"');
+    expect(defaults).toContain('ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"');
+    expect(defaults).toContain('ISSUE_REPO=""');
+    expect(defaults).toContain('ISSUE_COMMENT_PROGRESS="true"');
   });
 
   it("scaffolded ralphai.sh contains issue integration functions", () => {
