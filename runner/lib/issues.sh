@@ -108,9 +108,14 @@ read_issue_frontmatter() {
   PLAN_ISSUE_NUMBER=""
   PLAN_ISSUE_URL=""
   [[ -f "$plan_file" ]] || return
-  if head -1 "$plan_file" | grep -q '^---$'; then
-    PLAN_ISSUE_SOURCE=$(sed -n '/^---$/,/^---$/{ /^source:/{ s/^source:[[:space:]]*//; p; } }' "$plan_file")
-    PLAN_ISSUE_NUMBER=$(sed -n '/^---$/,/^---$/{ /^issue:/{ s/^issue:[[:space:]]*//; p; } }' "$plan_file")
-    PLAN_ISSUE_URL=$(sed -n '/^---$/,/^---$/{ /^issue-url:/{ s/^issue-url:[[:space:]]*//; p; } }' "$plan_file")
-  fi
+  local output
+  output=$(node "$_FRONTMATTER_CLI" issue "$plan_file")
+  # Parse key=value lines from the CLI output
+  while IFS='=' read -r key value; do
+    case "$key" in
+      source)    PLAN_ISSUE_SOURCE="$value" ;;
+      issue)     PLAN_ISSUE_NUMBER="$value" ;;
+      issue-url) PLAN_ISSUE_URL="$value" ;;
+    esac
+  done <<< "$output"
 }

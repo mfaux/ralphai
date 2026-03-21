@@ -8,13 +8,7 @@
 extract_scope() {
   local file="$1"
   [[ -f "$file" ]] || return 0
-  if head -1 "$file" | grep -q '^---$'; then
-    local value
-    value=$(sed -n '/^---$/,/^---$/{ /^scope:/{ s/^scope:[[:space:]]*//; p; } }' "$file")
-    # Trim trailing whitespace
-    value="${value%"${value##*[![:space:]]}"}"
-    echo "$value"
-  fi
+  node "$_FRONTMATTER_CLI" scope "$file"
 }
 
 # --- Plan dependency helpers (optional frontmatter: depends-on) ---
@@ -28,69 +22,8 @@ extract_scope() {
 # filename per line (basename form, e.g. prd-foo.md).
 extract_depends_on() {
   local file="$1"
-
-  # No frontmatter block
-  if [[ ! -f "$file" ]] || [[ "$(head -1 "$file" 2>/dev/null)" != "---" ]]; then
-    return 0
-  fi
-
-  awk '
-    BEGIN {
-      in_fm=0
-      dep_mode=0
-    }
-
-    NR==1 && $0=="---" {
-      in_fm=1
-      next
-    }
-
-    in_fm && $0=="---" {
-      exit
-    }
-
-    in_fm {
-      line=$0
-
-      # Inline array: depends-on: [a.md, b.md]
-      if (match(line, /^[[:space:]]*depends-on:[[:space:]]*\[[^\]]*\][[:space:]]*$/)) {
-        dep_mode=0
-        sub(/^[[:space:]]*depends-on:[[:space:]]*\[/, "", line)
-        sub(/\][[:space:]]*$/, "", line)
-        n=split(line, parts, ",")
-        for (i=1; i<=n; i++) {
-          dep=parts[i]
-          gsub(/^[[:space:]]+|[[:space:]]+$/, "", dep)
-          gsub(/^"|"$/, "", dep)
-          gsub(/^\047|\047$/, "", dep)
-          if (dep != "") print dep
-        }
-        next
-      }
-
-      # Start multiline list: depends-on:
-      if (match(line, /^[[:space:]]*depends-on:[[:space:]]*$/)) {
-        dep_mode=1
-        next
-      }
-
-      # Collect list item when in depends-on block
-      if (dep_mode == 1 && match(line, /^[[:space:]]*-[[:space:]]+/)) {
-        dep=line
-        sub(/^[[:space:]]*-[[:space:]]+/, "", dep)
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", dep)
-        gsub(/^"|"$/, "", dep)
-        gsub(/^\047|\047$/, "", dep)
-        if (dep != "") print dep
-        next
-      }
-
-      # Any new top-level key ends depends-on block
-      if (dep_mode == 1 && match(line, /^[[:alnum:]_-]+:[[:space:]]*/)) {
-        dep_mode=0
-      }
-    }
-  ' "$file"
+  [[ -f "$file" ]] || return 0
+  node "$_FRONTMATTER_CLI" depends-on "$file"
 }
 
 # Return dependency status for a plan basename:

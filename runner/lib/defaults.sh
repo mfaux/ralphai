@@ -88,6 +88,11 @@ if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
   fi
 fi
 
+# --- Frontmatter CLI path ---
+# All frontmatter parsing delegates to the TypeScript module via Node.
+# The compiled CLI lives at <package-root>/dist/frontmatter-cli.mjs.
+_FRONTMATTER_CLI="$RALPHAI_LIB_DIR/../../dist/frontmatter-cli.mjs"
+
 PLAN_SCOPE=""
 CONFIG_WORKSPACES=""
 

@@ -46,6 +46,8 @@ describe.skipIf(process.platform === "win32")("extract_scope (bash)", () => {
     const planFile = join(ctx.dir, "plan.md");
     writeFileSync(planFile, planContent);
     return runBash(`
+RALPHAI_LIB_DIR=${JSON.stringify(LIB_DIR)}
+source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
 source ${JSON.stringify(join(LIB_DIR, "plans.sh"))}
 extract_scope ${JSON.stringify(planFile)}
 `).trim();
