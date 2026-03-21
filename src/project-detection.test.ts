@@ -12,6 +12,7 @@ import {
   detectPythonProject,
   detectJavaProject,
   detectFeedbackCommands,
+  hasNodeSubstance,
 } from "./project-detection.ts";
 
 describe("detectPackageManager", () => {
@@ -186,6 +187,126 @@ describe("detectNodeProject", () => {
     expect(project).not.toBeNull();
     expect(project!.feedbackCommands).toEqual([]);
   });
+
+  it("returns null for bare package.json with no lock file, scripts, or workspaces", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ dependencies: {} }),
+    );
+
+    const project = detectNodeProject(ctx.dir);
+    expect(project).toBeNull();
+  });
+
+  it("detects node when package.json has scripts but no lock file", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { build: "tsc" },
+      }),
+    );
+
+    const project = detectNodeProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("node");
+  });
+
+  it("detects node when package.json has workspaces but no lock file", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        workspaces: ["packages/*"],
+      }),
+    );
+
+    const project = detectNodeProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("node");
+  });
+
+  it("detects node when lock file exists but package.json has no scripts", () => {
+    writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "test" }),
+    );
+
+    const project = detectNodeProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("node");
+  });
+});
+
+describe("hasNodeSubstance", () => {
+  const ctx = useTempDir();
+
+  it("returns false for empty directory", () => {
+    expect(hasNodeSubstance(ctx.dir)).toBe(false);
+  });
+
+  it("returns false for bare package.json with no lock file or scripts", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ dependencies: {} }),
+    );
+    expect(hasNodeSubstance(ctx.dir)).toBe(false);
+  });
+
+  it("returns true when package-lock.json exists", () => {
+    writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when yarn.lock exists", () => {
+    writeFileSync(join(ctx.dir, "yarn.lock"), "");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when pnpm-lock.yaml exists", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when bun.lockb exists", () => {
+    writeFileSync(join(ctx.dir, "bun.lockb"), "");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when pnpm-workspace.yaml exists", () => {
+    writeFileSync(join(ctx.dir, "pnpm-workspace.yaml"), "packages:\n");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when deno.json exists", () => {
+    writeFileSync(join(ctx.dir, "deno.json"), "{}");
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when package.json has scripts", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "test", scripts: { build: "tsc" } }),
+    );
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns true when package.json has workspaces", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "test", workspaces: ["packages/*"] }),
+    );
+    expect(hasNodeSubstance(ctx.dir)).toBe(true);
+  });
+
+  it("returns false when package.json has empty scripts object", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "test", scripts: {} }),
+    );
+    expect(hasNodeSubstance(ctx.dir)).toBe(false);
+  });
 });
 
 describe("detectFeedbackCommands", () => {
@@ -266,6 +387,37 @@ describe("detectProject priority", () => {
     expect(project).not.toBeNull();
     expect(project!.ecosystem).toBe("dotnet");
     expect(project!.label).toBe("dotnet (solution)");
+  });
+
+  it("dotnet wins over bare package.json with no substance (ace-like repo)", () => {
+    // Simulate a .NET-primary repo with a stub package.json used only for tooling
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ dependencies: {} }),
+    );
+    writeFileSync(join(ctx.dir, "MyApp.sln"), "");
+
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("dotnet");
+    expect(project!.feedbackCommands).toEqual(["dotnet build", "dotnet test"]);
+  });
+
+  it("node still wins when package.json has scripts alongside .sln", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { build: "tsc", test: "vitest" },
+      }),
+    );
+    writeFileSync(join(ctx.dir, "MyApp.sln"), "");
+
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("node");
+    // Dotnet feedback should be merged as additional ecosystem
+    expect(project!.feedbackCommands).toContain("dotnet build");
   });
 });
 

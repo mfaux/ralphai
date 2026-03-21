@@ -107,4 +107,17 @@ describe("init multi-language detection", () => {
     // Node should win over dotnet
     expect(output).toMatch(/Project:.*pnpm/);
   });
+
+  it("init --yes with bare package.json and .sln detects dotnet as primary", () => {
+    // Stub package.json with no scripts, no lock file, no workspaces
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ dependencies: {} }),
+    );
+    writeFileSync(join(ctx.dir, "MyApp.sln"), "");
+    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+
+    // Dotnet should win because package.json lacks substance
+    expect(output).toMatch(/Project:.*dotnet/);
+  });
 });

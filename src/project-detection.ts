@@ -45,6 +45,50 @@ export interface DetectedProject {
 // ---------------------------------------------------------------------------
 
 /**
+ * Check whether the root directory has enough Node.js "substance" to be
+ * considered a real Node.js project (rather than a tooling artifact like a
+ * bare package.json used only for `npm install <tool>`).
+ *
+ * Requires at least one of:
+ * - A JS lock file at root (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock/bun.lockb)
+ * - A pnpm-workspace.yaml at root
+ * - A deno.json or deno.jsonc at root (unambiguous Deno project)
+ * - package.json with a `scripts` field containing at least one entry
+ * - package.json with a `workspaces` field
+ */
+export function hasNodeSubstance(cwd: string): boolean {
+  const has = (file: string) => existsSync(join(cwd, file));
+
+  // Lock files or workspace configs are strong signals
+  if (
+    has("package-lock.json") ||
+    has("yarn.lock") ||
+    has("pnpm-lock.yaml") ||
+    has("bun.lockb") ||
+    has("bun.lock") ||
+    has("pnpm-workspace.yaml") ||
+    has("deno.json") ||
+    has("deno.jsonc")
+  ) {
+    return true;
+  }
+
+  // Check package.json for scripts or workspaces
+  const pkgPath = join(cwd, "package.json");
+  if (has("package.json")) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      if (pkg.scripts && Object.keys(pkg.scripts).length > 0) return true;
+      if (pkg.workspaces) return true;
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  return false;
+}
+
+/**
  * Detect the project's package manager by checking for lock files and config
  * files in priority order. Returns null for non-JS/TS projects.
  */
@@ -422,6 +466,11 @@ export function deriveDotnetScopedFeedback(
 export function detectNodeProject(cwd: string): DetectedProject | null {
   const pm = detectPackageManager(cwd);
   if (!pm) return null;
+
+  // A bare package.json with no lock file, scripts, or workspaces is likely
+  // a tooling artifact (e.g. for installing a dev tool at the repo root).
+  // Don't let it claim primary ecosystem status over the real project.
+  if (!hasNodeSubstance(cwd)) return null;
 
   const feedbackStr = detectFeedbackCommands(cwd);
   const feedbackCommands = feedbackStr

@@ -406,8 +406,66 @@ echo "$_RALPHAI_ECOSYSTEM"
       return result;
     }
 
-    it("detects node from package.json", () => {
-      expect(detectEcosystem(["package.json"])).toBe("node");
+    /** Create files with specific content, run _detect_ecosystem, then clean up */
+    function detectEcosystemWithContent(
+      files: { path: string; content: string }[],
+    ): string {
+      for (const f of files) {
+        writeFileSync(join(ctx.dir, f.path), f.content);
+      }
+
+      const result = runBash(
+        `
+source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
+_detect_ecosystem
+echo "$_RALPHAI_ECOSYSTEM"
+`,
+        ctx.dir,
+      ).trim();
+
+      for (const f of files) {
+        try {
+          rmSync(join(ctx.dir, f.path));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      return result;
+    }
+
+    it("detects node from package.json with scripts", () => {
+      expect(
+        detectEcosystemWithContent([
+          {
+            path: "package.json",
+            content: JSON.stringify({ scripts: { build: "tsc" } }),
+          },
+        ]),
+      ).toBe("node");
+    });
+
+    it("does not detect node from bare package.json without substance", () => {
+      expect(
+        detectEcosystemWithContent([
+          {
+            path: "package.json",
+            content: JSON.stringify({ dependencies: {} }),
+          },
+        ]),
+      ).toBe("unknown");
+    });
+
+    it("detects dotnet when bare package.json exists alongside .sln", () => {
+      expect(
+        detectEcosystemWithContent([
+          {
+            path: "package.json",
+            content: JSON.stringify({ dependencies: {} }),
+          },
+          { path: "Foo.sln", content: "" },
+        ]),
+      ).toBe("dotnet");
     });
 
     it("detects node from pnpm-lock.yaml", () => {
@@ -446,8 +504,10 @@ echo "$_RALPHAI_ECOSYSTEM"
       expect(detectEcosystem([])).toBe("unknown");
     });
 
-    it("node wins over dotnet when both present", () => {
-      expect(detectEcosystem(["package.json", "Foo.csproj"])).toBe("node");
+    it("node wins over dotnet when both present with lock file", () => {
+      expect(
+        detectEcosystem(["pnpm-lock.yaml", "package.json", "Foo.csproj"]),
+      ).toBe("node");
     });
   },
 );

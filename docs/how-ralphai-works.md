@@ -257,7 +257,9 @@ scope: packages/web
 
 ### Multi-Ecosystem Detection
 
-When a repository contains markers for multiple ecosystems (e.g., a `.sln` file alongside a `package.json`), Ralphai detects all of them and merges their feedback commands into a single list. The primary ecosystem (Node.js when present, otherwise the first detected) determines the project type, and secondary ecosystems contribute additional feedback commands.
+When a repository contains markers for multiple ecosystems (e.g., a `.sln` file alongside a `package.json`), Ralphai detects all of them and merges their feedback commands into a single list. The primary ecosystem is the first detected with sufficient substance; secondary ecosystems contribute additional feedback commands.
+
+A bare `package.json` with no lock file, no `scripts`, and no `workspaces` field is treated as a tooling artifact (e.g., used only for `npm install <tool>`) and does not claim Node.js as the primary ecosystem. This prevents stub `package.json` files from masking the real project type in .NET-primary or other non-Node repos.
 
 ### Scoped Feedback
 
@@ -303,6 +305,36 @@ When automatic derivation is insufficient, use the `workspaces` config key in `r
 ```
 
 Workspace overrides take precedence over automatic derivation. Plans without a scope use the top-level feedback commands unchanged.
+
+### Independent Sub-Projects
+
+Some repos contain Node.js (or other) sub-projects that are not connected to the root by any workspace configuration. Each sub-project has its own lock file and dependency tree. Common examples: an Nx frontend app inside a .NET monorepo, standalone documentation sites, or Playwright E2E test suites.
+
+Automatic scope rewriting uses workspace filters (`npm -w`, `pnpm --filter`), which require the root package manager to know about the sub-project. Independent sub-projects are not discoverable this way, so plans that target them need manual `workspaces` overrides with commands that run from the repo root:
+
+```json
+{
+  "feedbackCommands": ["dotnet build", "dotnet test"],
+  "workspaces": {
+    "ui": {
+      "feedbackCommands": ["cd ui && npm run build", "cd ui && npm test"]
+    },
+    "docs": {
+      "feedbackCommands": ["cd docs && npm run build"]
+    }
+  }
+}
+```
+
+Then target the sub-project from a plan's frontmatter:
+
+```yaml
+---
+scope: ui
+---
+```
+
+The runner will use the overridden feedback commands for that scope instead of the root-level ones.
 
 ## Learnings System
 
