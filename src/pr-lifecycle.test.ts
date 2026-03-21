@@ -41,7 +41,7 @@ function initRepoWithRemote(dir: string): {
 
   // Initial commit
   writeFileSync(join(repoDir, "init.txt"), "init\n");
-  execSync("git add -A && git commit -m 'init'", {
+  execSync('git add -A && git commit -m "init"', {
     cwd: repoDir,
     stdio: "ignore",
   });
@@ -59,7 +59,7 @@ function initRepo(dir: string): void {
   });
   execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
   writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync("git add -A && git commit -m 'init'", {
+  execSync('git add -A && git commit -m "init"', {
     cwd: dir,
     stdio: "ignore",
   });
@@ -78,7 +78,7 @@ describe("pushBranch", () => {
     // Create and push a feature branch
     execSync("git checkout -b test-branch", { cwd: repoDir, stdio: "ignore" });
     writeFileSync(join(repoDir, "new.txt"), "new\n");
-    execSync("git add -A && git commit -m 'add new'", {
+    execSync('git add -A && git commit -m "add new"', {
       cwd: repoDir,
       stdio: "ignore",
     });
@@ -255,7 +255,7 @@ describe("buildContinuousPrBody", () => {
     initRepo(ctx.dir);
     execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
     writeFileSync(join(ctx.dir, "feature.txt"), "feature\n");
-    execSync("git add -A && git commit -m 'add feature'", {
+    execSync('git add -A && git commit -m "add feature"', {
       cwd: ctx.dir,
       stdio: "ignore",
     });

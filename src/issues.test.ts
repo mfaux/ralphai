@@ -24,7 +24,7 @@ function initRepo(dir: string, remoteUrl?: string): void {
   });
   execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
   writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync("git add -A && git commit -m 'init'", {
+  execSync('git add -A && git commit -m "init"', {
     cwd: dir,
     stdio: "ignore",
   });

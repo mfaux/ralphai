@@ -146,13 +146,13 @@ describe("spawnAgent", () => {
 function createTmpGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "runner-test-"));
   execSync("git init", { cwd: dir, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: dir,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: dir, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: dir, stdio: "pipe" });
   writeFileSync(join(dir, "README.md"), "# test\n");
-  execSync("git add -A && git commit -m 'init'", { cwd: dir, stdio: "pipe" });
+  execSync('git add -A && git commit -m "init"', { cwd: dir, stdio: "pipe" });
   return dir;
 }
 
@@ -476,7 +476,7 @@ describe("runRunner — auto-commit", () => {
 
     // Create a tracked file for the agent to modify
     writeFileSync(join(dir, "target.txt"), "original\n");
-    execSync("git add -A && git commit -m 'add target'", {
+    execSync('git add -A && git commit -m "add target"', {
       cwd: dir,
       stdio: "pipe",
     });

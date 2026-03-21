@@ -20,7 +20,13 @@ describe("resolveReceiptPath", () => {
   it("returns correct path for a plan slug", () => {
     const result = resolveReceiptPath("/repo/.ralphai", "my-plan");
     expect(result).toBe(
-      "/repo/.ralphai/pipeline/in-progress/my-plan/receipt.txt",
+      join(
+        "/repo/.ralphai",
+        "pipeline",
+        "in-progress",
+        "my-plan",
+        "receipt.txt",
+      ),
     );
   });
 });

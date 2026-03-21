@@ -23,8 +23,10 @@ function initRepo(dir: string): void {
     stdio: "ignore",
   });
   execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
+  // Disable autocrlf so LF files stay clean on Windows
+  execSync("git config core.autocrlf false", { cwd: dir, stdio: "ignore" });
   writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync("git add -A && git commit -m 'init'", {
+  execSync('git add -A && git commit -m "init"', {
     cwd: dir,
     stdio: "ignore",
   });
@@ -78,7 +80,7 @@ describe("isTreeDirty", () => {
     initRepo(ctx.dir);
     // Commit ralphai.json first
     writeFileSync(join(ctx.dir, "ralphai.json"), '{"v":1}');
-    execSync("git add ralphai.json && git commit -m 'add config'", {
+    execSync('git add ralphai.json && git commit -m "add config"', {
       cwd: ctx.dir,
       stdio: "ignore",
     });
