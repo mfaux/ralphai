@@ -93,6 +93,10 @@ fi
 # The compiled CLI lives at <package-root>/dist/frontmatter-cli.mjs.
 _FRONTMATTER_CLI="$RALPHAI_LIB_DIR/../../dist/frontmatter-cli.mjs"
 
+# --- Receipt CLI path ---
+# Receipt operations delegate to the TypeScript module via Node.
+_RECEIPT_CLI="$RALPHAI_LIB_DIR/../../dist/receipt-cli.mjs"
+
 PLAN_SCOPE=""
 CONFIG_WORKSPACES=""
 

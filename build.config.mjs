@@ -5,5 +5,6 @@ export default defineBuildConfig({
   entries: [
     { type: "bundle", input: "./src/cli.ts" },
     { type: "bundle", input: "./src/frontmatter-cli.ts" },
+    { type: "bundle", input: "./src/receipt-cli.ts" },
   ],
 });

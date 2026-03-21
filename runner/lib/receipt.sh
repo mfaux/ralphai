@@ -10,20 +10,19 @@
 # Receipt files live at: .ralphai/pipeline/in-progress/<slug>/receipt.txt
 # Format: key=value (one per line, no quoting needed).
 #
-# Fields:
-#   started_at       — ISO 8601 UTC timestamp of when the run started
-#   source           — "main" or "worktree"
-#   worktree_path    — absolute path to worktree (only when source=worktree)
-#   branch           — git branch name
-#   slug             — plan slug (derived from plan folder name)
-#   plan_file        — exact plan filename (basename, e.g. "dark-mode.md")
-#   turns_budget     — total turn budget for the run (resolved $TURNS; 0 = unlimited)
-#   turns_completed  — number of agent turns completed
-#   tasks_completed  — number of plan tasks completed (parsed from progress.md)
+# All read/write operations delegate to the TypeScript receipt module via
+# the compiled receipt-cli.mjs. Only resolve_receipt_path() remains in bash
+# because it sets shell variables consumed by the orchestrator.
+
+# Fallback: compute _RECEIPT_CLI from this file's location if not already set
+# (e.g. when sourced directly in tests without defaults.sh).
+if [[ -z "${_RECEIPT_CLI:-}" ]]; then
+  _RECEIPT_CLI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/dist/receipt-cli.mjs"
+fi
 
 # --- Derive the receipt file path from the plan slug ---
 # Must be called after WIP_FILES is set (i.e. after detect_plan).
-# Sets: RECEIPT_FILE, PLAN_SLUG
+# Sets: RECEIPT_FILE, PLAN_SLUG, PLAN_BASENAME, PROGRESS_FILE
 resolve_receipt_path() {
   local plan_basename
   plan_basename=$(basename "${WIP_FILES[0]}")
@@ -48,19 +47,13 @@ init_receipt() {
   local branch
   branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 
-  {
-    echo "started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    echo "source=$source"
-    if [[ -n "$worktree_path" ]]; then
-      echo "worktree_path=$worktree_path"
-    fi
-    echo "branch=$branch"
-    echo "slug=$PLAN_SLUG"
-    echo "plan_file=$PLAN_BASENAME"
-    echo "turns_budget=${TURNS:-5}"
-    echo "turns_completed=0"
-    echo "tasks_completed=0"
-  } > "$RECEIPT_FILE"
+  local wt_arg=""
+  if [[ -n "$worktree_path" ]]; then
+    wt_arg="$worktree_path"
+  fi
+
+  node "$_RECEIPT_CLI" init \
+    "$RECEIPT_FILE" "$source" "$branch" "$PLAN_SLUG" "$PLAN_BASENAME" "${TURNS:-5}" $wt_arg
 
   echo "Initialized $RECEIPT_FILE"
 }
@@ -71,18 +64,11 @@ update_receipt_turn() {
   if [[ ! -f "$RECEIPT_FILE" ]]; then
     return
   fi
-
-  local current
-  current=$(sed -n 's/^turns_completed=//p' "$RECEIPT_FILE")
-  current=${current:-0}
-  local next=$((current + 1))
-  sed "s/^turns_completed=.*/turns_completed=$next/" "$RECEIPT_FILE" > "$RECEIPT_FILE.tmp" && mv "$RECEIPT_FILE.tmp" "$RECEIPT_FILE"
+  node "$_RECEIPT_CLI" update-turn "$RECEIPT_FILE"
 }
 
 # --- Recount tasks_completed from progress.md ---
 # Called after each turn completes (after auto-commit).
-# Counts individual `**Status:** Complete` markers and batch `Tasks X-Y` headings
-# in $PROGRESS_FILE, then writes the total to the receipt.
 update_receipt_tasks() {
   if [[ ! -f "$RECEIPT_FILE" ]]; then
     return
@@ -90,32 +76,7 @@ update_receipt_tasks() {
   if [[ ! -f "$PROGRESS_FILE" ]]; then
     return
   fi
-
-  local count=0
-
-  # Count individual **Status:** Complete markers (case-insensitive)
-  local individual
-  individual=$(grep -ci '\*\*Status:\*\*[[:space:]]*Complete' "$PROGRESS_FILE" 2>/dev/null || true)
-  count=$((count + individual))
-
-  # Count batch entries: Tasks X-Y or Tasks X–Y (en-dash or hyphen)
-  # Each match contributes (end - start + 1) tasks
-  while IFS= read -r line; do
-    # Extract start and end numbers from patterns like "Tasks 1-3" or "Tasks 1–3"
-    local start_num end_num
-    start_num=$(echo "$line" | sed -n 's/.*[Tt]asks\?[[:space:]]\+\([0-9]\+\)[[:space:]]*[–-][[:space:]]*\([0-9]\+\).*/\1/p')
-    end_num=$(echo "$line" | sed -n 's/.*[Tt]asks\?[[:space:]]\+\([0-9]\+\)[[:space:]]*[–-][[:space:]]*\([0-9]\+\).*/\2/p')
-    if [[ -n "$start_num" && -n "$end_num" && "$end_num" -gt "$start_num" ]]; then
-      count=$((count + end_num - start_num + 1))
-    fi
-  done < <(grep -i '^### .*tasks\?[[:space:]]\+[0-9]\+[[:space:]]*[–-][[:space:]]*[0-9]\+' "$PROGRESS_FILE" 2>/dev/null || true)
-
-  # Update or append tasks_completed in the receipt
-  if grep -q '^tasks_completed=' "$RECEIPT_FILE"; then
-    sed "s/^tasks_completed=.*/tasks_completed=$count/" "$RECEIPT_FILE" > "$RECEIPT_FILE.tmp" && mv "$RECEIPT_FILE.tmp" "$RECEIPT_FILE"
-  else
-    echo "tasks_completed=$count" >> "$RECEIPT_FILE"
-  fi
+  node "$_RECEIPT_CLI" update-tasks "$RECEIPT_FILE" "$PROGRESS_FILE"
 }
 
 # --- Check receipt source for cross-source conflicts ---
@@ -125,40 +86,12 @@ check_receipt_source() {
     return
   fi
 
-  local receipt_source
-  receipt_source=$(sed -n 's/^source=//p' "$RECEIPT_FILE")
-
-  if [[ "$receipt_source" == "worktree" && "$RALPHAI_IS_WORKTREE" != true ]]; then
-    local wt_path
-    wt_path=$(sed -n 's/^worktree_path=//p' "$RECEIPT_FILE")
-    local wt_branch
-    wt_branch=$(sed -n 's/^branch=//p' "$RECEIPT_FILE")
-    local wt_started
-    wt_started=$(sed -n 's/^started_at=//p' "$RECEIPT_FILE")
-    echo ""
-    echo "ERROR: Plan \"$PLAN_SLUG\" is running in a worktree."
-    echo ""
-    echo "  Worktree: ${wt_path:-unknown}"
-    echo "  Branch:   ${wt_branch:-unknown}"
-    echo "  Started:  ${wt_started:-unknown}"
-    echo ""
-    echo "  To resume:  ralphai worktree"
-    echo "  To discard: ralphai worktree clean"
-    exit 1
-  fi
-
-  if [[ "$receipt_source" == "main" && "$RALPHAI_IS_WORKTREE" == true ]]; then
-    local main_branch
-    main_branch=$(sed -n 's/^branch=//p' "$RECEIPT_FILE")
-    local main_started
-    main_started=$(sed -n 's/^started_at=//p' "$RECEIPT_FILE")
-    echo ""
-    echo "ERROR: Plan \"$PLAN_SLUG\" is already running in the main repository."
-    echo ""
-    echo "  Branch:  ${main_branch:-unknown}"
-    echo "  Started: ${main_started:-unknown}"
-    echo ""
-    echo "  Finish or interrupt the main-repo run first, then retry."
+  # The TS check-source scans all in-progress receipts and prints
+  # conflict details to stderr, exiting 1 on conflict.
+  # We need to pass the .ralphai directory (parent of pipeline/).
+  local ralphai_dir
+  ralphai_dir=$(dirname "$(dirname "$(dirname "$RECEIPT_FILE")")")
+  if ! node "$_RECEIPT_CLI" check-source "$ralphai_dir" "$RALPHAI_IS_WORKTREE"; then
     exit 1
   fi
 }
