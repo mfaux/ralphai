@@ -1449,7 +1449,13 @@ async function runRalphaiInit(
     // Workspace detection for --yes mode
     const workspaces = detectWorkspaces(cwd);
     if (workspaces.length > 0) {
-      const names = workspaces.map((ws) => ws.name).join(", ");
+      const MAX_WS_DISPLAY = 10;
+      const allNames = workspaces.map((ws) => ws.name);
+      const names =
+        allNames.length <= MAX_WS_DISPLAY
+          ? allNames.join(", ")
+          : allNames.slice(0, MAX_WS_DISPLAY).join(", ") +
+            `, ... and ${allNames.length - MAX_WS_DISPLAY} more`;
       console.log(
         `  ${DIM}Workspaces:${RESET} ${TEXT}${workspaces.length} packages${RESET} ${DIM}(${names})${RESET}`,
       );
@@ -1473,7 +1479,13 @@ async function runRalphaiInit(
     // escape hatch users add manually when they need custom overrides.
     const workspaces = detectWorkspaces(cwd);
     if (workspaces.length > 0) {
-      const names = workspaces.map((ws) => ws.name).join(", ");
+      const MAX_WS_DISPLAY = 10;
+      const allNames = workspaces.map((ws) => ws.name);
+      const names =
+        allNames.length <= MAX_WS_DISPLAY
+          ? allNames.join(", ")
+          : allNames.slice(0, MAX_WS_DISPLAY).join(", ") +
+            `, ... and ${allNames.length - MAX_WS_DISPLAY} more`;
       clack.log.info(
         `Detected ${workspaces.length} workspace packages: ${names}`,
       );

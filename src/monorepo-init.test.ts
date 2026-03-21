@@ -242,3 +242,34 @@ describe("pnpm-workspace.yaml parsing", () => {
     expect(combined).toContain("@org/dashboard");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Workspace display truncation
+// ---------------------------------------------------------------------------
+
+describe("workspace display truncation", () => {
+  const ctx = useTempGitDir();
+
+  it("truncates workspace names when more than 10 are detected", () => {
+    // Create a .sln file with 15 projects to trigger truncation
+    const projectLines: string[] = [];
+    for (let i = 1; i <= 15; i++) {
+      projectLines.push(
+        `Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Project${i}", "src\\Project${i}\\Project${i}.csproj", "{00000000-0000-0000-0000-00000000000${String(i).padStart(1, "0")}}"`,
+      );
+    }
+    writeFileSync(join(ctx.dir, "App.sln"), projectLines.join("\n") + "\n");
+
+    const result = runCli(["init", "--yes"], ctx.dir);
+    const combined = result.stdout + result.stderr;
+
+    expect(combined).toContain("15 packages");
+    // First 10 should be visible
+    expect(combined).toContain("Project1");
+    expect(combined).toContain("Project10");
+    // Should show truncation indicator
+    expect(combined).toContain("... and 5 more");
+    // Project11-15 should NOT be in the name list
+    expect(combined).not.toMatch(/Project11[^5]/);
+  });
+});

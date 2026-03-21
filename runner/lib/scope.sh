@@ -5,14 +5,30 @@
 # --- Detect the project ecosystem ---
 # Sets _RALPHAI_ECOSYSTEM to: node, dotnet, go, rust, java, python, or unknown.
 # Uses the same priority order as the TypeScript detectProject() function.
+# A bare package.json (no lock file, no scripts, no workspaces) is NOT enough
+# to claim "node" — it may be a tooling artifact (e.g. for npm install <tool>).
 _detect_ecosystem() {
-  # Node.js — check JS lockfiles and package.json first (highest priority)
+  # Node.js — lock files or Deno config are unambiguous signals
   if [[ -f "pnpm-lock.yaml" || -f "pnpm-workspace.yaml" || \
         -f "yarn.lock" || -f "bun.lockb" || -f "bun.lock" || \
-        -f "package-lock.json" || -f "deno.json" || -f "deno.jsonc" || \
-        -f "package.json" ]]; then
+        -f "package-lock.json" || -f "deno.json" || -f "deno.jsonc" ]]; then
     _RALPHAI_ECOSYSTEM="node"
     return
+  fi
+
+  # package.json exists but no lock file — only claim node if it has scripts or workspaces
+  if [[ -f "package.json" ]]; then
+    local _has_substance
+    _has_substance=$(node -e "
+      const p = JSON.parse(require('fs').readFileSync('package.json','utf-8'));
+      const s = p.scripts && Object.keys(p.scripts).length > 0;
+      const w = !!p.workspaces;
+      console.log(s || w ? 'yes' : 'no');
+    " 2>/dev/null) || _has_substance="no"
+    if [[ "$_has_substance" == "yes" ]]; then
+      _RALPHAI_ECOSYSTEM="node"
+      return
+    fi
   fi
 
   # .NET — .sln or .csproj
