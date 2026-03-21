@@ -314,6 +314,16 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   }
 
   const { planFile, planSlug } = result.plan;
+
+  // Show flat-file promotion message (backlog flat file → in-progress folder)
+  if (!result.plan.resumed) {
+    const flatSource = join(dirs.backlogDir, `${planSlug}.md`);
+    if (existsSync(flatSource)) {
+      console.log(
+        `[dry-run] Would promote flat file: ${flatSource} -> ${planFile}`,
+      );
+    }
+  }
   const planScope = extractScope(planFile);
   const scopeResult = resolveScope({
     cwd,

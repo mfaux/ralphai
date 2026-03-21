@@ -1,4 +1,4 @@
-import { execSync, spawn } from "child_process";
+import { execSync } from "child_process";
 import {
   existsSync,
   lstatSync,
@@ -34,6 +34,9 @@ import {
   detectProject,
 } from "./project-detection.ts";
 import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
+import { runRunner, type RunnerOptions } from "./runner.ts";
+import { resolveConfig, parseCLIArgs, ConfigError } from "./config.ts";
+import { formatShowConfig } from "./show-config.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -2494,7 +2497,7 @@ async function runRalphaiWorktree(
     try {
       await runRalphaiRunner(dryRunOptions, cwd);
     } catch {
-      // runRalphaiRunner calls process.exit() internally
+      // runRalphaiRunner may call process.exit() on fatal errors
     }
     return;
   }
@@ -2689,93 +2692,161 @@ async function runRalphaiWorktree(
   try {
     await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
   } catch {
-    // runRalphaiRunner calls process.exit() internally, so this catch
-    // handles edge cases where it throws instead
+    // runRalphaiRunner may call process.exit() on fatal errors
   }
 
-  // Note: cleanup after runner completion happens via process.exit in
-  // runRalphaiRunner. For proper lifecycle management (cleanup on success,
-  // preserve on failure), we'd need to refactor runRalphaiRunner to return
-  // an exit code instead of calling process.exit. That's a future improvement.
+  // Note: the runner now returns normally on success. Fatal errors still
+  // call process.exit(). For proper lifecycle management (cleanup on
+  // success, preserve on failure), the worktree command would need to
+  // inspect the runner's result. That's a future improvement.
+}
+
+/** Known non-config flags accepted by `ralphai run`. */
+const KNOWN_RUN_FLAGS = new Set([
+  "--dry-run",
+  "-n",
+  "--resume",
+  "-r",
+  "--allow-dirty",
+  "--show-config",
+  "--help",
+  "-h",
+]);
+
+/** Patterns for config flags that are parsed by the TS config resolver. */
+const CONFIG_FLAG_PATTERNS = [
+  /^--turns=/,
+  /^--agent-command=/,
+  /^--feedback-commands=/,
+  /^--base-branch=/,
+  /^--max-stuck=/,
+  /^--turn-timeout=/,
+  /^--branch$/,
+  /^--pr$/,
+  /^--patch$/,
+  /^--continuous$/,
+  /^--auto-commit$/,
+  /^--no-auto-commit$/,
+  /^--prompt-mode=/,
+  /^--issue-source=/,
+  /^--issue-label=/,
+  /^--issue-in-progress-label=/,
+  /^--issue-repo=/,
+  /^--issue-comment-progress=/,
+];
+
+function isRecognizedRunFlag(arg: string): boolean {
+  if (KNOWN_RUN_FLAGS.has(arg)) return true;
+  return CONFIG_FLAG_PATTERNS.some((p) => p.test(arg));
+}
+
+function showRunHelp(): void {
+  const lines = [
+    "Usage: ralphai run [options]",
+    "",
+    "  Auto-detects work: resumes in-progress plans, or picks from backlog.",
+    "  Turn budget resets for each new plan (normal mode).",
+    "  Pass 0 for unlimited turns (runs until complete or stuck).",
+    "  Default: 5 turns per plan.",
+    "",
+    "Options:",
+    "  --turns=<n>                      Turns per plan (default: 5, 0 = unlimited)",
+    "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
+    "  --resume, -r                     Auto-commit dirty state and continue",
+    "  --allow-dirty                    Skip the clean working tree check",
+    "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
+    "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
+    "  --base-branch=<branch>           Override base branch (default: main)",
+    "  --branch                         Branch mode (default): create isolated branch, commit, no PR",
+    "  --pr                             PR mode: create branch, push, and open PR",
+    "  --patch                          Patch mode: leave changes uncommitted in working tree",
+    "  --continuous                     Keep processing backlog plans after the first completes",
+    "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
+    "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)",
+    "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)",
+    "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)",
+    "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
+    "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)",
+    "  --issue-label=<label>            Label to filter issues by (default: ralphai)",
+    "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)",
+    "  --issue-repo=<owner/repo>        Override repo for issue operations (default: auto-detect)",
+    "  --issue-comment-progress=<bool>  Comment on issue during run (default: true)",
+    "  --show-config                    Print resolved settings and exit",
+    "  --help, -h                       Show this help message",
+    "",
+    "Config file: ralphai.json (optional, JSON format)",
+    "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,",
+    "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,",
+    "                  issueSource, issueLabel,",
+    "                  issueInProgressLabel, issueRepo,",
+    "                  issueCommentProgress",
+    "",
+    "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,",
+    "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
+    "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,",
+    "                   RALPHAI_AUTO_COMMIT, RALPHAI_TURNS,",
+    "                   RALPHAI_TURN_TIMEOUT,",
+    "                   RALPHAI_PROMPT_MODE,",
+    "                   RALPHAI_ISSUE_SOURCE,",
+    "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,",
+    "                   RALPHAI_ISSUE_REPO,",
+    "                   RALPHAI_ISSUE_COMMENT_PROGRESS",
+    "",
+    "Precedence: CLI flags > env vars > config file > built-in defaults",
+    "",
+    "Examples:",
+    "  ralphai run --turns=10                                # 10 turns per plan (default: 5)",
+    "  ralphai run --turns=0                                 # unlimited turns per plan",
+    "  ralphai run --dry-run                                 # preview only",
+    "  ralphai run --turns=10 --dry-run                      # preview with explicit turns",
+    "  ralphai run --turns=10 --resume                       # recover dirty state and continue",
+    "  ralphai run --turns=10 --agent-command='claude -p'     # use Claude Code",
+    "  ralphai run --turns=10 --agent-command='opencode run --agent build'  # use OpenCode",
+    "  ralphai run --turns=10 --branch                       # create isolated branch, commit (no PR)",
+    "  ralphai run --turns=10 --branch --continuous          # keep draining backlog on isolated branches",
+    "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run --turns=10  # override via env var",
+    "",
+    "Feature branch workflow:",
+    "  ralphai run --turns=10 --patch --base-branch=feature/big-thing  # leave changes uncommitted on a feature branch",
+  ];
+  console.log(lines.join("\n"));
 }
 
 /**
- * Resolve the path to a bash executable.
- *
- * On Windows (Git Bash / MSYS2) `spawnSync` cannot execute `.sh` files
- * directly and the mintty pty layer can swallow stdout from synchronously
- * spawned child processes.  We therefore need to locate `bash.exe` so we
- * can invoke the script explicitly.
- *
- * Search order:
- *  1. `bash` on PATH (works when running *inside* Git Bash)
- *  2. Common Git-for-Windows install locations
+ * Resolve worktree state for the given directory.
+ * Returns { isWorktree, mainWorktree } where mainWorktree is the root
+ * of the main worktree (empty string if not in a worktree).
  */
-function findBash(): string | null {
-  // Fast path: try `bash` on PATH
+function resolveWorktreeInfo(dir: string): {
+  isWorktree: boolean;
+  mainWorktree: string;
+} {
   try {
-    execSync("bash --version", { stdio: "ignore" });
-    return "bash";
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      cwd: dir,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    const gitDir = execSync("git rev-parse --git-dir", {
+      cwd: dir,
+      stdio: "pipe",
+      encoding: "utf-8",
+    }).trim();
+    if (commonDir !== gitDir) {
+      // In a worktree: --git-common-dir points to the main .git
+      const mainRoot = resolve(dir, commonDir, "..");
+      return { isWorktree: true, mainWorktree: mainRoot };
+    }
   } catch {
-    // not on PATH
+    // Not in a git repo or git not available
   }
-
-  if (process.platform === "win32") {
-    const candidates = [
-      join(
-        process.env.PROGRAMFILES ?? "C:\\Program Files",
-        "Git",
-        "bin",
-        "bash.exe",
-      ),
-      join(
-        process.env["PROGRAMFILES(X86)"] ?? "C:\\Program Files (x86)",
-        "Git",
-        "bin",
-        "bash.exe",
-      ),
-      join(
-        process.env.LOCALAPPDATA ?? "",
-        "Programs",
-        "Git",
-        "bin",
-        "bash.exe",
-      ),
-    ];
-    for (const p of candidates) {
-      if (existsSync(p)) return p;
-    }
-  }
-
-  return null;
-}
-
-function resolveBundledRunnerScript(moduleUrl: string): string {
-  if (process.env.RALPHAI_RUNNER_SCRIPT) {
-    return process.env.RALPHAI_RUNNER_SCRIPT;
-  }
-
-  const packageDir = join(dirname(fileURLToPath(moduleUrl)), "..");
-  const candidates = [
-    ["runner", "ralphai.sh"],
-    ["templates", "ralphai", "ralphai.sh"],
-  ].map((segments) => join(packageDir, ...segments));
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error(
-    `Could not locate bundled runner script. Tried: ${candidates.join(", ")}`,
-  );
+  return { isWorktree: false, mainWorktree: "" };
 }
 
 async function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
-): Promise<never> {
+): Promise<void> {
   // Check that ralphai has been initialized (config dir exists).
   // In a worktree, .ralphai/ lives in the main repo — resolveRalphaiDir()
   // handles the fallback transparently.
@@ -2787,28 +2858,86 @@ async function runRalphaiRunner(
     process.exit(1);
   }
 
-  // Check receipt files for cross-source conflicts before spawning the runner.
-  // This provides early TypeScript-level blocking; the bash runner also checks.
+  // Check receipt files for cross-source conflicts before running.
+  const worktreeInfo = resolveWorktreeInfo(cwd);
   const ralphaiDir = join(ralphaiRoot, ".ralphai");
-  if (!checkReceiptSource(ralphaiDir, isGitWorktree(cwd))) {
+  if (!checkReceiptSource(ralphaiDir, worktreeInfo.isWorktree)) {
     process.exit(1);
   }
 
-  // --- Pre-flight: interactive dirty-state check ---
-  // If the working tree is dirty, prompt TTY users before spawning the runner.
-  // Non-TTY sessions fall through to the bash-layer hard check (which now
-  // mentions --allow-dirty in its error message).
-  const isDryRun =
-    options.runArgs.includes("--dry-run") || options.runArgs.includes("-n");
-  const hasAllowDirty = options.runArgs.includes("--allow-dirty");
-  const hasResume =
-    options.runArgs.includes("--resume") || options.runArgs.includes("-r");
+  const runArgs = options.runArgs;
 
+  // --- Handle --help ---
+  if (runArgs.includes("--help") || runArgs.includes("-h")) {
+    showRunHelp();
+    return;
+  }
+
+  // --- Reject unrecognized flags ---
+  for (const arg of runArgs) {
+    if (!isRecognizedRunFlag(arg)) {
+      console.error(`ERROR: Unrecognized argument: ${arg}`);
+      showRunHelp();
+      process.exit(1);
+    }
+  }
+
+  // --- Parse flags ---
+  const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
+  let hasAllowDirty = runArgs.includes("--allow-dirty");
+  const hasResume = runArgs.includes("--resume") || runArgs.includes("-r");
+  const hasShowConfig = runArgs.includes("--show-config");
+
+  // --- Resolve config: defaults -> file -> env -> CLI ---
+  const configFilePath = join(ralphaiRoot, "ralphai.json");
+  // Use relative display path when config is in cwd (matches legacy behavior).
+  // In a worktree the config may live in a different root, so use absolute.
+  const configDisplayPath =
+    ralphaiRoot === cwd ? "ralphai.json" : configFilePath;
+  let config;
+  try {
+    const result = resolveConfig({
+      configFilePath,
+      envVars: process.env as Record<string, string | undefined>,
+      cliArgs: runArgs,
+    });
+    for (const w of result.warnings) {
+      console.error(w);
+    }
+    config = result.config;
+  } catch (e) {
+    if (e instanceof ConfigError) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e;
+  }
+
+  // --- Handle --show-config ---
+  if (hasShowConfig) {
+    const { rawFlags } = parseCLIArgs(runArgs);
+    const worktree = worktreeInfo.isWorktree
+      ? { isWorktree: true, mainWorktree: worktreeInfo.mainWorktree }
+      : undefined;
+    const text = formatShowConfig({
+      config,
+      configFilePath: configDisplayPath,
+      configFileExists: existsSync(configFilePath),
+      envVars: process.env as Record<string, string | undefined>,
+      rawFlags,
+      worktree,
+      workspaces: config.workspaces.value,
+    });
+    console.log(text);
+    return;
+  }
+
+  // --- Pre-flight: interactive dirty-state check ---
   if (!isDryRun && !hasAllowDirty && !hasResume) {
     let treeDirty = false;
     try {
-      // Mirror is_tree_dirty() from runner/lib/git.sh — exclude .ralphai
-      // (gitignored dir / worktree symlink) and ralphai.json (untracked config).
+      // Check for dirty state, excluding .ralphai (gitignored dir / worktree
+      // symlink) and ralphai.json (untracked config).
       execSync("git diff --quiet HEAD -- ':!.ralphai'", {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
@@ -2839,91 +2968,21 @@ async function runRalphaiRunner(
         );
         process.exit(1);
       }
-      // Inject --allow-dirty so the bash runner's check also passes
-      options.runArgs.push("--allow-dirty");
+      hasAllowDirty = true;
     }
   }
 
-  // Resolve the runner script from the npm package (not the user's project).
-  // RALPHAI_RUNNER_SCRIPT env var allows overriding for tests.
-  let ralphaiSh: string;
-  try {
-    ralphaiSh = resolveBundledRunnerScript(import.meta.url);
-  } catch (error) {
-    console.error(
-      `${TEXT}Error:${RESET} ${error instanceof Error ? error.message : String(error)}`,
-    );
-    process.exit(1);
-  }
+  // --- Build runner options and invoke the TypeScript runner directly ---
+  const runnerOpts: RunnerOptions = {
+    config,
+    cwd,
+    ralphaiDir,
+    isWorktree: worktreeInfo.isWorktree,
+    mainWorktree: worktreeInfo.mainWorktree,
+    dryRun: isDryRun,
+    resume: hasResume,
+    allowDirty: hasAllowDirty,
+  };
 
-  const args = options.runArgs;
-
-  const isWindows = process.platform === "win32";
-  // Git Bash / MSYS2 sets MSYSTEM; mintty-based terminals may also set
-  // TERM_PROGRAM=mintty.  In these environments Node cannot directly
-  // execute `.sh` files, so we need to locate `bash.exe` explicitly.
-  const isMsys = !!(
-    process.env.MSYSTEM || process.env.TERM_PROGRAM === "mintty"
-  );
-
-  if (isWindows || isMsys) {
-    // On Windows / MSYS: locate bash explicitly since Node cannot run
-    // `.sh` files directly on this platform.
-    const bash = findBash();
-    if (!bash) {
-      console.error(
-        `${TEXT}Error:${RESET} Could not find bash. ` +
-          `Install Git for Windows (https://git-scm.com) and ensure bash is on your PATH.`,
-      );
-      process.exit(1);
-    }
-
-    // Convert Windows path to a form bash understands (forward slashes)
-    const scriptPath = ralphaiSh.replace(/\\/g, "/");
-
-    // Use stdio "inherit" so the child shares the parent's file descriptors
-    // directly.  This avoids pipe-buffering issues that cause output to stall
-    // on Windows (Git Bash / mintty / PowerShell / cmd) where the MSYS2 PTY
-    // layer + Node.js pipe chain can swallow or delay agent output.  Shell-
-    // level redirection (e.g. `ralphai run > log.txt`) still works because it
-    // operates on the inherited file descriptors.
-    const child = spawn(bash, [scriptPath, ...args], {
-      cwd,
-      stdio: "inherit",
-      env: { ...process.env },
-    });
-
-    return new Promise((_resolve, _reject) => {
-      child.on("close", (code) => {
-        process.exit(code ?? 1);
-      });
-
-      child.on("error", (err) => {
-        console.error(
-          `${TEXT}Error:${RESET} Failed to start bash: ${err.message}`,
-        );
-        process.exit(1);
-      });
-    });
-  } else {
-    // Unix: inherit stdio so the child writes directly to the terminal,
-    // matching the Windows path and avoiding unnecessary pipe buffering.
-    const child = spawn(ralphaiSh, args, {
-      cwd,
-      stdio: "inherit",
-      env: { ...process.env },
-    });
-
-    return new Promise((_resolve, _reject) => {
-      child.on("close", (code) => {
-        process.exit(code ?? 1);
-      });
-      child.on("error", (err) => {
-        console.error(
-          `${TEXT}Error:${RESET} Failed to start task runner ${ralphaiSh}: ${err.message}`,
-        );
-        process.exit(1);
-      });
-    });
-  }
+  await runRunner(runnerOpts);
 }

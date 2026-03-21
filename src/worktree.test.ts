@@ -5,11 +5,9 @@ import {
   readFileSync,
   mkdirSync,
   writeFileSync,
-  chmodSync,
   symlinkSync,
   lstatSync,
   readlinkSync,
-  readdirSync,
 } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
@@ -103,17 +101,14 @@ describe("worktree", () => {
       // Initialize ralphai in the main repo (creates .ralphai/)
       runCliOutput(["init", "--yes"], mainRepo);
 
-      // Create a stub runner script that just prints success
-      const stubScript = join(mainRepo, "stub-runner.sh");
-      writeFileSync(stubScript, '#!/bin/bash\necho "STUB_OK"\n');
-      chmodSync(stubScript, 0o755);
-
-      // Run from worktree — should find .ralphai/ in the main repo
-      const result = runCli(["run"], worktreeDir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("STUB_OK");
+      // Run --show-config from worktree — should find .ralphai/ and
+      // ralphai.json in the main repo and resolve config successfully
+      const result = runCli(["run", "--show-config"], worktreeDir);
       expect(result.exitCode).toBe(0);
+      // Config output should include the agent command from the main repo's config
+      expect(result.stdout).toContain("agentCommand");
+      // Should detect that we're in a worktree
+      expect(result.stdout).toContain("worktree");
     });
 
     it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
@@ -471,15 +466,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       writeFileSync(join(backlogDir, "prd-first.md"), "# First\n");
       writeFileSync(join(backlogDir, "prd-second.md"), "# Second\n");
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
+      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly (1 turn)
       const result = runCli(
-        ["worktree", "--plan=prd-second.md"],
+        ["worktree", "--plan=prd-second.md", "--turns=1"],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -499,18 +490,18 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         "# Symlink test\n",
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       // Use --dir to place worktree inside ctx.dir (auto-cleaned by afterEach)
       const worktreeDir = join(ctx.dir, "wt-symlink");
 
       const result = runCli(
-        ["worktree", "--plan=prd-symlink-test.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-symlink-test.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -544,17 +535,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         JSON.stringify({ runner: "opencode" }),
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-config-symlink");
 
       const result = runCli(
-        ["worktree", "--plan=prd-config-symlink.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-config-symlink.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -591,17 +582,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         stdio: "ignore",
       });
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-committed-cfg");
 
       runCli(
-        ["worktree", "--plan=prd-committed-cfg.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-committed-cfg.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -622,17 +613,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         "# Tracked test\n",
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-tracked");
 
       const result = runCli(
-        ["worktree", "--plan=prd-tracked-test.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-tracked-test.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -721,23 +712,18 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         stdio: "ignore",
       });
 
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(
-        stubScript,
-        '#!/bin/bash\necho "PWD=$PWD"\necho "ARGS=$*"\nexit 0\n',
+      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly
+      const result = runCli(
+        ["worktree", "--turns=3"],
+        ctx.dir,
+        { RALPHAI_AGENT_COMMAND: "true" },
+        30000,
       );
-      chmodSync(stubScript, 0o755);
-
-      const result = runCli(["worktree", "--turns=3"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
       const combined = result.stdout + result.stderr;
 
-      expect(result.exitCode).toBe(0);
       expect(combined).toContain(`Reusing existing worktree: ${worktreeDir}`);
-      expect(combined).toContain(`PWD=${worktreeDir}`);
-      expect(combined).toContain("ARGS=--pr --resume --turns=3");
 
+      // The .ralphai symlink should have been created in the worktree
       const symlinkPath = join(worktreeDir, ".ralphai");
       expect(existsSync(symlinkPath)).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);

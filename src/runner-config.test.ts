@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  existsSync,
-  rmSync,
-  readFileSync,
-  mkdirSync,
-  writeFileSync,
-  chmodSync,
-} from "fs";
+import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync, execFileSync } from "child_process";
@@ -1098,13 +1091,8 @@ echo "$MODE"
   describe.skipIf(process.platform === "win32")(
     "mode --show-config display",
     () => {
-      let stubScript: string;
-
       beforeEach(() => {
         runCliOutput(["init", "--yes"], ctx.dir);
-        stubScript = join(ctx.dir, "stub-runner.sh");
-        writeFileSync(stubScript, '#!/bin/bash\necho "ARGS:$*"\n');
-        chmodSync(stubScript, 0o755);
       });
 
       it("--show-config displays mode=branch as default", () => {
@@ -1208,65 +1196,59 @@ echo "$MODE"
   // -------------------------------------------------------------------------
 
   describe.skipIf(process.platform === "win32")("run default turns", () => {
-    let stubScript: string;
-
     beforeEach(() => {
       // Scaffold ralphai (creates .ralphai/ directory)
       runCliOutput(["init", "--yes"], ctx.dir);
-      // Create a stub script that echoes args (used via RALPHAI_RUNNER_SCRIPT env var)
-      stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, '#!/bin/bash\necho "ARGS:$*"\n');
-      chmodSync(stubScript, 0o755);
     });
 
-    it("run without args lets the runner apply its default turn count", () => {
-      const result = runCli(["run"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:");
-      expect(result.stdout).not.toContain("ARGS:5");
+    it("run --show-config without --turns shows default turn count", () => {
+      const result = runCli(["run", "--show-config"], ctx.dir);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 5");
+      expect(result.stdout).toContain("(default)");
     });
 
-    it("run -- --turns=5 passes explicit turn count to ralphai.sh", () => {
-      const result = runCli(["run", "--", "--turns=5"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:--turns=5");
+    it("run --turns=5 --show-config shows explicit turn count from CLI", () => {
+      const result = runCli(["run", "--turns=5", "--show-config"], ctx.dir);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 5");
+      expect(result.stdout).toContain("(cli (--turns=5))");
     });
 
-    it("run -- --dry-run passes flags to ralphai.sh", () => {
-      const result = runCli(["run", "--", "--dry-run"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:--dry-run");
-    });
-
-    it("run -- --turns=5 --resume passes multiple args to ralphai.sh", () => {
-      const result = runCli(["run", "--", "--turns=5", "--resume"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:--turns=5 --resume");
-    });
-
-    it("run --turns=3 passes turn count without -- separator", () => {
-      const result = runCli(["run", "--turns=3"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:--turns=3");
-    });
-
-    it("run --dry-run passes flags without -- separator", () => {
+    it("run --dry-run produces preview output", () => {
       const result = runCli(["run", "--dry-run"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
+        RALPHAI_AGENT_COMMAND: "echo mock",
+        RALPHAI_NO_UPDATE_CHECK: "1",
       });
-      expect(result.stdout).toContain("ARGS:--dry-run");
+      expect(result.exitCode).toBe(0);
+      const combined = result.stdout + result.stderr;
+      expect(combined).toContain("dry-run");
     });
 
-    it("run --turns=3 --resume passes multiple args without -- separator", () => {
-      const result = runCli(["run", "--turns=3", "--resume"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("ARGS:--turns=3 --resume");
+    it("run --turns=5 --show-config with -- separator works the same", () => {
+      const result = runCli(
+        ["run", "--", "--turns=5", "--show-config"],
+        ctx.dir,
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 5");
+      expect(result.stdout).toContain("(cli (--turns=5))");
+    });
+
+    it("run --turns=3 --show-config shows turns=3 from CLI", () => {
+      const result = runCli(["run", "--turns=3", "--show-config"], ctx.dir);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("turns              = 3");
+      expect(result.stdout).toContain("(cli (--turns=3))");
+    });
+
+    it("run --help shows usage information", () => {
+      const result = runCli(["run", "--help"], ctx.dir);
+      expect(result.exitCode).toBe(0);
+      const combined = result.stdout + result.stderr;
+      expect(combined).toContain("--turns=");
+      expect(combined).toContain("--dry-run");
+      expect(combined).toContain("--branch");
     });
 
     it("run 3 is rejected by the bundled runner", () => {
@@ -1329,7 +1311,7 @@ echo "$MODE"
       expect(result.stdout).toContain("(config (ralphai.json))");
     });
 
-    it("built CLI can locate the bundled runner script", () => {
+    it("built CLI runs the TS runner directly (no bash runner)", () => {
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
 
