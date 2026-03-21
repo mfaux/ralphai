@@ -17,6 +17,7 @@ import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope, extractDependsOn } from "./frontmatter.ts";
+import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -1539,88 +1540,8 @@ interface SelectedWorktreePlan {
   source: "backlog" | "in-progress";
 }
 
-interface Receipt {
-  started_at: string;
-  source: "main" | "worktree";
-  worktree_path?: string;
-  branch: string;
-  slug: string;
-  plan_file?: string;
-  turns_budget: number;
-  turns_completed: number;
-  tasks_completed: number;
-  outcome?: string;
-}
-
-function parseReceipt(filePath: string): Receipt | null {
-  if (!existsSync(filePath)) return null;
-  const content = readFileSync(filePath, "utf-8");
-  const fields: Record<string, string> = {};
-  for (const line of content.split("\n")) {
-    const eq = line.indexOf("=");
-    if (eq > 0) {
-      fields[line.slice(0, eq)] = line.slice(eq + 1);
-    }
-  }
-  return {
-    started_at: fields.started_at ?? "",
-    source: (fields.source as "main" | "worktree") ?? "main",
-    worktree_path: fields.worktree_path,
-    branch: fields.branch ?? "",
-    slug: fields.slug ?? "",
-    plan_file: fields.plan_file,
-    turns_budget: parseInt(fields.turns_budget ?? "0", 10),
-    turns_completed: parseInt(fields.turns_completed ?? "0", 10),
-    tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
-    outcome: fields.outcome,
-  };
-}
-
-/**
- * Check receipt for cross-source conflicts. Called from runRalphaiRunner
- * to provide early TypeScript-level blocking before the bash runner runs.
- * Returns true if the run should proceed, false (with error output) if blocked.
- */
-function checkReceiptSource(ralphaiDir: string, isWorktree: boolean): boolean {
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-  if (!existsSync(inProgressDir)) return true;
-
-  const planSlugs = listPlanFolders(inProgressDir);
-  for (const slug of planSlugs) {
-    const receiptPath = join(inProgressDir, slug, "receipt.txt");
-    const receipt = parseReceipt(receiptPath);
-    if (!receipt) continue;
-
-    if (receipt.source === "worktree" && !isWorktree) {
-      console.error();
-      console.error(`Plan "${receipt.slug}" is running in a worktree.`);
-      console.error();
-      console.error(`  Worktree: ${receipt.worktree_path ?? "unknown"}`);
-      console.error(`  Branch:   ${receipt.branch || "unknown"}`);
-      console.error(`  Started:  ${receipt.started_at || "unknown"}`);
-      console.error();
-      console.error(`  To resume:  ralphai worktree`);
-      console.error(`  To discard: ralphai worktree clean`);
-      return false;
-    }
-
-    if (receipt.source === "main" && isWorktree) {
-      console.error();
-      console.error(
-        `Plan "${receipt.slug}" is already running in the main repository.`,
-      );
-      console.error();
-      console.error(`  Branch:  ${receipt.branch || "unknown"}`);
-      console.error(`  Started: ${receipt.started_at || "unknown"}`);
-      console.error();
-      console.error(
-        `  Finish or interrupt the main-repo run first, then retry.`,
-      );
-      return false;
-    }
-  }
-  return true;
-}
+// Receipt interface and functions (parseReceipt, checkReceiptSource) are
+// imported from ./receipt.ts above.
 
 function parseWorktreeList(output: string): WorktreeEntry[] {
   const entries: WorktreeEntry[] = [];
