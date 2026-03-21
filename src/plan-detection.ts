@@ -1,0 +1,414 @@
+/**
+ * Plan detection and dependency resolution.
+ *
+ * Single source of truth for plan listing, dependency checking, and
+ * plan selection logic.
+ */
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  mkdirSync,
+  renameSync,
+} from "fs";
+import { join, basename } from "path";
+import { extractDependsOn } from "./frontmatter.ts";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Result of detecting the next plan to run. */
+export interface DetectedPlan {
+  /** Absolute path to the plan .md file in its in-progress slug-folder. */
+  planFile: string;
+  /** Plan slug (dirname / filename stem). */
+  planSlug: string;
+  /** Absolute path to the active in-progress slug-folder. */
+  wipDir: string;
+  /** True when resuming an existing in-progress plan. */
+  resumed: boolean;
+}
+
+/** Reason why no plan was detected. */
+export type DetectFailReason = "empty-backlog" | "all-blocked";
+
+/** Blocked plan info returned when detection finds no runnable plans. */
+export interface BlockedPlanInfo {
+  slug: string;
+  reason: string; // e.g., "skipped", "pending:dep-a.md,missing:dep-b.md"
+}
+
+/** Full result of detectPlan, including failure reasons. */
+export type DetectPlanResult =
+  | { detected: true; plan: DetectedPlan }
+  | {
+      detected: false;
+      reason: DetectFailReason;
+      backlogCount: number;
+      blocked: BlockedPlanInfo[];
+    };
+
+/** Dependency status for a single plan dependency. */
+export type DependencyStatus = "done" | "pending" | "missing";
+
+/** Result of checking plan readiness. */
+export type PlanReadiness =
+  | { ready: true }
+  | { ready: false; reasons: string[] };
+
+/** Directories used by the pipeline. */
+export interface PipelineDirs {
+  wipDir: string;
+  backlogDir: string;
+  archiveDir: string;
+}
+
+// ---------------------------------------------------------------------------
+// Plan listing (moved from src/ralphai.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * List subdirectory names in `dir`.
+ */
+export function listPlanFolders(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compute the path to a plan file inside a slug-folder: `<dir>/<slug>/<slug>.md`
+ */
+export function planPathForSlug(dir: string, slug: string): string {
+  return join(dir, slug, `${slug}.md`);
+}
+
+/**
+ * List plan slugs in `dir`.
+ * - Slug-folder plans (`<slug>/<slug>.md`): used by in-progress and out.
+ * - Flat `.md` files (`<slug>.md`): used by backlog.
+ * Pass `flatOnly: true` for backlog to skip slug-folder scanning.
+ */
+export function listPlanSlugs(dir: string, flatOnly = false): string[] {
+  if (!existsSync(dir)) return [];
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+
+  // Slug-folder plans: <dir>/<slug>/<slug>.md (in-progress, out)
+  if (!flatOnly) {
+    for (const folder of listPlanFolders(dir)) {
+      if (existsSync(planPathForSlug(dir, folder))) {
+        seen.add(folder);
+        slugs.push(folder);
+      }
+    }
+  }
+
+  // Flat files: <dir>/<slug>.md (backlog)
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const slug = entry.name.replace(/\.md$/, "");
+      if (!seen.has(slug)) {
+        seen.add(slug);
+        slugs.push(slug);
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+
+  return slugs;
+}
+
+/**
+ * List plan filenames (`<slug>.md`) in `dir`.
+ */
+export function listPlanFiles(dir: string, flatOnly = false): string[] {
+  return listPlanSlugs(dir, flatOnly).map((slug) => `${slug}.md`);
+}
+
+/**
+ * Resolve the path to a plan file for a given slug in `dir`.
+ * Checks slug-folder (`<dir>/<slug>/<slug>.md`) for in-progress/out,
+ * then flat file (`<dir>/<slug>.md`) for backlog.
+ * Returns the path if found, null otherwise.
+ */
+export function resolvePlanPath(dir: string, slug: string): string | null {
+  const folderPath = planPathForSlug(dir, slug);
+  if (existsSync(folderPath)) return folderPath;
+  const flatPath = join(dir, `${slug}.md`);
+  if (existsSync(flatPath)) return flatPath;
+  return null;
+}
+
+/**
+ * Check whether a plan exists for the given slug in `dir`.
+ */
+export function planExistsForSlug(dir: string, slug: string): boolean {
+  return resolvePlanPath(dir, slug) !== null;
+}
+
+/**
+ * Count total tasks in a plan file by counting `### Task N:` headings.
+ */
+export function countPlanTasks(planPath: string): number {
+  if (!existsSync(planPath)) return 0;
+  const content = readFileSync(planPath, "utf-8");
+  const matches = content.match(/^### Task \d+/gm);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Count completed tasks in a progress file. Handles two patterns:
+ * 1. Individual: `### Task N:` followed by `**Status:** Complete`
+ * 2. Batch: `### ... Tasks X-Y:` or `### ... Tasks X-Y:` headings
+ */
+export function countCompletedTasks(progressPath: string): number {
+  if (!existsSync(progressPath)) return 0;
+  const content = readFileSync(progressPath, "utf-8");
+
+  // Count individual `**Status:** Complete` entries
+  const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
+  let count = completeMatches ? completeMatches.length : 0;
+
+  // Count batch entries: `### ... Tasks X-Y` or `### ... Tasks X-Y` headings only
+  const batchMatches = content.matchAll(
+    /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
+  );
+  for (const match of batchMatches) {
+    const start = parseInt(match[1]!, 10);
+    const end = parseInt(match[2]!, 10);
+    if (end > start) {
+      count += end - start + 1;
+    }
+  }
+
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Plan detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect backlog plans (flat `.md` files only).
+ * Returns sorted array of absolute file paths.
+ */
+export function collectBacklogPlans(backlogDir: string): string[] {
+  if (!existsSync(backlogDir)) return [];
+  try {
+    return readdirSync(backlogDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+      .map((entry) => join(backlogDir, entry.name))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Check dependency status for a plan slug.
+ * Returns "done" if archived, "pending" if in backlog or in-progress,
+ * "missing" if not found anywhere.
+ */
+export function checkDependencyStatus(
+  depSlug: string,
+  dirs: PipelineDirs,
+): DependencyStatus {
+  // Normalize: strip .md extension if present
+  const slug = depSlug.replace(/\.md$/, "");
+  const depBase = `${slug}.md`;
+
+  if (existsSync(join(dirs.archiveDir, slug))) {
+    return "done";
+  }
+
+  if (
+    existsSync(join(dirs.wipDir, slug)) ||
+    existsSync(join(dirs.backlogDir, depBase))
+  ) {
+    return "pending";
+  }
+
+  return "missing";
+}
+
+/**
+ * Determine whether a backlog plan is ready based on depends-on metadata.
+ */
+export function planReadiness(
+  planPath: string,
+  dirs: PipelineDirs,
+): PlanReadiness {
+  const planBase = basename(planPath);
+  const deps = extractDependsOn(planPath).map((d) => basename(d));
+
+  if (deps.length === 0) {
+    return { ready: true };
+  }
+
+  const reasons: string[] = [];
+  for (const dep of deps) {
+    if (dep === planBase) {
+      reasons.push(`self:${dep}`);
+      continue;
+    }
+
+    const slug = dep.replace(/\.md$/, "");
+    const status = checkDependencyStatus(slug, dirs);
+    if (status !== "done") {
+      reasons.push(`${status}:${dep}`);
+    }
+  }
+
+  if (reasons.length === 0) {
+    return { ready: true };
+  }
+
+  return { ready: false, reasons };
+}
+
+/**
+ * Extract the first markdown heading from a plan file.
+ */
+export function getPlanDescription(planPath: string): string {
+  if (!existsSync(planPath)) return "ralphai task";
+  try {
+    const content = readFileSync(planPath, "utf-8");
+    const match = content.match(/^#+\s+(.+)$/m);
+    return match ? match[1]!.trim() : "ralphai task";
+  } catch {
+    return "ralphai task";
+  }
+}
+
+/**
+ * Detect the next plan to run.
+ *
+ * Algorithm:
+ * 1. Check for in-progress plans (resume).
+ *    - In worktree mode, only consider the plan matching the current branch.
+ *    - Otherwise, consider all in-progress slug-folders.
+ * 2. If no in-progress work, scan the backlog.
+ * 3. Filter backlog by dependency readiness.
+ * 4. Pick the first ready plan.
+ * 5. Promote it from flat file to in-progress slug-folder (unless dry-run).
+ *
+ * Returns a `DetectPlanResult` with either the detected plan or a
+ * reason why no plan was found plus blocked-plan diagnostics.
+ */
+export function detectPlan(opts: {
+  dirs: PipelineDirs;
+  /** Current git branch name, if in worktree mode. */
+  worktreeBranch?: string;
+  /** If true, skip filesystem side effects (mkdir, mv). */
+  dryRun?: boolean;
+  /** Plan slugs to skip (e.g., branch/PR collision). */
+  skippedSlugs?: Set<string>;
+}): DetectPlanResult {
+  const { dirs, worktreeBranch, dryRun = false, skippedSlugs } = opts;
+
+  // --- 1. Check for in-progress plans ---
+  const inProgressPlans: string[] = [];
+
+  if (worktreeBranch) {
+    // Worktree mode: only consider the plan matching this branch
+    const slug = worktreeBranch.replace(/^ralphai\//, "");
+    const planFile = planPathForSlug(dirs.wipDir, slug);
+    if (existsSync(planFile)) {
+      inProgressPlans.push(planFile);
+    }
+  } else {
+    // Normal mode: scan all in-progress slug-folders
+    for (const folder of listPlanFolders(dirs.wipDir)) {
+      const planFile = planPathForSlug(dirs.wipDir, folder);
+      if (existsSync(planFile)) {
+        inProgressPlans.push(planFile);
+      }
+    }
+  }
+
+  if (inProgressPlans.length > 0) {
+    const planFile = inProgressPlans[0]!;
+    const slug = basename(join(planFile, ".."));
+    return {
+      detected: true,
+      plan: {
+        planFile,
+        planSlug: slug,
+        wipDir: join(dirs.wipDir, slug),
+        resumed: true,
+      },
+    };
+  }
+
+  // --- 2. Scan backlog ---
+  const backlogPlans = collectBacklogPlans(dirs.backlogDir);
+  if (backlogPlans.length === 0) {
+    return {
+      detected: false,
+      reason: "empty-backlog",
+      backlogCount: 0,
+      blocked: [],
+    };
+  }
+
+  // --- 3. Filter by dependency readiness ---
+  const readyPlans: string[] = [];
+  const blocked: BlockedPlanInfo[] = [];
+  for (const f of backlogPlans) {
+    const fb = basename(f);
+    const slug = fb.replace(/\.md$/, "");
+
+    // Skip plans with branch/PR collisions
+    if (skippedSlugs?.has(slug)) {
+      blocked.push({ slug, reason: "skipped" });
+      continue;
+    }
+
+    const status = planReadiness(f, dirs);
+    if (status.ready) {
+      readyPlans.push(f);
+    } else {
+      blocked.push({ slug, reason: status.reasons.join(",") });
+    }
+  }
+
+  if (readyPlans.length === 0) {
+    return {
+      detected: false,
+      reason: "all-blocked",
+      backlogCount: backlogPlans.length,
+      blocked,
+    };
+  }
+
+  // --- 4. Pick the first ready plan ---
+  const chosen = readyPlans[0]!;
+  const slug = basename(chosen).replace(/\.md$/, "");
+  const destDir = join(dirs.wipDir, slug);
+  const destPlan = join(destDir, `${slug}.md`);
+
+  // --- 5. Promote to in-progress ---
+  if (!dryRun) {
+    mkdirSync(destDir, { recursive: true });
+    renameSync(chosen, destPlan);
+  }
+
+  return {
+    detected: true,
+    plan: {
+      planFile: destPlan,
+      planSlug: slug,
+      wipDir: destDir,
+      resumed: false,
+    },
+  };
+}

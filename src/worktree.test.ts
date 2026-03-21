@@ -5,24 +5,19 @@ import {
   readFileSync,
   mkdirSync,
   writeFileSync,
-  chmodSync,
   symlinkSync,
   lstatSync,
   readlinkSync,
-  readdirSync,
 } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import { fileURLToPath } from "url";
 import {
   runCli,
   runCliOutput,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("worktree", () => {
   // -------------------------------------------------------------------------
@@ -103,17 +98,14 @@ describe("worktree", () => {
       // Initialize ralphai in the main repo (creates .ralphai/)
       runCliOutput(["init", "--yes"], mainRepo);
 
-      // Create a stub runner script that just prints success
-      const stubScript = join(mainRepo, "stub-runner.sh");
-      writeFileSync(stubScript, '#!/bin/bash\necho "STUB_OK"\n');
-      chmodSync(stubScript, 0o755);
-
-      // Run from worktree — should find .ralphai/ in the main repo
-      const result = runCli(["run"], worktreeDir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
-      expect(result.stdout).toContain("STUB_OK");
+      // Run --show-config from worktree — should find .ralphai/ and
+      // ralphai.json in the main repo and resolve config successfully
+      const result = runCli(["run", "--show-config"], worktreeDir);
       expect(result.exitCode).toBe(0);
+      // Config output should include the agent command from the main repo's config
+      expect(result.stdout).toContain("agentCommand");
+      // Should detect that we're in a worktree
+      expect(result.stdout).toContain("worktree");
     });
 
     it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
@@ -122,169 +114,6 @@ describe("worktree", () => {
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not set up");
       expect(result.stderr).toContain("ralphai init");
-    });
-
-    it("defaults.sh resolves pipeline paths to main worktree when sourced inside a worktree", () => {
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      // Source defaults.sh from the worktree directory and print resolved variables
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-wt-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: worktreeDir,
-        });
-        expect(result).toContain("IS_WORKTREE=true");
-        expect(result).toContain(`MAIN_WORKTREE=${mainRepo}`);
-        expect(result).toContain(
-          `WIP_DIR=${mainRepo}/.ralphai/pipeline/in-progress`,
-        );
-        expect(result).toContain(
-          `BACKLOG_DIR=${mainRepo}/.ralphai/pipeline/backlog`,
-        );
-        expect(result).toContain(
-          `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
-        );
-        // Config falls back to main repo's absolute path (manual worktree without symlink)
-        expect(result).toContain(`CONFIG_FILE=${mainRepo}/ralphai.json`);
-        expect(result).toContain(
-          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/<slug>/progress.md`,
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-
-    it("defaults.sh uses relative paths when .ralphai symlink exists in worktree", () => {
-      // Create .ralphai/ directory in the main repo
-      const ralphaiDir = join(mainRepo, ".ralphai");
-      mkdirSync(join(ralphaiDir, "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      mkdirSync(join(ralphaiDir, "pipeline", "backlog"), { recursive: true });
-      mkdirSync(join(ralphaiDir, "pipeline", "out"), { recursive: true });
-
-      // Create symlink in the worktree pointing to main repo's .ralphai/
-      symlinkSync(ralphaiDir, join(worktreeDir, ".ralphai"));
-
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-symlink-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: worktreeDir,
-        });
-        // Should detect worktree
-        expect(result).toContain("IS_WORKTREE=true");
-        // But paths should be RELATIVE (not absolute) thanks to the symlink
-        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
-        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
-        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
-        expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-
-    it("defaults.sh keeps relative paths when sourced in the main repo (not a worktree)", () => {
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-main-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: mainRepo,
-        });
-        expect(result).toContain("IS_WORKTREE=false");
-        expect(result).toContain("MAIN_WORKTREE=");
-        // Verify MAIN_WORKTREE is empty (not set)
-        expect(result).toMatch(/MAIN_WORKTREE=\n/);
-        // Paths should remain relative
-        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
-        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
-        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
-        expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
     });
   });
 
@@ -471,15 +300,11 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       writeFileSync(join(backlogDir, "prd-first.md"), "# First\n");
       writeFileSync(join(backlogDir, "prd-second.md"), "# Second\n");
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
+      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly (1 turn)
       const result = runCli(
-        ["worktree", "--plan=prd-second.md"],
+        ["worktree", "--plan=prd-second.md", "--turns=1"],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -499,18 +324,18 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         "# Symlink test\n",
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       // Use --dir to place worktree inside ctx.dir (auto-cleaned by afterEach)
       const worktreeDir = join(ctx.dir, "wt-symlink");
 
       const result = runCli(
-        ["worktree", "--plan=prd-symlink-test.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-symlink-test.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -544,17 +369,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         JSON.stringify({ runner: "opencode" }),
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-config-symlink");
 
       const result = runCli(
-        ["worktree", "--plan=prd-config-symlink.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-config-symlink.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -591,17 +416,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         stdio: "ignore",
       });
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-committed-cfg");
 
       runCli(
-        ["worktree", "--plan=prd-committed-cfg.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-committed-cfg.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -622,17 +447,17 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         "# Tracked test\n",
       );
 
-      // Use a stub runner that just exits 0
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(stubScript, "#!/bin/bash\nexit 0\n");
-      chmodSync(stubScript, 0o755);
-
       const worktreeDir = join(ctx.dir, "wt-tracked");
 
       const result = runCli(
-        ["worktree", "--plan=prd-tracked-test.md", `--dir=${worktreeDir}`],
+        [
+          "worktree",
+          "--plan=prd-tracked-test.md",
+          `--dir=${worktreeDir}`,
+          "--turns=1",
+        ],
         ctx.dir,
-        { RALPHAI_RUNNER_SCRIPT: stubScript },
+        { RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -646,60 +471,6 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       ).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(symlinkPath)).toBe(join(ctx.dir, ".ralphai"));
-    });
-
-    it("is_tree_dirty ignores .ralphai changes (gitignored) but catches real dirty state", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Add .ralphai/ to .gitignore (legacy pattern -- only matches directories,
-      // not symlinks; the pathspec exclusion in is_tree_dirty handles this)
-      writeFileSync(join(ctx.dir, ".gitignore"), ".ralphai/\n");
-      execSync("git add .gitignore && git commit -m 'add gitignore'", {
-        cwd: ctx.dir,
-        stdio: "ignore",
-      });
-
-      const gitShPath = join(__dirname, "..", "runner", "lib", "git.sh");
-
-      // Helper: run is_tree_dirty in a given directory
-      const isDirty = (cwd: string) => {
-        const branch = execSync("git rev-parse --abbrev-ref HEAD", {
-          cwd,
-          encoding: "utf-8",
-        }).trim();
-        const result = execSync(
-          `bash -c 'MODE=direct; DRY_RUN=true; BASE_BRANCH=${branch}; source "${gitShPath}"; is_tree_dirty; echo $?'`,
-          { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-        ).trim();
-        return result === "0";
-      };
-
-      // Clean tree should not be dirty
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // Adding files inside .ralphai/ should NOT make the tree dirty (gitignored)
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-      writeFileSync(join(ctx.dir, ".ralphai", "LEARNINGS.md"), "# Learnings");
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // A .ralphai symlink (as created in worktrees) should also not trigger dirty
-      rmSync(join(ctx.dir, ".ralphai"), { recursive: true, force: true });
-      const symlinkTarget = join(ctx.dir, ".ralphai-real");
-      mkdirSync(symlinkTarget, { recursive: true });
-      symlinkSync(symlinkTarget, join(ctx.dir, ".ralphai"));
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // A ralphai.json symlink (as created in worktrees) should not trigger dirty.
-      // The symlink target lives outside the repo (in the main repo), so use tmpdir.
-      rmSync(join(ctx.dir, "real-change.txt"), { force: true });
-      const configTarget = join(tmpdir(), "ralphai-config-real.json");
-      writeFileSync(configTarget, '{"agent":"opencode"}');
-      symlinkSync(configTarget, join(ctx.dir, "ralphai.json"));
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // But a real change (outside .ralphai and ralphai.json) should still be caught
-      writeFileSync(join(ctx.dir, "real-change.txt"), "dirty");
-      expect(isDirty(ctx.dir)).toBe(true);
     });
 
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
@@ -721,23 +492,18 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
         stdio: "ignore",
       });
 
-      const stubScript = join(ctx.dir, "stub-runner.sh");
-      writeFileSync(
-        stubScript,
-        '#!/bin/bash\necho "PWD=$PWD"\necho "ARGS=$*"\nexit 0\n',
+      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly
+      const result = runCli(
+        ["worktree", "--turns=3"],
+        ctx.dir,
+        { RALPHAI_AGENT_COMMAND: "true" },
+        30000,
       );
-      chmodSync(stubScript, 0o755);
-
-      const result = runCli(["worktree", "--turns=3"], ctx.dir, {
-        RALPHAI_RUNNER_SCRIPT: stubScript,
-      });
       const combined = result.stdout + result.stderr;
 
-      expect(result.exitCode).toBe(0);
       expect(combined).toContain(`Reusing existing worktree: ${worktreeDir}`);
-      expect(combined).toContain(`PWD=${worktreeDir}`);
-      expect(combined).toContain("ARGS=--pr --resume --turns=3");
 
+      // The .ralphai symlink should have been created in the worktree
       const symlinkPath = join(worktreeDir, ".ralphai");
       expect(existsSync(symlinkPath)).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);

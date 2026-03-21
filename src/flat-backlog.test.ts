@@ -108,11 +108,11 @@ depends-on: [parent-plan.md]
 });
 
 // ---------------------------------------------------------------------------
-// Flat plan selection for worktree (dry-run via bash runner)
+// Flat plan selection for worktree (dry-run via TS runner)
 // ---------------------------------------------------------------------------
 
 describe.skipIf(process.platform === "win32")(
-  "flat backlog plan execution (bash runner)",
+  "flat backlog plan execution (TS runner)",
   () => {
     let testDir: string;
 
