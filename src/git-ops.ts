@@ -69,18 +69,20 @@ function ghAvailable(): boolean {
  */
 export function isTreeDirty(cwd: string): boolean {
   // 1. Unstaged changes (exclude .ralphai)
-  if (!execOk("git diff --quiet HEAD -- ':!.ralphai'", cwd)) {
+  // Note: pathspec excludes must not be single-quoted; cmd.exe on Windows
+  // passes the literal quotes to git, breaking the exclude pattern.
+  if (!execOk("git diff --quiet HEAD -- :!.ralphai", cwd)) {
     return true;
   }
 
   // 2. Staged changes (exclude .ralphai)
-  if (!execOk("git diff --cached --quiet -- ':!.ralphai'", cwd)) {
+  if (!execOk("git diff --cached --quiet -- :!.ralphai", cwd)) {
     return true;
   }
 
   // 3. Untracked files (exclude .ralphai and ralphai.json)
   const untracked = execQuiet(
-    "git ls-files --others --exclude-standard -- ':!.ralphai' ':!ralphai.json'",
+    "git ls-files --others --exclude-standard -- :!.ralphai :!ralphai.json",
     cwd,
   );
   if (untracked && untracked.length > 0) {

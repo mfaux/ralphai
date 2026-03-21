@@ -2938,16 +2938,18 @@ async function runRalphaiRunner(
     try {
       // Check for dirty state, excluding .ralphai (gitignored dir / worktree
       // symlink) and ralphai.json (untracked config).
-      execSync("git diff --quiet HEAD -- ':!.ralphai'", {
+      // Note: pathspec excludes must not be single-quoted; cmd.exe on Windows
+      // passes the literal quotes to git, breaking the exclude pattern.
+      execSync("git diff --quiet HEAD -- :!.ralphai", {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
       });
-      execSync("git diff --cached --quiet -- ':!.ralphai'", {
+      execSync("git diff --cached --quiet -- :!.ralphai", {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
       });
       const untracked = execSync(
-        "git ls-files --others --exclude-standard -- ':!.ralphai' ':!ralphai.json'",
+        "git ls-files --others --exclude-standard -- :!.ralphai :!ralphai.json",
         { cwd, encoding: "utf-8" },
       ).trim();
       if (untracked.length > 0) {
