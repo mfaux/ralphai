@@ -17,6 +17,16 @@ import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope, extractDependsOn } from "./frontmatter.ts";
+import {
+  listPlanFolders,
+  planPathForSlug,
+  listPlanSlugs,
+  listPlanFiles,
+  resolvePlanPath,
+  planExistsForSlug,
+  countPlanTasks,
+  countCompletedTasks,
+} from "./plan-detection.ts";
 import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
 import {
   detectFeedbackCommands,
@@ -1806,84 +1816,6 @@ function showWorktreeHelp(): void {
   );
 }
 
-/**
- * List subdirectory names in `dir`.
- */
-function listPlanFolders(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  try {
-    return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
-function planPathForSlug(dir: string, slug: string): string {
-  return join(dir, slug, `${slug}.md`);
-}
-
-/**
- * List plan slugs in `dir`.
- * - Slug-folder plans (`<slug>/<slug>.md`): used by in-progress and out.
- * - Flat `.md` files (`<slug>.md`): used by backlog.
- * Pass `flatOnly: true` for backlog to skip slug-folder scanning.
- */
-function listPlanSlugs(dir: string, flatOnly = false): string[] {
-  if (!existsSync(dir)) return [];
-  const seen = new Set<string>();
-  const slugs: string[] = [];
-
-  // Slug-folder plans: <dir>/<slug>/<slug>.md (in-progress, out)
-  if (!flatOnly) {
-    for (const folder of listPlanFolders(dir)) {
-      if (existsSync(planPathForSlug(dir, folder))) {
-        seen.add(folder);
-        slugs.push(folder);
-      }
-    }
-  }
-
-  // Flat files: <dir>/<slug>.md (backlog)
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      const slug = entry.name.replace(/\.md$/, "");
-      if (!seen.has(slug)) {
-        seen.add(slug);
-        slugs.push(slug);
-      }
-    }
-  } catch {
-    // ignore read errors
-  }
-
-  return slugs;
-}
-
-function listPlanFiles(dir: string, flatOnly = false): string[] {
-  return listPlanSlugs(dir, flatOnly).map((slug) => `${slug}.md`);
-}
-
-/**
- * Resolve the path to a plan file for a given slug in `dir`.
- * Checks slug-folder (`<dir>/<slug>/<slug>.md`) for in-progress/out,
- * then flat file (`<dir>/<slug>.md`) for backlog.
- * Returns the path if found, null otherwise.
- */
-function resolvePlanPath(dir: string, slug: string): string | null {
-  const folderPath = planPathForSlug(dir, slug);
-  if (existsSync(folderPath)) return folderPath;
-  const flatPath = join(dir, `${slug}.md`);
-  if (existsSync(flatPath)) return flatPath;
-  return null;
-}
-
-function planExistsForSlug(dir: string, slug: string): boolean {
-  return resolvePlanPath(dir, slug) !== null;
-}
-
 function listWorktrees(cwd: string): void {
   const worktrees = listRalphaiWorktrees(cwd);
 
@@ -2337,44 +2269,6 @@ function runRalphaiDoctor(cwd: string): void {
 // ---------------------------------------------------------------------------
 // Status command
 // ---------------------------------------------------------------------------
-
-/**
- * Count total tasks in a plan file by counting `### Task N:` headings.
- */
-function countPlanTasks(planPath: string): number {
-  if (!existsSync(planPath)) return 0;
-  const content = readFileSync(planPath, "utf-8");
-  const matches = content.match(/^### Task \d+/gm);
-  return matches ? matches.length : 0;
-}
-
-/**
- * Count completed tasks in a progress file. Handles two patterns:
- * 1. Individual: `### Task N:` followed by `**Status:** Complete`
- * 2. Batch: `### ... Tasks X–Y:` or `### ... Tasks X-Y:` headings
- */
-function countCompletedTasks(progressPath: string): number {
-  if (!existsSync(progressPath)) return 0;
-  const content = readFileSync(progressPath, "utf-8");
-
-  // Count individual `**Status:** Complete` entries
-  const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
-  let count = completeMatches ? completeMatches.length : 0;
-
-  // Count batch entries: `### ... Tasks X–Y` or `### ... Tasks X-Y` headings only
-  const batchMatches = content.matchAll(
-    /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
-  );
-  for (const match of batchMatches) {
-    const start = parseInt(match[1]!, 10);
-    const end = parseInt(match[2]!, 10);
-    if (end > start) {
-      count += end - start + 1;
-    }
-  }
-
-  return count;
-}
 
 // extractScope and extractDependsOn are imported from ./frontmatter.ts
 export { extractScope, extractDependsOn } from "./frontmatter.ts";
