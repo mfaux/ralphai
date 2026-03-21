@@ -10,6 +10,7 @@ ralphai run --turns=3    # 3 turns per plan
 ralphai run --turns=0    # unlimited turns
 ralphai run --dry-run    # preview what would happen
 ralphai run --resume     # recover dirty state and continue
+ralphai run --allow-dirty # skip the clean working tree check
 ralphai run --pr         # create ralphai/* branch and open a PR
 ralphai run --help       # show all options
 ```
@@ -48,6 +49,8 @@ All pipeline files are **gitignored** (local-only state).
 - **Patch mode** (`--patch`): leaves changes uncommitted
 
 **`--resume`:** Auto-commits dirty state on non-base branches and continues. Refuses to auto-commit on the base branch.
+
+**`--allow-dirty`:** Skips the clean working tree check. Useful right after `ralphai init` when `.gitignore` and `AGENTS.md` are uncommitted. In interactive terminals, Ralphai prompts automatically instead of requiring this flag.
 
 **`--dry-run`:** Read-only preview — no file moves, no branches, no agent execution.
 

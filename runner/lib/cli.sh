@@ -18,6 +18,7 @@ print_usage() {
   echo "  --turns=<n>                     Turns per plan (default: 5, 0 = unlimited)"
   echo "  --dry-run, -n                    Preview what Ralphai would do without mutating state"
   echo "  --resume, -r                     Auto-commit dirty state and continue"
+  echo "  --allow-dirty                    Skip the clean working tree check"
   echo "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')"
   echo "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')"
   echo "  --base-branch=<branch>           Override base branch (default: $DEFAULT_BASE_BRANCH)"
@@ -90,6 +91,9 @@ for arg in "$@"; do
       ;;
     --resume|-r)
       RESUME=true
+      ;;
+    --allow-dirty)
+      ALLOW_DIRTY=true
       ;;
     --show-config)
       SHOW_CONFIG=true

@@ -832,15 +832,17 @@ Project-specific guidance for AI coding agents working in this codebase.
     console.log(
       `  1. A sample plan is ready in ${TEXT}.ralphai/pipeline/backlog/${RESET}`,
     );
-    console.log(`  2. Run the plan in an isolated worktree:`);
+    console.log(`  2. Run the plan:`);
   } else {
     console.log(
       `  1. Write a plan in ${TEXT}.ralphai/pipeline/backlog/${RESET} (see ${TEXT}PLANNING.md${RESET})`,
     );
-    console.log(`  2. Run it in an isolated worktree:`);
+    console.log(`  2. Run it:`);
   }
   console.log(`       ${TEXT}$ ralphai worktree${RESET}`);
-  console.log(`     ${DIM}Or: switch to a branch and run directly:${RESET}`);
+  console.log(
+    `     ${DIM}Or: run directly (Ralphai will prompt if there are uncommitted changes):${RESET}`,
+  );
   console.log(`       ${TEXT}$ ralphai run${RESET}`);
   if (answers.issueSource === "github") {
     console.log();
@@ -2977,7 +2979,7 @@ function resolveBundledRunnerScript(moduleUrl: string): string {
   );
 }
 
-function runRalphaiRunner(
+async function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<never> {
@@ -2997,6 +2999,56 @@ function runRalphaiRunner(
   const ralphaiDir = join(ralphaiRoot, ".ralphai");
   if (!checkReceiptSource(ralphaiDir, isGitWorktree(cwd))) {
     process.exit(1);
+  }
+
+  // --- Pre-flight: interactive dirty-state check ---
+  // If the working tree is dirty, prompt TTY users before spawning the runner.
+  // Non-TTY sessions fall through to the bash-layer hard check (which now
+  // mentions --allow-dirty in its error message).
+  const isDryRun =
+    options.runArgs.includes("--dry-run") || options.runArgs.includes("-n");
+  const hasAllowDirty = options.runArgs.includes("--allow-dirty");
+  const hasResume =
+    options.runArgs.includes("--resume") || options.runArgs.includes("-r");
+
+  if (!isDryRun && !hasAllowDirty && !hasResume) {
+    let treeDirty = false;
+    try {
+      // Mirror is_tree_dirty() from runner/lib/git.sh — exclude .ralphai
+      // (gitignored dir / worktree symlink) and ralphai.json (untracked config).
+      execSync("git diff --quiet HEAD -- ':!.ralphai'", {
+        cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      execSync("git diff --cached --quiet -- ':!.ralphai'", {
+        cwd,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const untracked = execSync(
+        "git ls-files --others --exclude-standard -- ':!.ralphai' ':!ralphai.json'",
+        { cwd, encoding: "utf-8" },
+      ).trim();
+      if (untracked.length > 0) {
+        treeDirty = true;
+      }
+    } catch {
+      treeDirty = true;
+    }
+
+    if (treeDirty && process.stdin.isTTY) {
+      const proceed = await clack.confirm({
+        message: "Working tree has uncommitted changes. Continue anyway?",
+        initialValue: false,
+      });
+      if (clack.isCancel(proceed) || !proceed) {
+        console.log(
+          `${DIM}Tip: commit your changes first, or re-run with --allow-dirty to skip this check.${RESET}`,
+        );
+        process.exit(1);
+      }
+      // Inject --allow-dirty so the bash runner's check also passes
+      options.runArgs.push("--allow-dirty");
+    }
   }
 
   // Resolve the runner script from the npm package (not the user's project).
