@@ -3036,14 +3036,17 @@ function runRalphaiRunner(
     // Convert Windows path to a form bash understands (forward slashes)
     const scriptPath = ralphaiSh.replace(/\\/g, "/");
 
+    // Use stdio "inherit" so the child shares the parent's file descriptors
+    // directly.  This avoids pipe-buffering issues that cause output to stall
+    // on Windows (Git Bash / mintty / PowerShell / cmd) where the MSYS2 PTY
+    // layer + Node.js pipe chain can swallow or delay agent output.  Shell-
+    // level redirection (e.g. `ralphai run > log.txt`) still works because it
+    // operates on the inherited file descriptors.
     const child = spawn(bash, [scriptPath, ...args], {
       cwd,
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: "inherit",
       env: { ...process.env },
     });
-
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
 
     return new Promise((_resolve, _reject) => {
       child.on("close", (code) => {
@@ -3058,16 +3061,13 @@ function runRalphaiRunner(
       });
     });
   } else {
-    // Unix: use async spawn with piped output so users see output in real
-    // time AND parent processes (e.g. test harness) can still capture it.
+    // Unix: inherit stdio so the child writes directly to the terminal,
+    // matching the Windows path and avoiding unnecessary pipe buffering.
     const child = spawn(ralphaiSh, args, {
       cwd,
-      stdio: ["inherit", "pipe", "pipe"],
+      stdio: "inherit",
       env: { ...process.env },
     });
-
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
 
     return new Promise((_resolve, _reject) => {
       child.on("close", (code) => {
