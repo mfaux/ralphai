@@ -31,6 +31,25 @@ export interface DetectedPlan {
   resumed: boolean;
 }
 
+/** Reason why no plan was detected. */
+export type DetectFailReason = "empty-backlog" | "all-blocked";
+
+/** Blocked plan info returned when detection finds no runnable plans. */
+export interface BlockedPlanInfo {
+  slug: string;
+  reason: string; // e.g., "skipped", "pending:dep-a.md,missing:dep-b.md"
+}
+
+/** Full result of detectPlan, including failure reasons. */
+export type DetectPlanResult =
+  | { detected: true; plan: DetectedPlan }
+  | {
+      detected: false;
+      reason: DetectFailReason;
+      backlogCount: number;
+      blocked: BlockedPlanInfo[];
+    };
+
 /** Dependency status for a single plan dependency. */
 export type DependencyStatus = "done" | "pending" | "missing";
 
@@ -287,7 +306,8 @@ export function getPlanDescription(planPath: string): string {
  * 4. Pick the first ready plan.
  * 5. Promote it from flat file to in-progress slug-folder (unless dry-run).
  *
- * Returns DetectedPlan or null if nothing to run.
+ * Returns a `DetectPlanResult` with either the detected plan or a
+ * reason why no plan was found plus blocked-plan diagnostics.
  */
 export function detectPlan(opts: {
   dirs: PipelineDirs;
@@ -297,7 +317,7 @@ export function detectPlan(opts: {
   dryRun?: boolean;
   /** Plan slugs to skip (e.g., branch/PR collision). */
   skippedSlugs?: Set<string>;
-}): DetectedPlan | null {
+}): DetectPlanResult {
   const { dirs, worktreeBranch, dryRun = false, skippedSlugs } = opts;
 
   // --- 1. Check for in-progress plans ---
@@ -324,36 +344,55 @@ export function detectPlan(opts: {
     const planFile = inProgressPlans[0]!;
     const slug = basename(join(planFile, ".."));
     return {
-      planFile,
-      planSlug: slug,
-      wipDir: join(dirs.wipDir, slug),
-      resumed: true,
+      detected: true,
+      plan: {
+        planFile,
+        planSlug: slug,
+        wipDir: join(dirs.wipDir, slug),
+        resumed: true,
+      },
     };
   }
 
   // --- 2. Scan backlog ---
   const backlogPlans = collectBacklogPlans(dirs.backlogDir);
   if (backlogPlans.length === 0) {
-    return null;
+    return {
+      detected: false,
+      reason: "empty-backlog",
+      backlogCount: 0,
+      blocked: [],
+    };
   }
 
   // --- 3. Filter by dependency readiness ---
   const readyPlans: string[] = [];
+  const blocked: BlockedPlanInfo[] = [];
   for (const f of backlogPlans) {
     const fb = basename(f);
     const slug = fb.replace(/\.md$/, "");
 
     // Skip plans with branch/PR collisions
-    if (skippedSlugs?.has(slug)) continue;
+    if (skippedSlugs?.has(slug)) {
+      blocked.push({ slug, reason: "skipped" });
+      continue;
+    }
 
     const status = planReadiness(f, dirs);
     if (status.ready) {
       readyPlans.push(f);
+    } else {
+      blocked.push({ slug, reason: status.reasons.join(",") });
     }
   }
 
   if (readyPlans.length === 0) {
-    return null;
+    return {
+      detected: false,
+      reason: "all-blocked",
+      backlogCount: backlogPlans.length,
+      blocked,
+    };
   }
 
   // --- 4. Pick the first ready plan ---
@@ -369,9 +408,12 @@ export function detectPlan(opts: {
   }
 
   return {
-    planFile: destPlan,
-    planSlug: slug,
-    wipDir: destDir,
-    resumed: false,
+    detected: true,
+    plan: {
+      planFile: destPlan,
+      planSlug: slug,
+      wipDir: destDir,
+      resumed: false,
+    },
   };
 }

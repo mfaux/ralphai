@@ -1187,12 +1187,8 @@ echo "$MODE"
     const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
     const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
     const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // detect_plan: FILE_REFS uses format_file_ref
-    expect(plans).toContain('FILE_REFS="$FILE_REFS $(format_file_ref "$f")"');
-    // detect_plan: dry-run chosen
-    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest_plan")"');
-    // detect_plan: normal chosen
-    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$dest_plan")"');
+    // detect_plan: FILE_REFS uses format_file_ref (delegated to TS, shell sets it)
+    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$plan_file")"');
     // LEARNINGS_REF uses format_file_ref
     expect(prompt).toContain(
       'LEARNINGS_REF=" $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"',

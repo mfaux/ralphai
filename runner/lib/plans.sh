@@ -1,10 +1,16 @@
 # plans.sh — Plan dependency helpers and plan detection
 # Sourced by ralphai.sh — do not execute directly.
+#
+# Core plan logic lives in src/plan-detection.ts. This file provides thin
+# shell wrappers that call the compiled CLI and set shell globals
+# (WIP_FILES, FILE_REFS, RESUMING) expected by ralphai.sh.
+
+# --- CLI path fallback (for tests that source this file directly) ---
+if [[ -z "${_PLAN_DETECTION_CLI:-}" || ! -f "${_PLAN_DETECTION_CLI:-}" ]]; then
+  _PLAN_DETECTION_CLI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/dist/plan-detection-cli.mjs"
+fi
 
 # --- Scope extraction (optional frontmatter: scope) ---
-# Reads the `scope` field from a plan file's YAML frontmatter.
-# Prints the value (a relative path like `packages/web`) to stdout.
-# Prints nothing if `scope` is not present or the file has no frontmatter.
 extract_scope() {
   local file="$1"
   [[ -f "$file" ]] || return 0
@@ -12,14 +18,6 @@ extract_scope() {
 }
 
 # --- Plan dependency helpers (optional frontmatter: depends-on) ---
-# Supported forms in markdown frontmatter:
-#   depends-on: [prd-a.md, prd-b.md]
-#   depends-on:
-#     - prd-a.md
-#     - prd-b.md
-
-# Read a plan's depends-on entries from YAML frontmatter and emit one dependency
-# filename per line (basename form, e.g. prd-foo.md).
 extract_depends_on() {
   local file="$1"
   [[ -f "$file" ]] || return 0
@@ -33,61 +31,14 @@ extract_depends_on() {
 dependency_status() {
   local dep_base
   dep_base=$(basename "$1")
-  local dep_slug
-  dep_slug="${dep_base%.md}"
-
-  if [[ -d "$ARCHIVE_DIR/$dep_slug" ]]; then
-    echo "done"
-    return 0
-  fi
-
-  if [[ -d "$WIP_DIR/$dep_slug" || -f "$BACKLOG_DIR/$dep_base" ]]; then
-    echo "pending"
-    return 0
-  fi
-
-  echo "missing"
+  node "$_PLAN_DETECTION_CLI" dep-status "$dep_base" "$WIP_DIR" "$BACKLOG_DIR" "$ARCHIVE_DIR"
 }
 
 # Determine whether a backlog plan is ready based on depends-on metadata.
-# Prints "ready" when runnable, otherwise a reason string prefixed with
-# "blocked:".
+# Prints "ready" when runnable, otherwise "blocked:<reasons>".
 plan_readiness() {
   local plan="$1"
-  local plan_base
-  plan_base=$(basename "$plan")
-
-  local deps=()
-  while IFS= read -r dep; do
-    [[ -n "$dep" ]] && deps+=("$(basename "$dep")")
-  done < <(extract_depends_on "$plan")
-
-  if [[ ${#deps[@]} -eq 0 ]]; then
-    echo "ready"
-    return 0
-  fi
-
-  local blocked_reasons=()
-  for dep in "${deps[@]}"; do
-    if [[ "$dep" == "$plan_base" ]]; then
-      blocked_reasons+=("self:$dep")
-      continue
-    fi
-
-    status=$(dependency_status "$dep")
-    if [[ "$status" != "done" ]]; then
-      blocked_reasons+=("$status:$dep")
-    fi
-  done
-
-  if [[ ${#blocked_reasons[@]} -eq 0 ]]; then
-    echo "ready"
-    return 0
-  fi
-
-  local joined
-  joined=$(IFS=','; echo "${blocked_reasons[*]}")
-  echo "blocked:$joined"
+  node "$_PLAN_DETECTION_CLI" readiness "$plan" "$WIP_DIR" "$BACKLOG_DIR" "$ARCHIVE_DIR"
 }
 
 # --- Resolve plan file path inside a slug-folder (in-progress/out only) ---
@@ -105,76 +56,112 @@ plan_file_for_dir() {
 
 # --- Collect backlog plans (flat .md files only) ---
 # Populates the named array with plan file paths.
-# Backlog only supports flat files: <backlog>/<slug>.md
 collect_backlog_plans() {
   local -n _out_plans=$1
   _out_plans=()
 
-  for f in "$BACKLOG_DIR"/*.md; do
-    [[ -f "$f" ]] || continue
-    _out_plans+=("$f")
-  done
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && _out_plans+=("$line")
+  done < <(node "$_PLAN_DETECTION_CLI" backlog "$BACKLOG_DIR")
 }
 
 # --- Detect plan: find in-progress work or pick from backlog ---
 # Sets: WIP_FILES, FILE_REFS, RESUMING
+#
+# Delegates core detection to the TypeScript plan-detection-cli.
+# Shell-specific orchestration (pull_github_issues on empty backlog,
+# SKIPPED_PLANS handling, verbose diagnostic output, setting globals)
+# is handled here.
 detect_plan() {
   WIP_FILES=()
   FILE_REFS=""
   RESUMING=false
 
-  # Check for in-progress plan files
-  local in_progress_plans=()
+  # Build CLI arguments
+  local detect_args=("$WIP_DIR" "$BACKLOG_DIR" "$ARCHIVE_DIR")
+
   if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then
-    # In worktree mode, only consider the plan matching this branch.
-    # Multiple worktrees share the same .ralphai/ directory via symlink,
-    # so other worktrees' in-progress plans must be ignored.
     local _branch
     _branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-    local _slug="${_branch#ralphai/}"
-    local _dir="$WIP_DIR/$_slug"
-    if [[ -d "$_dir" ]]; then
-      local _plan_file
-      _plan_file=$(plan_file_for_dir "$_dir") || _plan_file=""
-      if [[ -n "$_plan_file" ]]; then
-        in_progress_plans+=("$_plan_file")
-      fi
-    fi
-  else
-    for d in "$WIP_DIR"/*; do
-      [[ -d "$d" ]] || continue
-      local plan_file
-      plan_file=$(plan_file_for_dir "$d") || continue
-      in_progress_plans+=("$plan_file")
-    done
+    detect_args+=("--worktree-branch=$_branch")
   fi
 
-  if [[ ${#in_progress_plans[@]} -gt 0 ]]; then
-    # Resume in-progress work
-    RESUMING=true
-    WIP_FILES=("${in_progress_plans[@]}")
-    for f in "${WIP_FILES[@]}"; do
-      FILE_REFS="$FILE_REFS $(format_file_ref "$f")"
-    done
-    echo "Found in-progress plan(s): ${WIP_FILES[*]}"
+  if [[ "$DRY_RUN" == true ]]; then
+    detect_args+=("--dry-run")
+  fi
+
+  # Convert SKIPPED_PLANS associative array to --skip-slug args
+  for key in "${!SKIPPED_PLANS[@]}"; do
+    # Shell keys are basenames with .md; TS expects slugs without .md
+    local skip_slug="${key%.md}"
+    detect_args+=("--skip-slug=$skip_slug")
+  done
+
+  # Call TypeScript plan detection
+  local detect_json
+  detect_json=$(node "$_PLAN_DETECTION_CLI" detect "${detect_args[@]}" 2>/dev/null) || true
+
+  if [[ -z "$detect_json" ]]; then
+    echo "Nothing to do — plan detection failed."
+    return 1
+  fi
+
+  # Parse JSON result
+  local detected reason
+  detected=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(String(d.detected))")
+
+  if [[ "$detected" == "true" ]]; then
+    # Plan found — extract fields
+    local plan_file plan_slug wip_dir resumed
+    plan_file=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.planFile)")
+    plan_slug=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.planSlug)")
+    wip_dir=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.wipDir)")
+    resumed=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(String(d.plan.resumed))")
+
+    WIP_FILES=("$plan_file")
+    FILE_REFS=" $(format_file_ref "$plan_file")"
+
+    if [[ "$resumed" == "true" ]]; then
+      RESUMING=true
+      echo "Found in-progress plan(s): ${WIP_FILES[*]}"
+    else
+      RESUMING=false
+      if [[ "$DRY_RUN" == true ]]; then
+        echo "[dry-run] Would select: $BACKLOG_DIR/${plan_slug}.md"
+        echo "[dry-run] Would promote flat file: $BACKLOG_DIR/${plan_slug}.md -> $plan_file"
+      else
+        echo "Promoted flat file: $BACKLOG_DIR/${plan_slug}.md -> $plan_file"
+      fi
+    fi
     return 0
   fi
 
-  # Check backlog
-  local backlog_plans=()
-  collect_backlog_plans backlog_plans
+  # No plan detected — check reason
+  reason=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.reason||'')")
 
-  if [[ ${#backlog_plans[@]} -eq 0 ]]; then
-    # Skip issue pull during dry-run — it creates files and modifies
-    # GitHub issue labels, which violates the dry-run contract.
+  if [[ "$reason" == "empty-backlog" ]]; then
+    # Backlog is empty — try pulling from GitHub issues
     if [[ "$DRY_RUN" == true ]]; then
       echo "[dry-run] Backlog is empty. Would attempt to pull a GitHub issue (if configured)."
       return 1
     fi
     if pull_github_issues; then
-      # Re-scan backlog after pulling issue
-      collect_backlog_plans backlog_plans
-      if [[ ${#backlog_plans[@]} -eq 0 ]]; then
+      # Re-run detection after pulling issue (backlog should now have a plan)
+      detect_json=$(node "$_PLAN_DETECTION_CLI" detect "${detect_args[@]}" 2>/dev/null) || true
+      detected=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(String(d.detected))" 2>/dev/null) || detected="false"
+
+      if [[ "$detected" == "true" ]]; then
+        local plan_file plan_slug wip_dir
+        plan_file=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.planFile)")
+        plan_slug=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.planSlug)")
+        wip_dir=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(d.plan.wipDir)")
+
+        WIP_FILES=("$plan_file")
+        FILE_REFS=" $(format_file_ref "$plan_file")"
+        RESUMING=false
+        echo "Promoted flat file: $BACKLOG_DIR/${plan_slug}.md -> $plan_file"
+        return 0
+      else
         echo "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md"
         return 1
       fi
@@ -184,98 +171,47 @@ detect_plan() {
     fi
   fi
 
-  # Filter backlog by dependency readiness and skip list
-  local ready_plans=()
-  local blocked_info=()
-  for f in "${backlog_plans[@]}"; do
-    local fb
-    fb=$(basename "$f")
-    # Skip plans that had branch/PR collisions this session
-    if [[ -n "${SKIPPED_PLANS[$fb]+x}" ]]; then
-      blocked_info+=("$fb => skipped (branch/PR already exists)")
-      continue
-    fi
-    readiness=$(plan_readiness "$f")
-    if [[ "$readiness" == "ready" ]]; then
-      ready_plans+=("$f")
-    else
-      blocked_info+=("$fb => ${readiness#blocked:}")
-    fi
-  done
+  # All plans blocked — print diagnostic info
+  local backlog_count
+  backlog_count=$(echo "$detect_json" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(String(d.backlogCount))")
 
-  if [[ ${#ready_plans[@]} -eq 0 ]]; then
-    echo "Backlog has ${#backlog_plans[@]} plan(s), but none are runnable yet."
-    echo ""
-    for line in "${blocked_info[@]}"; do
-      local plan_name="${line%% =>*}"
-      local reason="${line#*=> }"
-      if [[ "$reason" == "skipped (branch/PR already exists)" ]]; then
-        echo "  $plan_name — skipped: branch or PR already exists"
-      else
-        # Parse dependency reasons like "pending:dep-a.md,missing:dep-b.md"
-        echo "  $plan_name — waiting on dependencies:"
-        IFS=',' read -ra dep_entries <<< "$reason"
-        for entry in "${dep_entries[@]}"; do
-          local dep_status="${entry%%:*}"
-          local dep_name="${entry#*:}"
-          case "$dep_status" in
-            pending)  echo "    - $dep_name (still in backlog or in-progress)" ;;
-            missing)  echo "    - $dep_name (not found — never created or misnamed?)" ;;
-            self)     echo "    - $dep_name (depends on itself)" ;;
-            *)        echo "    - $entry" ;;
-          esac
-        done
-      fi
-    done
-    echo ""
-    echo "Plans become runnable when their dependencies are archived in $ARCHIVE_DIR/."
-    return 1
-  fi
+  echo "Backlog has ${backlog_count} plan(s), but none are runnable yet."
+  echo ""
 
-  # Pick a plan from dependency-ready backlog plans
-  local chosen=""
-  if [[ ${#ready_plans[@]} -eq 1 ]]; then
-    chosen="${ready_plans[0]}"
-    echo "Single dependency-ready backlog plan found: $chosen"
-  else
-    chosen="${ready_plans[0]}"
-    echo "Multiple dependency-ready backlog plans found (${#ready_plans[@]}). Picking oldest: $(basename "$chosen")"
-  fi
+  # Parse blocked array and print diagnostics
+  node -e "
+    const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+    for (const b of d.blocked || []) {
+      if (b.reason === 'skipped') {
+        console.log('  ' + b.slug + '.md — skipped: branch or PR already exists');
+      } else {
+        console.log('  ' + b.slug + '.md — waiting on dependencies:');
+        for (const entry of b.reason.split(',')) {
+          const [status, dep] = [entry.split(':')[0], entry.split(':').slice(1).join(':')];
+          if (status === 'pending') {
+            console.log('    - ' + dep + ' (still in backlog or in-progress)');
+          } else if (status === 'missing') {
+            console.log('    - ' + dep + ' (not found — never created or misnamed?)');
+          } else if (status === 'self') {
+            console.log('    - ' + dep + ' (depends on itself)');
+          } else {
+            console.log('    - ' + entry);
+          }
+        }
+      }
+    }
+  " <<< "$detect_json"
 
-  # Backlog plans are always flat files: <backlog>/<slug>.md
-  local slug
-  slug="${chosen##*/}"  # basename
-  slug="${slug%.md}"
-
-  local dest_dir="$WIP_DIR/$slug"
-  local dest_plan="$dest_dir/$slug.md"
-
-  if [[ "$DRY_RUN" == true ]]; then
-    echo "[dry-run] Would select: $chosen"
-    WIP_FILES=("$dest_plan")
-    FILE_REFS=" $(format_file_ref "$dest_plan")"
-    RESUMING=false
-    echo "[dry-run] Would promote flat file: $chosen -> $dest_plan"
-  else
-    # Move chosen plan to in-progress (promote flat file to slug-folder)
-    mkdir -p "$WIP_DIR"
-    mkdir -p "$dest_dir"
-    mv "$chosen" "$dest_plan"
-    echo "Promoted flat file: $chosen -> $dest_plan"
-
-    WIP_FILES=("$dest_plan")
-    FILE_REFS=" $(format_file_ref "$dest_plan")"
-    RESUMING=false
-  fi
-  return 0
+  echo ""
+  echo "Plans become runnable when their dependencies are archived in $ARCHIVE_DIR/."
+  return 1
 }
 
 # --- Extract plan description from first heading ---
 plan_description() {
   local file="$1"
   if [[ -f "$file" ]]; then
-    # Get the first markdown heading, strip the # prefix
-    sed -n 's/^#\+ *//p' "$file" | head -1
+    node "$_PLAN_DETECTION_CLI" describe "$file"
   else
     echo "ralphai task"
   fi

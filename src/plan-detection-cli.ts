@@ -2,21 +2,22 @@
  * Plan Detection CLI -- thin wrapper around src/plan-detection.ts for shell callers.
  *
  * Usage:
- *   node plan-detection-cli.mjs detect     <wip-dir> <backlog-dir> <archive-dir> [--worktree-branch=<branch>] [--dry-run]
+ *   node plan-detection-cli.mjs detect     <wip-dir> <backlog-dir> <archive-dir> [--worktree-branch=<branch>] [--dry-run] [--skip-slug=<slug>]...
  *   node plan-detection-cli.mjs readiness  <plan-path> <wip-dir> <backlog-dir> <archive-dir>
  *   node plan-detection-cli.mjs describe   <plan-path>
  *   node plan-detection-cli.mjs backlog    <backlog-dir>
  *   node plan-detection-cli.mjs dep-status <dep-slug> <wip-dir> <backlog-dir> <archive-dir>
  *
  * Output:
- *   detect:     JSON object with planFile, planSlug, wipDir, resumed, or {"detected":false}
+ *   detect:     JSON -- { detected: true, plan: { planFile, planSlug, wipDir, resumed } }
+ *              or   -- { detected: false, reason: "empty-backlog"|"all-blocked", backlogCount, blocked: [...] }
  *   readiness:  "ready" or "blocked:<reasons>"
  *   describe:   first heading text (one line)
  *   backlog:    one plan path per line
  *   dep-status: "done", "pending", or "missing"
  *
  * Exit codes:
- *   0 -- success
+ *   0 -- success (detect found a plan, or other subcommand succeeded)
  *   1 -- detect: no plan found (not an error, just nothing to do)
  *   2 -- usage error
  */
@@ -44,18 +45,21 @@ switch (command) {
     const [, wipDir, backlogDir, archiveDir, ...rest] = args;
     if (!wipDir || !backlogDir || !archiveDir) {
       process.stderr.write(
-        "Usage: plan-detection-cli detect <wip-dir> <backlog-dir> <archive-dir> [--worktree-branch=<branch>] [--dry-run]\n",
+        "Usage: plan-detection-cli detect <wip-dir> <backlog-dir> <archive-dir> [--worktree-branch=<branch>] [--dry-run] [--skip-slug=<slug>]...\n",
       );
       process.exit(2);
     }
 
     let worktreeBranch: string | undefined;
     let dryRun = false;
+    const skippedSlugs = new Set<string>();
     for (const arg of rest) {
       if (arg.startsWith("--worktree-branch=")) {
         worktreeBranch = arg.slice("--worktree-branch=".length);
       } else if (arg === "--dry-run") {
         dryRun = true;
+      } else if (arg.startsWith("--skip-slug=")) {
+        skippedSlugs.add(arg.slice("--skip-slug=".length));
       }
     }
 
@@ -63,12 +67,11 @@ switch (command) {
       dirs: { wipDir, backlogDir, archiveDir },
       worktreeBranch,
       dryRun,
+      skippedSlugs: skippedSlugs.size > 0 ? skippedSlugs : undefined,
     });
 
-    if (result) {
-      process.stdout.write(JSON.stringify(result) + "\n");
-    } else {
-      process.stdout.write(JSON.stringify({ detected: false }) + "\n");
+    process.stdout.write(JSON.stringify(result) + "\n");
+    if (!result.detected) {
       process.exit(1);
     }
     break;

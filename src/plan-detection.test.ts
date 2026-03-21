@@ -250,17 +250,23 @@ describe("detectPlan", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns null for empty backlog and no in-progress", () => {
-    expect(detectPlan({ dirs })).toBeNull();
+  it("returns not-detected for empty backlog and no in-progress", () => {
+    const result = detectPlan({ dirs });
+    expect(result.detected).toBe(false);
+    if (!result.detected) {
+      expect(result.reason).toBe("empty-backlog");
+    }
   });
 
   it("picks single plan from backlog", () => {
     writeFileSync(join(dirs.backlogDir, "my-plan.md"), "# Plan: My Plan\n");
 
     const result = detectPlan({ dirs });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("my-plan");
-    expect(result!.resumed).toBe(false);
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("my-plan");
+      expect(result.plan.resumed).toBe(false);
+    }
     // Plan should have been promoted to in-progress
     expect(existsSync(join(dirs.wipDir, "my-plan", "my-plan.md"))).toBe(true);
     // Backlog file should be gone
@@ -273,9 +279,11 @@ describe("detectPlan", () => {
     writeFileSync(join(slugDir, "existing.md"), "# Plan: Existing\n");
 
     const result = detectPlan({ dirs });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("existing");
-    expect(result!.resumed).toBe(true);
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("existing");
+      expect(result.plan.resumed).toBe(true);
+    }
   });
 
   it("prefers in-progress over backlog", () => {
@@ -287,9 +295,11 @@ describe("detectPlan", () => {
     writeFileSync(join(dirs.backlogDir, "waiting.md"), "# Plan: Waiting\n");
 
     const result = detectPlan({ dirs });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("active");
-    expect(result!.resumed).toBe(true);
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("active");
+      expect(result.plan.resumed).toBe(true);
+    }
   });
 
   it("skips plan with unmet dependency, picks ready plan", () => {
@@ -300,8 +310,10 @@ describe("detectPlan", () => {
     writeFileSync(join(dirs.backlogDir, "ready.md"), "# Plan: Ready\n");
 
     const result = detectPlan({ dirs });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("ready");
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("ready");
+    }
   });
 
   it("picks plan when dependency is met", () => {
@@ -312,16 +324,20 @@ describe("detectPlan", () => {
     );
 
     const result = detectPlan({ dirs });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("child");
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("child");
+    }
   });
 
   it("dry-run does not move files", () => {
     writeFileSync(join(dirs.backlogDir, "plan.md"), "# Plan: Dry Run\n");
 
     const result = detectPlan({ dirs, dryRun: true });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("plan");
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("plan");
+    }
     // File should still be in backlog
     expect(existsSync(join(dirs.backlogDir, "plan.md"))).toBe(true);
     // No in-progress folder created
@@ -342,9 +358,11 @@ describe("detectPlan", () => {
       dirs,
       worktreeBranch: "ralphai/plan-b",
     });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("plan-b");
-    expect(result!.resumed).toBe(true);
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("plan-b");
+      expect(result.plan.resumed).toBe(true);
+    }
   });
 
   it("worktree mode falls through to backlog when branch has no in-progress plan", () => {
@@ -354,9 +372,11 @@ describe("detectPlan", () => {
       dirs,
       worktreeBranch: "ralphai/no-match",
     });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("new-work");
-    expect(result!.resumed).toBe(false);
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("new-work");
+      expect(result.plan.resumed).toBe(false);
+    }
   });
 
   it("respects skippedSlugs", () => {
@@ -367,17 +387,26 @@ describe("detectPlan", () => {
       dirs,
       skippedSlugs: new Set(["skip-me"]),
     });
-    expect(result).not.toBeNull();
-    expect(result!.planSlug).toBe("take-me");
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("take-me");
+    }
   });
 
-  it("returns null when all backlog plans are blocked", () => {
+  it("returns all-blocked when all backlog plans have unmet deps", () => {
     writeFileSync(
       join(dirs.backlogDir, "blocked.md"),
       "---\ndepends-on: [missing.md]\n---\n# Blocked\n",
     );
 
-    expect(detectPlan({ dirs })).toBeNull();
+    const result = detectPlan({ dirs });
+    expect(result.detected).toBe(false);
+    if (!result.detected) {
+      expect(result.reason).toBe("all-blocked");
+      expect(result.backlogCount).toBe(1);
+      expect(result.blocked).toHaveLength(1);
+      expect(result.blocked[0]!.slug).toBe("blocked");
+    }
   });
 });
 

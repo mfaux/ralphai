@@ -73,6 +73,9 @@ _SCOPE_CLI="$RALPHAI_LIB_DIR/../../dist/scope-cli.mjs"
 # Config resolution delegates to the TypeScript module via Node.
 _CONFIG_CLI="$RALPHAI_LIB_DIR/../../dist/config-cli.mjs"
 
+# Plan detection delegates to the TypeScript module via Node.
+_PLAN_DETECTION_CLI="$RALPHAI_LIB_DIR/../../dist/plan-detection-cli.mjs"
+
 # --- Runtime flags and resolved settings ---
 # These are populated by cli.sh after calling the TS config resolver.
 PLAN_SCOPE=""
