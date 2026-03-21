@@ -152,37 +152,3 @@ function buildScopeHint(planScope: string): string {
   if (!planScope) return "";
   return `\nThis plan is scoped to ${planScope}. Focus your changes on files within this directory. Run feedback commands from the repository root — they are already filtered to target this package.`;
 }
-
-// ---------------------------------------------------------------------------
-// CLI entry point — called by runner/lib/scope.sh via node
-// ---------------------------------------------------------------------------
-
-/**
- * CLI interface for the shell runner. Reads arguments and writes JSON to
- * stdout so the shell can parse it with `_json_q_stdin`.
- *
- * Usage:
- *   node --experimental-strip-types src/scope.ts \
- *     <cwd> <planScope> <rootFeedbackCommands> [workspacesConfig]
- */
-export function main(args: string[]): void {
-  const [cwd, planScope, rootFeedbackCommands, workspacesConfig] = args;
-  if (!cwd || planScope === undefined || rootFeedbackCommands === undefined) {
-    process.stderr.write(
-      "Usage: scope.ts <cwd> <planScope> <rootFeedbackCommands> [workspacesConfig]\n",
-    );
-    process.exit(1);
-  }
-  const result = resolveScope({
-    cwd,
-    planScope,
-    rootFeedbackCommands,
-    workspacesConfig,
-  });
-  process.stdout.write(JSON.stringify(result) + "\n");
-}
-
-// Run main() when executed directly (not imported as a module in tests)
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  main(process.argv.slice(2));
-}

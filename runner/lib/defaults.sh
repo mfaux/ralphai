@@ -97,6 +97,10 @@ _FRONTMATTER_CLI="$RALPHAI_LIB_DIR/../../dist/frontmatter-cli.mjs"
 # Receipt operations delegate to the TypeScript module via Node.
 _RECEIPT_CLI="$RALPHAI_LIB_DIR/../../dist/receipt-cli.mjs"
 
+# --- Scope CLI path ---
+# Scope/ecosystem detection delegates to the TypeScript module via Node.
+_SCOPE_CLI="$RALPHAI_LIB_DIR/../../dist/scope-cli.mjs"
+
 PLAN_SCOPE=""
 CONFIG_WORKSPACES=""
 
