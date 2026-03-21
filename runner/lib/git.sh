@@ -114,9 +114,13 @@ Interrupted mid-turn on branch $current_branch.
 Committing dirty state so ralphai can resume." || true
       fi
     else
-      echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."
-      echo "Tip: re-run with --resume to auto-commit and continue."
-      exit 1
+      if [[ "$ALLOW_DIRTY" == true ]]; then
+        echo "WARNING: Working tree is dirty. Proceeding anyway (--allow-dirty)."
+      else
+        echo "ERROR: Working tree is dirty. Commit or stash changes before running Ralphai."
+        echo "Tip: re-run with --resume to auto-commit and continue, or --allow-dirty to skip this check."
+        exit 1
+      fi
     fi
   fi
 fi

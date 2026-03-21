@@ -80,3 +80,13 @@ This is by design. Ralphai creates feature branches (`ralphai/<slug>`) to isolat
 - Use a worktree for parallel runs: `ralphai worktree`
 
 The `--resume` flag also refuses to run on the base branch. Switch to the `ralphai/*` branch first.
+
+## "Working tree is dirty" after init
+
+Running `ralphai run` immediately after `ralphai init` may report a dirty working tree because init modifies `.gitignore` and optionally creates `AGENTS.md`. In an interactive terminal, Ralphai will prompt you to continue anyway.
+
+**Options:**
+
+- **Accept the prompt** when Ralphai asks "Continue anyway?"
+- **Commit the init files first:** `git add .gitignore AGENTS.md && git commit -m "chore: configure ralphai"`
+- **Skip the check explicitly:** `ralphai run --allow-dirty`

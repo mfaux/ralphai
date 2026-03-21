@@ -50,6 +50,12 @@ Ralphai auto-detects in-progress work and picks up where it left off. If the age
 ralphai run --resume
 ```
 
+To skip the dirty-state check without committing (for example, right after `ralphai init`), use `--allow-dirty`:
+
+```bash
+ralphai run --allow-dirty
+```
+
 ## Run overnight unattended
 
 ```bash
