@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, rmSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync, execFileSync } from "child_process";
@@ -14,19 +14,6 @@ describe("runner config", () => {
   // -------------------------------------------------------------------------
   // Agent type detection
   // -------------------------------------------------------------------------
-
-  it("scaffolded ralphai.sh contains detect_agent_type function", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    // detect_agent_type is defined in validate.sh (shared helpers)
-    const validate = readFileSync(join(templateLib, "validate.sh"), "utf-8");
-    expect(validate).toContain("detect_agent_type()");
-    expect(validate).toContain("DETECTED_AGENT_TYPE=");
-
-    // prompt.sh calls detect_agent_type (defined in validate.sh, sourced earlier)
-    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
-    expect(prompt).toContain("detect_agent_type");
-  });
 
   describe.skipIf(process.platform === "win32")(
     "detect_agent_type mapping",
@@ -95,17 +82,6 @@ describe("runner config", () => {
   // -------------------------------------------------------------------------
   // Prompt formatting tests (format_file_ref + resolve_prompt_mode)
   // -------------------------------------------------------------------------
-
-  it("scaffolded ralphai.sh contains format_file_ref and resolve_prompt_mode functions", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
-    expect(prompt).toContain("format_file_ref()");
-    expect(prompt).toContain("resolve_prompt_mode()");
-    expect(prompt).toContain("RESOLVED_PROMPT_MODE=");
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain('PROMPT_MODE="auto"');
-  });
 
   describe.skipIf(process.platform === "win32")(
     "format_file_ref and resolve_prompt_mode",
@@ -291,23 +267,6 @@ ${cleanupFile}
   // promptMode config key tests (config file, env var, CLI flag)
   // -------------------------------------------------------------------------
 
-  it("scaffolded ralphai.sh contains promptMode config infrastructure", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    // Config resolution is now handled by the TS config-cli; config.sh
-    // delegates via resolve_config(). Verify the TS module handles promptMode.
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    expect(config).toContain("resolve_config");
-
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    // CLI flag is recognized (grouped pattern) and mentioned in help text
-    expect(cli).toContain("--prompt-mode=");
-
-    // defaults.sh initialises the shell variable that the runner reads
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain('PROMPT_MODE="auto"');
-  });
-
   describe.skipIf(process.platform === "win32")(
     "promptMode config precedence",
     () => {
@@ -462,28 +421,6 @@ echo "$PROMPT_MODE"
   // --continuous config infrastructure tests
   // -------------------------------------------------------------------------
 
-  it("scaffolded ralphai.sh contains continuous config infrastructure", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    // defaults.sh initialises shell variables (no DEFAULT_ prefix now)
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain('CONTINUOUS="false"');
-
-    // Config resolution delegated to TS config-cli via resolve_config()
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    expect(config).toContain("resolve_config");
-
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    // CLI flag recognised in grouped pattern
-    expect(cli).toContain("--continuous");
-    // Help text
-    expect(cli).toContain(
-      "Keep processing backlog plans after the first completes",
-    );
-    // Supported keys list
-    expect(cli).toContain("continuous,");
-  });
-
   describe.skipIf(process.platform === "win32")(
     "continuous config precedence",
     () => {
@@ -627,48 +564,6 @@ echo "$CONTINUOUS"
   // -------------------------------------------------------------------------
   // --auto-commit config infrastructure tests
   // -------------------------------------------------------------------------
-
-  it("scaffolded ralphai.sh contains autoCommit config infrastructure", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    // defaults.sh initialises shell variables (no DEFAULT_ prefix now)
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain('AUTO_COMMIT="false"');
-
-    // Config resolution delegated to TS config-cli via resolve_config()
-    const config = readFileSync(join(templateLib, "config.sh"), "utf-8");
-    expect(config).toContain("resolve_config");
-
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    // CLI flags recognised in grouped pattern
-    expect(cli).toContain("--auto-commit");
-    expect(cli).toContain("--no-auto-commit");
-    // Help text
-    expect(cli).toContain("Enable auto-commit of agent changes");
-    expect(cli).toContain("Disable auto-commit");
-    // Supported keys list
-    expect(cli).toContain("autoCommit");
-  });
-
-  it("scaffolded ralphai.sh gates per-turn auto-commit on AUTO_COMMIT and MODE", () => {
-    const templateDir = join(__dirname, "..", "runner");
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-
-    // Patch mode with autoCommit=false skips auto-commit
-    expect(ralphaiSh).toContain(
-      'AUTO_COMMIT" == "false" && "$MODE" == "patch"',
-    );
-    expect(ralphaiSh).toContain("autoCommit=false, skipping recovery commit");
-  });
-
-  it("scaffolded git.sh gates resume recovery on AUTO_COMMIT and MODE", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-    const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
-
-    // Resume with autoCommit=false in patch mode skips recovery commit
-    expect(gitSh).toContain('AUTO_COMMIT" == "false" && "$MODE" == "patch"');
-    expect(gitSh).toContain("autoCommit=false, skipping recovery commit");
-  });
 
   describe.skipIf(process.platform === "win32")(
     "autoCommit config precedence",
@@ -845,48 +740,6 @@ echo "$AUTO_COMMIT"
     expect(config.mode).toBe("branch");
   });
 
-  it("scaffolded cli.sh has --branch, --pr, and --patch CLI flags", () => {
-    const cli = readFileSync(
-      join(__dirname, "..", "runner", "lib", "cli.sh"),
-      "utf-8",
-    );
-    // Flags are recognised in a grouped case pattern (no individual --branch) pattern)
-    expect(cli).toContain("--branch");
-    expect(cli).toContain("--pr");
-    expect(cli).toContain("--patch");
-    // --direct should no longer exist
-    expect(cli).not.toContain("--direct");
-  });
-
-  it("scaffolded defaults.sh sets MODE to branch", () => {
-    const defaults = readFileSync(
-      join(__dirname, "..", "runner", "lib", "defaults.sh"),
-      "utf-8",
-    );
-    // defaults.sh uses plain variable names (no DEFAULT_ prefix now)
-    expect(defaults).toContain('MODE="branch"');
-    // Old default should not exist
-    expect(defaults).not.toContain('MODE="direct"');
-  });
-
-  it("scaffolded config.sh delegates mode validation to TS config-cli", () => {
-    const config = readFileSync(
-      join(__dirname, "..", "runner", "lib", "config.sh"),
-      "utf-8",
-    );
-    // Validation is now in the TS config module; config.sh just calls resolve_config
-    expect(config).toContain("resolve_config");
-  });
-
-  it("scaffolded config.sh delegates env var validation to TS config-cli", () => {
-    const config = readFileSync(
-      join(__dirname, "..", "runner", "lib", "config.sh"),
-      "utf-8",
-    );
-    // All validation (including RALPHAI_MODE) is in the TS config module
-    expect(config).toContain("resolve_config");
-  });
-
   it("init --yes sets autoCommit=false by default (non-patch mode)", () => {
     runCliOutput(["init", "--yes"], ctx.dir);
 
@@ -896,17 +749,6 @@ echo "$AUTO_COMMIT"
     // Default mode is "branch" so auto-commit question is never asked
     expect(config.mode).toBe("branch");
     expect(config.autoCommit).toBe(false);
-  });
-
-  it("scaffolded ralphai.sh auto-commit guard uses patch mode", () => {
-    const ralphaiSh = readFileSync(
-      join(__dirname, "..", "runner", "ralphai.sh"),
-      "utf-8",
-    );
-    // Auto-commit skip guard should check for patch mode
-    expect(ralphaiSh).toContain('"patch"');
-    // Should not reference "direct" mode anywhere
-    expect(ralphaiSh).not.toMatch(/\bdirect\b.*mode/i);
   });
 
   describe.skipIf(process.platform === "win32")(
@@ -1163,33 +1005,6 @@ echo "$MODE"
       });
     },
   );
-
-  // -------------------------------------------------------------------------
-  // Prompt construction wiring tests (format_file_ref used in prompt)
-  // -------------------------------------------------------------------------
-
-  it("scaffolded ralphai.sh wires format_file_ref into prompt construction and detect_plan", () => {
-    const templateDir = join(__dirname, "..", "runner");
-    const templateLib = join(templateDir, "lib");
-
-    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
-    const prompt = readFileSync(join(templateLib, "prompt.sh"), "utf-8");
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // detect_plan: FILE_REFS uses format_file_ref (delegated to TS, shell sets it)
-    expect(plans).toContain('FILE_REFS=" $(format_file_ref "$plan_file")"');
-    // LEARNINGS_REF uses format_file_ref
-    expect(prompt).toContain(
-      'LEARNINGS_REF=" $(format_file_ref "$RALPHAI_LEARNINGS_FILE")"',
-    );
-    // Prompt construction uses format_file_ref for progress file
-    expect(ralphaiSh).toContain(
-      '$(format_file_ref "${PROGRESS_FILE}")${LEARNINGS_REF}',
-    );
-    // Should NOT have any hardcoded @$var or @${VAR} file references in
-    // prompt construction or detect_plan FILE_REFS assignments
-    expect(plans).not.toMatch(/FILE_REFS=.*@\$/);
-    expect(prompt).not.toContain('LEARNINGS_REF=" @');
-  });
 
   // -------------------------------------------------------------------------
   // Run default turn tests

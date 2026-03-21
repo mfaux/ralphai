@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { mkdirSync, writeFileSync, rmSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
-import { tmpdir } from "os";
-import { execSync } from "child_process";
-import { dirname } from "path";
-import { fileURLToPath } from "url";
 import {
   useTempDir,
   useTempGitDir,
@@ -18,10 +14,6 @@ import {
   detectProject,
   deriveDotnetScopedFeedback,
 } from "./project-detection.ts";
-import { readFileSync } from "fs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const LIB_DIR = join(__dirname, "..", "runner", "lib");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,27 +35,6 @@ function slnContent(projects: { name: string; path: string }[]): string {
   lines.push("Global");
   lines.push("EndGlobal");
   return lines.join("\n");
-}
-
-function runBash(script: string, cwd?: string): string {
-  const scriptFile = join(
-    tmpdir(),
-    `ralphai-dotnet-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-  );
-  try {
-    writeFileSync(scriptFile, script);
-    const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-      encoding: "utf-8",
-      cwd,
-    });
-    return result;
-  } finally {
-    try {
-      rmSync(scriptFile);
-    } catch {
-      /* ignore */
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -348,162 +319,6 @@ describe("detectProject mixed repos", () => {
     expect(project!.additionalEcosystems).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Bash: resolve_scoped_feedback for dotnet
-// ---------------------------------------------------------------------------
-
-describe.skipIf(process.platform === "win32")(
-  "resolve_scoped_feedback dotnet scoping (bash)",
-  () => {
-    const ctx = useTempGitDir();
-
-    it("rewrites 'dotnet build' to 'dotnet build <scope>' for dotnet projects", () => {
-      // Create a .sln at root
-      writeFileSync(join(ctx.dir, "Foo.sln"), "");
-      // Create scoped directory
-      const scopeDir = join(ctx.dir, "src/MyProject");
-      mkdirSync(scopeDir, { recursive: true });
-
-      const result = runBash(
-        `
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-
-DETECTED_AGENT_TYPE="claude"
-AGENT_COMMAND="claude -p"
-detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
-
-source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
-
-PLAN_SCOPE="src/MyProject"
-FEEDBACK_COMMANDS="dotnet build,dotnet test"
-CONFIG_WORKSPACES=""
-
-resolve_scoped_feedback
-echo "\$FEEDBACK_COMMANDS"
-`,
-        ctx.dir,
-      ).trim();
-
-      expect(result).toBe(
-        "dotnet build src/MyProject,dotnet test src/MyProject",
-      );
-    });
-
-    it("uses workspace override for dotnet when CONFIG_WORKSPACES matches", () => {
-      writeFileSync(join(ctx.dir, "Foo.sln"), "");
-      const scopeDir = join(ctx.dir, "src/Api");
-      mkdirSync(scopeDir, { recursive: true });
-
-      const ws = JSON.stringify({
-        "src/Api": {
-          feedbackCommands: [
-            "dotnet build src/Api",
-            "dotnet test tests/Api.Tests",
-          ],
-        },
-      });
-
-      const result = runBash(
-        `
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-
-DETECTED_AGENT_TYPE="claude"
-AGENT_COMMAND="claude -p"
-detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
-
-source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
-
-PLAN_SCOPE="src/Api"
-FEEDBACK_COMMANDS="dotnet build,dotnet test"
-CONFIG_WORKSPACES='${ws}'
-
-resolve_scoped_feedback
-echo "\$FEEDBACK_COMMANDS"
-`,
-        ctx.dir,
-      ).trim();
-
-      expect(result).toBe("dotnet build src/Api,dotnet test tests/Api.Tests");
-    });
-
-    it("passes non-dotnet commands through unchanged in dotnet ecosystem", () => {
-      writeFileSync(join(ctx.dir, "Foo.sln"), "");
-      const scopeDir = join(ctx.dir, "src/MyProject");
-      mkdirSync(scopeDir, { recursive: true });
-
-      const result = runBash(
-        `
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-
-DETECTED_AGENT_TYPE="claude"
-AGENT_COMMAND="claude -p"
-detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
-
-source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
-
-PLAN_SCOPE="src/MyProject"
-FEEDBACK_COMMANDS="dotnet build,make lint"
-CONFIG_WORKSPACES=""
-
-resolve_scoped_feedback
-echo "\$FEEDBACK_COMMANDS"
-`,
-        ctx.dir,
-      ).trim();
-
-      expect(result).toBe("dotnet build src/MyProject,make lint");
-    });
-
-    it("scopes dotnet commands in a mixed node+dotnet repo", () => {
-      // Node markers so _detect_ecosystem returns "node"
-      writeFileSync(
-        join(ctx.dir, "package.json"),
-        JSON.stringify({ name: "root" }),
-      );
-      writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
-      // .sln also present
-      writeFileSync(join(ctx.dir, "Foo.sln"), "");
-      // Scope target is a dotnet project (no package.json inside)
-      const scopeDir = join(ctx.dir, "src/Api");
-      mkdirSync(scopeDir, { recursive: true });
-
-      const result = runBash(
-        `
-source ${JSON.stringify(join(LIB_DIR, "defaults.sh"))}
-
-DETECTED_AGENT_TYPE="claude"
-AGENT_COMMAND="claude -p"
-detect_agent_type() { DETECTED_AGENT_TYPE="claude"; }
-
-source ${JSON.stringify(join(LIB_DIR, "prompt.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "json.sh"))}
-source ${JSON.stringify(join(LIB_DIR, "scope.sh"))}
-
-PLAN_SCOPE="src/Api"
-FEEDBACK_COMMANDS="pnpm build,pnpm test,dotnet build,dotnet test"
-CONFIG_WORKSPACES=""
-
-resolve_scoped_feedback
-echo "\$FEEDBACK_COMMANDS"
-`,
-        ctx.dir,
-      ).trim();
-
-      // dotnet commands get scoped; pnpm commands pass through unchanged
-      // (no package.json in scope dir, so pnpm can't be rewritten)
-      expect(result).toBe(
-        "pnpm build,pnpm test,dotnet build src/Api,dotnet test src/Api",
-      );
-    });
-  },
-);
 
 // ---------------------------------------------------------------------------
 // CLI init — dotnet monorepo

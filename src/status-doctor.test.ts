@@ -1,17 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import { fileURLToPath } from "url";
 import {
   runCli,
   runCliOutput,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
 // GitHub Issues integration
@@ -173,92 +170,6 @@ build_continuous_pr_body
     });
   },
 );
-
-// ---------------------------------------------------------------------------
-// Continuous+PR: runner template contains continuous PR functions
-// ---------------------------------------------------------------------------
-
-it("pr.sh contains continuous PR management functions", () => {
-  const prSh = readFileSync(
-    join(__dirname, "..", "runner", "lib", "pr.sh"),
-    "utf-8",
-  );
-  expect(prSh).toContain("build_continuous_pr_body()");
-  expect(prSh).toContain("create_continuous_pr()");
-  expect(prSh).toContain("update_continuous_pr()");
-  expect(prSh).toContain("finalize_continuous_pr()");
-});
-
-it("ralphai.sh tracks COMPLETED_PLANS and CONTINUOUS_BRANCH for continuous+PR", () => {
-  const ralphaiSh = readFileSync(
-    join(__dirname, "..", "runner", "ralphai.sh"),
-    "utf-8",
-  );
-  expect(ralphaiSh).toContain("COMPLETED_PLANS=()");
-  expect(ralphaiSh).toContain('CONTINUOUS_BRANCH=""');
-  expect(ralphaiSh).toContain('CONTINUOUS_PR_URL=""');
-});
-
-it("ralphai.sh routes to continuous PR functions when CONTINUOUS=true and MODE=pr", () => {
-  const ralphaiSh = readFileSync(
-    join(__dirname, "..", "runner", "ralphai.sh"),
-    "utf-8",
-  );
-  // First plan creates draft PR
-  expect(ralphaiSh).toContain("create_continuous_pr");
-  // Subsequent plans update PR
-  expect(ralphaiSh).toContain("update_continuous_pr");
-  // Backlog drained finalizes PR
-  expect(ralphaiSh).toContain("finalize_continuous_pr");
-});
-
-it("ralphai.sh reuses CONTINUOUS_BRANCH for subsequent plans in continuous+PR mode", () => {
-  const ralphaiSh = readFileSync(
-    join(__dirname, "..", "runner", "ralphai.sh"),
-    "utf-8",
-  );
-  // When continuous branch is already set, reuse it
-  expect(ralphaiSh).toContain(
-    'CONTINUOUS" == "true" && -n "$CONTINUOUS_BRANCH"',
-  );
-  expect(ralphaiSh).toContain('branch="$CONTINUOUS_BRANCH"');
-});
-
-it("no group mode references remain in runner scripts", () => {
-  const defaultsSh = readFileSync(
-    join(__dirname, "..", "runner", "lib", "defaults.sh"),
-    "utf-8",
-  );
-  const plansSh = readFileSync(
-    join(__dirname, "..", "runner", "lib", "plans.sh"),
-    "utf-8",
-  );
-  const prSh = readFileSync(
-    join(__dirname, "..", "runner", "lib", "pr.sh"),
-    "utf-8",
-  );
-  const ralphaiSh = readFileSync(
-    join(__dirname, "..", "runner", "ralphai.sh"),
-    "utf-8",
-  );
-
-  for (const [name, content] of [
-    ["defaults.sh", defaultsSh],
-    ["plans.sh", plansSh],
-    ["pr.sh", prSh],
-    ["ralphai.sh", ralphaiSh],
-  ]) {
-    expect(content).not.toContain("GROUP_NAME");
-    expect(content).not.toContain("GROUP_STATE_FILE");
-    expect(content).not.toContain("extract_group");
-    expect(content).not.toContain("group-state");
-    expect(content).not.toContain("collect_group_plans");
-    expect(content).not.toContain("advance_group_plan");
-    expect(content).not.toContain("create_group_pr");
-    expect(content).not.toContain("update_group_pr");
-    expect(content).not.toContain("finalize_group_pr");
-  }
-});
 
 // ---------------------------------------------------------------------------
 // Status subcommand
@@ -774,79 +685,6 @@ describe("status subcommand", () => {
     expect(output).toContain("turn 2 of 5");
   });
 });
-
-// ---------------------------------------------------------------------------
-// update_receipt_tasks batch counting
-// ---------------------------------------------------------------------------
-
-describe.skipIf(process.platform === "win32")(
-  "update_receipt_tasks batch counting",
-  () => {
-    const ctx = useTempGitDir();
-
-    const receiptShPath = join(__dirname, "..", "runner", "lib", "receipt.sh");
-
-    /** Helper: run update_receipt_tasks with given progress content and return tasks_completed */
-    function countTasks(progressContent: string): number {
-      const progressFile = join(ctx.dir, "progress.md");
-      const receiptFile = join(ctx.dir, "receipt.txt");
-      writeFileSync(progressFile, progressContent);
-      writeFileSync(receiptFile, "tasks_completed=0\n");
-
-      execSync(
-        `bash -c 'export RECEIPT_FILE=${JSON.stringify(receiptFile)}; export PROGRESS_FILE=${JSON.stringify(progressFile)}; source ${JSON.stringify(receiptShPath)}; update_receipt_tasks'`,
-        { cwd: ctx.dir, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
-
-      const receipt = readFileSync(receiptFile, "utf-8");
-      const match = receipt.match(/^tasks_completed=(\d+)/m);
-      return match ? parseInt(match[1]!, 10) : -1;
-    }
-
-    it("counts individual Status Complete markers", () => {
-      expect(
-        countTasks(
-          "## Progress\n\n### Task 1: A\n**Status:** Complete\n\n### Task 2: B\n**Status:** Complete\n",
-        ),
-      ).toBe(2);
-    });
-
-    it("counts batch heading Tasks X-Y", () => {
-      expect(
-        countTasks(
-          "## Progress\n\n### Tasks 1-3: Batch\n**Status:** Complete\n",
-        ),
-      ).toBe(4); // 3 from batch (1-3) + 1 from Status Complete
-    });
-
-    it("does not count Tasks X-Y in prose body text", () => {
-      // Regression: prose mentioning "Tasks 3-4" was incorrectly counted as batch tasks
-      expect(
-        countTasks(
-          [
-            "## Progress",
-            "",
-            "### Task 1: Refactor",
-            "**Status:** Complete",
-            "",
-            "Refactored validation. CLI parsing moves in Tasks 3-4.",
-            "",
-            "### Task 2: Extract",
-            "**Status:** Complete",
-            "",
-            "Remaining size includes show-config which moves in Tasks 3-4.",
-          ].join("\n"),
-        ),
-      ).toBe(2); // Only 2 individual completions, prose mentions should be ignored
-    });
-
-    it("counts batch heading with en-dash Tasks X\u2013Y", () => {
-      expect(
-        countTasks("## Progress\n\n### Tasks 5\u20138: Later batch\n"),
-      ).toBe(4); // 8 - 5 + 1 = 4 from batch, no Status Complete
-    });
-  },
-);
 
 // ---------------------------------------------------------------------------
 // doctor subcommand

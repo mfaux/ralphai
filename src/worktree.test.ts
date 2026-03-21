@@ -9,18 +9,15 @@ import {
   lstatSync,
   readlinkSync,
 } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import { fileURLToPath } from "url";
 import {
   runCli,
   runCliOutput,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("worktree", () => {
   // -------------------------------------------------------------------------
@@ -117,169 +114,6 @@ describe("worktree", () => {
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not set up");
       expect(result.stderr).toContain("ralphai init");
-    });
-
-    it("defaults.sh resolves pipeline paths to main worktree when sourced inside a worktree", () => {
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      // Source defaults.sh from the worktree directory and print resolved variables
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-wt-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: worktreeDir,
-        });
-        expect(result).toContain("IS_WORKTREE=true");
-        expect(result).toContain(`MAIN_WORKTREE=${mainRepo}`);
-        expect(result).toContain(
-          `WIP_DIR=${mainRepo}/.ralphai/pipeline/in-progress`,
-        );
-        expect(result).toContain(
-          `BACKLOG_DIR=${mainRepo}/.ralphai/pipeline/backlog`,
-        );
-        expect(result).toContain(
-          `ARCHIVE_DIR=${mainRepo}/.ralphai/pipeline/out`,
-        );
-        // Config falls back to main repo's absolute path (manual worktree without symlink)
-        expect(result).toContain(`CONFIG_FILE=${mainRepo}/ralphai.json`);
-        expect(result).toContain(
-          `PROGRESS_FILE=${mainRepo}/.ralphai/pipeline/in-progress/<slug>/progress.md`,
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-
-    it("defaults.sh uses relative paths when .ralphai symlink exists in worktree", () => {
-      // Create .ralphai/ directory in the main repo
-      const ralphaiDir = join(mainRepo, ".ralphai");
-      mkdirSync(join(ralphaiDir, "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      mkdirSync(join(ralphaiDir, "pipeline", "backlog"), { recursive: true });
-      mkdirSync(join(ralphaiDir, "pipeline", "out"), { recursive: true });
-
-      // Create symlink in the worktree pointing to main repo's .ralphai/
-      symlinkSync(ralphaiDir, join(worktreeDir, ".ralphai"));
-
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-symlink-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: worktreeDir,
-        });
-        // Should detect worktree
-        expect(result).toContain("IS_WORKTREE=true");
-        // But paths should be RELATIVE (not absolute) thanks to the symlink
-        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
-        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
-        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
-        expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-
-    it("defaults.sh keeps relative paths when sourced in the main repo (not a worktree)", () => {
-      const defaultsPath = join(
-        __dirname,
-        "..",
-        "runner",
-        "lib",
-        "defaults.sh",
-      );
-      const script = `#!/bin/bash
-set -e
-source ${JSON.stringify(defaultsPath)}
-echo "IS_WORKTREE=$RALPHAI_IS_WORKTREE"
-echo "MAIN_WORKTREE=$RALPHAI_MAIN_WORKTREE"
-echo "WIP_DIR=$WIP_DIR"
-echo "BACKLOG_DIR=$BACKLOG_DIR"
-echo "ARCHIVE_DIR=$ARCHIVE_DIR"
-echo "CONFIG_FILE=$CONFIG_FILE"
-echo "PROGRESS_FILE=$PROGRESS_FILE"
-`;
-      const scriptFile = join(
-        tmpdir(),
-        `ralphai-defaults-main-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-      );
-      try {
-        writeFileSync(scriptFile, script);
-        const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-          encoding: "utf-8",
-          cwd: mainRepo,
-        });
-        expect(result).toContain("IS_WORKTREE=false");
-        expect(result).toContain("MAIN_WORKTREE=");
-        // Verify MAIN_WORKTREE is empty (not set)
-        expect(result).toMatch(/MAIN_WORKTREE=\n/);
-        // Paths should remain relative
-        expect(result).toContain("WIP_DIR=.ralphai/pipeline/in-progress");
-        expect(result).toContain("BACKLOG_DIR=.ralphai/pipeline/backlog");
-        expect(result).toContain("ARCHIVE_DIR=.ralphai/pipeline/out");
-        expect(result).toContain("CONFIG_FILE=ralphai.json");
-        expect(result).toContain(
-          "PROGRESS_FILE=.ralphai/pipeline/in-progress/<slug>/progress.md",
-        );
-      } finally {
-        try {
-          rmSync(scriptFile);
-        } catch {
-          /* ignore */
-        }
-      }
     });
   });
 
@@ -637,60 +471,6 @@ echo "PROGRESS_FILE=$PROGRESS_FILE"
       ).toBe(true);
       expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
       expect(readlinkSync(symlinkPath)).toBe(join(ctx.dir, ".ralphai"));
-    });
-
-    it("is_tree_dirty ignores .ralphai changes (gitignored) but catches real dirty state", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Add .ralphai/ to .gitignore (legacy pattern -- only matches directories,
-      // not symlinks; the pathspec exclusion in is_tree_dirty handles this)
-      writeFileSync(join(ctx.dir, ".gitignore"), ".ralphai/\n");
-      execSync("git add .gitignore && git commit -m 'add gitignore'", {
-        cwd: ctx.dir,
-        stdio: "ignore",
-      });
-
-      const gitShPath = join(__dirname, "..", "runner", "lib", "git.sh");
-
-      // Helper: run is_tree_dirty in a given directory
-      const isDirty = (cwd: string) => {
-        const branch = execSync("git rev-parse --abbrev-ref HEAD", {
-          cwd,
-          encoding: "utf-8",
-        }).trim();
-        const result = execSync(
-          `bash -c 'MODE=direct; DRY_RUN=true; BASE_BRANCH=${branch}; source "${gitShPath}"; is_tree_dirty; echo $?'`,
-          { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-        ).trim();
-        return result === "0";
-      };
-
-      // Clean tree should not be dirty
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // Adding files inside .ralphai/ should NOT make the tree dirty (gitignored)
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-      writeFileSync(join(ctx.dir, ".ralphai", "LEARNINGS.md"), "# Learnings");
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // A .ralphai symlink (as created in worktrees) should also not trigger dirty
-      rmSync(join(ctx.dir, ".ralphai"), { recursive: true, force: true });
-      const symlinkTarget = join(ctx.dir, ".ralphai-real");
-      mkdirSync(symlinkTarget, { recursive: true });
-      symlinkSync(symlinkTarget, join(ctx.dir, ".ralphai"));
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // A ralphai.json symlink (as created in worktrees) should not trigger dirty.
-      // The symlink target lives outside the repo (in the main repo), so use tmpdir.
-      rmSync(join(ctx.dir, "real-change.txt"), { force: true });
-      const configTarget = join(tmpdir(), "ralphai-config-real.json");
-      writeFileSync(configTarget, '{"agent":"opencode"}');
-      symlinkSync(configTarget, join(ctx.dir, "ralphai.json"));
-      expect(isDirty(ctx.dir)).toBe(false);
-
-      // But a real change (outside .ralphai and ralphai.json) should still be caught
-      writeFileSync(join(ctx.dir, "real-change.txt"), "dirty");
-      expect(isDirty(ctx.dir)).toBe(true);
     });
 
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {

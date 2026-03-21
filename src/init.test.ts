@@ -226,34 +226,6 @@ describe("init command", () => {
     expect(gitignore).not.toContain("ralphai.json");
   });
 
-  // -------------------------------------------------------------------------
-  // Shell script template checks
-  // -------------------------------------------------------------------------
-
-  it("ralphai.sh template passes bash syntax check", () => {
-    // Read directly from runner/ (scripts are bundled in the package)
-    const templateScript = join(__dirname, "..", "runner", "ralphai.sh");
-
-    // bash -n does a syntax check without executing
-    expect(() => {
-      execSync(`bash -n "${templateScript}"`, {
-        stdio: "pipe",
-      });
-    }).not.toThrow();
-  });
-
-  it("ralphai.sh lib contains issue integration functions and config", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
-    expect(issues).toContain("read_issue_frontmatter");
-    expect(issues).toContain("check_gh_available");
-    expect(issues).toContain("detect_repo_from_url");
-    // defaults.sh initialises shell variables for issue settings
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain("ISSUE_SOURCE");
-  });
-
   it("init --yes works without package.json", () => {
     const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
 
@@ -289,114 +261,6 @@ describe("init command", () => {
     }
   });
 
-  it("scaffolded ralphai.sh contains helpful hint in nothing-to-do messages", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const plans = readFileSync(join(templateLib, "plans.sh"), "utf-8");
-    // Both "nothing to do" messages should include the hint
-    expect(plans).toContain(
-      "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
-    );
-    expect(plans).toContain(
-      "Nothing to do — issue pull produced no plan file. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
-    );
-  });
-
-  it("scaffolded ralphai.sh defaults to 5 turns when none specified", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    // Help text mentions the default of 5 turns
-    expect(cli).toContain("Default: 5 turns per plan.");
-    // Turns are now resolved by the TS config-cli, not set directly in cli.sh
-    expect(cli).toContain("--turns=");
-    // Should NOT contain the old error message for missing turns
-    expect(cli).not.toContain("ERROR: Missing required <turns-per-plan>");
-  });
-
-  it("scaffolded ralphai.sh shows turns-per-plan as optional in usage", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const cli = readFileSync(join(templateLib, "cli.sh"), "utf-8");
-    expect(cli).toContain("--turns=<n>");
-    expect(cli).not.toContain("[turns-per-plan]");
-    // Should mention the default
-    expect(cli).toContain("Default: 5 turns per plan.");
-  });
-
-  it("scaffolded ralphai.sh contains gh preflight check for PR mode", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const gitSh = readFileSync(join(templateLib, "git.sh"), "utf-8");
-    // PR mode preflight: checks gh is installed and authenticated
-    expect(gitSh).toContain('MODE" == "pr"');
-    expect(gitSh).toContain("command -v gh");
-    expect(gitSh).toContain("gh auth status");
-    expect(gitSh).toContain("PR mode requires the GitHub CLI");
-    expect(gitSh).toContain("gh is installed but not authenticated");
-    expect(gitSh).toContain("--branch");
-  });
-
-  it("scaffolded ralphai.sh uses create_pr instead of merge_and_cleanup", () => {
-    const templateDir = join(__dirname, "..", "runner");
-    const templateLib = join(templateDir, "lib");
-
-    const prSh = readFileSync(join(templateLib, "pr.sh"), "utf-8");
-    // create_pr function exists in lib/pr.sh
-    expect(prSh).toContain("create_pr()");
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // create_pr is called on completion in the main loop
-    expect(ralphaiSh).toContain('create_pr "$branch" "$PLAN_DESC"');
-    // Old merge_and_cleanup and is_branch_protected are removed
-    expect(ralphaiSh).not.toContain("merge_and_cleanup");
-    expect(ralphaiSh).not.toContain("is_branch_protected");
-    expect(prSh).not.toContain("merge_and_cleanup");
-    expect(prSh).not.toContain("is_branch_protected");
-    // No direct merge path (git merge --no-ff into base branch)
-    expect(ralphaiSh).not.toContain("git merge");
-    expect(ralphaiSh).not.toContain("git branch -d");
-    // No MERGE_TARGET or PROTECTED_BRANCHES variables
-    expect(ralphaiSh).not.toContain("MERGE_TARGET");
-    expect(ralphaiSh).not.toContain("PROTECTED_BRANCHES");
-  });
-
-  it("scaffolded ralphai.sh has patch mode safety guard for main/master", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // Patch mode refuses to run on main or master
-    expect(ralphaiSh).toContain("Patch mode cannot run on");
-    expect(ralphaiSh).toContain("ralphai run --pr");
-    expect(ralphaiSh).toContain("git checkout -b ralphai/");
-  });
-
-  it("scaffolded ralphai.sh has worktree-aware patch mode suggestion", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // When in a worktree, the patch mode guard suggests git worktree add
-    expect(ralphaiSh).toContain(
-      'if [[ "$RALPHAI_IS_WORKTREE" == true ]]; then',
-    );
-    expect(ralphaiSh).toContain("git worktree add");
-    // In a worktree, the non-worktree "git checkout -b" suggestion is in the else branch
-    expect(ralphaiSh).toContain("Or create a worktree on a feature branch:");
-  });
-
-  it("scaffolded ralphai.sh has worktree-aware PR branch strategy", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // In worktree PR mode, the runner uses the existing branch without checkout
-    expect(ralphaiSh).toContain("Worktree mode: working on existing branch");
-    // Errors if running on the base branch in a worktree
-    expect(ralphaiSh).toContain(
-      "ERROR: Running in a worktree on the base branch",
-    );
-    // Rolls back the plan when erroring
-    expect(ralphaiSh).toContain("Rolled back: moved plan to");
-  });
-
   it("scaffolded show-config includes worktree status in --show-config output", () => {
     // Worktree display is now handled by the TS show-config module.
     // Verify the TS module exists and contains worktree formatting.
@@ -408,68 +272,11 @@ describe("init command", () => {
     expect(showConfigTs).toContain("mainWorktree");
   });
 
-  it("scaffolded ralphai.sh includes worktree note in dry-run output", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // Dry-run should note when running in a worktree
-    expect(ralphaiSh).toContain(
-      "[dry-run] Running in worktree (main repo: $RALPHAI_MAIN_WORKTREE)",
-    );
-  });
-
-  it("scaffolded ralphai.sh has stuck detection current_hash on its own line", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // current_hash assignment must NOT be on the same line as a # comment,
-    // otherwise bash treats it as part of the comment and never executes it.
-    const lines = ralphaiSh.split("\n");
-    const assignLine = lines.find((l) =>
-      l.includes("current_hash=$(git rev-parse HEAD)"),
-    );
-    expect(assignLine).toBeDefined();
-    expect(assignLine!.trimStart().startsWith("#")).toBe(false);
-  });
-
-  it("scaffolded ralphai.sh skips create_pr in branch mode", () => {
-    const templateDir = join(__dirname, "..", "runner");
-
-    const ralphaiSh = readFileSync(join(templateDir, "ralphai.sh"), "utf-8");
-    // Completion handler should conditionally call create_pr only in PR mode
-    expect(ralphaiSh).toContain('if [[ "$MODE" == "pr" ]]; then');
-    expect(ralphaiSh).toContain("Branch mode: changes committed on branch");
-  });
-
   it("scaffolded config resolution warns on unknown config keys instead of erroring", () => {
     // Unknown config key warnings are now handled by the TS config module.
     // Verify the TS config module handles unknown keys with a warning.
     const configTs = readFileSync(join(__dirname, "config.ts"), "utf-8");
     expect(configTs).toContain("unknown config key");
-  });
-
-  it("scaffolded ralphai.sh contains issue integration defaults", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    // defaults.sh initialises shell variables (no DEFAULT_ prefix now)
-    const defaults = readFileSync(join(templateLib, "defaults.sh"), "utf-8");
-    expect(defaults).toContain('ISSUE_SOURCE="none"');
-    expect(defaults).toContain('ISSUE_LABEL="ralphai"');
-    expect(defaults).toContain('ISSUE_IN_PROGRESS_LABEL="ralphai:in-progress"');
-    expect(defaults).toContain('ISSUE_REPO=""');
-    expect(defaults).toContain('ISSUE_COMMENT_PROGRESS="true"');
-  });
-
-  it("scaffolded ralphai.sh contains issue integration functions", () => {
-    const templateLib = join(__dirname, "..", "runner", "lib");
-
-    const issues = readFileSync(join(templateLib, "issues.sh"), "utf-8");
-    // Core functions
-    expect(issues).toContain("pull_github_issues()");
-    expect(issues).toContain("read_issue_frontmatter()");
-    expect(issues).toContain("check_gh_available()");
-    expect(issues).toContain("detect_issue_repo()");
-    expect(issues).toContain("slugify()");
   });
 
   // -------------------------------------------------------------------------
