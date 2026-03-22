@@ -238,7 +238,7 @@ describe("buildContinuousPrBody", () => {
     expect(body).toContain("_Backlog empty");
   });
 
-  it("includes commit log section", () => {
+  it("includes changes section", () => {
     initRepo(ctx.dir);
     const body = buildContinuousPrBody(
       [],
@@ -247,8 +247,7 @@ describe("buildContinuousPrBody", () => {
       "main",
       ctx.dir,
     );
-    expect(body).toContain("## Commits");
-    expect(body).toContain("```");
+    expect(body).toContain("## Changes");
   });
 
   it("includes commits between base and head branch", () => {
