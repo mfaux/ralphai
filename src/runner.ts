@@ -170,6 +170,10 @@ export function spawnAgent(
       return;
     }
 
+    // Close stdin so the agent knows no input is coming.
+    // Without this, agents that read or wait for stdin EOF will hang.
+    child.stdin?.end();
+
     const chunks: Buffer[] = [];
 
     child.stdout?.on("data", (data: Buffer) => {
