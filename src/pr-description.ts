@@ -1,0 +1,231 @@
+/**
+ * PR description builders: structured, human-readable PR bodies.
+ *
+ * Parses conventional commits into categories, builds file-change
+ * summaries, and assembles formatted PR descriptions for both
+ * single-plan and continuous modes.
+ */
+import { execSync } from "child_process";
+import { basename } from "path";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface CategorizedCommits {
+  features: string[];
+  fixes: string[];
+  refactors: string[];
+  tests: string[];
+  docs: string[];
+  chores: string[];
+  other: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Git helpers (read-only)
+// ---------------------------------------------------------------------------
+
+function execQuiet(cmd: string, cwd: string): string | null {
+  try {
+    return execSync(cmd, {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Raw one-line commit log between two refs. */
+export function buildCommitLog(
+  base: string,
+  head: string,
+  cwd: string,
+): string {
+  return (
+    execQuiet(`git log "${base}".."${head}" --oneline --no-decorate`, cwd) ?? ""
+  );
+}
+
+/** File-change diffstat between two refs. */
+export function buildDiffStat(base: string, head: string, cwd: string): string {
+  return (
+    execQuiet(`git diff "${base}".."${head}" --stat --stat-width=72`, cwd) ?? ""
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Conventional commit parsing
+// ---------------------------------------------------------------------------
+
+const CC_PATTERN =
+  /^[0-9a-f]{4,}\s+(feat|fix|refactor|test|docs|chore|ci|build|perf|style|revert)(?:\([^)]*\))?!?:\s+(.+)$/i;
+
+/** Parse a line of `git log --oneline` into {type, description}. */
+function parseCommitLine(
+  line: string,
+): { type: string; description: string } | null {
+  const m = line.match(CC_PATTERN);
+  if (!m) return null;
+  return { type: m[1]!.toLowerCase(), description: m[2]!.trim() };
+}
+
+/** Group commit lines by conventional-commit type. */
+export function categorizeCommits(commitLog: string): CategorizedCommits {
+  const result: CategorizedCommits = {
+    features: [],
+    fixes: [],
+    refactors: [],
+    tests: [],
+    docs: [],
+    chores: [],
+    other: [],
+  };
+  if (!commitLog) return result;
+
+  for (const line of commitLog.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parsed = parseCommitLine(trimmed);
+    if (!parsed) {
+      result.other.push(trimmed.replace(/^[0-9a-f]+\s+/, ""));
+      continue;
+    }
+    switch (parsed.type) {
+      case "feat":
+        result.features.push(parsed.description);
+        break;
+      case "fix":
+        result.fixes.push(parsed.description);
+        break;
+      case "refactor":
+      case "perf":
+      case "style":
+        result.refactors.push(parsed.description);
+        break;
+      case "test":
+        result.tests.push(parsed.description);
+        break;
+      case "docs":
+        result.docs.push(parsed.description);
+        break;
+      case "chore":
+      case "ci":
+      case "build":
+      case "revert":
+        result.chores.push(parsed.description);
+        break;
+      default:
+        result.other.push(parsed.description);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Body builders
+// ---------------------------------------------------------------------------
+
+/** Format categorized commits as a bullet list grouped by type. */
+export function formatCommitsByCategory(commits: CategorizedCommits): string {
+  const sections: string[] = [];
+  const map: [string, string[]][] = [
+    ["Features", commits.features],
+    ["Bug Fixes", commits.fixes],
+    ["Refactoring", commits.refactors],
+    ["Tests", commits.tests],
+    ["Documentation", commits.docs],
+    ["Maintenance", commits.chores],
+    ["Other", commits.other],
+  ];
+
+  for (const [label, items] of map) {
+    if (items.length === 0) continue;
+    sections.push(`### ${label}\n`);
+    for (const item of items) {
+      sections.push(`- ${item}`);
+    }
+    sections.push("");
+  }
+
+  return sections.length > 0 ? sections.join("\n").trimEnd() : "_No commits._";
+}
+
+/**
+ * Build a structured PR body for a single-plan PR.
+ *
+ * Sections:
+ *   ## Summary         – plan description
+ *   ## Changes         – commits grouped by type
+ *   ## Files Changed   – diffstat
+ */
+export function buildPrBody(
+  planDescription: string,
+  baseBranch: string,
+  headBranch: string,
+  cwd: string,
+): string {
+  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
+  const categorized = categorizeCommits(commitLog);
+  const formattedCommits = formatCommitsByCategory(categorized);
+  const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
+
+  const parts: string[] = [
+    `## Summary\n`,
+    `${planDescription}\n`,
+    `## Changes\n`,
+    formattedCommits,
+  ];
+
+  if (diffStat) {
+    parts.push("", `## Files Changed\n`, "```", diffStat, "```");
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Build a structured PR body for continuous-mode PRs.
+ *
+ * Sections:
+ *   ## Completed Plans  – checked items
+ *   ## Remaining Plans  – unchecked items
+ *   ## Changes          – commits grouped by type
+ *   ## Files Changed    – diffstat
+ */
+export function buildContinuousPrBodyStructured(
+  completedPlans: string[],
+  remainingPlans: string[],
+  baseBranch: string,
+  headBranch: string,
+  cwd: string,
+): string {
+  const parts: string[] = ["## Completed Plans\n"];
+  if (completedPlans.length > 0) {
+    parts.push(...completedPlans.map((p) => `- [x] ${p}`));
+  } else {
+    parts.push("_None yet._");
+  }
+
+  parts.push("\n## Remaining Plans\n");
+  if (remainingPlans.length > 0) {
+    parts.push(...remainingPlans.map((r) => `- [ ] ${r}`));
+  } else {
+    parts.push("_Backlog empty — all plans processed._");
+  }
+
+  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
+  const categorized = categorizeCommits(commitLog);
+  const formattedCommits = formatCommitsByCategory(categorized);
+  const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
+
+  parts.push("\n## Changes\n", formattedCommits);
+
+  if (diffStat) {
+    parts.push("", "## Files Changed\n", "```", diffStat, "```");
+  }
+
+  return parts.join("\n");
+}

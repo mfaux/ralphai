@@ -11,6 +11,10 @@ import { basename, dirname, join } from "path";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { checkGhAvailable, detectIssueRepo } from "./issues.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
+import {
+  buildPrBody,
+  buildContinuousPrBodyStructured,
+} from "./pr-description.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,12 +71,6 @@ function execQuiet(cmd: string, cwd: string): string | null {
   } catch {
     return null;
   }
-}
-
-function buildCommitLog(base: string, head: string, cwd: string): string {
-  return (
-    execQuiet(`git log "${base}".."${head}" --oneline --no-decorate`, cwd) ?? ""
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -169,8 +167,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
 
-  const commitLog = buildCommitLog(baseBranch, branch, cwd);
-  const prBody = `## Summary\n\n${planDescription}\n\n## Commits\n\n\`\`\`\n${commitLog || "_No commits._"}\n\`\`\``;
+  const prBody = buildPrBody(planDescription, baseBranch, branch, cwd);
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
   const prUrl = execQuiet(
@@ -216,24 +213,14 @@ export function buildContinuousPrBody(
   headBranch: string,
   cwd: string,
 ): string {
-  const parts: string[] = ["## Completed Plans\n"];
-  if (completedPlans.length > 0) {
-    parts.push(...completedPlans.map((p) => `- [x] ${p}`));
-  } else {
-    parts.push("_None yet._");
-  }
-
   const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
-  parts.push("\n## Remaining Plans\n");
-  if (remaining.length > 0) {
-    parts.push(...remaining.map((r) => `- [ ] ${r}`));
-  } else {
-    parts.push("_Backlog empty — all plans processed._");
-  }
-
-  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
-  parts.push("\n## Commits\n", "```", commitLog || "_No commits._", "```");
-  return parts.join("\n");
+  return buildContinuousPrBodyStructured(
+    completedPlans,
+    remaining,
+    baseBranch,
+    headBranch,
+    cwd,
+  );
 }
 
 /** Create draft PR for continuous mode. Matches `create_continuous_pr()`. */
