@@ -43,8 +43,12 @@ export function runCli(
   }
 }
 
-export function runCliOutput(args: string[], cwd?: string): string {
-  const result = runCli(args, cwd);
+export function runCliOutput(
+  args: string[],
+  cwd?: string,
+  env?: Record<string, string>,
+): string {
+  const result = runCli(args, cwd, env);
   return result.stdout || result.stderr;
 }
 

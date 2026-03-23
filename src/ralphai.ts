@@ -26,7 +26,7 @@ import {
   countCompletedTasks,
 } from "./plan-detection.ts";
 import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs, getRepoStateDir } from "./global-state.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -482,21 +482,22 @@ async function teardownRalphai(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  const ralphaiDir = join(cwd, ".ralphai");
-
-  if (!existsSync(ralphaiDir)) {
+  const configPath = getConfigFilePath(cwd);
+  if (!existsSync(configPath)) {
     console.log(
-      `${TEXT}Ralphai is not set up in this project (.ralphai/ does not exist).${RESET}`,
+      `${TEXT}Ralphai is not set up in this project (no config found).${RESET}`,
     );
     return;
   }
+
+  const stateDir = getRepoStateDir(cwd);
 
   if (!options.yes) {
     clack.intro("Tearing down Ralphai");
     const confirmed = await clack.confirm({
       message:
-        "This will permanently delete .ralphai/. " +
-        "Any plans and learnings in .ralphai/ will be lost. Continue?",
+        "This will permanently delete the global state for this repo. " +
+        "Any plans and learnings will be lost. Continue?",
     });
 
     if (clack.isCancel(confirmed) || !confirmed) {
@@ -505,13 +506,19 @@ async function teardownRalphai(
     }
   }
 
-  // Remove .ralphai/ directory
-  rmSync(ralphaiDir, { recursive: true, force: true });
+  // Remove global state directory for this repo
+  rmSync(stateDir, { recursive: true, force: true });
+
+  // Also remove local .ralphai/ if it exists (legacy cleanup)
+  const localDir = join(cwd, ".ralphai");
+  if (existsSync(localDir)) {
+    rmSync(localDir, { recursive: true, force: true });
+  }
 
   console.log(`${TEXT}Ralphai torn down.${RESET}`);
   console.log();
   console.log(`${DIM}Removed:${RESET}`);
-  console.log(`  .ralphai/                  ${DIM}Entire directory${RESET}`);
+  console.log(`  ${stateDir}  ${DIM}Global state${RESET}`);
   console.log();
 }
 
@@ -706,17 +713,15 @@ async function runRalphaiReset(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  const ralphaiRoot = resolveRalphaiDir(cwd);
-  if (!ralphaiRoot) {
+  if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
 
-  const ralphaiDir = join(ralphaiRoot, ".ralphai");
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
+  const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
+  const inProgressDir = wipDir;
 
   if (!existsSync(inProgressDir)) {
     console.log("Nothing to reset — no in-progress directory.");
@@ -729,7 +734,7 @@ async function runRalphaiReset(
   // Check for worktrees to clean
   let worktrees: WorktreeEntry[] = [];
   try {
-    worktrees = listRalphaiWorktrees(ralphaiRoot);
+    worktrees = listRalphaiWorktrees(cwd);
   } catch {
     // Not in a git repo or git not available
   }
@@ -801,7 +806,7 @@ async function runRalphaiReset(
   if (worktrees.length > 0) {
     // Prune stale entries
     try {
-      execSync("git worktree prune", { cwd: ralphaiRoot, stdio: "pipe" });
+      execSync("git worktree prune", { cwd, stdio: "pipe" });
     } catch {
       // Not critical
     }
@@ -811,7 +816,7 @@ async function runRalphaiReset(
         // Use --force because the worktree may have uncommitted changes
         // from interrupted agent work.
         execSync(`git worktree remove --force "${wt.path}"`, {
-          cwd: ralphaiRoot,
+          cwd,
           stdio: "pipe",
         });
         // Force-delete branch (-D) because ralphai/* branches are typically
@@ -819,7 +824,7 @@ async function runRalphaiReset(
         // stale branches that cause dirty-state errors on the next run.
         try {
           execSync(`git branch -D "${wt.branch}"`, {
-            cwd: ralphaiRoot,
+            cwd,
             stdio: "pipe",
           });
         } catch {
@@ -864,15 +869,14 @@ async function runRalphaiPurge(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  const ralphaiRoot = resolveRalphaiDir(cwd);
-  if (!ralphaiRoot) {
+  if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
 
-  const outDir = join(ralphaiRoot, ".ralphai", "pipeline", "out");
+  const { archiveDir: outDir } = getRepoPipelineDirs(cwd);
 
   if (!existsSync(outDir)) {
     console.log("Nothing to purge — no out/ directory.");
@@ -1411,12 +1415,11 @@ function parseWorktreeList(output: string): WorktreeEntry[] {
 }
 
 function selectPlanForWorktree(
-  ralphaiDir: string,
+  cwd: string,
   specificPlan?: string,
   activeWorktrees: WorktreeEntry[] = [],
 ): SelectedWorktreePlan | null {
-  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+  const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
 
   // Build set of slugs that already have an active worktree
   const activeSlugs = new Set(
@@ -1504,7 +1507,7 @@ function selectPlanForWorktree(
   }
 
   console.error(
-    `No plans in backlog. Add a plan to .ralphai/pipeline/backlog/ first.`,
+    `No plans in backlog. Add a plan to the pipeline backlog first.`,
   );
   return null;
 }
@@ -1641,8 +1644,7 @@ function listWorktrees(cwd: string): void {
   console.log("Active ralphai worktrees:\n");
   for (const wt of worktrees) {
     const slug = wt.branch.replace("ralphai/", "");
-    const ralphaiDir = join(cwd, ".ralphai");
-    const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
+    const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
     const hasActivePlan = planExistsForSlug(inProgressDir, slug);
     const status = hasActivePlan ? "in-progress" : "idle";
     console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
@@ -1660,9 +1662,7 @@ function cleanWorktrees(cwd: string): void {
     return;
   }
 
-  const ralphaiDir = join(cwd, ".ralphai");
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-  const archiveDir = join(ralphaiDir, "pipeline", "out");
+  const { wipDir: inProgressDir, archiveDir } = getRepoPipelineDirs(cwd);
   let cleaned = 0;
 
   for (const wt of worktrees) {
@@ -1725,10 +1725,11 @@ interface DoctorCheckResult {
 }
 
 function checkRalphaiDirExists(cwd: string): DoctorCheckResult {
-  if (existsSync(join(cwd, ".ralphai"))) {
-    return { status: "pass", message: ".ralphai/ initialized" };
+  const configPath = getConfigFilePath(cwd);
+  if (existsSync(configPath)) {
+    return { status: "pass", message: "config initialized (global state)" };
   }
-  return { status: "fail", message: ".ralphai/ not found — run ralphai init" };
+  return { status: "fail", message: "config not found — run ralphai init" };
 }
 
 function checkConfigValid(cwd: string): DoctorCheckResult {
@@ -1926,7 +1927,7 @@ function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
 }
 
 function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
-  const backlogDir = join(cwd, ".ralphai", "pipeline", "backlog");
+  const { backlogDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(backlogDir)) {
     return { status: "warn", message: "backlog: directory not found" };
   }
@@ -1941,7 +1942,7 @@ function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
 }
 
 function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
-  const inProgressDir = join(cwd, ".ralphai", "pipeline", "in-progress");
+  const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(inProgressDir)) {
     return { status: "pass", message: "no orphaned receipts" };
   }
@@ -1972,13 +1973,19 @@ function checkWorktreeSymlink(cwd: string): DoctorCheckResult {
       message: "not a worktree (symlink check skipped)",
     };
   }
+  // With global state, .ralphai/ in a worktree is legacy. If it exists
+  // and is not a symlink, warn but it is non-critical since pipeline
+  // data now lives in global state.
   const ralphaiPath = join(cwd, ".ralphai");
   if (!existsSync(ralphaiPath)) {
     return { status: "pass", message: "worktree: no local .ralphai/ (ok)" };
   }
   try {
     if (lstatSync(ralphaiPath).isSymbolicLink()) {
-      return { status: "pass", message: "worktree: .ralphai/ is a symlink" };
+      return {
+        status: "pass",
+        message: "worktree: .ralphai/ is a symlink (legacy)",
+      };
     }
   } catch {
     return { status: "pass", message: "worktree: .ralphai/ check skipped" };
@@ -1986,7 +1993,7 @@ function checkWorktreeSymlink(cwd: string): DoctorCheckResult {
   return {
     status: "warn",
     message:
-      ".ralphai/ is a directory in this worktree (not a symlink) — local plans will be ignored",
+      ".ralphai/ is a directory in this worktree (not a symlink) — consider removing it",
   };
 }
 
@@ -2088,19 +2095,19 @@ function runRalphaiDoctor(cwd: string): void {
 export { extractScope, extractDependsOn } from "./frontmatter.ts";
 
 function runRalphaiStatus(cwd: string): void {
-  // Resolve .ralphai/ — works from main repo or worktree
-  const ralphaiRoot = resolveRalphaiDir(cwd);
-  if (!ralphaiRoot) {
+  // Verify config exists (global state)
+  if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
     process.exit(1);
   }
 
-  const ralphaiDir = join(ralphaiRoot, ".ralphai");
-  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-  const archiveDir = join(ralphaiDir, "pipeline", "out");
+  const {
+    backlogDir,
+    wipDir: inProgressDir,
+    archiveDir,
+  } = getRepoPipelineDirs(cwd);
 
   // --- Collect data ---
   const backlogPlans = listPlanFiles(backlogDir, true);
@@ -2214,7 +2221,7 @@ function runRalphaiStatus(cwd: string): void {
   // --- Worktrees section ---
   let worktrees: WorktreeEntry[] = [];
   try {
-    worktrees = listRalphaiWorktrees(ralphaiRoot);
+    worktrees = listRalphaiWorktrees(cwd);
   } catch {
     // Not in a git repo or git not available
   }
@@ -2322,8 +2329,8 @@ async function runRalphaiWorktree(
     process.exit(1);
   }
 
-  // Guard: .ralphai must exist
-  if (!existsSync(join(cwd, ".ralphai"))) {
+  // Guard: config must exist
+  if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );
@@ -2346,22 +2353,12 @@ async function runRalphaiWorktree(
 
   // Select plan (in-progress first, then backlog)
   const activeWorktrees = listRalphaiWorktrees(cwd);
-  const plan = selectPlanForWorktree(
-    join(cwd, ".ralphai"),
-    wtOpts.plan,
-    activeWorktrees,
-  );
+  const plan = selectPlanForWorktree(cwd, wtOpts.plan, activeWorktrees);
   if (!plan) process.exit(1);
 
   // Check receipt for cross-source conflicts: block if plan is running in main repo
-  const receiptPath = join(
-    cwd,
-    ".ralphai",
-    "pipeline",
-    "in-progress",
-    plan.slug,
-    "receipt.txt",
-  );
+  const { wipDir } = getRepoPipelineDirs(cwd);
+  const receiptPath = join(wipDir, plan.slug, "receipt.txt");
   const receipt = parseReceipt(receiptPath);
   if (receipt && receipt.source === "main") {
     console.error();
@@ -2458,16 +2455,17 @@ async function runRalphaiWorktree(
     }
   }
 
-  // Symlink .ralphai/ from worktree → main repo so the agent can access
-  // pipeline files as relative paths. Without this, agents with directory
-  // sandboxing (OpenCode, Claude Code, Codex) reject reads/writes to the
-  // main repo's .ralphai/ as "external directory" access.
+  // Pipeline data now lives in global state (~/.ralphai/repos/<id>/...),
+  // so no .ralphai/ symlink is needed in the worktree for pipeline access.
+  // Config also lives in global state, so no ralphai.json symlink is needed.
   //
-  // Since .ralphai/ is fully gitignored, `git worktree add` won't create
-  // it in the worktree — we just need to add the symlink.
-  const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
-  if (!existsSync(worktreeRalphaiLink)) {
-    symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
+  // If a local .ralphai/ exists (legacy), symlink it for backward compat.
+  const localRalphaiDir = join(cwd, ".ralphai");
+  if (existsSync(localRalphaiDir)) {
+    const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
+    if (!existsSync(worktreeRalphaiLink)) {
+      symlinkSync(localRalphaiDir, worktreeRalphaiLink);
+    }
   }
 
   // Config now lives in global state (~/.ralphai/repos/<id>/config.json),
@@ -2655,11 +2653,8 @@ async function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  // Check that ralphai has been initialized (config dir exists).
-  // In a worktree, .ralphai/ lives in the main repo — resolveRalphaiDir()
-  // handles the fallback transparently.
-  const ralphaiRoot = resolveRalphaiDir(cwd);
-  if (!ralphaiRoot) {
+  // Check that ralphai has been initialized (global config exists).
+  if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
     );

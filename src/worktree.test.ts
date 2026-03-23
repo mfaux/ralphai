@@ -4,7 +4,6 @@ import {
   rmSync,
   readFileSync,
   mkdirSync,
-  mkdtempSync,
   writeFileSync,
   symlinkSync,
   lstatSync,
@@ -127,6 +126,10 @@ describe("worktree", () => {
   describe.skipIf(process.platform === "win32")("worktree subcommand", () => {
     const ctx = useTempGitDir();
 
+    function testEnv() {
+      return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    }
+
     /** Create an initial commit so worktree operations work (CI has no global git config). */
     function gitInitialCommit(cwd: string): void {
       execSync("git config user.name 'Test'", { cwd, stdio: "ignore" });
@@ -166,12 +169,11 @@ describe("worktree", () => {
       });
 
       // Initialize ralphai so the worktree guard runs (it checks before .ralphai)
-      // Create a minimal .ralphai in main repo so worktree resolves
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
+      runCli(["init", "--yes"], ctx.dir, testEnv());
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
       writeFileSync(join(backlogDir, "prd-test.md"), "# Test plan\n");
 
-      const result = runCli(["worktree"], worktreeDir);
+      const result = runCli(["worktree"], worktreeDir, testEnv());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("must be run from the main repository");
 
@@ -184,37 +186,37 @@ describe("worktree", () => {
 
     it("worktree errors when .ralphai is not set up", () => {
       gitInitialCommit(ctx.dir);
-      const result = runCli(["worktree"], ctx.dir);
+      const result = runCli(["worktree"], ctx.dir, testEnv());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not set up");
     });
 
     it("worktree errors with no backlog plans", () => {
       gitInitialCommit(ctx.dir);
-      // Create .ralphai with empty backlog
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
+      // Initialize config in global state with empty backlog
+      runCli(["init", "--yes"], ctx.dir, testEnv());
 
-      const result = runCli(["worktree"], ctx.dir);
+      const result = runCli(["worktree"], ctx.dir, testEnv());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("No plans in backlog");
     });
 
     it("worktree --plan=nonexistent.md errors", () => {
       gitInitialCommit(ctx.dir);
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
+      runCli(["init", "--yes"], ctx.dir, testEnv());
 
-      const result = runCli(["worktree", "--plan=nonexistent.md"], ctx.dir);
+      const result = runCli(
+        ["worktree", "--plan=nonexistent.md"],
+        ctx.dir,
+        testEnv(),
+      );
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not found in backlog");
     });
 
     it("worktree list shows no worktrees initially", () => {
       gitInitialCommit(ctx.dir);
-      const output = runCliOutput(["worktree", "list"], ctx.dir);
+      const output = runCliOutput(["worktree", "list"], ctx.dir, testEnv());
       expect(output).toContain("No active ralphai worktrees");
     });
 
@@ -228,7 +230,7 @@ describe("worktree", () => {
         stdio: "ignore",
       });
 
-      const output = runCliOutput(["worktree", "list"], ctx.dir);
+      const output = runCliOutput(["worktree", "list"], ctx.dir, testEnv());
       expect(output).toContain("ralphai/my-feature");
       expect(output).toContain(wtPath);
 
@@ -249,9 +251,8 @@ describe("worktree", () => {
         stdio: "ignore",
       });
 
-      // No .ralphai/pipeline/in-progress/done-feature/done-feature.md exists,
-      // so it should be cleaned
-      const output = runCliOutput(["worktree", "clean"], ctx.dir);
+      // No in-progress plan exists for this slug, so it should be cleaned
+      const output = runCliOutput(["worktree", "clean"], ctx.dir, testEnv());
       expect(output).toContain("Removing:");
       expect(output).toContain("Cleaned 1 worktree(s)");
       expect(existsSync(wtPath)).toBe(false);
@@ -271,18 +272,13 @@ describe("worktree", () => {
         },
       );
 
-      // Create matching in-progress plan
-      const inProgressDir = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "in-progress",
-      );
-      const planDir = join(inProgressDir, "prd-active-feature");
+      // Create matching in-progress plan in global state
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const planDir = join(wipDir, "prd-active-feature");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(join(planDir, "prd-active-feature.md"), "# Active plan\n");
 
-      const output = runCliOutput(["worktree", "clean"], ctx.dir);
+      const output = runCliOutput(["worktree", "clean"], ctx.dir, testEnv());
       expect(output).toContain("Keeping:");
       expect(output).toContain("plan still in progress");
       expect(existsSync(wtPath)).toBe(true);
@@ -297,9 +293,9 @@ describe("worktree", () => {
     it("worktree --plan selects a specific plan", () => {
       gitInitialCommit(ctx.dir);
 
-      // Create .ralphai with two plans
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
+      // Initialize config and create two plans in global backlog
+      runCli(["init", "--yes"], ctx.dir, testEnv());
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
       writeFileSync(join(backlogDir, "prd-first.md"), "# First\n");
       writeFileSync(join(backlogDir, "prd-second.md"), "# Second\n");
 
@@ -307,7 +303,7 @@ describe("worktree", () => {
       const result = runCli(
         ["worktree", "--plan=prd-second.md", "--turns=1"],
         ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
+        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -319,13 +315,15 @@ describe("worktree", () => {
     it("worktree creates .ralphai symlink in worktree directory", () => {
       gitInitialCommit(ctx.dir);
 
-      // Create .ralphai with a plan
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
+      // Initialize config in global state and create local .ralphai/ + plan
+      runCli(["init", "--yes"], ctx.dir, testEnv());
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
       writeFileSync(
         join(backlogDir, "prd-symlink-test.md"),
         "# Symlink test\n",
       );
+      // Create local .ralphai/ so the worktree command creates the symlink (legacy compat)
+      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
 
       // Use --dir to place worktree inside ctx.dir (auto-cleaned by afterEach)
       const worktreeDir = join(ctx.dir, "wt-symlink");
@@ -338,7 +336,7 @@ describe("worktree", () => {
           "--turns=1",
         ],
         ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
+        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -358,13 +356,15 @@ describe("worktree", () => {
     it("worktree replaces existing .ralphai dir with symlink", () => {
       gitInitialCommit(ctx.dir);
 
-      // Create .ralphai with a plan (not git-tracked since .ralphai/ is gitignored)
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
+      // Initialize config in global state and create local .ralphai/ + plan
+      runCli(["init", "--yes"], ctx.dir, testEnv());
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
       writeFileSync(
         join(backlogDir, "prd-tracked-test.md"),
         "# Tracked test\n",
       );
+      // Create local .ralphai/ so the worktree command creates the symlink (legacy compat)
+      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
 
       const worktreeDir = join(ctx.dir, "wt-tracked");
 
@@ -376,7 +376,7 @@ describe("worktree", () => {
           "--turns=1",
         ],
         ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
+        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
 
@@ -395,15 +395,17 @@ describe("worktree", () => {
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
       gitInitialCommit(ctx.dir);
 
-      const inProgressDir = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "in-progress",
-      );
-      const planDir = join(inProgressDir, "prd-resume");
+      // Initialize config in global state
+      runCli(["init", "--yes"], ctx.dir, testEnv());
+
+      // Create in-progress plan in global state
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const planDir = join(wipDir, "prd-resume");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(join(planDir, "prd-resume.md"), "# Resume test\n");
+
+      // Create local .ralphai/ so symlink is created (legacy compat)
+      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
 
       const worktreeDir = join(ctx.dir, "wt-resume");
       execSync(`git worktree add "${worktreeDir}" -b ralphai/prd-resume HEAD`, {
@@ -415,7 +417,7 @@ describe("worktree", () => {
       const result = runCli(
         ["worktree", "--turns=3"],
         ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
+        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
       );
       const combined = result.stdout + result.stderr;
@@ -430,20 +432,18 @@ describe("worktree", () => {
 
     it("worktree clean with no ralphai worktrees", () => {
       gitInitialCommit(ctx.dir);
-      const output = runCliOutput(["worktree", "clean"], ctx.dir);
+      const output = runCliOutput(["worktree", "clean"], ctx.dir, testEnv());
       expect(output).toContain("No ralphai worktrees to clean");
     });
 
     it("run is blocked when receipt says source=worktree", () => {
       gitInitialCommit(ctx.dir);
 
-      // Set up initialized ralphai config
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-      writeConfigFile(ctx.dir, { agentCommand: "claude -p" });
+      // Set up initialized ralphai config in global state
+      const env = testEnv();
+      writeConfigFile(ctx.dir, { agentCommand: "claude -p" }, env);
 
       // Write receipt to global state wip directory
-      const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
-      const env = { RALPHAI_HOME: ralphaiHome };
       const { wipDir } = getRepoPipelineDirs(ctx.dir, env);
       const planDir = join(wipDir, "dark-mode");
       mkdirSync(planDir, { recursive: true });
@@ -460,9 +460,7 @@ describe("worktree", () => {
         ].join("\n"),
       );
 
-      const result = runCli(["run"], ctx.dir, {
-        RALPHAI_HOME: ralphaiHome,
-      });
+      const result = runCli(["run"], ctx.dir, env);
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(1);
@@ -473,17 +471,10 @@ describe("worktree", () => {
     it("worktree is blocked when receipt says source=main", () => {
       gitInitialCommit(ctx.dir);
 
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
-      writeConfigFile(ctx.dir, { agentCommand: "claude -p" });
-      const planDir = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "in-progress",
-        "prd-search",
-      );
+      const env = testEnv();
+      writeConfigFile(ctx.dir, { agentCommand: "claude -p" }, env);
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, env);
+      const planDir = join(wipDir, "prd-search");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(join(planDir, "prd-search.md"), "# Search\n");
       writeFileSync(
@@ -498,7 +489,7 @@ describe("worktree", () => {
         ].join("\n"),
       );
 
-      const result = runCli(["worktree"], ctx.dir);
+      const result = runCli(["worktree"], ctx.dir, env);
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(1);
@@ -510,9 +501,8 @@ describe("worktree", () => {
     it("worktree clean archives receipt file", () => {
       gitInitialCommit(ctx.dir);
 
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
+      const env = testEnv();
+      const { wipDir, archiveDir } = getRepoPipelineDirs(ctx.dir, env);
 
       // Create a worktree with no active plan (so clean will remove it)
       const worktreeDir = join(ctx.dir, "wt-done");
@@ -521,14 +511,8 @@ describe("worktree", () => {
         stdio: "ignore",
       });
 
-      // Write a receipt for the slug "done"
-      const planDir = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "in-progress",
-        "done",
-      );
+      // Write a receipt for the slug "done" in global state
+      const planDir = join(wipDir, "done");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(
         join(planDir, "receipt.txt"),
@@ -542,30 +526,18 @@ describe("worktree", () => {
         ].join("\n"),
       );
 
-      const result = runCli(["worktree", "clean"], ctx.dir);
+      const result = runCli(["worktree", "clean"], ctx.dir, env);
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(0);
       expect(combined).toContain("Archived receipt: done/receipt.txt");
 
       // Receipt should no longer exist in in-progress
-      expect(
-        existsSync(
-          join(
-            ctx.dir,
-            ".ralphai",
-            "pipeline",
-            "in-progress",
-            "done",
-            "receipt.txt",
-          ),
-        ),
-      ).toBe(false);
+      expect(existsSync(join(wipDir, "done", "receipt.txt"))).toBe(false);
 
       // Receipt should exist in out/
-      const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
-      expect(existsSync(outDir)).toBe(true);
-      const archivedReceipt = join(outDir, "done", "receipt.txt");
+      expect(existsSync(archiveDir)).toBe(true);
+      const archivedReceipt = join(archiveDir, "done", "receipt.txt");
       expect(existsSync(archivedReceipt)).toBe(true);
     });
   });
@@ -580,6 +552,11 @@ describe.skipIf(process.platform === "win32")(
   () => {
     let mainRepo: string;
     let worktreeDir: string;
+    let ralphaiHome: string;
+
+    function doctorEnv() {
+      return { RALPHAI_HOME: ralphaiHome };
+    }
 
     beforeEach(() => {
       mainRepo = join(
@@ -587,6 +564,7 @@ describe.skipIf(process.platform === "win32")(
         `ralphai-doc-wt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       );
       mkdirSync(mainRepo, { recursive: true });
+      ralphaiHome = join(mainRepo, ".ralphai-home");
       execSync("git init", { cwd: mainRepo, stdio: "ignore" });
       execSync("git config user.name 'Test'", {
         cwd: mainRepo,
@@ -603,10 +581,10 @@ describe.skipIf(process.platform === "win32")(
         stdio: "ignore",
       });
 
-      // Initialize ralphai in the main repo
-      runCli(["init", "--yes"], mainRepo);
+      // Initialize ralphai in the main repo with isolated RALPHAI_HOME
+      runCli(["init", "--yes"], mainRepo, doctorEnv());
       // Set agentCommand to something in PATH so doctor doesn't fail on that
-      const configPath = getConfigFilePath(mainRepo);
+      const configPath = getConfigFilePath(mainRepo, doctorEnv());
       const config = JSON.parse(readFileSync(configPath, "utf-8"));
       config.agentCommand = "true";
       config.feedbackCommands = ["true"];
@@ -654,19 +632,27 @@ describe.skipIf(process.platform === "win32")(
         "# Plan\n",
       );
 
-      const result = runCli(["doctor"], worktreeDir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], worktreeDir, {
+        ...doctorEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       expect(output).toContain("not a symlink");
-      expect(output).toContain("local plans will be ignored");
+      expect(output).toContain("consider removing it");
       expect(output).toContain("\u26A0"); // warning sign
     });
 
     it("doctor does not warn when worktree has .ralphai/ as a symlink", () => {
+      // Create a .ralphai/ dir in main repo so symlink target exists
+      mkdirSync(join(mainRepo, ".ralphai"), { recursive: true });
       // Create a proper symlink in the worktree
       symlinkSync(join(mainRepo, ".ralphai"), join(worktreeDir, ".ralphai"));
 
-      const result = runCli(["doctor"], worktreeDir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], worktreeDir, {
+        ...doctorEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       expect(output).not.toContain("not a symlink");

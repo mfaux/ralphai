@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { runCli, useTempGitDir } from "./test-utils.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Status scope display
@@ -10,16 +11,20 @@ import { runCli, useTempGitDir } from "./test-utils.ts";
 describe("status scope display", () => {
   const ctx = useTempGitDir();
 
-  it("shows scope annotation for backlog plan with scope frontmatter", () => {
-    runCli(["init", "--yes"], ctx.dir);
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
 
-    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+  it("shows scope annotation for backlog plan with scope frontmatter", () => {
+    runCli(["init", "--yes"], ctx.dir, testEnv());
+
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
       join(backlogDir, "scoped-plan.md"),
       "---\nscope: packages/web\n---\n\n# Scoped Plan\n\n### Task 1: Do\n",
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -28,15 +33,15 @@ describe("status scope display", () => {
   });
 
   it("shows no scope annotation for plan without scope", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
       join(backlogDir, "unscoped-plan.md"),
       "# Unscoped Plan\n\n### Task 1: Do\n",
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -51,9 +56,9 @@ describe("status scope display", () => {
   });
 
   it("shows scope for in-progress plan with scope frontmatter", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "web-feature");
     mkdirSync(planDir, { recursive: true });
 
@@ -62,7 +67,7 @@ describe("status scope display", () => {
       "---\nscope: packages/web\n---\n\n# Web Feature\n\n### Task 1: Build\n",
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -71,9 +76,9 @@ describe("status scope display", () => {
   });
 
   it("displays mix of scoped and unscoped plans correctly", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
       join(backlogDir, "web-auth.md"),
       "---\nscope: packages/web\n---\n\n# Web Auth\n\n### Task 1: Login\n",
@@ -87,7 +92,7 @@ describe("status scope display", () => {
       "---\nscope: packages/api\n---\n\n# API Search\n\n### Task 1: Index\n",
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);

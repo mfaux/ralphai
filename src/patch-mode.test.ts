@@ -10,7 +10,11 @@ describe("patch mode", () => {
   const ctx = useTempGitDir();
 
   it("does not crash when the progress file has zero completed tasks", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    // Write a plan to the global state backlog so the runner can find it
+    const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
+    const env = { RALPHAI_HOME: ralphaiHome };
+
+    runCliOutput(["init", "--yes"], ctx.dir, env);
 
     execSync("git config user.name 'Test User'", {
       cwd: ctx.dir,
@@ -30,8 +34,6 @@ describe("patch mode", () => {
     });
 
     // Write a plan to the global state backlog so the runner can find it
-    const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
-    const env = { RALPHAI_HOME: ralphaiHome };
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, env);
     writeFileSync(
       join(backlogDir, "hello-ralphai.md"),

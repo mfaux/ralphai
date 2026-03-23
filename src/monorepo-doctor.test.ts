@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { runCli, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Doctor workspace feedback validation
@@ -50,6 +51,11 @@ describe.skipIf(process.platform === "win32")(
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       config.agentCommand = "true";
       config.feedbackCommands = ["true"];
+
+      // Seed a plan in the global backlog so the backlog check passes
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      writeFileSync(join(backlogDir, "seed-plan.md"), "# Plan: Seed\n");
+
       return config;
     }
 

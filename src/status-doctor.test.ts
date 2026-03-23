@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // GitHub Issues integration
@@ -199,17 +200,6 @@ describe("status subcommand", () => {
     // Initialize ralphai
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    // Remove sample plan to test truly empty pipeline
-    const samplePlanDir = join(
-      ctx.dir,
-      ".ralphai",
-      "pipeline",
-      "backlog",
-      "hello-ralphai",
-    );
-    if (existsSync(samplePlanDir))
-      rmSync(samplePlanDir, { recursive: true, force: true });
-
     const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
@@ -224,7 +214,7 @@ describe("status subcommand", () => {
   it("status shows backlog plans", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
       join(backlogDir, "prd-auth.md"),
       "# Auth\n\n### Task 1: Login\n### Task 2: Signup\n",
@@ -238,7 +228,7 @@ describe("status subcommand", () => {
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
-    expect(output).toContain("3 plans"); // hello-ralphai.md + prd-auth.md + prd-search.md
+    expect(output).toContain("2 plans"); // prd-auth.md + prd-search.md
     expect(output).toContain("prd-auth.md");
     expect(output).toContain("prd-search.md");
     expect(output).toContain("waiting on prd-auth.md");
@@ -247,7 +237,7 @@ describe("status subcommand", () => {
   it("status shows in-progress plan with task progress from receipt", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-dark-mode");
     mkdirSync(planDir, { recursive: true });
 
@@ -291,7 +281,7 @@ describe("status subcommand", () => {
   it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-legacy");
     mkdirSync(planDir, { recursive: true });
 
@@ -323,7 +313,7 @@ describe("status subcommand", () => {
   it("status shows tasks_completed from receipt, not progress.md", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-feature");
     mkdirSync(planDir, { recursive: true });
 
@@ -363,7 +353,7 @@ describe("status subcommand", () => {
   it("status shows turn progress when receipt has turns_budget", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-search");
     mkdirSync(planDir, { recursive: true });
 
@@ -397,7 +387,7 @@ describe("status subcommand", () => {
   it("status shows unlimited turns when turns_budget is 0", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-refactor");
     mkdirSync(planDir, { recursive: true });
 
@@ -431,7 +421,7 @@ describe("status subcommand", () => {
   it("status shows no turns info for old receipt without turns_budget", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-old-plan");
     mkdirSync(planDir, { recursive: true });
 
@@ -464,7 +454,7 @@ describe("status subcommand", () => {
   it("status shows orphaned receipt as a problem", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const orphanDir = join(ipDir, "orphan");
     mkdirSync(orphanDir, { recursive: true });
 
@@ -491,7 +481,7 @@ describe("status subcommand", () => {
   it("status counts completed plans from archive", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
+    const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const authDir = join(outDir, "prd-auth");
     const searchDir = join(outDir, "prd-search");
     mkdirSync(authDir, { recursive: true });
@@ -515,7 +505,7 @@ describe("status subcommand", () => {
   it("status pairs non-prd plan with receipt via plan_file field", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "remove-fallback-agents");
     mkdirSync(planDir, { recursive: true });
 
@@ -554,7 +544,7 @@ describe("status subcommand", () => {
   it("status pairs gh-prefixed plan with receipt via plan_file field", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "gh-42-search");
     mkdirSync(planDir, { recursive: true });
 
@@ -593,7 +583,7 @@ describe("status subcommand", () => {
   it("status counts completed non-prd plans from archive", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
+    const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const agentsDir = join(outDir, "remove-fallback-agents");
     const searchDir = join(outDir, "gh-42-search");
     const authDir = join(outDir, "prd-auth");
@@ -623,7 +613,7 @@ describe("status subcommand", () => {
   it("status shows outcome when receipt has outcome field", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-stuck-plan");
     mkdirSync(planDir, { recursive: true });
 
@@ -658,7 +648,7 @@ describe("status subcommand", () => {
   it("status shows [in progress] when receipt has no outcome", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-active");
     mkdirSync(planDir, { recursive: true });
 
@@ -738,6 +728,13 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
+    // Seed a plan so the backlog check passes (init --yes no longer creates samples)
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+    writeFileSync(
+      join(backlogDir, "seed-plan.md"),
+      "# Seed\n\n### Task 1: Do\n",
+    );
+
     // Commit ralphai files so working tree is clean
     execSync("git add -A && git commit -m 'add ralphai'", {
       cwd: ctx.dir,
@@ -756,7 +753,7 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     // All checks should pass
     expect(output).toContain("\u2713"); // checkmark
     expect(output).not.toContain("\u2717"); // x-mark
-    expect(output).toContain(".ralphai/ initialized");
+    expect(output).toContain("config initialized (global state)");
     expect(output).toContain("config.json valid");
     expect(output).toContain("git repo detected");
     expect(output).toContain("agent: true");
@@ -765,15 +762,15 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it("doctor without .ralphai/ reports first check as failed", () => {
-    // Don't run init -- no .ralphai/ directory
-    // Without .ralphai/ the doctor should still run and report failures
+  it("doctor without config reports first check as failed", () => {
+    // Don't run init -- no config
+    // Without config the doctor should still run and report failures
 
     const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
     const output = result.stdout;
 
     expect(output).toContain("\u2717"); // x-mark
-    expect(output).toContain(".ralphai/ not found");
+    expect(output).toContain("config not found");
     expect(result.exitCode).toBe(1);
   });
 
