@@ -44,13 +44,25 @@ export function getRepoId(cwd: string): string {
 }
 
 /**
- * Returns `<ralphaiHome>/repos/<repoId>`, creating it if missing.
+ * Computes `<ralphaiHome>/repos/<repoId>` without creating the directory.
+ * Use this for read-only checks (e.g., "does the config file exist?").
  */
-export function getRepoStateDir(
+export function resolveRepoStateDir(
   cwd: string,
   env?: Record<string, string | undefined>,
 ): string {
-  const dir = join(getRalphaiHome(env), "repos", getRepoId(cwd));
+  return join(getRalphaiHome(env), "repos", getRepoId(cwd));
+}
+
+/**
+ * Returns `<ralphaiHome>/repos/<repoId>`, creating it if missing.
+ * Use this only when you intend to write state (config, plans, learnings).
+ */
+export function ensureRepoStateDir(
+  cwd: string,
+  env?: Record<string, string | undefined>,
+): string {
+  const dir = resolveRepoStateDir(cwd, env);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -65,7 +77,7 @@ export function getRepoPipelineDirs(
   cwd: string,
   env?: Record<string, string | undefined>,
 ): { backlogDir: string; wipDir: string; archiveDir: string } {
-  const base = join(getRepoStateDir(cwd, env), "pipeline");
+  const base = join(ensureRepoStateDir(cwd, env), "pipeline");
   const backlogDir = join(base, "backlog");
   const wipDir = join(base, "in-progress");
   const archiveDir = join(base, "out");
@@ -86,7 +98,7 @@ export function getRepoLearningsPath(
   cwd: string,
   env?: Record<string, string | undefined>,
 ): string {
-  return join(getRepoStateDir(cwd, env), "LEARNINGS.md");
+  return join(resolveRepoStateDir(cwd, env), "LEARNINGS.md");
 }
 
 /**
@@ -96,7 +108,7 @@ export function getRepoCandidatesPath(
   cwd: string,
   env?: Record<string, string | undefined>,
 ): string {
-  return join(getRepoStateDir(cwd, env), "LEARNING_CANDIDATES.md");
+  return join(resolveRepoStateDir(cwd, env), "LEARNING_CANDIDATES.md");
 }
 
 // ---------------------------------------------------------------------------

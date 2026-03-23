@@ -7,7 +7,8 @@ import { useTempDir, useTempGitDir } from "./test-utils.ts";
 import {
   getRalphaiHome,
   getRepoId,
-  getRepoStateDir,
+  resolveRepoStateDir,
+  ensureRepoStateDir,
   getRepoPipelineDirs,
   getRepoLearningsPath,
   getRepoCandidatesPath,
@@ -108,19 +109,30 @@ describe("getRepoId", () => {
   });
 });
 
-describe("getRepoStateDir", () => {
+describe("resolveRepoStateDir", () => {
+  const ctx = useTempDir();
+
+  it("returns a path under RALPHAI_HOME without creating it", () => {
+    const home = join(ctx.dir, "ralphai-home-resolve");
+    const dir = resolveRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
+    expect(dir).toContain(join("repos", "_path-"));
+    expect(existsSync(dir)).toBe(false);
+  });
+});
+
+describe("ensureRepoStateDir", () => {
   const ctx = useTempDir();
 
   it("creates the repo state directory under RALPHAI_HOME", () => {
     const home = join(ctx.dir, "ralphai-home");
-    const dir = getRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
+    const dir = ensureRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
     expect(dir).toMatch(new RegExp(`^${home.replace(/[/\\]/g, ".")}`));
     expect(existsSync(dir)).toBe(true);
   });
 
   it("nests under repos/<repoId>", () => {
     const home = join(ctx.dir, "ralphai-home");
-    const dir = getRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
+    const dir = ensureRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
     expect(dir).toContain(join("repos", "_path-"));
   });
 
@@ -146,8 +158,8 @@ describe("getRepoStateDir", () => {
 
     const home = join(ctx.dir, "ralphai-home");
     try {
-      expect(getRepoStateDir(worktreeDir, { RALPHAI_HOME: home })).toBe(
-        getRepoStateDir(repoDir, { RALPHAI_HOME: home }),
+      expect(ensureRepoStateDir(worktreeDir, { RALPHAI_HOME: home })).toBe(
+        ensureRepoStateDir(repoDir, { RALPHAI_HOME: home }),
       );
     } finally {
       execSync(`git worktree remove "${worktreeDir}" --force`, {

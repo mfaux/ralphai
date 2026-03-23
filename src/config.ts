@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
-import { getRepoStateDir } from "./global-state.ts";
+import { resolveRepoStateDir } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -404,7 +404,7 @@ export function getConfigFilePath(
   cwd: string,
   env?: Record<string, string | undefined>,
 ): string {
-  return join(getRepoStateDir(cwd, env), "config.json");
+  return join(resolveRepoStateDir(cwd, env), "config.json");
 }
 
 /**
