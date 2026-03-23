@@ -73,6 +73,8 @@ export interface RunnerOptions {
   resume: boolean;
   /** Whether --allow-dirty was passed. */
   allowDirty: boolean;
+  /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
+  plan?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +420,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
  * Run the Ralphai autonomous loop.
  */
 export async function runRunner(opts: RunnerOptions): Promise<void> {
-  const { config, cwd, isWorktree, mainWorktree, dryRun, resume } = opts;
+  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan } = opts;
 
   // Unpack config values
   const mode = config.mode.value;
@@ -538,6 +540,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         : undefined,
       dryRun: false,
       skippedSlugs,
+      targetPlan: plan,
     });
 
     if (!detectResult.detected) {
@@ -578,6 +581,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
           );
         }
+        break;
+      }
+
+      // Target plan not found
+      if (detectResult.reason === "target-not-found") {
+        console.log(
+          `Plan '${plan}' not found in backlog (${detectResult.backlogCount} plan(s) available).`,
+        );
         break;
       }
 

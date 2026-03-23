@@ -2713,6 +2713,9 @@ const KNOWN_RUN_FLAGS = new Set([
   "-h",
 ]);
 
+/** Patterns for run flags parsed directly (not by config resolver). */
+const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/];
+
 /** Patterns for config flags that are parsed by the TS config resolver. */
 const CONFIG_FLAG_PATTERNS = [
   /^--turns=/,
@@ -2737,6 +2740,7 @@ const CONFIG_FLAG_PATTERNS = [
 
 function isRecognizedRunFlag(arg: string): boolean {
   if (KNOWN_RUN_FLAGS.has(arg)) return true;
+  if (RUN_FLAG_PATTERNS_EXTRA.some((p) => p.test(arg))) return true;
   return CONFIG_FLAG_PATTERNS.some((p) => p.test(arg));
 }
 
@@ -2754,6 +2758,7 @@ function showRunHelp(): void {
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
     "  --resume, -r                     Auto-commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
+    "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
     "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
     "  --base-branch=<branch>           Override base branch (default: main)",
@@ -2887,6 +2892,8 @@ async function runRalphaiRunner(
   let hasAllowDirty = runArgs.includes("--allow-dirty");
   const hasResume = runArgs.includes("--resume") || runArgs.includes("-r");
   const hasShowConfig = runArgs.includes("--show-config");
+  const planFlag = runArgs.find((a) => a.startsWith("--plan="));
+  const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
 
   // --- Resolve config: defaults -> file -> env -> CLI ---
   const configFilePath = join(ralphaiRoot, "ralphai.json");
@@ -2984,6 +2991,7 @@ async function runRalphaiRunner(
     dryRun: isDryRun,
     resume: hasResume,
     allowDirty: hasAllowDirty,
+    plan: targetPlan,
   };
 
   await runRunner(runnerOpts);
