@@ -7,10 +7,10 @@ import {
   realpathSync,
 } from "fs";
 import { join, dirname } from "path";
-import { homedir } from "os";
 import { fileURLToPath } from "url";
 import { compareVersions } from "./utils.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
+import { getRalphaiHome } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,12 +159,11 @@ export function runSelfUpdate(options: {
 // ---------------------------------------------------------------------------
 
 /**
- * Get the cache directory for ralphai, following XDG conventions.
+ * Get the cache directory for ralphai under the global home.
  * Creates the directory if it doesn't exist.
  */
 export function getCacheDir(): string {
-  const base = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
-  const dir = join(base, "ralphai");
+  const dir = join(getRalphaiHome(), "cache");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }

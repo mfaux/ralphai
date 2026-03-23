@@ -176,14 +176,14 @@ describe("update notification banner", () => {
 
   it("shows update banner when newer version is cached", () => {
     // Write a cache file indicating a newer version
-    const xdgBase = join(
+    const ralphaiHome = join(
       tmpdir(),
-      `ralphai-xdg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `ralphai-home-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
-    const xdgRalphai = join(xdgBase, "ralphai");
-    mkdirSync(xdgRalphai, { recursive: true });
+    const cacheSubdir = join(ralphaiHome, "cache");
+    mkdirSync(cacheSubdir, { recursive: true });
     writeFileSync(
-      join(xdgRalphai, "update-check.json"),
+      join(cacheSubdir, "update-check.json"),
       JSON.stringify({ lastCheck: Date.now(), latestVersion: "99.0.0" }),
     );
 
@@ -191,40 +191,40 @@ describe("update notification banner", () => {
       // Use "init --yes" which goes through runRalphai() and then hits
       // the notification code path in main().
       const result = runCli(["init", "--yes"], ctx.dir, {
-        XDG_CACHE_HOME: xdgBase,
+        RALPHAI_HOME: ralphaiHome,
       });
       expect(result.stdout).toContain("Update available");
       expect(result.stdout).toContain("99.0.0");
       expect(result.stdout).toContain("ralphai update");
     } finally {
-      if (existsSync(xdgBase)) {
-        rmSync(xdgBase, { recursive: true, force: true });
+      if (existsSync(ralphaiHome)) {
+        rmSync(ralphaiHome, { recursive: true, force: true });
       }
     }
   });
 
   it("does not show banner when RALPHAI_NO_UPDATE_CHECK is set", () => {
-    const xdgBase = join(
+    const ralphaiHome = join(
       tmpdir(),
-      `ralphai-xdg-nocheck-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `ralphai-home-nocheck-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
-    const xdgRalphai = join(xdgBase, "ralphai");
-    mkdirSync(xdgRalphai, { recursive: true });
+    const cacheSubdir = join(ralphaiHome, "cache");
+    mkdirSync(cacheSubdir, { recursive: true });
     writeFileSync(
-      join(xdgRalphai, "update-check.json"),
+      join(cacheSubdir, "update-check.json"),
       JSON.stringify({ lastCheck: Date.now(), latestVersion: "99.0.0" }),
     );
 
     try {
       const result = runCli(["init", "--yes"], ctx.dir, {
-        XDG_CACHE_HOME: xdgBase,
+        RALPHAI_HOME: ralphaiHome,
         RALPHAI_NO_UPDATE_CHECK: "1",
       });
       expect(result.stdout).not.toContain("Update available");
       expect(result.stdout).not.toContain("99.0.0");
     } finally {
-      if (existsSync(xdgBase)) {
-        rmSync(xdgBase, { recursive: true, force: true });
+      if (existsSync(ralphaiHome)) {
+        rmSync(ralphaiHome, { recursive: true, force: true });
       }
     }
   });
