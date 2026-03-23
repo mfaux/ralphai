@@ -54,6 +54,7 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 --dry-run, -n                     Preview what would happen without changing anything
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
+--plan=<file>                     Target a specific backlog plan (default: auto-detect)
 --agent-command=<command>         Override agent CLI command
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)

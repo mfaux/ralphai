@@ -31,7 +31,7 @@ export interface DetectedPlan {
 }
 
 /** Reason why no plan was detected. */
-export type DetectFailReason = "empty-backlog" | "all-blocked";
+export type DetectFailReason = "empty-backlog" | "all-blocked" | "target-not-found";
 
 /** Blocked plan info returned when detection finds no runnable plans. */
 export interface BlockedPlanInfo {
@@ -312,8 +312,10 @@ export function detectPlan(opts: {
   dryRun?: boolean;
   /** Plan slugs to skip (e.g., branch/PR collision). */
   skippedSlugs?: Set<string>;
+  /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
+  targetPlan?: string;
 }): DetectPlanResult {
-  const { dirs, worktreeBranch, dryRun = false, skippedSlugs } = opts;
+  const { dirs, worktreeBranch, dryRun = false, skippedSlugs, targetPlan } = opts;
 
   // --- 1. Check for in-progress plans ---
   const inProgressPlans: string[] = [];
@@ -358,6 +360,25 @@ export function detectPlan(opts: {
       backlogCount: 0,
       blocked: [],
     };
+  }
+
+  // --- 2b. Filter to targeted plan if --plan was specified ---
+  if (targetPlan) {
+    const normalized = targetPlan.endsWith(".md")
+      ? targetPlan
+      : `${targetPlan}.md`;
+    const match = backlogPlans.find((f) => basename(f) === normalized);
+    if (!match) {
+      return {
+        detected: false,
+        reason: "target-not-found",
+        backlogCount: backlogPlans.length,
+        blocked: [],
+      };
+    }
+    // Replace backlogPlans with just the targeted plan for the readiness check
+    backlogPlans.length = 0;
+    backlogPlans.push(match);
   }
 
   // --- 3. Filter by dependency readiness ---
