@@ -20,6 +20,10 @@ describe("worktree", () => {
   describe.skipIf(process.platform === "win32")("worktree detection", () => {
     let mainRepo: string;
     let worktreeDir: string;
+    let ralphaiHome: string;
+
+    /** Per-test RALPHAI_HOME so config goes to a temp dir, not ~/.ralphai. */
+    const env = () => ({ RALPHAI_HOME: ralphaiHome });
 
     beforeEach(() => {
       // Create a main repo with at least one commit (worktrees need a commit)
@@ -51,6 +55,9 @@ describe("worktree", () => {
         `git worktree add ${JSON.stringify(worktreeDir)} -b test-worktree`,
         { cwd: mainRepo, stdio: "ignore" },
       );
+
+      // Isolated RALPHAI_HOME for this test
+      ralphaiHome = join(mainRepo, ".ralphai-home");
     });
 
     afterEach(() => {
@@ -72,7 +79,7 @@ describe("worktree", () => {
     });
 
     it("init --yes fails inside a git worktree", () => {
-      const result = runCli(["init", "--yes"], worktreeDir);
+      const result = runCli(["init", "--yes"], worktreeDir, env());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain(
         "Cannot initialize ralphai inside a git worktree",
@@ -82,18 +89,20 @@ describe("worktree", () => {
     });
 
     it("init --yes succeeds in the main repo (not a worktree)", () => {
-      const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
+      const output = stripLogo(
+        runCliOutput(["init", "--yes"], mainRepo, env()),
+      );
       expect(output).toContain("Ralphai initialized");
-      expect(existsSync(getConfigFilePath(mainRepo))).toBe(true);
+      expect(existsSync(getConfigFilePath(mainRepo, env()))).toBe(true);
     });
 
     it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
       // Initialize ralphai in the main repo (creates .ralphai/)
-      runCliOutput(["init", "--yes"], mainRepo);
+      runCliOutput(["init", "--yes"], mainRepo, env());
 
       // Run --show-config from worktree — should find .ralphai/ and
       // config.json in global state and resolve config successfully
-      const result = runCli(["run", "--show-config"], worktreeDir);
+      const result = runCli(["run", "--show-config"], worktreeDir, env());
       expect(result.exitCode).toBe(0);
       // Config output should include the agent command from the main repo's config
       expect(result.stdout).toContain("agentCommand");
@@ -103,7 +112,7 @@ describe("worktree", () => {
 
     it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
       // Do NOT init — .ralphai/ doesn't exist anywhere
-      const result = runCli(["run"], worktreeDir);
+      const result = runCli(["run"], worktreeDir, env());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("not set up");
       expect(result.stderr).toContain("ralphai init");

@@ -1,13 +1,28 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
+import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { runRalphai } from "./ralphai.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
+import { getConfigFilePath } from "./config.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Quick check: is the cwd inside a git repo? */
+function isInsideGitRepoQuick(): boolean {
+  try {
+    execSync("git rev-parse --git-dir", {
+      cwd: process.cwd(),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function getVersion(): string {
   try {
@@ -34,6 +49,7 @@ ${BOLD}Commands:${RESET}
   uninstall    Remove all global state and uninstall the CLI
   doctor       Check your ralphai setup for problems
   backlog-dir  Print the path to the plan backlog directory
+  repos        List all known repos with pipeline summaries
 
 ${BOLD}Options:${RESET}
   --help, -h      Show this help message
@@ -67,6 +83,36 @@ async function main(): Promise<void> {
   }
 
   if (args.length === 0) {
+    // Launch interactive dashboard when running in a TTY
+    if (process.stdout.isTTY && process.stdin.isTTY) {
+      // Nudge init if we're in an un-initialized git repo
+      if (
+        isInsideGitRepoQuick() &&
+        !existsSync(getConfigFilePath(process.cwd()))
+      ) {
+        const clack = await import("@clack/prompts");
+        console.log(`${TEXT}ralphai${RESET} ${DIM}v${getVersion()}${RESET}`);
+        console.log();
+        const shouldInit = await clack.confirm({
+          message: "This repo isn't set up yet. Run ralphai init?",
+        });
+
+        if (clack.isCancel(shouldInit)) {
+          return;
+        }
+
+        if (shouldInit) {
+          await runRalphai(["init"]);
+          return;
+        }
+        // User declined — fall through to dashboard
+      }
+
+      const { launchDashboard } = await import("./dashboard/index.ts");
+      launchDashboard();
+      return;
+    }
+    // Non-interactive: show help text
     console.log(`${TEXT}ralphai${RESET} ${DIM}v${getVersion()}${RESET}`);
     console.log();
     showHelp();

@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "fs";
+import { dirname, join, resolve as resolvePath } from "path";
 import { homedir } from "os";
 
 /**
@@ -176,4 +176,159 @@ function pathFallbackId(absolutePath: string): string {
     .digest("hex")
     .slice(0, 12);
   return `_path-${hash}`;
+}
+
+// ---------------------------------------------------------------------------
+// Repo enumeration
+// ---------------------------------------------------------------------------
+
+/** Summary of a known repo read from global state. */
+export interface RepoSummary {
+  /** Directory name under ~/.ralphai/repos/ (the repo ID slug). */
+  id: string;
+  /** Absolute path to the repo root (from config.json repoPath). */
+  repoPath: string | null;
+  /** Whether the stored repoPath still exists on disk. */
+  pathExists: boolean;
+  /** Number of plans in the backlog. */
+  backlogCount: number;
+  /** Number of plans in progress. */
+  inProgressCount: number;
+  /** Number of completed plans. */
+  completedCount: number;
+}
+
+/**
+ * Scan `~/.ralphai/repos/` and return a summary for every known repo.
+ * Reads each repo's `config.json` for `repoPath` and counts plans in
+ * the pipeline subdirectories.
+ */
+export function listAllRepos(
+  env?: Record<string, string | undefined>,
+): RepoSummary[] {
+  const reposDir = join(getRalphaiHome(env), "repos");
+  if (!existsSync(reposDir)) return [];
+
+  const entries = readdirSync(reposDir, { withFileTypes: true });
+  const repos: RepoSummary[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    const id = entry.name;
+    const stateDir = join(reposDir, id);
+    const configPath = join(stateDir, "config.json");
+
+    // Read repoPath from config
+    let repoPath: string | null = null;
+    if (existsSync(configPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+        if (typeof raw.repoPath === "string") {
+          repoPath = raw.repoPath;
+        }
+      } catch {
+        // Corrupt config — skip repoPath
+      }
+    }
+
+    const pathExists = repoPath !== null && existsSync(repoPath);
+
+    // Count pipeline entries
+    const countDirEntries = (dir: string, flatOnly: boolean): number => {
+      if (!existsSync(dir)) return 0;
+      try {
+        const items = readdirSync(dir, { withFileTypes: true });
+        if (flatOnly) {
+          return items.filter((i) => i.isFile() && i.name.endsWith(".md"))
+            .length;
+        }
+        return items.filter((i) => i.isDirectory()).length;
+      } catch {
+        return 0;
+      }
+    };
+
+    const pipelineDir = join(stateDir, "pipeline");
+    const backlogCount = countDirEntries(join(pipelineDir, "backlog"), true);
+    const inProgressCount = countDirEntries(
+      join(pipelineDir, "in-progress"),
+      false,
+    );
+    const completedCount = countDirEntries(join(pipelineDir, "out"), false);
+
+    repos.push({
+      id,
+      repoPath,
+      pathExists,
+      backlogCount,
+      inProgressCount,
+      completedCount,
+    });
+  }
+
+  return repos;
+}
+
+/**
+ * Look up a repo by name or path. Tries to match the given identifier
+ * against known repo IDs (exact or suffix match) and stored repo paths.
+ * Returns the repo state dir path if found, or null.
+ */
+export function resolveRepoByNameOrPath(
+  nameOrPath: string,
+  env?: Record<string, string | undefined>,
+): string | null {
+  const repos = listAllRepos(env);
+
+  // 1. Exact ID match
+  const exact = repos.find((r) => r.id === nameOrPath);
+  if (exact) return join(getRalphaiHome(env), "repos", exact.id);
+
+  // 2. Suffix match (e.g., "ralphai" matches "github-com-mfaux-ralphai")
+  const suffix = repos.filter((r) => r.id.endsWith(`-${nameOrPath}`));
+  if (suffix.length === 1) {
+    return join(getRalphaiHome(env), "repos", suffix[0]!.id);
+  }
+
+  // 3. Repo path match
+  const resolvedInput = resolvePath(nameOrPath);
+  const byPath = repos.find(
+    (r) => r.repoPath !== null && resolvePath(r.repoPath) === resolvedInput,
+  );
+  if (byPath) return join(getRalphaiHome(env), "repos", byPath.id);
+
+  return null;
+}
+
+/**
+ * Remove stale repo entries from global state.
+ *
+ * A repo is considered stale when its stored `repoPath` points to a directory
+ * that no longer exists **and** its pipeline is completely empty (no backlog,
+ * in-progress, or completed plans). Returns the IDs of removed entries.
+ */
+export function removeStaleRepos(
+  env?: Record<string, string | undefined>,
+): string[] {
+  const repos = listAllRepos(env);
+  const reposDir = join(getRalphaiHome(env), "repos");
+  const removed: string[] = [];
+
+  for (const repo of repos) {
+    const isStale =
+      repo.repoPath !== null &&
+      !repo.pathExists &&
+      repo.backlogCount === 0 &&
+      repo.inProgressCount === 0 &&
+      repo.completedCount === 0;
+
+    if (isStale) {
+      const stateDir = join(reposDir, repo.id);
+      rmSync(stateDir, { recursive: true, force: true });
+      removed.push(repo.id);
+    }
+  }
+
+  return removed;
 }

@@ -90,3 +90,17 @@ Running `ralphai run` immediately after `ralphai init` may report a dirty workin
 - **Accept the prompt** when Ralphai asks "Continue anyway?"
 - **Commit the init files first:** `git add .gitignore AGENTS.md && git commit -m "chore: configure ralphai"`
 - **Skip the check explicitly:** `ralphai run --allow-dirty`
+
+## "Not inside a git repository"
+
+Commands that modify the working tree (`run`, `worktree`, `init`) require a git repository. If you run them outside one, Ralphai exits with:
+
+```
+ERROR: <command> must be run inside a git repository.
+```
+
+**Options:**
+
+- `cd` into your repo first, then run the command
+- Use `ralphai repos` to see all known repos and their paths
+- Use `--repo=<name-or-path>` with read-only commands (`status`, `doctor`, `backlog-dir`, etc.) to inspect a repo from anywhere
