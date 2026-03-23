@@ -1,13 +1,11 @@
 import { execSync } from "child_process";
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
   readdirSync,
   rmSync,
-  symlinkSync,
   renameSync,
 } from "fs";
 import { join, resolve } from "path";
@@ -513,12 +511,6 @@ async function teardownRalphai(
 
   // Remove global state directory for this repo
   rmSync(stateDir, { recursive: true, force: true });
-
-  // Also remove local .ralphai/ if it exists (legacy cleanup)
-  const localDir = join(cwd, ".ralphai");
-  if (existsSync(localDir)) {
-    rmSync(localDir, { recursive: true, force: true });
-  }
 
   console.log(`${TEXT}Ralphai torn down.${RESET}`);
   console.log();
@@ -1155,34 +1147,6 @@ function isGitWorktree(dir: string): boolean {
 }
 
 /**
- * Resolve the directory containing `.ralphai/`. Returns `cwd` if it has
- * `.ralphai/` directly, falls back to the main worktree root when running
- * inside a git worktree, or `null` if `.ralphai/` cannot be found.
- */
-function resolveRalphaiDir(cwd: string): string | null {
-  // Direct check first — covers the common (non-worktree) case
-  if (existsSync(join(cwd, ".ralphai"))) {
-    return cwd;
-  }
-  // Worktree fallback: resolve main worktree root
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      cwd,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    // --git-common-dir may return a relative path; anchor to cwd
-    const mainRoot = resolve(cwd, commonDir, "..");
-    if (mainRoot !== cwd && existsSync(join(mainRoot, ".ralphai"))) {
-      return mainRoot;
-    }
-  } catch {
-    // Not in a git repo, or git not available
-  }
-  return null;
-}
-
-/**
  * Check whether the first token of an agent command is reachable in PATH.
  * Returns the token name if NOT found, or null if it is found.
  */
@@ -1770,7 +1734,7 @@ interface DoctorCheckResult {
   message: string;
 }
 
-function checkRalphaiDirExists(cwd: string): DoctorCheckResult {
+function checkConfigExists(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (existsSync(configPath)) {
     return { status: "pass", message: "config initialized (global state)" };
@@ -2012,53 +1976,17 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
   return { status: "pass", message: "no orphaned receipts" };
 }
 
-function checkWorktreeSymlink(cwd: string): DoctorCheckResult {
-  if (!isGitWorktree(cwd)) {
-    return {
-      status: "pass",
-      message: "not a worktree (symlink check skipped)",
-    };
-  }
-  // With global state, .ralphai/ in a worktree is legacy. If it exists
-  // and is not a symlink, warn but it is non-critical since pipeline
-  // data now lives in global state.
-  const ralphaiPath = join(cwd, ".ralphai");
-  if (!existsSync(ralphaiPath)) {
-    return { status: "pass", message: "worktree: no local .ralphai/ (ok)" };
-  }
-  try {
-    if (lstatSync(ralphaiPath).isSymbolicLink()) {
-      return {
-        status: "pass",
-        message: "worktree: .ralphai/ is a symlink (legacy)",
-      };
-    }
-  } catch {
-    return { status: "pass", message: "worktree: .ralphai/ check skipped" };
-  }
-  return {
-    status: "warn",
-    message:
-      ".ralphai/ is a directory in this worktree (not a symlink) — consider removing it",
-  };
-}
-
 function runRalphaiDoctor(cwd: string): void {
   const results: DoctorCheckResult[] = [];
 
-  // 1. .ralphai/ exists
-  results.push(checkRalphaiDirExists(cwd));
+  // 1. Config exists
+  results.push(checkConfigExists(cwd));
 
   // 2. config.json valid
   results.push(checkConfigValid(cwd));
 
   // 3. Git repo detected
   results.push(checkGitRepo(cwd));
-
-  // 3b. Worktree .ralphai/ symlink check (only if git repo detected)
-  if (results[2]!.status !== "fail") {
-    results.push(checkWorktreeSymlink(cwd));
-  }
 
   // 4. Working tree clean (only if git repo detected)
   if (results[2]!.status !== "fail") {
@@ -2085,12 +2013,12 @@ function runRalphaiDoctor(cwd: string): void {
     results.push(...checkWorkspaceFeedbackCommands(cwd));
   }
 
-  // 8. Backlog has plans (only if .ralphai/ exists)
+  // 8. Backlog has plans (only if config exists)
   if (results[0]!.status !== "fail") {
     results.push(checkBacklogHasPlans(cwd));
   }
 
-  // 9. No orphaned receipts (only if .ralphai/ exists)
+  // 9. No orphaned receipts (only if config exists)
   if (results[0]!.status !== "fail") {
     results.push(checkOrphanedReceipts(cwd));
   }
@@ -2501,21 +2429,8 @@ async function runRalphaiWorktree(
     }
   }
 
-  // Pipeline data now lives in global state (~/.ralphai/repos/<id>/...),
-  // so no .ralphai/ symlink is needed in the worktree for pipeline access.
-  // Config also lives in global state, so no ralphai.json symlink is needed.
-  //
-  // If a local .ralphai/ exists (legacy), symlink it for backward compat.
-  const localRalphaiDir = join(cwd, ".ralphai");
-  if (existsSync(localRalphaiDir)) {
-    const worktreeRalphaiLink = join(resolvedWorktreeDir, ".ralphai");
-    if (!existsSync(worktreeRalphaiLink)) {
-      symlinkSync(localRalphaiDir, worktreeRalphaiLink);
-    }
-  }
-
-  // Config now lives in global state (~/.ralphai/repos/<id>/config.json),
-  // so no ralphai.json symlink is needed in the worktree.
+  // Config and pipeline data live in global state (~/.ralphai/repos/<id>/...),
+  // so no local .ralphai/ or config symlinks are needed in the worktree.
 
   // Spawn ralphai runner in the worktree
   console.log("Running ralphai in worktree...");

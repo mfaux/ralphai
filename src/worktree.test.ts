@@ -1,14 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  existsSync,
-  rmSync,
-  readFileSync,
-  mkdirSync,
-  writeFileSync,
-  symlinkSync,
-  lstatSync,
-  readlinkSync,
-} from "fs";
+import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
@@ -312,86 +303,6 @@ describe("worktree", () => {
       expect(combined).toContain("ralphai/prd-second");
     });
 
-    it("worktree creates .ralphai symlink in worktree directory", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Initialize config in global state and create local .ralphai/ + plan
-      runCli(["init", "--yes"], ctx.dir, testEnv());
-      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-      writeFileSync(
-        join(backlogDir, "prd-symlink-test.md"),
-        "# Symlink test\n",
-      );
-      // Create local .ralphai/ so the worktree command creates the symlink (legacy compat)
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-
-      // Use --dir to place worktree inside ctx.dir (auto-cleaned by afterEach)
-      const worktreeDir = join(ctx.dir, "wt-symlink");
-
-      const result = runCli(
-        [
-          "worktree",
-          "--plan=prd-symlink-test.md",
-          `--dir=${worktreeDir}`,
-          "--turns=1",
-        ],
-        ctx.dir,
-        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
-        30000,
-      );
-
-      // Debug: print stdout/stderr if the worktree dir doesn't exist
-      const combined = result.stdout + result.stderr;
-
-      // Verify the symlink was created
-      const symlinkPath = join(worktreeDir, ".ralphai");
-      expect(
-        existsSync(symlinkPath),
-        `Symlink not found at ${symlinkPath}. worktreeDir exists: ${existsSync(worktreeDir)}. CLI output: ${combined}`,
-      ).toBe(true);
-      expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
-      expect(readlinkSync(symlinkPath)).toBe(join(ctx.dir, ".ralphai"));
-    });
-
-    it("worktree replaces existing .ralphai dir with symlink", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Initialize config in global state and create local .ralphai/ + plan
-      runCli(["init", "--yes"], ctx.dir, testEnv());
-      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-      writeFileSync(
-        join(backlogDir, "prd-tracked-test.md"),
-        "# Tracked test\n",
-      );
-      // Create local .ralphai/ so the worktree command creates the symlink (legacy compat)
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-
-      const worktreeDir = join(ctx.dir, "wt-tracked");
-
-      const result = runCli(
-        [
-          "worktree",
-          "--plan=prd-tracked-test.md",
-          `--dir=${worktreeDir}`,
-          "--turns=1",
-        ],
-        ctx.dir,
-        { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
-        30000,
-      );
-
-      const combined = result.stdout + result.stderr;
-
-      // The .ralphai in the worktree should be a symlink, NOT a directory
-      const symlinkPath = join(worktreeDir, ".ralphai");
-      expect(
-        existsSync(symlinkPath),
-        `Symlink not found at ${symlinkPath}. CLI output: ${combined}`,
-      ).toBe(true);
-      expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
-      expect(readlinkSync(symlinkPath)).toBe(join(ctx.dir, ".ralphai"));
-    });
-
     it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
       gitInitialCommit(ctx.dir);
 
@@ -403,9 +314,6 @@ describe("worktree", () => {
       const planDir = join(wipDir, "prd-resume");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(join(planDir, "prd-resume.md"), "# Resume test\n");
-
-      // Create local .ralphai/ so symlink is created (legacy compat)
-      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
 
       const worktreeDir = join(ctx.dir, "wt-resume");
       execSync(`git worktree add "${worktreeDir}" -b ralphai/prd-resume HEAD`, {
@@ -423,11 +331,6 @@ describe("worktree", () => {
       const combined = result.stdout + result.stderr;
 
       expect(combined).toContain(`Reusing existing worktree: ${worktreeDir}`);
-
-      // The .ralphai symlink should have been created in the worktree
-      const symlinkPath = join(worktreeDir, ".ralphai");
-      expect(existsSync(symlinkPath)).toBe(true);
-      expect(lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
     });
 
     it("worktree clean with no ralphai worktrees", () => {
@@ -544,119 +447,3 @@ describe("worktree", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Doctor: worktree .ralphai/ symlink check
-// ---------------------------------------------------------------------------
-
-describe.skipIf(process.platform === "win32")(
-  "doctor worktree symlink check",
-  () => {
-    let mainRepo: string;
-    let worktreeDir: string;
-    let ralphaiHome: string;
-
-    function doctorEnv() {
-      return { RALPHAI_HOME: ralphaiHome };
-    }
-
-    beforeEach(() => {
-      mainRepo = join(
-        tmpdir(),
-        `ralphai-doc-wt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      );
-      mkdirSync(mainRepo, { recursive: true });
-      ralphaiHome = join(mainRepo, ".ralphai-home");
-      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
-      execSync("git config user.name 'Test'", {
-        cwd: mainRepo,
-        stdio: "ignore",
-      });
-      execSync("git config user.email 'test@test.com'", {
-        cwd: mainRepo,
-        stdio: "ignore",
-      });
-      execSync("git checkout -b main", { cwd: mainRepo, stdio: "ignore" });
-      writeFileSync(join(mainRepo, "seed.txt"), "seed");
-      execSync("git add -A && git commit -m init", {
-        cwd: mainRepo,
-        stdio: "ignore",
-      });
-
-      // Initialize ralphai in the main repo with isolated RALPHAI_HOME
-      runCli(["init", "--yes"], mainRepo, doctorEnv());
-      // Set agentCommand to something in PATH so doctor doesn't fail on that
-      const configPath = getConfigFilePath(mainRepo, doctorEnv());
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
-      config.agentCommand = "true";
-      config.feedbackCommands = ["true"];
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
-      execSync("git add -A && git commit -m 'add ralphai'", {
-        cwd: mainRepo,
-        stdio: "ignore",
-      });
-
-      // Create a worktree
-      worktreeDir = join(
-        tmpdir(),
-        `ralphai-doc-tree-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      );
-      execSync(
-        `git worktree add ${JSON.stringify(worktreeDir)} -b ralphai/test-wt`,
-        { cwd: mainRepo, stdio: "ignore" },
-      );
-    });
-
-    afterEach(() => {
-      try {
-        execSync(`git worktree remove ${JSON.stringify(worktreeDir)} --force`, {
-          cwd: mainRepo,
-          stdio: "ignore",
-        });
-      } catch {
-        /* ignore */
-      }
-      if (existsSync(mainRepo)) {
-        rmSync(mainRepo, { recursive: true, force: true });
-      }
-      if (existsSync(worktreeDir)) {
-        rmSync(worktreeDir, { recursive: true, force: true });
-      }
-    });
-
-    it("doctor warns when worktree has a real .ralphai/ directory (not a symlink)", () => {
-      // Place a real .ralphai/ directory in the worktree (not a symlink)
-      mkdirSync(join(worktreeDir, ".ralphai", "pipeline", "backlog"), {
-        recursive: true,
-      });
-      writeFileSync(
-        join(worktreeDir, ".ralphai", "pipeline", "backlog", "my-plan.md"),
-        "# Plan\n",
-      );
-
-      const result = runCli(["doctor"], worktreeDir, {
-        ...doctorEnv(),
-        NO_COLOR: "1",
-      });
-      const output = result.stdout;
-
-      expect(output).toContain("not a symlink");
-      expect(output).toContain("consider removing it");
-      expect(output).toContain("\u26A0"); // warning sign
-    });
-
-    it("doctor does not warn when worktree has .ralphai/ as a symlink", () => {
-      // Create a .ralphai/ dir in main repo so symlink target exists
-      mkdirSync(join(mainRepo, ".ralphai"), { recursive: true });
-      // Create a proper symlink in the worktree
-      symlinkSync(join(mainRepo, ".ralphai"), join(worktreeDir, ".ralphai"));
-
-      const result = runCli(["doctor"], worktreeDir, {
-        ...doctorEnv(),
-        NO_COLOR: "1",
-      });
-      const output = result.stdout;
-
-      expect(output).not.toContain("not a symlink");
-      expect(output).toContain(".ralphai/ is a symlink");
-    });
-  },
-);

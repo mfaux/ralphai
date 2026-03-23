@@ -33,5 +33,5 @@ logs
 
 package-lock.json
 
-# ralphai local pipeline state (fully gitignored)
+# ralphai local directory (legacy; no longer created)
 .ralphai

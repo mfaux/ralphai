@@ -131,7 +131,7 @@ Deletes all archived plan artifacts from `pipeline/out/`. Use this to clean up a
 
 Validates your Ralphai setup with diagnostic checks:
 
-1. `.ralphai/` directory exists
+1. Config exists (global state)
 2. `config.json` is valid JSON with recognized keys
 3. Git repository detected
 4. Working tree is clean
@@ -149,7 +149,7 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project: deletes `.ralphai/` and cleans up `.gitignore` entries.
+Removes Ralphai from your project: deletes global state for this repo (`~/.ralphai/repos/<id>/`).
 
 ## Backlog Dir
 

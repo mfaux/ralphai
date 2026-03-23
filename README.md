@@ -46,7 +46,7 @@ ralphai init                 # configure agent and feedback commands
 
 Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** and **C# / .NET** (full support, including monorepo workspace scoping), **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). When multiple ecosystems coexist (e.g., a .NET backend with a Node.js frontend), Ralphai detects all of them and merges their feedback commands. Use `--yes` to skip prompts and auto-detect your installed agent.
 
-Configuration is stored in `~/.ralphai/` (global state, not in your repo). Pipeline files (plans, progress logs) live in `.ralphai/` and are gitignored by default. See [Workflows](docs/workflows.md) for details.
+Configuration and pipeline state are stored in `~/.ralphai/` (global state, not in your repo). See [Workflows](docs/workflows.md) for details.
 
 ## Workflow
 
@@ -110,7 +110,7 @@ ralphai purge            # delete archived artifacts from pipeline/out/
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
+Ralphai logs mistakes to `LEARNINGS.md` (in global state) and flags durable lessons in `LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
 
 ## GitHub Issues Integration
 
