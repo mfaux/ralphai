@@ -1851,6 +1851,7 @@ function checkAgentCommand(cwd: string): DoctorCheckResult {
     execSync(`which ${executable}`, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 5000,
     });
     return {
       status: "pass",
@@ -1887,7 +1888,7 @@ function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
       execSync(cmd, {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
-        timeout: 60000,
+        timeout: 15000,
       });
       return {
         status: "pass" as const,
@@ -1927,7 +1928,7 @@ function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
         execSync(cmd, {
           cwd,
           stdio: ["pipe", "pipe", "pipe"],
-          timeout: 60000,
+          timeout: 15000,
         });
         results.push({
           status: "pass" as const,
@@ -1985,71 +1986,79 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
 }
 
 function runRalphaiDoctor(cwd: string): void {
-  const results: DoctorCheckResult[] = [];
-
-  // 1. Config exists
-  results.push(checkConfigExists(cwd));
-
-  // 2. config.json valid
-  results.push(checkConfigValid(cwd));
-
-  // 3. Git repo detected
-  results.push(checkGitRepo(cwd));
-
-  // 4. Working tree clean (only if git repo detected)
-  if (results[2]!.status !== "fail") {
-    results.push(checkWorkingTreeClean(cwd));
-  }
-
-  // 5. Base branch exists (only if git repo detected)
-  if (results[2]!.status !== "fail") {
-    results.push(checkBaseBranchExists(cwd));
-  }
-
-  // 6. Agent command in PATH (only if config exists)
-  if (results[1]!.status !== "fail") {
-    results.push(checkAgentCommand(cwd));
-  }
-
-  // 7. Feedback commands (only if config exists)
-  if (results[1]!.status !== "fail") {
-    results.push(...checkFeedbackCommands(cwd));
-  }
-
-  // 7b. Workspace feedback commands (only if config exists)
-  if (results[1]!.status !== "fail") {
-    results.push(...checkWorkspaceFeedbackCommands(cwd));
-  }
-
-  // 8. Backlog has plans (only if config exists)
-  if (results[0]!.status !== "fail") {
-    results.push(checkBacklogHasPlans(cwd));
-  }
-
-  // 9. No orphaned receipts (only if config exists)
-  if (results[0]!.status !== "fail") {
-    results.push(checkOrphanedReceipts(cwd));
-  }
-
-  // --- Print report ---
-  console.log();
-  console.log(`${TEXT}ralphai doctor${RESET}`);
-  console.log();
-
   const statusIcons: Record<DoctorCheckResult["status"], string> = {
     pass: "\u2713",
     fail: "\u2717",
     warn: "\u26A0",
   };
 
-  for (const result of results) {
+  let failures = 0;
+  let warnings = 0;
+
+  // Print header immediately so the user sees output right away.
+  console.log();
+  console.log(`${TEXT}ralphai doctor${RESET}`);
+  console.log();
+
+  function emit(result: DoctorCheckResult): void {
+    if (result.status === "fail") failures++;
+    if (result.status === "warn") warnings++;
     const icon = statusIcons[result.status];
     console.log(`  ${icon} ${DIM}${result.message}${RESET}`);
   }
 
-  const failures = results.filter((r) => r.status === "fail").length;
-  const warnings = results.filter((r) => r.status === "warn").length;
+  function emitAll(results: DoctorCheckResult[]): void {
+    for (const r of results) emit(r);
+  }
 
+  // 1. Config exists
+  const configExists = checkConfigExists(cwd);
+  emit(configExists);
+
+  // 2. config.json valid
+  const configValid = checkConfigValid(cwd);
+  emit(configValid);
+
+  // 3. Git repo detected
+  const gitRepo = checkGitRepo(cwd);
+  emit(gitRepo);
+
+  // 4. Working tree clean (only if git repo detected)
+  if (gitRepo.status !== "fail") {
+    emit(checkWorkingTreeClean(cwd));
+  }
+
+  // 5. Base branch exists (only if git repo detected)
+  if (gitRepo.status !== "fail") {
+    emit(checkBaseBranchExists(cwd));
+  }
+
+  // 6. Agent command in PATH (only if config valid)
+  if (configValid.status !== "fail") {
+    emit(checkAgentCommand(cwd));
+  }
+
+  // 7. Feedback commands (only if config valid)
+  if (configValid.status !== "fail") {
+    emitAll(checkFeedbackCommands(cwd));
+  }
+
+  // 7b. Workspace feedback commands (only if config valid)
+  if (configValid.status !== "fail") {
+    emitAll(checkWorkspaceFeedbackCommands(cwd));
+  }
+
+  // 8. Backlog has plans (only if config exists)
+  if (configExists.status !== "fail") {
+    emit(checkBacklogHasPlans(cwd));
+  }
+
+  // 9. No orphaned receipts (only if config exists)
+  if (configExists.status !== "fail") {
+    emit(checkOrphanedReceipts(cwd));
+  }
+
+  // --- Summary ---
   console.log();
   if (failures > 0 || warnings > 0) {
     const parts: string[] = [];
