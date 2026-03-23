@@ -10,7 +10,7 @@ import {
   useTempGitDir,
 } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs, getRepoStateDir } from "./global-state.ts";
+import { getRepoPipelineDirs, resolveRepoStateDir } from "./global-state.ts";
 
 describe("teardown command", () => {
   const ctx = useTempGitDir();
@@ -32,8 +32,8 @@ describe("teardown command", () => {
 
     expect(output).toContain("Ralphai torn down");
     // Global state should be removed
-    const stateDir = getRepoStateDir(ctx.dir, testEnv());
-    // getRepoStateDir auto-creates, so check the config file specifically
+    const stateDir = resolveRepoStateDir(ctx.dir, testEnv());
+    // resolveRepoStateDir does not auto-create, so check the config file specifically
     expect(existsSync(configPath)).toBe(false);
   });
 

@@ -24,7 +24,7 @@ import {
   countCompletedTasks,
 } from "./plan-detection.ts";
 import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
-import { getRepoPipelineDirs, getRepoStateDir } from "./global-state.ts";
+import { getRepoPipelineDirs, resolveRepoStateDir } from "./global-state.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -493,7 +493,7 @@ async function teardownRalphai(
     return;
   }
 
-  const stateDir = getRepoStateDir(cwd);
+  const stateDir = resolveRepoStateDir(cwd);
 
   if (!options.yes) {
     clack.intro("Tearing down Ralphai");
@@ -1604,6 +1604,14 @@ function showBacklogDirHelp(): void {
 }
 
 function runBacklogDir(cwd: string): void {
+  const configPath = getConfigFilePath(cwd);
+  if (!existsSync(configPath)) {
+    console.log(
+      `${TEXT}Ralphai is not set up in this project (no config found).${RESET}`,
+    );
+    console.log(`${DIM}Run ${TEXT}ralphai init${DIM} first.${RESET}`);
+    return;
+  }
   const { backlogDir } = getRepoPipelineDirs(cwd);
   console.log(backlogDir);
 }
