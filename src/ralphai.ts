@@ -42,6 +42,7 @@ import {
   writeConfigFile,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
+import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,6 +53,7 @@ type RalphaiSubcommand =
   | "update"
   | "run"
   | "teardown"
+  | "uninstall"
   | "worktree"
   | "status"
   | "reset"
@@ -115,6 +117,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "update",
   "run",
   "teardown",
+  "uninstall",
   "worktree",
   "status",
   "reset",
@@ -994,6 +997,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}teardown${RESET}    ${DIM}Remove Ralphai from your project${RESET}`,
   );
   console.log(
+    `  ${TEXT}uninstall${RESET}   ${DIM}Remove all global state and uninstall the CLI${RESET}`,
+  );
+  console.log(
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
   );
   console.log(
@@ -1022,6 +1028,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "purge",
     "update",
     "teardown",
+    "uninstall",
     "doctor",
     "backlog-dir",
   ]);
@@ -1062,6 +1069,13 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       await teardownRalphai(options, cwd);
+      break;
+    case "uninstall":
+      if (helpRequested) {
+        showUninstallHelp();
+        return;
+      }
+      await runUninstall({ yes: options.yes, cwd });
       break;
     case "run":
       await runRalphaiRunner(options, cwd);
