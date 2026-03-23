@@ -172,4 +172,35 @@ describe("CLI help and flags", () => {
     expect(raw).not.toMatch(/\x1b\[/);
     expect(raw).toContain("init");
   });
+
+  // -------------------------------------------------------------------------
+  // backlog-dir command
+  // -------------------------------------------------------------------------
+
+  it("backlog-dir prints a directory path", () => {
+    const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    const result = runCli(["backlog-dir"], ctx.dir, env);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toContain("pipeline");
+    expect(result.stdout.trim()).toContain("backlog");
+  });
+
+  it("backlog-dir --help shows usage", () => {
+    const result = runCli(["backlog-dir", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("backlog-dir");
+    expect(result.stdout).toContain("backlog");
+  });
+
+  it("backlog-dir --unknown exits with error", () => {
+    const result = runCli(["backlog-dir", "--unknown"], ctx.dir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown flag");
+  });
+
+  it("help text lists backlog-dir", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("backlog-dir");
+  });
 });

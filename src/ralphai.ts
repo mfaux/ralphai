@@ -56,7 +56,8 @@ type RalphaiSubcommand =
   | "status"
   | "reset"
   | "purge"
-  | "doctor";
+  | "doctor"
+  | "backlog-dir";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -119,6 +120,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "reset",
   "purge",
   "doctor",
+  "backlog-dir",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -994,6 +996,9 @@ function showRalphaiHelp(): void {
   console.log(
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
   );
+  console.log(
+    `  ${TEXT}backlog-dir${RESET} ${DIM}Print the path to the plan backlog directory${RESET}`,
+  );
   console.log();
   console.log(
     `${DIM}Run 'ralphai <command> --help' for command-specific options.${RESET}`,
@@ -1018,6 +1023,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "update",
     "teardown",
     "doctor",
+    "backlog-dir",
   ]);
   if (
     options.subcommand &&
@@ -1090,6 +1096,13 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       runRalphaiDoctor(cwd);
+      break;
+    case "backlog-dir":
+      if (helpRequested) {
+        showBacklogDirHelp();
+        return;
+      }
+      runBacklogDir(cwd);
       break;
     default:
       showRalphaiHelp();
@@ -1604,6 +1617,17 @@ function showTeardownHelp(): void {
   console.log(
     `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
   );
+}
+
+function showBacklogDirHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai backlog-dir`);
+  console.log();
+  console.log(`${DIM}Print the path to the plan backlog directory.${RESET}`);
+}
+
+function runBacklogDir(cwd: string): void {
+  const { backlogDir } = getRepoPipelineDirs(cwd);
+  console.log(backlogDir);
 }
 
 function showDoctorHelp(): void {

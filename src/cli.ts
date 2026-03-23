@@ -32,6 +32,7 @@ ${BOLD}Commands:${RESET}
   update       Update ralphai to the latest (or specified) version
   teardown     Remove Ralphai from your project
   doctor       Check your ralphai setup for problems
+  backlog-dir  Print the path to the plan backlog directory
 
 ${BOLD}Options:${RESET}
   --help, -h      Show this help message

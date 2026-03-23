@@ -15,6 +15,7 @@ ralphai <command> [options]
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
 | `doctor`       | Check your Ralphai setup for problems                                  |
+| `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update ralphai to the latest (or specified) version                    |
 | `teardown`     | Remove Ralphai from your project                                       |
 
@@ -149,6 +150,15 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 ```
 
 Removes Ralphai from your project: deletes `.ralphai/` and cleans up `.gitignore` entries.
+
+## Backlog Dir
+
+Prints the absolute path to the plan backlog directory for the current repository. Useful for scripting or finding where to place plan files.
+
+```bash
+ralphai backlog-dir
+# ~/.ralphai/repos/<repo-id>/pipeline/backlog
+```
 
 ## Configuration
 
