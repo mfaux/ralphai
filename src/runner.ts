@@ -17,6 +17,11 @@ import {
   getCurrentCommitHash,
   getWorkingTreeDiffHash,
 } from "./git-ops.ts";
+import {
+  getRepoPipelineDirs,
+  getRepoLearningsPath,
+  getRepoCandidatesPath,
+} from "./global-state.ts";
 import { processLearnings } from "./learnings.ts";
 import {
   resolvePromptMode,
@@ -61,8 +66,6 @@ export interface RunnerOptions {
   config: ResolvedConfig;
   /** Working directory (repository root). */
   cwd: string;
-  /** Path to the .ralphai directory. */
-  ralphaiDir: string;
   /** Whether we're in a git worktree. */
   isWorktree: boolean;
   /** Main worktree root (empty if not a worktree). */
@@ -439,19 +442,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
-  // Pipeline directories
-  const dirs: PipelineDirs = {
-    wipDir: join(opts.ralphaiDir, "pipeline", "in-progress"),
-    backlogDir: join(opts.ralphaiDir, "pipeline", "backlog"),
-    archiveDir: join(opts.ralphaiDir, "pipeline", "out"),
-  };
+  // Pipeline directories (resolved from global state)
+  const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
 
-  // Learnings file paths
-  const learningsFile = join(opts.ralphaiDir, "LEARNINGS.md");
-  const learningCandidatesFile = join(
-    opts.ralphaiDir,
-    "LEARNING_CANDIDATES.md",
-  );
+  // Learnings file paths (resolved from global state)
+  const learningsFile = getRepoLearningsPath(cwd);
+  const learningCandidatesFile = getRepoCandidatesPath(cwd);
 
   // --- Patch mode guard: cannot run on main/master ---
   if (mode === "patch") {
@@ -578,7 +574,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           }
         } else {
           console.log(
-            "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
+            `Nothing to do — backlog is empty and no in-progress work. Add plans to ${dirs.backlogDir}/<slug>.md`,
           );
         }
         break;
@@ -652,7 +648,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     const progressFile = join(wipDir, "progress.md");
 
     if (existsSync(receiptFile)) {
-      if (!checkReceiptSource(opts.ralphaiDir, isWorktree)) {
+      if (!checkReceiptSource(dirs.wipDir, isWorktree)) {
         process.exit(1);
       }
     }

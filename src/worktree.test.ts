@@ -4,6 +4,7 @@ import {
   rmSync,
   readFileSync,
   mkdirSync,
+  mkdtempSync,
   writeFileSync,
   symlinkSync,
   lstatSync,
@@ -19,6 +20,7 @@ import {
   useTempGitDir,
 } from "./test-utils.ts";
 import { writeConfigFile, getConfigFilePath } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 describe("worktree", () => {
   // -------------------------------------------------------------------------
@@ -435,18 +437,15 @@ describe("worktree", () => {
     it("run is blocked when receipt says source=worktree", () => {
       gitInitialCommit(ctx.dir);
 
-      // Set up initialized ralphai with an in-progress plan and receipt
-      mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
-        recursive: true,
-      });
+      // Set up initialized ralphai config
+      mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
       writeConfigFile(ctx.dir, { agentCommand: "claude -p" });
-      const planDir = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "in-progress",
-        "dark-mode",
-      );
+
+      // Write receipt to global state wip directory
+      const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
+      const env = { RALPHAI_HOME: ralphaiHome };
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, env);
+      const planDir = join(wipDir, "dark-mode");
       mkdirSync(planDir, { recursive: true });
       writeFileSync(join(planDir, "dark-mode.md"), "# Dark mode\n");
       writeFileSync(
@@ -461,7 +460,9 @@ describe("worktree", () => {
         ].join("\n"),
       );
 
-      const result = runCli(["run"], ctx.dir);
+      const result = runCli(["run"], ctx.dir, {
+        RALPHAI_HOME: ralphaiHome,
+      });
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(1);

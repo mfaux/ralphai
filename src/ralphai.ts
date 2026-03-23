@@ -28,6 +28,7 @@ import {
   countCompletedTasks,
 } from "./plan-detection.ts";
 import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -2835,8 +2836,8 @@ async function runRalphaiRunner(
 
   // Check receipt files for cross-source conflicts before running.
   const worktreeInfo = resolveWorktreeInfo(cwd);
-  const ralphaiDir = join(ralphaiRoot, ".ralphai");
-  if (!checkReceiptSource(ralphaiDir, worktreeInfo.isWorktree)) {
+  const { wipDir } = getRepoPipelineDirs(cwd);
+  if (!checkReceiptSource(wipDir, worktreeInfo.isWorktree)) {
     process.exit(1);
   }
 
@@ -2954,7 +2955,6 @@ async function runRalphaiRunner(
   const runnerOpts: RunnerOptions = {
     config,
     cwd,
-    ralphaiDir,
     isWorktree: worktreeInfo.isWorktree,
     mainWorktree: worktreeInfo.mainWorktree,
     dryRun: isDryRun,

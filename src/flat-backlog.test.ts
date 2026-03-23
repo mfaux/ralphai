@@ -4,6 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { runCli, runCliOutput, useTempGitDir } from "./test-utils.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Flat backlog plan discovery (TypeScript side)
@@ -136,17 +137,20 @@ describe.skipIf(process.platform === "win32")(
     });
 
     it("dry-run detects flat backlog plan and shows promote message", () => {
-      // Set up ralphai structure with a flat plan
+      // Set up ralphai config structure (for init check)
       runCli(["init", "--yes"], testDir);
-      const bd = join(testDir, ".ralphai", "pipeline", "backlog");
-      // Remove sample plan to isolate our test plan
-      rmSync(join(bd, "hello-ralphai.md"), { force: true });
-      writeFileSync(join(bd, "test-flat.md"), "# Plan: Test Flat\n");
+
+      // Write the plan to the global state backlog directory
+      const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
+      const env = { RALPHAI_HOME: ralphaiHome };
+      const { backlogDir } = getRepoPipelineDirs(testDir, env);
+      writeFileSync(join(backlogDir, "test-flat.md"), "# Plan: Test Flat\n");
 
       // Run the CLI in dry-run mode (which invokes the bundled runner)
       const result = runCli(["run", "--dry-run"], testDir, {
         RALPHAI_AGENT_COMMAND: "echo mock",
         RALPHAI_NO_UPDATE_CHECK: "1",
+        RALPHAI_HOME: ralphaiHome,
       });
       const output = result.stdout + result.stderr;
       // Should mention the flat file and show promote message

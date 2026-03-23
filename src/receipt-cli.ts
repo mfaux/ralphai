@@ -5,7 +5,7 @@
  *   node receipt-cli.mjs init          <receipt-path> <source> <branch> <slug> <plan-file> <turns-budget> [worktree-path]
  *   node receipt-cli.mjs update-turn   <receipt-path>
  *   node receipt-cli.mjs update-tasks  <receipt-path> <progress-path>
- *   node receipt-cli.mjs check-source  <ralphai-dir> <is-worktree>
+ *   node receipt-cli.mjs check-source  <wip-dir> <is-worktree>
  *
  * Exit codes:
  *   0 — success (or check-source: no conflict)
@@ -89,15 +89,15 @@ switch (command) {
   }
 
   case "check-source": {
-    const [, ralphaiDir, isWorktreeStr] = args;
-    if (!ralphaiDir || !isWorktreeStr) {
+    const [, wipDir, isWorktreeStr] = args;
+    if (!wipDir || !isWorktreeStr) {
       process.stderr.write(
-        "Usage: receipt-cli check-source <ralphai-dir> <is-worktree>\n",
+        "Usage: receipt-cli check-source <wip-dir> <is-worktree>\n",
       );
       process.exit(2);
     }
     const isWorktree = isWorktreeStr === "true";
-    const ok = checkReceiptSource(ralphaiDir, isWorktree);
+    const ok = checkReceiptSource(wipDir, isWorktree);
     if (!ok) process.exit(1);
     break;
   }
