@@ -6,17 +6,17 @@ ralphai <command> [options]
 
 ## Commands
 
-| Command        | Description                                         |
-| -------------- | --------------------------------------------------- |
-| `init`         | Set up Ralphai in your project                      |
-| `run`          | Start the Ralphai task runner                       |
-| `worktree`     | Run in an isolated git worktree                     |
-| `status`       | Show pipeline and worktree status                   |
-| `reset`        | Move in-progress plans back to backlog and clean up |
-| `purge`        | Delete archived artifacts from `pipeline/out/`      |
-| `doctor`       | Check your Ralphai setup for problems               |
-| `update [tag]` | Update ralphai to the latest (or specified) version |
-| `teardown`     | Remove Ralphai from your project                    |
+| Command        | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
+| `run`          | Start the Ralphai task runner                                          |
+| `worktree`     | Run in an isolated git worktree                                        |
+| `status`       | Show pipeline and worktree status                                      |
+| `reset`        | Move in-progress plans back to backlog and clean up                    |
+| `purge`        | Delete archived artifacts from `pipeline/out/`                         |
+| `doctor`       | Check your Ralphai setup for problems                                  |
+| `update [tag]` | Update ralphai to the latest (or specified) version                    |
+| `teardown`     | Remove Ralphai from your project                                       |
 
 ## Global Options
 
@@ -31,7 +31,6 @@ ralphai <command> [options]
 ```
 --yes, -y              Skip prompts; auto-detect agent (Claude Code → OpenCode → others)
 --force                Re-scaffold from scratch
---shared               Track ralphai.json in git (for team-shared config)
 --agent-command=CMD    Set the agent command
 ```
 
@@ -132,7 +131,7 @@ Deletes all archived plan artifacts from `pipeline/out/`. Use this to clean up a
 Validates your Ralphai setup with diagnostic checks:
 
 1. `.ralphai/` directory exists
-2. `ralphai.json` is valid JSON with recognized keys
+2. `config.json` is valid JSON with recognized keys
 3. Git repository detected
 4. Working tree is clean
 5. Base branch exists
@@ -149,11 +148,11 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project: deletes `.ralphai/`, `ralphai.json`, and cleans up `.gitignore` entries.
+Removes Ralphai from your project: deletes `.ralphai/` and cleans up `.gitignore` entries.
 
 ## Configuration
 
-Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaults**.
+Settings resolve in this order: **CLI flags > env vars > `config.json` > defaults**.
 
 ### Environment Variables
 
@@ -181,7 +180,7 @@ Settings resolve in this order: **CLI flags > env vars > `ralphai.json` > defaul
 
 The `promptMode` setting controls how file references are formatted in the
 prompt sent to the agent. Set it via `--prompt-mode`, `RALPHAI_PROMPT_MODE`, or
-`promptMode` in `ralphai.json`.
+`promptMode` in `config.json`.
 
 | Value         | Behavior                                                                                                                                                                    |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -194,7 +193,7 @@ prompt sent to the agent. Set it via `--prompt-mode`, `RALPHAI_PROMPT_MODE`, or
 
 ### Workspaces (Monorepo)
 
-The `workspaces` key in `ralphai.json` provides per-package feedback command
+The `workspaces` key in `config.json` provides per-package feedback command
 overrides for monorepo projects. Each key is a relative path matching a plan's
 `scope` frontmatter value.
 

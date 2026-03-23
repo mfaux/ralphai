@@ -1,6 +1,7 @@
 # Bug Fix Plan Guide
 
-For fixing bugs. Read [PLANNING.md](../PLANNING.md) first for shared principles.
+For fixing bugs. Read the [planning skill](../SKILL.md) first for shared
+principles.
 
 ## Before Writing the Plan
 

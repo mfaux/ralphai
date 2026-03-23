@@ -1,7 +1,8 @@
 /**
  * Receipt handling: parse, write, and update receipt files.
  *
- * Receipt files live at: .ralphai/pipeline/in-progress/<slug>/receipt.txt
+ * Receipt files live in the per-plan WIP directory:
+ *   <wipDir>/<slug>/receipt.txt
  * Format: key=value (one per line, no quoting needed).
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs";
@@ -197,15 +198,14 @@ function listDirs(dir: string): string[] {
  * or vice versa.
  */
 export function checkReceiptSource(
-  ralphaiDir: string,
+  wipDir: string,
   isWorktree: boolean,
 ): boolean {
-  const inProgressDir = join(ralphaiDir, "pipeline", "in-progress");
-  if (!existsSync(inProgressDir)) return true;
+  if (!existsSync(wipDir)) return true;
 
-  const planSlugs = listDirs(inProgressDir);
+  const planSlugs = listDirs(wipDir);
   for (const slug of planSlugs) {
-    const receiptPath = join(inProgressDir, slug, "receipt.txt");
+    const receiptPath = join(wipDir, slug, "receipt.txt");
     const receipt = parseReceipt(receiptPath);
     if (!receipt) continue;
 

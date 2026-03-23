@@ -6,7 +6,9 @@
  * with source tracking for --show-config.
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { getRepoStateDir } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,7 +27,6 @@ export interface RalphaiConfig {
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   turnTimeout: number;
-  promptMode: "auto" | "at-path" | "inline";
   continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
   turns: number;
@@ -68,7 +69,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueRepo: "",
   issueCommentProgress: "true",
   turnTimeout: 0,
-  promptMode: "auto",
   continuous: "false",
   autoCommit: "false",
   turns: 5, // default turns budget (overridden by config/env/cli)
@@ -165,7 +165,7 @@ export function validateCommaList(value: string, label: string): void {
 // Config file parsing
 // ---------------------------------------------------------------------------
 
-/** Allowed keys in ralphai.json. */
+/** Allowed keys in config.json. */
 const ALLOWED_CONFIG_KEYS = new Set([
   "agentCommand",
   "feedbackCommands",
@@ -178,7 +178,6 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueRepo",
   "issueCommentProgress",
   "turnTimeout",
-  "promptMode",
   "continuous",
   "autoCommit",
   "turns",
@@ -194,7 +193,7 @@ export interface ParsedConfigFile {
 }
 
 /**
- * Parse and validate a ralphai.json config file.
+ * Parse and validate a config.json file.
  * Returns the parsed values and any warnings.
  * Throws ConfigError for invalid values.
  * Returns null if the file does not exist.
@@ -329,14 +328,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.turnTimeout = v as number;
   }
 
-  // promptMode (enum)
-  if ("promptMode" in obj) {
-    const v = String(obj.promptMode || "");
-    if (!["auto", "at-path", "inline"].includes(v))
-      err(`'promptMode' must be 'auto', 'at-path', or 'inline', got '${v}'`);
-    values.promptMode = v as RalphaiConfig["promptMode"];
-  }
-
   // continuous (boolean)
   if ("continuous" in obj) {
     const v = obj.continuous;
@@ -405,6 +396,35 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
   return { values, warnings };
 }
 
+/**
+ * Return the global config file path for a given working directory.
+ * The path is `~/.ralphai/repos/<repoId>/config.json`.
+ */
+export function getConfigFilePath(
+  cwd: string,
+  env?: Record<string, string | undefined>,
+): string {
+  return join(getRepoStateDir(cwd, env), "config.json");
+}
+
+/**
+ * Write a validated config object to the global config path.
+ * Creates parent directories as needed.
+ */
+export function writeConfigFile(
+  cwd: string,
+  config: Record<string, unknown>,
+  env?: Record<string, string | undefined>,
+): string {
+  const filePath = getConfigFilePath(cwd, env);
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(filePath, JSON.stringify(config, null, 2) + "\n");
+  return filePath;
+}
+
 // ---------------------------------------------------------------------------
 // Env var overrides
 // ---------------------------------------------------------------------------
@@ -424,7 +444,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
-  ["RALPHAI_PROMPT_MODE", "promptMode"],
   ["RALPHAI_CONTINUOUS", "continuous"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
   ["RALPHAI_TURNS", "turns"],
@@ -509,17 +528,6 @@ export function applyEnvOverrides(
   if (issueComment !== undefined) {
     validateBoolean(issueComment, "RALPHAI_ISSUE_COMMENT_PROGRESS");
     overrides.issueCommentProgress = issueComment;
-  }
-
-  // promptMode (enum)
-  const promptMode = get("RALPHAI_PROMPT_MODE");
-  if (promptMode !== undefined) {
-    validateEnum(promptMode, "RALPHAI_PROMPT_MODE", [
-      "auto",
-      "at-path",
-      "inline",
-    ]);
-    overrides.promptMode = promptMode as RalphaiConfig["promptMode"];
   }
 
   // continuous (boolean)
@@ -635,11 +643,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-auto-commit") {
       overrides.autoCommit = "false";
       rawFlags.autoCommit = "--no-auto-commit";
-    } else if (arg.startsWith("--prompt-mode=")) {
-      const v = arg.slice("--prompt-mode=".length);
-      validateEnum(v, "--prompt-mode", ["auto", "at-path", "inline"]);
-      overrides.promptMode = v as RalphaiConfig["promptMode"];
-      rawFlags.promptMode = arg;
     } else if (arg.startsWith("--issue-source=")) {
       const v = arg.slice("--issue-source=".length);
       validateEnum(v, "--issue-source", ["none", "github"]);
@@ -685,13 +688,15 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
 // ---------------------------------------------------------------------------
 
 export interface ResolveConfigInput {
-  configFilePath: string;
+  cwd: string;
   envVars: Record<string, string | undefined>;
   cliArgs: readonly string[];
 }
 
 export interface ResolveConfigResult {
   config: ResolvedConfig;
+  /** Path to the config file that was loaded (or would be loaded). */
+  configFilePath: string;
   warnings: string[];
 }
 
@@ -705,7 +710,8 @@ export interface ResolveConfigResult {
  * Each field tracks its source for --show-config display.
  */
 export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
-  const { configFilePath, envVars, cliArgs } = input;
+  const { cwd, envVars, cliArgs } = input;
+  const configFilePath = getConfigFilePath(cwd, envVars);
   const warnings: string[] = [];
 
   // Layer 1: defaults
@@ -762,5 +768,5 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
     }
   }
 
-  return { config: resolved, warnings };
+  return { config: resolved, configFilePath, warnings };
 }

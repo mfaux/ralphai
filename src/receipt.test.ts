@@ -398,34 +398,37 @@ describe("updateReceiptTasks", () => {
 describe("checkReceiptSource", () => {
   const ctx = useTempDir();
 
-  it("returns true when no in-progress directory exists", () => {
-    expect(checkReceiptSource(ctx.dir, false)).toBe(true);
+  it("returns true when wip directory does not exist", () => {
+    expect(checkReceiptSource(join(ctx.dir, "nonexistent"), false)).toBe(true);
   });
 
   it("returns true when receipt source matches (both main)", () => {
-    const slugDir = join(ctx.dir, "pipeline", "in-progress", "test-plan");
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
       "source=main\nslug=test-plan\nbranch=main\n",
     );
 
-    expect(checkReceiptSource(ctx.dir, false)).toBe(true);
+    expect(checkReceiptSource(wipDir, false)).toBe(true);
   });
 
   it("returns true when receipt source matches (both worktree)", () => {
-    const slugDir = join(ctx.dir, "pipeline", "in-progress", "test-plan");
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
       "source=worktree\nslug=test-plan\nbranch=feat/x\nworktree_path=/tmp/wt\n",
     );
 
-    expect(checkReceiptSource(ctx.dir, true)).toBe(true);
+    expect(checkReceiptSource(wipDir, true)).toBe(true);
   });
 
   it("blocks when receipt says worktree but running from main", () => {
-    const slugDir = join(ctx.dir, "pipeline", "in-progress", "test-plan");
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
@@ -440,14 +443,15 @@ describe("checkReceiptSource", () => {
 
     // Suppress console.error output during test
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = checkReceiptSource(ctx.dir, false);
+    const result = checkReceiptSource(wipDir, false);
     spy.mockRestore();
 
     expect(result).toBe(false);
   });
 
   it("blocks when receipt says main but running from worktree", () => {
-    const slugDir = join(ctx.dir, "pipeline", "in-progress", "test-plan");
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
@@ -460,14 +464,15 @@ describe("checkReceiptSource", () => {
     );
 
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = checkReceiptSource(ctx.dir, true);
+    const result = checkReceiptSource(wipDir, true);
     spy.mockRestore();
 
     expect(result).toBe(false);
   });
 
   it("returns true when receipt has no source conflict", () => {
-    const slugDir = join(ctx.dir, "pipeline", "in-progress", "plan-a");
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "plan-a");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
@@ -475,6 +480,6 @@ describe("checkReceiptSource", () => {
     );
 
     // Running from main, receipt says main: no conflict
-    expect(checkReceiptSource(ctx.dir, false)).toBe(true);
+    expect(checkReceiptSource(wipDir, false)).toBe(true);
   });
 });

@@ -34,14 +34,12 @@ a worktree. All runner options are forwarded automatically.
 1. Creates a git worktree with a `ralphai/<plan-slug>` branch.
    Reuses existing worktrees for in-progress plans.
 2. Symlinks the worktree's `.ralphai/` to the main repo's `.ralphai/`
-   so the agent can access pipeline files through relative paths
-   (bypassing agent directory sandboxing).
-3. Symlinks `ralphai.json` into the worktree so configuration is
-   available without committing it.
-4. Spawns the runner in the worktree directory.
+   so the agent can access pipeline files through relative paths.
+3. Spawns the runner in the worktree directory.
 
-Both `ralphai.json` and `.ralphai/` are gitignored by default. The
-symlinks make them transparently available in every worktree.
+Configuration lives in global state (`~/.ralphai/repos/<id>/config.json`),
+so it is automatically available in every worktree without symlinks. The
+symlink is only needed for pipeline files (plans, progress logs, learnings).
 
 ## Agent compatibility
 
@@ -53,5 +51,5 @@ symlinks make them transparently available in every worktree.
 | Others      | Likely           | Untested — no known restrictions                            |
 
 **Workaround for unsupported agents:** Set `"promptMode": "inline"` in
-`ralphai.json` to embed pipeline file contents directly in the prompt,
+`config.json` to embed pipeline file contents directly in the prompt,
 bypassing the agent's need to access external paths.

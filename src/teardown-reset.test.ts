@@ -9,27 +9,41 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
+import { getRepoPipelineDirs, getRepoStateDir } from "./global-state.ts";
 
 describe("teardown command", () => {
   const ctx = useTempGitDir();
 
-  it("teardown --yes removes .ralphai/ dir", () => {
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
+  it("teardown --yes removes global state dir", () => {
     // First, set up ralphai
-    runCliOutput(["init", "--yes"], ctx.dir);
-    expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(true);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+    const configPath = getConfigFilePath(ctx.dir, testEnv());
+    expect(existsSync(configPath)).toBe(true);
 
     // Now tear down
-    const output = stripLogo(runCliOutput(["teardown", "--yes"], ctx.dir));
+    const output = stripLogo(
+      runCliOutput(["teardown", "--yes"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Ralphai torn down");
-    expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(false);
+    // Global state should be removed
+    const stateDir = getRepoStateDir(ctx.dir, testEnv());
+    // getRepoStateDir auto-creates, so check the config file specifically
+    expect(existsSync(configPath)).toBe(false);
   });
 
-  it("teardown --yes prints not set up when .ralphai/ does not exist", () => {
-    const output = stripLogo(runCliOutput(["teardown", "--yes"], ctx.dir));
+  it("teardown --yes prints not set up when config does not exist", () => {
+    const output = stripLogo(
+      runCliOutput(["teardown", "--yes"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("not set up");
-    expect(output).toContain(".ralphai/ does not exist");
+    expect(output).toContain("no config found");
   });
 
   it("teardown --yes <target-dir> tears down from target directory", () => {
@@ -42,16 +56,17 @@ describe("teardown command", () => {
 
     try {
       // Set up ralphai in target
-      runCliOutput(["init", "--yes", targetDir], ctx.dir);
-      expect(existsSync(join(targetDir, ".ralphai"))).toBe(true);
+      runCliOutput(["init", "--yes", targetDir], ctx.dir, testEnv());
+      const configPath = getConfigFilePath(targetDir, testEnv());
+      expect(existsSync(configPath)).toBe(true);
 
       // Tear down from target
       const output = stripLogo(
-        runCliOutput(["teardown", "--yes", targetDir], ctx.dir),
+        runCliOutput(["teardown", "--yes", targetDir], ctx.dir, testEnv()),
       );
 
       expect(output).toContain("Ralphai torn down");
-      expect(existsSync(join(targetDir, ".ralphai"))).toBe(false);
+      expect(existsSync(configPath)).toBe(false);
     } finally {
       if (existsSync(targetDir)) {
         rmSync(targetDir, { recursive: true, force: true });
@@ -63,38 +78,39 @@ describe("teardown command", () => {
 describe("reset command", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
   it("reset --yes moves in-progress plans back to backlog", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
     // Simulate an in-progress plan
-    const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: inProgressDir, backlogDir } = getRepoPipelineDirs(
+      ctx.dir,
+      testEnv(),
+    );
     const planDir = join(inProgressDir, "prd-my-feature");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-my-feature.md"), "# My Feature");
 
-    const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
+    const output = stripLogo(
+      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Pipeline reset");
     // Plan should be back in backlog as a flat file
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-my-feature.md"),
-      ),
-    ).toBe(true);
+    expect(existsSync(join(backlogDir, "prd-my-feature.md"))).toBe(true);
     // Slug-folder should NOT exist in backlog
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-my-feature"),
-      ),
-    ).toBe(false);
+    expect(existsSync(join(backlogDir, "prd-my-feature"))).toBe(false);
     // Plan should NOT be in in-progress
     expect(existsSync(join(inProgressDir, "prd-my-feature"))).toBe(false);
   });
 
   it("reset --yes deletes progress files", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
-    const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-test.md"), "# Test");
@@ -103,7 +119,7 @@ describe("reset command", () => {
       "## Progress Log\n### Task 1:\n**Status:** Complete",
     );
 
-    runCliOutput(["reset", "--yes"], ctx.dir);
+    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
 
     expect(existsSync(join(inProgressDir, "prd-test", "progress.md"))).toBe(
       false,
@@ -111,9 +127,9 @@ describe("reset command", () => {
   });
 
   it("reset --yes deletes receipt files", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
-    const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-test.md"), "# Test");
@@ -122,7 +138,7 @@ describe("reset command", () => {
       "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test\nturns_completed=3",
     );
 
-    runCliOutput(["reset", "--yes"], ctx.dir);
+    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
 
     expect(existsSync(join(inProgressDir, "prd-test", "receipt.txt"))).toBe(
       false,
@@ -130,9 +146,12 @@ describe("reset command", () => {
   });
 
   it("reset --yes handles multiple plans, progress, and receipts", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
-    const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: inProgressDir, backlogDir } = getRepoPipelineDirs(
+      ctx.dir,
+      testEnv(),
+    );
     const planDirA = join(inProgressDir, "prd-feature-a");
     const planDirB = join(inProgressDir, "prd-feature-b");
     mkdirSync(planDirA, { recursive: true });
@@ -143,33 +162,19 @@ describe("reset command", () => {
     writeFileSync(join(planDirA, "receipt.txt"), "slug=feature-a");
     writeFileSync(join(planDirB, "receipt.txt"), "slug=feature-b");
 
-    const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
+    const output = stripLogo(
+      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("2 plans moved to backlog");
     expect(output).toContain("Deleted progress.md and receipt.txt in 2 plans");
 
     // Both plans should be in backlog as flat files
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-a.md"),
-      ),
-    ).toBe(true);
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-b.md"),
-      ),
-    ).toBe(true);
+    expect(existsSync(join(backlogDir, "prd-feature-a.md"))).toBe(true);
+    expect(existsSync(join(backlogDir, "prd-feature-b.md"))).toBe(true);
     // Slug-folders should NOT exist in backlog
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-a"),
-      ),
-    ).toBe(false);
-    expect(
-      existsSync(
-        join(ctx.dir, ".ralphai", "pipeline", "backlog", "prd-feature-b"),
-      ),
-    ).toBe(false);
+    expect(existsSync(join(backlogDir, "prd-feature-a"))).toBe(false);
+    expect(existsSync(join(backlogDir, "prd-feature-b"))).toBe(false);
 
     // in-progress should be clean (empty)
     const remaining = readdirSync(inProgressDir);
@@ -177,15 +182,17 @@ describe("reset command", () => {
   });
 
   it("reset --yes reports nothing to reset when pipeline is clean", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
-    const output = stripLogo(runCliOutput(["reset", "--yes"], ctx.dir));
+    const output = stripLogo(
+      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Nothing to reset");
   });
 
-  it("reset errors when .ralphai/ does not exist", () => {
-    const result = runCli(["reset", "--yes"], ctx.dir);
+  it("reset errors when config does not exist", () => {
+    const result = runCli(["reset", "--yes"], ctx.dir, testEnv());
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
@@ -193,14 +200,14 @@ describe("reset command", () => {
   });
 
   it("reset preserves in-progress directory", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
-    const inProgressDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
+    const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-test.md"), "# Test");
 
-    runCliOutput(["reset", "--yes"], ctx.dir);
+    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
 
     // Directory should still exist
     expect(existsSync(inProgressDir)).toBe(true);
@@ -218,7 +225,7 @@ describe("reset command", () => {
       stdio: "ignore",
     });
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
 
     // Create a worktree on a ralphai/* branch
     const wtPath = join(ctx.dir, "wt-dirty");
@@ -232,7 +239,7 @@ describe("reset command", () => {
     execSync("git add dirty-file.txt", { cwd: wtPath, stdio: "ignore" });
 
     // Reset should force-remove the dirty worktree
-    const output = runCliOutput(["reset", "--yes"], ctx.dir);
+    const output = runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
     expect(output).toContain("Pipeline reset");
     expect(existsSync(wtPath)).toBe(false);
 

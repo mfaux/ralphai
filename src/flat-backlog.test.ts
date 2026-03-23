@@ -4,6 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { runCli, runCliOutput, useTempGitDir } from "./test-utils.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Flat backlog plan discovery (TypeScript side)
@@ -12,12 +13,16 @@ import { runCli, runCliOutput, useTempGitDir } from "./test-utils.ts";
 describe("flat backlog plan discovery", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
   function initProject(dir: string): void {
-    runCli(["init", "--yes"], dir);
+    runCli(["init", "--yes"], dir, testEnv());
   }
 
   function backlogDir(dir: string): string {
-    return join(dir, ".ralphai", "pipeline", "backlog");
+    return getRepoPipelineDirs(dir, testEnv()).backlogDir;
   }
 
   it("flat .md file in backlog is listed by status", () => {
@@ -26,22 +31,20 @@ describe("flat backlog plan discovery", () => {
     const bd = backlogDir(ctx.dir);
     writeFileSync(join(bd, "my-flat-plan.md"), "# Plan: Flat Plan\n");
 
-    const output = runCliOutput(["status"], ctx.dir);
+    const output = runCliOutput(["status"], ctx.dir, testEnv());
     expect(output).toContain("my-flat-plan.md");
   });
 
   it("slug-folder plan in backlog is NOT discovered (flat-only)", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // Remove default sample so it doesn't interfere
-    rmSync(join(bd, "hello-ralphai.md"), { force: true });
     mkdirSync(join(bd, "folder-plan"), { recursive: true });
     writeFileSync(
       join(bd, "folder-plan", "folder-plan.md"),
       "# Plan: Folder Plan\n",
     );
 
-    const output = runCliOutput(["status"], ctx.dir);
+    const output = runCliOutput(["status"], ctx.dir, testEnv());
     // Slug-folder plans in backlog should be ignored
     expect(output).not.toContain("folder-plan.md");
   });
@@ -52,17 +55,17 @@ describe("flat backlog plan discovery", () => {
     writeFileSync(join(bd, "flat-one.md"), "# Plan: Flat One\n");
     writeFileSync(join(bd, "flat-two.md"), "# Plan: Flat Two\n");
 
-    const output = runCliOutput(["status"], ctx.dir);
+    const output = runCliOutput(["status"], ctx.dir, testEnv());
     expect(output).toContain("flat-one.md");
     expect(output).toContain("flat-two.md");
   });
 
-  it("init --yes creates sample plan as flat file", () => {
+  it("init --yes does not create sample plan (global state only)", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // Flat file should exist
-    expect(existsSync(join(bd, "hello-ralphai.md"))).toBe(true);
-    // Slug-folder should NOT exist
+    // No sample plan should be created (init writes only config now)
+    expect(existsSync(join(bd, "hello-ralphai.md"))).toBe(false);
+    // Slug-folder should NOT exist either
     expect(existsSync(join(bd, "hello-ralphai", "hello-ralphai.md"))).toBe(
       false,
     );
@@ -71,12 +74,10 @@ describe("flat backlog plan discovery", () => {
   it("doctor detects flat backlog plans", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // Remove default sample plan
-    rmSync(join(bd, "hello-ralphai.md"), { force: true });
     // Add a flat plan
     writeFileSync(join(bd, "doc-plan.md"), "# Plan: Doc Plan\n");
 
-    const output = runCliOutput(["doctor"], ctx.dir);
+    const output = runCliOutput(["doctor"], ctx.dir, testEnv());
     expect(output).toContain("backlog:");
     expect(output).toContain("1 plan");
   });
@@ -89,9 +90,13 @@ describe("flat backlog plan discovery", () => {
 describe("flat backlog plan dependencies in status", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
   it("shows dependency info for flat plans with depends-on frontmatter", () => {
-    runCli(["init", "--yes"], ctx.dir);
-    const bd = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    runCli(["init", "--yes"], ctx.dir, testEnv());
+    const { backlogDir: bd } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
       join(bd, "child-plan.md"),
       `---
@@ -101,7 +106,7 @@ depends-on: [parent-plan.md]
 `,
     );
 
-    const output = runCliOutput(["status"], ctx.dir);
+    const output = runCliOutput(["status"], ctx.dir, testEnv());
     expect(output).toContain("child-plan.md");
     expect(output).toContain("waiting on parent-plan.md");
   });
@@ -136,17 +141,21 @@ describe.skipIf(process.platform === "win32")(
     });
 
     it("dry-run detects flat backlog plan and shows promote message", () => {
-      // Set up ralphai structure with a flat plan
-      runCli(["init", "--yes"], testDir);
-      const bd = join(testDir, ".ralphai", "pipeline", "backlog");
-      // Remove sample plan to isolate our test plan
-      rmSync(join(bd, "hello-ralphai.md"), { force: true });
-      writeFileSync(join(bd, "test-flat.md"), "# Plan: Test Flat\n");
+      const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
+      const env = { RALPHAI_HOME: ralphaiHome };
+
+      // Set up ralphai config structure (for init check)
+      runCli(["init", "--yes"], testDir, env);
+
+      // Write the plan to the global state backlog directory
+      const { backlogDir } = getRepoPipelineDirs(testDir, env);
+      writeFileSync(join(backlogDir, "test-flat.md"), "# Plan: Test Flat\n");
 
       // Run the CLI in dry-run mode (which invokes the bundled runner)
       const result = runCli(["run", "--dry-run"], testDir, {
         RALPHAI_AGENT_COMMAND: "echo mock",
         RALPHAI_NO_UPDATE_CHECK: "1",
+        RALPHAI_HOME: ralphaiHome,
       });
       const output = result.stdout + result.stderr;
       // Should mention the flat file and show promote message

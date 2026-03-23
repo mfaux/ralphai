@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Workspace detection via init --yes
@@ -9,6 +10,13 @@ import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
 
 describe("workspace detection in init", () => {
   const ctx = useTempGitDir();
+
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
 
   it("detects pnpm monorepo workspaces", () => {
     // Create pnpm-workspace.yaml
@@ -42,13 +50,13 @@ describe("workspace detection in init", () => {
     );
 
     const output = stripLogo(
-      runCli(["init", "--yes"], ctx.dir).stdout +
-        runCli(["init", "--yes"], ctx.dir).stderr,
+      runCli(["init", "--yes"], ctx.dir, testEnv()).stdout +
+        runCli(["init", "--yes"], ctx.dir, testEnv()).stderr,
     );
 
     // Re-run cleanly (first run creates .ralphai)
     // Use a fresh approach: init, then check output
-    const result = runCli(["init", "--yes", "--force"], ctx.dir);
+    const result = runCli(["init", "--yes", "--force"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("2 packages");
@@ -74,7 +82,7 @@ describe("workspace detection in init", () => {
       JSON.stringify({ name: "@org/shared" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("1 packages");
@@ -90,7 +98,7 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).not.toContain("Workspaces");
@@ -111,7 +119,7 @@ describe("workspace detection in init", () => {
       JSON.stringify({ name: "empty-monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).not.toContain("Workspaces");
@@ -139,11 +147,9 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.workspaces).toBeUndefined();
   });
 
@@ -169,7 +175,7 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("auto-filtered by scope");
@@ -182,6 +188,10 @@ describe("workspace detection in init", () => {
 
 describe("pnpm-workspace.yaml parsing", () => {
   const ctx = useTempGitDir();
+
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
 
   it("handles quoted globs in pnpm-workspace.yaml", () => {
     writeFileSync(
@@ -202,7 +212,7 @@ describe("pnpm-workspace.yaml parsing", () => {
       JSON.stringify({ name: "monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("1 packages");
@@ -234,7 +244,7 @@ describe("pnpm-workspace.yaml parsing", () => {
       JSON.stringify({ name: "monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("2 packages");
@@ -250,6 +260,10 @@ describe("pnpm-workspace.yaml parsing", () => {
 describe("workspace display truncation", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
   it("truncates workspace names when more than 10 are detected", () => {
     // Create a .sln file with 15 projects to trigger truncation
     const projectLines: string[] = [];
@@ -260,7 +274,7 @@ describe("workspace display truncation", () => {
     }
     writeFileSync(join(ctx.dir, "App.sln"), projectLines.join("\n") + "\n");
 
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("15 packages");

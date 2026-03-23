@@ -17,12 +17,14 @@ import {
   getCurrentCommitHash,
   getWorkingTreeDiffHash,
 } from "./git-ops.ts";
-import { processLearnings } from "./learnings.ts";
 import {
-  resolvePromptMode,
-  assemblePrompt,
-  type ResolvedPromptMode,
-} from "./prompt.ts";
+  getRepoPipelineDirs,
+  getRepoLearningsPath,
+  getRepoCandidatesPath,
+} from "./global-state.ts";
+import { processLearnings } from "./learnings.ts";
+import { assemblePrompt } from "./prompt.ts";
+import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { pullGithubIssues } from "./issues.ts";
 import {
   archiveRun,
@@ -61,8 +63,6 @@ export interface RunnerOptions {
   config: ResolvedConfig;
   /** Working directory (repository root). */
   cwd: string;
-  /** Path to the .ralphai directory. */
-  ralphaiDir: string;
   /** Whether we're in a git worktree. */
   isWorktree: boolean;
   /** Main worktree root (empty if not a worktree). */
@@ -432,26 +432,18 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
   const maxLearnings = config.maxLearnings.value;
-  const promptModeConfig = config.promptMode.value;
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
-  // Pipeline directories
-  const dirs: PipelineDirs = {
-    wipDir: join(opts.ralphaiDir, "pipeline", "in-progress"),
-    backlogDir: join(opts.ralphaiDir, "pipeline", "backlog"),
-    archiveDir: join(opts.ralphaiDir, "pipeline", "out"),
-  };
+  // Pipeline directories (resolved from global state)
+  const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
 
-  // Learnings file paths
-  const learningsFile = join(opts.ralphaiDir, "LEARNINGS.md");
-  const learningCandidatesFile = join(
-    opts.ralphaiDir,
-    "LEARNING_CANDIDATES.md",
-  );
+  // Learnings file paths (resolved from global state)
+  const learningsFile = getRepoLearningsPath(cwd);
+  const learningCandidatesFile = getRepoCandidatesPath(cwd);
 
   // --- Patch mode guard: cannot run on main/master ---
   if (mode === "patch") {
@@ -513,12 +505,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
 
-  // --- Resolve prompt mode ---
-  const promptMode: ResolvedPromptMode = resolvePromptMode(
-    promptModeConfig as "auto" | "at-path" | "inline",
-    agentCommand,
-  );
-
   // --- Main plan loop ---
   let plansCompleted = 0;
   const completedPlans: string[] = [];
@@ -578,7 +564,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           }
         } else {
           console.log(
-            "Nothing to do — backlog is empty and no in-progress work. Add plans to .ralphai/pipeline/backlog/<slug>.md — see .ralphai/PLANNING.md",
+            `Nothing to do — backlog is empty and no in-progress work. Add plans to ${dirs.backlogDir}/<slug>.md`,
           );
         }
         break;
@@ -652,7 +638,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     const progressFile = join(wipDir, "progress.md");
 
     if (existsSync(receiptFile)) {
-      if (!checkReceiptSource(opts.ralphaiDir, isWorktree)) {
+      if (!checkReceiptSource(dirs.wipDir, isWorktree)) {
         process.exit(1);
       }
     }
@@ -848,7 +834,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       const prompt = assemblePrompt({
         planFile,
         progressFile,
-        promptMode,
         feedbackCommands,
         scopeHint,
         mode,
@@ -877,6 +862,13 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         maxLearnings,
       );
       console.log(learningsResult.message);
+
+      // --- Extract and append progress block ---
+      const progressContent = extractProgressBlock(output);
+      if (progressContent) {
+        appendProgressBlock(progressFile, turn, progressContent);
+        console.log(`Appended progress block from turn ${turn}.`);
+      }
 
       if (exitCode !== 0 && !timedOut) {
         console.log();

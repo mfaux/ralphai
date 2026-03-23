@@ -52,7 +52,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueInProgressLabel: "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
-  promptMode: "RALPHAI_PROMPT_MODE",
   continuous: "RALPHAI_CONTINUOUS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
   turns: "RALPHAI_TURNS",
@@ -190,15 +189,6 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     input,
   );
   lines.push(`  turnTimeout        = ${timeoutDisplay}  (${timeoutSrc})`);
-
-  const promptModeSrc = sourceLabel(
-    "promptMode",
-    config.promptMode.source,
-    input,
-  );
-  lines.push(
-    `  promptMode         = ${config.promptMode.value}  (${promptModeSrc})`,
-  );
 
   // maxLearnings: 0 displays as "unlimited"
   const maxLearnVal = config.maxLearnings.value;

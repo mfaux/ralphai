@@ -9,7 +9,7 @@
   "files": [
     "dist",
     "bin",
-    "templates"
+    "skills"
   ],
   "scripts": {
     "build": "obuild",

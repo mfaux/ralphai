@@ -4,6 +4,31 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "vitest";
 
+function sleepMs(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function cleanupTempDir(testDir: string): void {
+  const isWindows = process.platform === "win32";
+  const maxAttempts = isWindows ? 6 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (!existsSync(testDir)) {
+      return;
+    }
+
+    try {
+      rmSync(testDir, { recursive: true, force: true, maxRetries: 5 });
+      return;
+    } catch (error) {
+      if (!isWindows || attempt === maxAttempts) {
+        throw error;
+      }
+      sleepMs(50 * attempt);
+    }
+  }
+}
+
 const CLI_PATH = join(import.meta.dirname, "cli.ts");
 
 function stripAnsi(str: string): string {
@@ -43,8 +68,12 @@ export function runCli(
   }
 }
 
-export function runCliOutput(args: string[], cwd?: string): string {
-  const result = runCli(args, cwd);
+export function runCliOutput(
+  args: string[],
+  cwd?: string,
+  env?: Record<string, string>,
+): string {
+  const result = runCli(args, cwd, env);
   return result.stdout || result.stderr;
 }
 
@@ -69,7 +98,7 @@ export function useTempDir() {
 
   afterEach(() => {
     if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true, force: true });
+      cleanupTempDir(testDir);
     }
   });
 
@@ -91,7 +120,7 @@ export function useTempGitDir() {
 
   afterEach(() => {
     if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true, force: true });
+      cleanupTempDir(testDir);
     }
   });
 

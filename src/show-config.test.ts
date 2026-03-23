@@ -88,7 +88,7 @@ describe("detectAgentType", () => {
 describe("formatShowConfig", () => {
   const defaultInput = (): FormatShowConfigInput => ({
     config: makeResolved(),
-    configFilePath: "ralphai.json",
+    configFilePath: "/home/user/.ralphai/repos/test-repo/config.json",
     configFileExists: false,
     envVars: {},
     rawFlags: {},
@@ -113,7 +113,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  turns              = 5  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  turnTimeout        = off  (default)");
-    expect(output).toContain("  promptMode         = auto  (default)");
     expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
   });
@@ -196,11 +195,11 @@ describe("formatShowConfig", () => {
     input.config = makeResolved({
       baseBranch: { value: "develop", source: "config" },
     });
-    input.configFilePath = "ralphai.json";
+    input.configFilePath = "/home/user/.ralphai/repos/test-repo/config.json";
     input.configFileExists = true;
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  baseBranch         = develop  (config (ralphai.json))",
+      "  baseBranch         = develop  (config (/home/user/.ralphai/repos/test-repo/config.json))",
     );
   });
 
@@ -253,7 +252,7 @@ describe("formatShowConfig", () => {
   it("shows config file as not found when missing", () => {
     const output = formatShowConfig(defaultInput());
     expect(output).toContain(
-      "Config file: ralphai.json (not found, using defaults)",
+      "Config file: /home/user/.ralphai/repos/test-repo/config.json (not found, using defaults)",
     );
   });
 
@@ -261,7 +260,9 @@ describe("formatShowConfig", () => {
     const input = defaultInput();
     input.configFileExists = true;
     const output = formatShowConfig(input);
-    expect(output).toContain("Config file: ralphai.json (loaded)");
+    expect(output).toContain(
+      "Config file: /home/user/.ralphai/repos/test-repo/config.json (loaded)",
+    );
   });
 
   // --- Worktree info ---

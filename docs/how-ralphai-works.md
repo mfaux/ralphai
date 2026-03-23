@@ -14,7 +14,7 @@ tried — repeating mistakes and drifting from the goal.
 Ralphai avoids this by starting each turn with a **fresh agent session**
 containing only what matters:
 
-- The [plan file](../templates/ralphai/PLANNING.md) (what to build)
+- The plan file (what to build)
 - A progress log (what was already done)
 - Learnings from past mistakes (if any)
 
@@ -61,12 +61,12 @@ single turn.
 ```
 
 Feedback commands are auto-detected during `ralphai init` or configured
-via `feedbackCommands` in `ralphai.json`.
+via `feedbackCommands` in `config.json`.
 
 ## Stuck Detection
 
 If **N consecutive turns** produce no new commits, Ralphai aborts. Default
-threshold is 3. Configurable via `maxStuck` in `ralphai.json`,
+threshold is 3. Configurable via `maxStuck` in `config.json`,
 `RALPHAI_MAX_STUCK`, or `--max-stuck`.
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume.
@@ -80,7 +80,7 @@ use commit-based detection.
 ## Continuous Mode
 
 By default, Ralphai stops after one plan. With `--continuous` (or
-`continuous: true` in `ralphai.json`), it keeps draining the backlog —
+`continuous: true` in `config.json`), it keeps draining the backlog —
 picking the next dependency-ready plan after each completion. All plans
 run sequentially on a single branch.
 
@@ -291,7 +291,7 @@ In all cases, the runner **adds a scope hint** to the agent prompt so the agent 
 
 ### Workspace Overrides
 
-When automatic derivation is insufficient, use the `workspaces` config key in `ralphai.json` to provide explicit per-package feedback commands:
+When automatic derivation is insufficient, use the `workspaces` config key in `config.json` to provide explicit per-package feedback commands:
 
 ```json
 {
@@ -340,7 +340,23 @@ The runner will use the overridden feedback commands for that scope instead of t
 
 Ralphai maintains two gitignored files for learning from mistakes:
 
-- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `ralphai.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
+- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
 - **`.ralphai/LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
 
 **After runs:** review candidates, promote useful ones, and prune stale learnings entries.
+
+## Progress Extraction
+
+After each turn, Ralphai scans the agent's output for a `<progress>` block:
+
+```
+<progress>
+Completed Task 2. Tests pass. Moving to Task 3.
+</progress>
+```
+
+If found, the content is appended to `progress.md` in the plan's
+`in-progress/<slug>/` folder with a turn header (`### Turn N`). This
+keeps the progress log up to date even when the agent forgets to edit
+`progress.md` directly. The prompt instructs the agent to include a
+`<progress>` block in every response.

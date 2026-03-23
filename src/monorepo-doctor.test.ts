@@ -3,6 +3,8 @@ import { execSync } from "child_process";
 import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { runCli, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath, writeConfigFile } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Doctor workspace feedback validation
@@ -12,6 +14,13 @@ describe.skipIf(process.platform === "win32")(
   "doctor workspace feedback checks",
   () => {
     const ctx = useTempGitDir();
+
+    function testEnv() {
+      return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    }
+    function configPath() {
+      return getConfigFilePath(ctx.dir, testEnv());
+    }
 
     /**
      * Helper: initialize a fully passing doctor environment so we can isolate
@@ -24,12 +33,14 @@ describe.skipIf(process.platform === "win32")(
       );
       execSync("git checkout -b main", { cwd: ctx.dir, stdio: "ignore" });
       writeFileSync(join(ctx.dir, "seed.txt"), "seed");
+      // Ignore the RALPHAI_HOME dir so global config doesn't dirty the worktree
+      writeFileSync(join(ctx.dir, ".gitignore"), ".ralphai-home/\n");
       execSync("git add -A && git commit -m 'init'", {
         cwd: ctx.dir,
         stdio: "ignore",
       });
 
-      runCli(["init", "--yes"], ctx.dir);
+      runCli(["init", "--yes"], ctx.dir, testEnv());
 
       execSync("git add -A && git commit -m 'add ralphai'", {
         cwd: ctx.dir,
@@ -37,10 +48,14 @@ describe.skipIf(process.platform === "win32")(
       });
 
       // Override agentCommand and root feedbackCommands to always pass
-      const configPath = join(ctx.dir, "ralphai.json");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       config.agentCommand = "true";
       config.feedbackCommands = ["true"];
+
+      // Seed a plan in the global backlog so the backlog check passes
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      writeFileSync(join(backlogDir, "seed-plan.md"), "# Plan: Seed\n");
+
       return config;
     }
 
@@ -50,12 +65,12 @@ describe.skipIf(process.platform === "win32")(
       config.workspaces = {
         "packages/web": { feedbackCommands: ["true"] },
       };
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify(config, null, 2),
-      );
+      writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], ctx.dir, {
+        ...testEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       expect(output).toContain("feedback (packages/web)");
@@ -70,12 +85,12 @@ describe.skipIf(process.platform === "win32")(
       config.workspaces = {
         "packages/api": { feedbackCommands: ["false"] },
       };
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify(config, null, 2),
-      );
+      writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], ctx.dir, {
+        ...testEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       expect(output).toContain("feedback (packages/api)");
@@ -91,12 +106,12 @@ describe.skipIf(process.platform === "win32")(
 
       // Explicitly no workspaces key
       delete config.workspaces;
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify(config, null, 2),
-      );
+      writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], ctx.dir, {
+        ...testEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       // Should not mention any workspace feedback
@@ -112,12 +127,12 @@ describe.skipIf(process.platform === "win32")(
         "packages/web": { feedbackCommands: ["true"] },
         "packages/api": { feedbackCommands: ["false"] },
       };
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify(config, null, 2),
-      );
+      writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+      const result = runCli(["doctor"], ctx.dir, {
+        ...testEnv(),
+        NO_COLOR: "1",
+      });
       const output = result.stdout;
 
       // web should pass

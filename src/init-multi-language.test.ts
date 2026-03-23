@@ -1,19 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import {
-  runCli,
-  runCliOutput,
-  stripLogo,
-  useTempGitDir,
-} from "./test-utils.ts";
+import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
 
 describe("init multi-language detection", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
+
   it("init --yes in a dotnet solution directory detects dotnet", () => {
     writeFileSync(join(ctx.dir, "MyApp.sln"), "");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Detected:");
     expect(output).toMatch(/Project:.*dotnet \(solution\)/);
@@ -21,28 +25,25 @@ describe("init multi-language detection", () => {
 
   it("init --yes in a dotnet directory sets feedback to dotnet build, dotnet test", () => {
     writeFileSync(join(ctx.dir, "MyApp.sln"), "");
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.feedbackCommands).toEqual(["dotnet build", "dotnet test"]);
   });
 
   it("init --yes in a Go module directory detects go", () => {
     writeFileSync(join(ctx.dir, "go.mod"), "module example.com/myapp\n");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toMatch(/Project:.*go module/);
   });
 
   it("init --yes in a Go directory sets feedback to go build and go test", () => {
     writeFileSync(join(ctx.dir, "go.mod"), "module example.com/myapp\n");
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.feedbackCommands).toEqual([
       "go build ./...",
       "go test ./...",
@@ -51,14 +52,16 @@ describe("init multi-language detection", () => {
 
   it("init --yes in a Rust project directory detects cargo", () => {
     writeFileSync(join(ctx.dir, "Cargo.toml"), "[package]\nname = 'myapp'\n");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toMatch(/Project:.*cargo/);
   });
 
   it("init --yes in a Maven project directory detects maven", () => {
     writeFileSync(join(ctx.dir, "pom.xml"), "<project></project>");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toMatch(/Project:.*maven/);
   });
@@ -68,7 +71,8 @@ describe("init multi-language detection", () => {
       join(ctx.dir, "pyproject.toml"),
       "[tool.pytest]\ntestpaths = ['tests']\n",
     );
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toMatch(/Project:.*python \(pyproject\)/);
   });
@@ -78,17 +82,15 @@ describe("init multi-language detection", () => {
       join(ctx.dir, "pyproject.toml"),
       "[tool.pytest]\ntestpaths = ['tests']\n",
     );
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.feedbackCommands).toEqual(["python -m pytest"]);
   });
 
   it("init --yes does not warn about missing feedback for non-JS projects with feedback", () => {
     writeFileSync(join(ctx.dir, "MyApp.sln"), "");
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     // Dotnet auto-detects "dotnet build, dotnet test", so no warning
@@ -102,7 +104,8 @@ describe("init multi-language detection", () => {
     );
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "");
     writeFileSync(join(ctx.dir, "MyApp.sln"), "");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     // Node should win over dotnet
     expect(output).toMatch(/Project:.*pnpm/);
@@ -115,7 +118,8 @@ describe("init multi-language detection", () => {
       JSON.stringify({ dependencies: {} }),
     );
     writeFileSync(join(ctx.dir, "MyApp.sln"), "");
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     // Dotnet should win because package.json lacks substance
     expect(output).toMatch(/Project:.*dotnet/);

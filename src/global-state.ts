@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { execSync } from "child_process";
 import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { homedir } from "os";
 
 /**
@@ -40,7 +40,7 @@ export function getRepoId(cwd: string): string {
     // No remote, or not a git repo — fall through to path-based ID.
   }
 
-  return pathFallbackId(cwd);
+  return pathFallbackId(getRepoIdentityRoot(cwd));
 }
 
 /**
@@ -125,6 +125,33 @@ function slugifyRemoteUrl(url: string): string {
     .replace(/^-+|-+$/g, "");
 
   return slug;
+}
+
+/**
+ * Returns a stable repository root for identity fallback.
+ *
+ * In a normal repo, this is the main working tree root. In a git worktree,
+ * this resolves to the main repository root so worktrees share the same
+ * global state directory when no remote is configured.
+ */
+function getRepoIdentityRoot(cwd: string): string {
+  try {
+    const commonDir = execSync(
+      "git rev-parse --path-format=absolute --git-common-dir",
+      {
+        cwd,
+        stdio: "pipe",
+        encoding: "utf-8",
+      },
+    ).trim();
+    if (commonDir) {
+      return dirname(commonDir);
+    }
+  } catch {
+    // Not in a git repo, or git is not available.
+  }
+
+  return cwd;
 }
 
 /**

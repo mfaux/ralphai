@@ -23,6 +23,7 @@ import {
   type RunnerOptions,
 } from "./runner.ts";
 import { type ResolvedConfig } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // shellSplit
@@ -156,20 +157,21 @@ function createTmpGitRepo(): string {
   return dir;
 }
 
-function setupPipeline(dir: string): {
-  ralphaiDir: string;
+/**
+ * Create a global-state pipeline directory structure for a temp repo.
+ * Sets RALPHAI_HOME to a temp dir so global-state functions resolve there.
+ * Returns the pipeline dirs.
+ */
+function setupGlobalPipeline(cwd: string): {
+  ralphaiHome: string;
   backlogDir: string;
   wipDir: string;
   archiveDir: string;
 } {
-  const ralphaiDir = join(dir, ".ralphai");
-  const backlogDir = join(ralphaiDir, "pipeline", "backlog");
-  const wipDir = join(ralphaiDir, "pipeline", "in-progress");
-  const archiveDir = join(ralphaiDir, "pipeline", "out");
-  mkdirSync(backlogDir, { recursive: true });
-  mkdirSync(wipDir, { recursive: true });
-  mkdirSync(archiveDir, { recursive: true });
-  return { ralphaiDir, backlogDir, wipDir, archiveDir };
+  const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
+  process.env.RALPHAI_HOME = ralphaiHome;
+  const dirs = getRepoPipelineDirs(cwd);
+  return { ralphaiHome, ...dirs };
 }
 
 function makeResolvedConfig(
@@ -187,7 +189,6 @@ function makeResolvedConfig(
     issueRepo: "",
     issueCommentProgress: "true",
     turnTimeout: 0,
-    promptMode: "auto",
     continuous: "false",
     autoCommit: "false",
     turns: 1,
@@ -209,18 +210,24 @@ function makeResolvedConfig(
 
 describe("runRunner — dry-run", () => {
   let dir: string;
+  let savedHome: string | undefined;
 
   beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
     dir = createTmpGitRepo();
   });
 
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
   test("dry-run with no plans exits cleanly", async () => {
-    const { ralphaiDir } = setupPipeline(dir);
+    setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig(),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: true,
@@ -233,7 +240,7 @@ describe("runRunner — dry-run", () => {
   });
 
   test("dry-run with a backlog plan prints preview", async () => {
-    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+    const { backlogDir } = setupGlobalPipeline(dir);
 
     writeFileSync(
       join(backlogDir, "test-plan.md"),
@@ -243,7 +250,6 @@ describe("runRunner — dry-run", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig(),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: true,
@@ -265,13 +271,20 @@ describe("runRunner — dry-run", () => {
 
 describe("runRunner — completion", () => {
   let dir: string;
+  let savedHome: string | undefined;
 
   beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
     dir = createTmpGitRepo();
   });
 
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
   test("detects COMPLETE marker and archives plan", async () => {
-    const { ralphaiDir, backlogDir, wipDir } = setupPipeline(dir);
+    const { backlogDir, wipDir, archiveDir } = setupGlobalPipeline(dir);
 
     writeFileSync(
       join(backlogDir, "simple.md"),
@@ -288,7 +301,6 @@ describe("runRunner — completion", () => {
         autoCommit: "true",
       }),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
@@ -299,13 +311,12 @@ describe("runRunner — completion", () => {
     await runRunner(opts);
 
     // Plan should have been archived
-    const archiveDir = join(ralphaiDir, "pipeline", "out");
     expect(existsSync(join(archiveDir, "simple", "simple.md"))).toBe(true);
     expect(existsSync(join(wipDir, "simple", "simple.md"))).toBe(false);
   });
 
   test("stuck detection triggers after maxStuck turns with no progress", async () => {
-    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+    const { backlogDir } = setupGlobalPipeline(dir);
 
     writeFileSync(
       join(backlogDir, "stuck.md"),
@@ -323,7 +334,6 @@ describe("runRunner — completion", () => {
         autoCommit: "false",
       }),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
@@ -357,14 +367,24 @@ describe("runRunner — completion", () => {
 // ---------------------------------------------------------------------------
 
 describe("runRunner — patch mode", () => {
+  let savedHome: string | undefined;
+
+  beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
+  });
+
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
   test("patch mode on main branch exits with error", async () => {
     const dir = createTmpGitRepo();
-    const { ralphaiDir } = setupPipeline(dir);
+    setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({ mode: "patch" }),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
@@ -392,7 +412,7 @@ describe("runRunner — patch mode", () => {
 
   test("patch mode stuck detection uses diff hash", async () => {
     const dir = createTmpGitRepo();
-    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+    const { backlogDir } = setupGlobalPipeline(dir);
 
     // Create a feature branch (patch mode can't run on main)
     execSync("git checkout -b feature/test", { cwd: dir, stdio: "pipe" });
@@ -413,7 +433,6 @@ describe("runRunner — patch mode", () => {
         maxStuck: 2,
       }),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
@@ -445,14 +464,24 @@ describe("runRunner — patch mode", () => {
 // ---------------------------------------------------------------------------
 
 describe("runRunner — no work", () => {
+  let savedHome: string | undefined;
+
+  beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
+  });
+
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
   test("exits cleanly when backlog is empty", async () => {
     const dir = createTmpGitRepo();
-    const { ralphaiDir } = setupPipeline(dir);
+    setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig(),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
@@ -470,9 +499,20 @@ describe("runRunner — no work", () => {
 // ---------------------------------------------------------------------------
 
 describe("runRunner — auto-commit", () => {
+  let savedHome: string | undefined;
+
+  beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
+  });
+
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
   test("auto-commits dirty state when autoCommit is true", async () => {
     const dir = createTmpGitRepo();
-    const { ralphaiDir, backlogDir } = setupPipeline(dir);
+    const { backlogDir } = setupGlobalPipeline(dir);
 
     // Create a tracked file for the agent to modify
     writeFileSync(join(dir, "target.txt"), "original\n");
@@ -496,7 +536,6 @@ describe("runRunner — auto-commit", () => {
         autoCommit: "true",
       }),
       cwd: dir,
-      ralphaiDir,
       isWorktree: false,
       mainWorktree: "",
       dryRun: false,
