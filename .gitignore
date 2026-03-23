@@ -32,6 +32,3 @@ logs
 .DS_Store
 
 package-lock.json
-
-# ralphai local directory (legacy; no longer created)
-.ralphai
