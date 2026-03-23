@@ -237,7 +237,7 @@ tasks_completed=2
   the run originated (`source`, `worktree_path`, `branch`).
 - **Status diagnostics** — `ralphai status` reads receipt files
   automatically. If you need more detail, inspect the receipt directly at
-  `.ralphai/pipeline/in-progress/<slug>/receipt.txt`.
+  `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt`.
 
 After a plan is archived to `out/`, the receipt moves with it.
 
@@ -338,10 +338,10 @@ The runner will use the overridden feedback commands for that scope instead of t
 
 ## Learnings System
 
-Ralphai maintains two gitignored files for learning from mistakes:
+Ralphai maintains two files in global state (`~/.ralphai/repos/<id>/`) for learning from mistakes:
 
-- **`.ralphai/LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
-- **`.ralphai/LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
+- **`LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
+- **`LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
 
 **After runs:** review candidates, promote useful ones, and prune stale learnings entries.
 

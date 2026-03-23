@@ -8,7 +8,7 @@ Ralphai aborts when it detects 3 consecutive turns with no new commits (configur
 
 **Steps:**
 
-1. Check `.ralphai/LEARNINGS.md` for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
+1. Check `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
 2. Open the progress file in `pipeline/in-progress/<slug>/progress.md` to see what the agent attempted and where it got stuck.
 3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the stuck task, add hints, or break it into smaller steps.
 4. Resume: `ralphai run --resume`
@@ -17,7 +17,7 @@ The `--resume` flag auto-commits any dirty working tree state and continues from
 
 ## "Agent keeps making the same mistake"
 
-Add the mistake to `.ralphai/LEARNINGS.md` with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it on the next turn.
+Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it on the next turn.
 
 ```markdown
 ### 2025-01-15 — Describe the mistake briefly

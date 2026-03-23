@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { execSync } from "child_process";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 import {
@@ -61,13 +61,6 @@ describe("isTreeDirty", () => {
     initRepo(ctx.dir);
     writeFileSync(join(ctx.dir, "untracked.txt"), "new\n");
     expect(isTreeDirty(ctx.dir)).toBe(true);
-  });
-
-  it("excludes .ralphai directory from dirty check", () => {
-    initRepo(ctx.dir);
-    mkdirSync(join(ctx.dir, ".ralphai"), { recursive: true });
-    writeFileSync(join(ctx.dir, ".ralphai", "something.txt"), "data\n");
-    expect(isTreeDirty(ctx.dir)).toBe(false);
   });
 
   it("does not exclude untracked ralphai.json (config is now in global state)", () => {
