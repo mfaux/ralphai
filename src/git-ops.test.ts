@@ -70,22 +70,22 @@ describe("isTreeDirty", () => {
     expect(isTreeDirty(ctx.dir)).toBe(false);
   });
 
-  it("excludes ralphai.json from untracked check", () => {
+  it("does not exclude untracked ralphai.json (config is now in global state)", () => {
     initRepo(ctx.dir);
     writeFileSync(join(ctx.dir, "ralphai.json"), "{}");
-    expect(isTreeDirty(ctx.dir)).toBe(false);
+    expect(isTreeDirty(ctx.dir)).toBe(true);
   });
 
-  it("detects modified committed ralphai.json as dirty", () => {
+  it("detects modified committed file as dirty", () => {
     initRepo(ctx.dir);
-    // Commit ralphai.json first
-    writeFileSync(join(ctx.dir, "ralphai.json"), '{"v":1}');
-    execSync('git add ralphai.json && git commit -m "add config"', {
+    // Commit a file first
+    writeFileSync(join(ctx.dir, "config.json"), '{"v":1}');
+    execSync('git add config.json && git commit -m "add config"', {
       cwd: ctx.dir,
       stdio: "ignore",
     });
     // Now modify it
-    writeFileSync(join(ctx.dir, "ralphai.json"), '{"v":2}');
+    writeFileSync(join(ctx.dir, "config.json"), '{"v":2}');
     expect(isTreeDirty(ctx.dir)).toBe(true);
   });
 });

@@ -4,25 +4,33 @@ import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
-import {
-  runCli,
-  runCliOutput,
-  stripLogo,
-  useTempGitDir,
-} from "./test-utils.ts";
+import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath, writeConfigFile } from "./config.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("init command", () => {
   const ctx = useTempGitDir();
 
+  /** Per-test RALPHAI_HOME so config goes to a temp dir, not ~/.ralphai. */
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
+  /** Resolve the global config file path for this test's cwd. */
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
+
   it("init --yes scaffolds all expected files", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
 
-    // Config at repo root (not inside .ralphai/)
-    expect(existsSync(join(ctx.dir, "ralphai.json"))).toBe(true);
+    // Config at global state dir (not in the repo)
+    expect(existsSync(configPath())).toBe(true);
+    expect(existsSync(join(ctx.dir, "ralphai.json"))).toBe(false);
 
     // User-owned files inside .ralphai/ (local-only, gitignored)
     expect(existsSync(join(ctx.dir, ".ralphai", "README.md"))).toBe(true);
@@ -58,19 +66,19 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, ".ralphai", "pipeline", "out"))).toBe(true);
   });
 
-  it("init --yes adds .ralphai and ralphai.json to root .gitignore", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+  it("init --yes adds .ralphai to root .gitignore", () => {
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const gitignore = readFileSync(join(ctx.dir, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".ralphai");
     // Should use ".ralphai" (no trailing slash) to also match symlinks in worktrees
     expect(gitignore).not.toContain(".ralphai/");
-    // ralphai.json is gitignored by default — personal config
-    expect(gitignore).toContain("ralphai.json");
+    // Config is now in global state — ralphai.json should NOT be gitignored
+    expect(gitignore).not.toContain("ralphai.json");
   });
 
   it("init --yes creates LEARNINGS.md with seed content", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const learnings = readFileSync(
       join(ctx.dir, ".ralphai", "LEARNINGS.md"),
@@ -82,7 +90,7 @@ describe("init command", () => {
   });
 
   it("init --yes copies plan template guides from source templates", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const templatesDir = join(__dirname, "..", "templates", "ralphai", "plans");
     for (const guide of ["feature.md", "bugfix.md", "refactor.md"]) {
@@ -96,9 +104,9 @@ describe("init command", () => {
   });
 
   it("init --yes generates config with auto-detected or default agent command", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // Agent command is auto-detected from PATH or falls back to OpenCode
     expect(typeof parsed.agentCommand).toBe("string");
@@ -115,9 +123,9 @@ describe("init command", () => {
   });
 
   it("init --yes writes all config keys with defaults", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
     // Verify exactly 14 keys are present
@@ -149,9 +157,9 @@ describe("init command", () => {
   });
 
   it("init --yes --agent-command uses the provided agent command", () => {
-    runCliOutput(["init", "--yes", "--agent-command=claude -p"], ctx.dir);
+    runCli(["init", "--yes", "--agent-command=claude -p"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
@@ -165,26 +173,28 @@ describe("init command", () => {
     const result = runCli(
       ["init", "--yes", "--agent-command=nonexistent-agent-xyz -p"],
       ctx.dir,
+      testEnv(),
     );
     const output = result.stdout + result.stderr;
     expect(output).toContain("not found in PATH");
     expect(output).toContain("nonexistent-agent-xyz");
     // Should still scaffold successfully (warning, not error)
-    expect(existsSync(join(ctx.dir, "ralphai.json"))).toBe(true);
+    expect(existsSync(configPath())).toBe(true);
   });
 
   it("init --yes warns when no feedback commands are detected", () => {
     // ctx.dir has no package.json, so detectFeedbackCommands returns ""
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
     expect(output).toContain("No build/test/lint scripts detected");
     expect(output).toContain("feedbackCommands");
     // Should still scaffold successfully (warning, not error)
-    expect(existsSync(join(ctx.dir, "ralphai.json"))).toBe(true);
+    expect(existsSync(configPath())).toBe(true);
   });
 
   it("init --yes prints detection summary with detected values", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
     // Summary should contain the header and detected values
     expect(output).toContain("Detected:");
     // Agent line shows auto-detected or fallback command
@@ -198,37 +208,31 @@ describe("init command", () => {
   });
 
   it("init --yes detection summary shows custom agent command", () => {
-    const output = stripLogo(
-      runCliOutput(
-        ["init", "--yes", "--agent-command=my-agent --flag"],
-        ctx.dir,
-      ),
+    const result = runCli(
+      ["init", "--yes", "--agent-command=my-agent --flag"],
+      ctx.dir,
+      testEnv(),
     );
+    const output = stripLogo(result.stdout || result.stderr);
     expect(output).toContain("Detected:");
     expect(output).toContain("my-agent --flag");
   });
 
   it("success output contains next steps", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("ralphai worktree");
-    expect(output).toContain("ralphai.json");
+    expect(output).toContain("config.json");
     expect(output).toContain("PLANNING.md");
     expect(output).toContain("plans/");
     expect(output).toContain("LEARNINGS.md");
   });
 
-  it("init --shared does not gitignore ralphai.json", () => {
-    runCliOutput(["init", "--yes", "--shared"], ctx.dir);
-
-    const gitignore = readFileSync(join(ctx.dir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain(".ralphai");
-    expect(gitignore).not.toContain("ralphai.json");
-  });
-
   it("init --yes works without package.json", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("ralphai run");
@@ -243,16 +247,18 @@ describe("init command", () => {
     mkdirSync(targetDir, { recursive: true });
     execSync("git init", { cwd: targetDir, stdio: "ignore" });
 
+    const env = testEnv();
+
     try {
       // Run CLI from ctx.dir but point at targetDir
-      const output = stripLogo(
-        runCliOutput(["init", "--yes", targetDir], ctx.dir),
-      );
+      const result = runCli(["init", "--yes", targetDir], ctx.dir, env);
+      const output = stripLogo(result.stdout || result.stderr);
 
       expect(output).toContain("Ralphai initialized");
 
-      // ralphai.json should exist in targetDir (repo root), not in ctx.dir (cwd)
-      expect(existsSync(join(targetDir, "ralphai.json"))).toBe(true);
+      // Config should be in global state for targetDir, not at repo root
+      const targetConfigPath = getConfigFilePath(targetDir, env);
+      expect(existsSync(targetConfigPath)).toBe(true);
       expect(existsSync(join(targetDir, ".ralphai", "README.md"))).toBe(true);
       expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(false);
     } finally {
@@ -285,7 +291,7 @@ describe("init command", () => {
   // -------------------------------------------------------------------------
 
   it("init --yes creates hello-ralphai.md in pipeline/backlog/", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const samplePlanPath = join(
       ctx.dir,
@@ -298,7 +304,7 @@ describe("init command", () => {
   });
 
   it("sample plan content follows PLANNING.md format", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const samplePlan = readFileSync(
       join(ctx.dir, ".ralphai", "pipeline", "backlog", "hello-ralphai.md"),
@@ -325,7 +331,7 @@ describe("init command", () => {
   });
 
   it("init --force --yes does not overwrite an edited sample plan", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const samplePlanPath = join(
       ctx.dir,
@@ -344,21 +350,23 @@ describe("init command", () => {
     // Force re-init — the sample plan should be preserved because existsSync guard
     // Note: --force deletes and recreates .ralphai/, so the plan is removed.
     // The scaffold then writes a fresh hello-ralphai.md because the file no longer exists.
-    runCliOutput(["init", "--force", "--yes"], ctx.dir);
+    runCli(["init", "--force", "--yes"], ctx.dir, testEnv());
 
     // After --force re-init, verify the sample plan exists (was recreated)
     expect(existsSync(samplePlanPath)).toBe(true);
   });
 
   it("init --yes output mentions sample plan in created files", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("hello-ralphai.md");
     expect(output).toContain("Sample plan");
   });
 
   it("init --yes next steps mention sample plan is ready", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("A sample plan is ready in");
     expect(output).toContain(".ralphai/pipeline/backlog/");
@@ -370,31 +378,31 @@ describe("init command", () => {
   // --force tests
   // -------------------------------------------------------------------------
 
-  it("init --force --yes re-scaffolds from scratch, overwriting ralphai.json", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+  it("init --force --yes re-scaffolds from scratch, overwriting config", () => {
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Write custom config
-    writeFileSync(
-      join(ctx.dir, "ralphai.json"),
-      JSON.stringify({ agentCommand: "my-agent", baseBranch: "main" }) + "\n",
+    writeConfigFile(
+      ctx.dir,
+      { agentCommand: "my-agent", baseBranch: "main" },
+      testEnv(),
     );
 
     // Force re-scaffold
-    const output = stripLogo(
-      runCliOutput(["init", "--force", "--yes"], ctx.dir),
-    );
+    const result = runCli(["init", "--force", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
 
     // Config should have been overwritten with auto-detected defaults
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // Agent command is auto-detected, so just verify it's not the custom one
     expect(parsed.agentCommand).not.toBe("my-agent");
   });
 
   it("init --force --yes overwrites LEARNINGS.md", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Add custom LEARNINGS
     writeFileSync(
@@ -403,7 +411,7 @@ describe("init command", () => {
     );
 
     // Force re-scaffold
-    runCliOutput(["init", "--force", "--yes"], ctx.dir);
+    runCli(["init", "--force", "--yes"], ctx.dir, testEnv());
 
     const learnings = readFileSync(
       join(ctx.dir, ".ralphai", "LEARNINGS.md"),
@@ -414,7 +422,7 @@ describe("init command", () => {
   });
 
   it("init --force --yes removes old plan files", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Add a plan file
     const planDir = join(
@@ -428,7 +436,7 @@ describe("init command", () => {
     writeFileSync(join(planDir, "old-plan.md"), "# Old plan");
 
     // Force re-scaffold
-    runCliOutput(["init", "--force", "--yes"], ctx.dir);
+    runCli(["init", "--force", "--yes"], ctx.dir, testEnv());
 
     // Plan file should be gone (directory was deleted and recreated)
     expect(existsSync(join(planDir, "old-plan.md"))).toBe(false);
@@ -442,16 +450,16 @@ describe("init command", () => {
   // -------------------------------------------------------------------------
 
   it("init --yes errors when .ralphai/ already exists", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
     // Second init should fail
-    const result = runCli(["init", "--yes"], ctx.dir);
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("already set up");
   });
 
   it("init error message suggests init --force", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
-    const result = runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     expect(result.stderr).toContain("ralphai init --force");
   });
 });

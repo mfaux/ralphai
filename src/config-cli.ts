@@ -3,7 +3,7 @@
  * for shell callers.
  *
  * Usage:
- *   node config-cli.mjs <configFilePath> [--show-config] [--shell] [cliArgs...]
+ *   node config-cli.mjs <cwd> [--show-config] [--shell] [cliArgs...]
  *
  * Normal mode (JSON):
  *   Resolves config and writes JSON to stdout.
@@ -65,13 +65,13 @@ const args = process.argv.slice(2);
 
 if (args.length === 0) {
   process.stderr.write(
-    "Usage: config-cli <configFilePath> [--show-config] [--shell] [cliArgs...]\n",
+    "Usage: config-cli <cwd> [--show-config] [--shell] [cliArgs...]\n",
   );
   process.exit(2);
 }
 
 // args[0] is guaranteed to exist by the length check above
-const configFilePath: string = args[0]!;
+const cwd: string = args[0]!;
 const cliArgs = args.slice(1);
 
 // Detect mode flags
@@ -94,10 +94,12 @@ const configArgs = cliArgs.filter(
 
 try {
   const result = resolveConfig({
-    configFilePath,
+    cwd,
     envVars: process.env as Record<string, string | undefined>,
     cliArgs: configArgs,
   });
+
+  const { configFilePath } = result;
 
   // Print warnings to stderr
   for (const w of result.warnings) {

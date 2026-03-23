@@ -59,7 +59,7 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("--yes");
     expect(result.stdout).toContain("--force");
-    expect(result.stdout).toContain("--shared");
+    expect(result.stdout).not.toContain("--shared");
     expect(result.stdout).toContain("--agent-command");
   });
 

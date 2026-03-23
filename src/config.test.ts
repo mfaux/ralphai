@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { useTempDir } from "./test-utils.ts";
 import {
   validateEnum,
@@ -12,6 +12,8 @@ import {
   applyEnvOverrides,
   parseCLIArgs,
   resolveConfig,
+  getConfigFilePath,
+  writeConfigFile,
   ConfigError,
   DEFAULTS,
 } from "./config.ts";
@@ -534,12 +536,27 @@ describe("parseCLIArgs", () => {
 describe("resolveConfig", () => {
   const ctx = useTempDir();
 
+  /** Build envVars that route global state into the temp dir. */
+  function env(
+    extra?: Record<string, string>,
+  ): Record<string, string | undefined> {
+    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
+  }
+
+  /** Write a config file to the global state path for the given cwd. */
+  function writeGlobalConfig(
+    cwd: string,
+    config: Record<string, unknown>,
+  ): void {
+    const filePath = getConfigFilePath(cwd, env());
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, JSON.stringify(config));
+  }
+
   it("returns defaults when no config file, env, or CLI args", () => {
-    const { config } = resolveConfig({
-      configFilePath: join(ctx.dir, "nonexistent.json"),
-      envVars: {},
-      cliArgs: [],
-    });
+    const cwd = join(ctx.dir, "repo-defaults");
+    mkdirSync(cwd, { recursive: true });
+    const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
     expect(config.baseBranch.value).toBe("main");
     expect(config.baseBranch.source).toBe("default");
     expect(config.mode.value).toBe("branch");
@@ -551,13 +568,10 @@ describe("resolveConfig", () => {
   });
 
   it("config file overrides defaults", () => {
-    const file = join(ctx.dir, "config-override.json");
-    writeFileSync(file, JSON.stringify({ baseBranch: "develop", maxStuck: 5 }));
-    const { config } = resolveConfig({
-      configFilePath: file,
-      envVars: {},
-      cliArgs: [],
-    });
+    const cwd = join(ctx.dir, "repo-override");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, { baseBranch: "develop", maxStuck: 5 });
+    const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
     expect(config.baseBranch.value).toBe("develop");
     expect(config.baseBranch.source).toBe("config");
     expect(config.maxStuck.value).toBe(5);
@@ -568,11 +582,12 @@ describe("resolveConfig", () => {
   });
 
   it("env vars override config file", () => {
-    const file = join(ctx.dir, "env-override.json");
-    writeFileSync(file, JSON.stringify({ baseBranch: "develop" }));
+    const cwd = join(ctx.dir, "repo-env");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, { baseBranch: "develop" });
     const { config } = resolveConfig({
-      configFilePath: file,
-      envVars: { RALPHAI_BASE_BRANCH: "staging" },
+      cwd,
+      envVars: env({ RALPHAI_BASE_BRANCH: "staging" }),
       cliArgs: [],
     });
     expect(config.baseBranch.value).toBe("staging");
@@ -580,9 +595,11 @@ describe("resolveConfig", () => {
   });
 
   it("CLI args override env vars", () => {
+    const cwd = join(ctx.dir, "repo-cli");
+    mkdirSync(cwd, { recursive: true });
     const { config } = resolveConfig({
-      configFilePath: join(ctx.dir, "nonexistent.json"),
-      envVars: { RALPHAI_BASE_BRANCH: "staging" },
+      cwd,
+      envVars: env({ RALPHAI_BASE_BRANCH: "staging" }),
       cliArgs: ["--base-branch=production"],
     });
     expect(config.baseBranch.value).toBe("production");
@@ -590,22 +607,20 @@ describe("resolveConfig", () => {
   });
 
   it("full precedence chain: default < config < env < CLI", () => {
-    const file = join(ctx.dir, "full-precedence.json");
-    writeFileSync(
-      file,
-      JSON.stringify({
-        baseBranch: "from-config",
-        mode: "pr",
-        maxStuck: 7,
-        turns: 20,
-      }),
-    );
+    const cwd = join(ctx.dir, "repo-full");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, {
+      baseBranch: "from-config",
+      mode: "pr",
+      maxStuck: 7,
+      turns: 20,
+    });
     const { config } = resolveConfig({
-      configFilePath: file,
-      envVars: {
+      cwd,
+      envVars: env({
         RALPHAI_BASE_BRANCH: "from-env",
         RALPHAI_MODE: "patch",
-      },
+      }),
       cliArgs: ["--base-branch=from-cli"],
     });
     // baseBranch: CLI wins
@@ -626,11 +641,12 @@ describe("resolveConfig", () => {
   });
 
   it("propagates config file warnings", () => {
-    const file = join(ctx.dir, "warnings.json");
-    writeFileSync(file, JSON.stringify({ unknownField: true }));
+    const cwd = join(ctx.dir, "repo-warn");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, { unknownField: true });
     const { warnings } = resolveConfig({
-      configFilePath: file,
-      envVars: {},
+      cwd,
+      envVars: env(),
       cliArgs: [],
     });
     expect(warnings).toHaveLength(1);
@@ -638,34 +654,72 @@ describe("resolveConfig", () => {
   });
 
   it("throws on config file validation error", () => {
-    const file = join(ctx.dir, "bad-config.json");
-    writeFileSync(file, JSON.stringify({ mode: "invalid" }));
-    expect(() =>
-      resolveConfig({
-        configFilePath: file,
-        envVars: {},
-        cliArgs: [],
-      }),
-    ).toThrow("'mode' must be 'branch', 'pr', or 'patch'");
+    const cwd = join(ctx.dir, "repo-bad");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, { mode: "invalid" });
+    expect(() => resolveConfig({ cwd, envVars: env(), cliArgs: [] })).toThrow(
+      "'mode' must be 'branch', 'pr', or 'patch'",
+    );
   });
 
   it("throws on env var validation error", () => {
+    const cwd = join(ctx.dir, "repo-env-bad");
+    mkdirSync(cwd, { recursive: true });
     expect(() =>
       resolveConfig({
-        configFilePath: join(ctx.dir, "nonexistent.json"),
-        envVars: { RALPHAI_MODE: "invalid" },
+        cwd,
+        envVars: env({ RALPHAI_MODE: "invalid" }),
         cliArgs: [],
       }),
     ).toThrow("must be 'branch', 'pr', or 'patch'");
   });
 
   it("throws on CLI arg validation error", () => {
+    const cwd = join(ctx.dir, "repo-cli-bad");
+    mkdirSync(cwd, { recursive: true });
     expect(() =>
-      resolveConfig({
-        configFilePath: join(ctx.dir, "nonexistent.json"),
-        envVars: {},
-        cliArgs: ["--turns=abc"],
-      }),
+      resolveConfig({ cwd, envVars: env(), cliArgs: ["--turns=abc"] }),
     ).toThrow("must be a non-negative integer");
+  });
+
+  it("returns the resolved config file path", () => {
+    const cwd = join(ctx.dir, "repo-path");
+    mkdirSync(cwd, { recursive: true });
+    const { configFilePath } = resolveConfig({
+      cwd,
+      envVars: env(),
+      cliArgs: [],
+    });
+    expect(configFilePath).toContain("config.json");
+    expect(configFilePath).toContain(join("home", "repos"));
+  });
+});
+
+// ---- writeConfigFile / getConfigFilePath ----
+
+describe("writeConfigFile", () => {
+  const ctx = useTempDir();
+
+  it("writes config and reads it back", () => {
+    const cwd = join(ctx.dir, "repo-write");
+    mkdirSync(cwd, { recursive: true });
+    const envVars = { RALPHAI_HOME: join(ctx.dir, "home") };
+    const configData = { agentCommand: "claude -p", baseBranch: "main" };
+    const filePath = writeConfigFile(cwd, configData, envVars);
+    expect(filePath).toContain("config.json");
+
+    const parsed = parseConfigFile(filePath);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.values.agentCommand).toBe("claude -p");
+    expect(parsed!.values.baseBranch).toBe("main");
+  });
+
+  it("getConfigFilePath returns path under RALPHAI_HOME", () => {
+    const cwd = join(ctx.dir, "repo-path-test");
+    mkdirSync(cwd, { recursive: true });
+    const envVars = { RALPHAI_HOME: join(ctx.dir, "home") };
+    const path = getConfigFilePath(cwd, envVars);
+    expect(path).toContain(join(ctx.dir, "home", "repos"));
+    expect(path).toMatch(/config\.json$/);
   });
 });

@@ -91,4 +91,4 @@ scope: packages/web
 ---
 ```
 
-When `scope` is set, Ralphai rewrites feedback commands (e.g., `pnpm --filter @org/web build` for Node.js, or `dotnet build src/Api` for .NET) and adds a hint to the agent prompt to focus on the scoped directory. Use the `workspaces` key in `ralphai.json` for custom per-package overrides when automatic derivation is insufficient.
+When `scope` is set, Ralphai rewrites feedback commands (e.g., `pnpm --filter @org/web build` for Node.js, or `dotnet build src/Api` for .NET) and adds a hint to the agent prompt to focus on the scoped directory. Use the `workspaces` key in `config.json` for custom per-package overrides when automatic derivation is insufficient.

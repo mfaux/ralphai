@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
-import {
-  useTempDir,
-  useTempGitDir,
-  runCliOutput,
-  stripLogo,
-} from "./test-utils.ts";
+import { useTempDir, useTempGitDir, runCli, stripLogo } from "./test-utils.ts";
 import {
   parseSolutionProjects,
   detectDotnetProject,
@@ -14,6 +9,7 @@ import {
   detectProject,
   deriveDotnetScopedFeedback,
 } from "./project-detection.ts";
+import { getConfigFilePath } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -327,6 +323,13 @@ describe("detectProject mixed repos", () => {
 describe("init --yes dotnet monorepo", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
+
   it("detects workspaces from .sln and shows workspace count", () => {
     const content = slnContent([
       { name: "Api", path: "src\\Api\\Api.csproj" },
@@ -334,7 +337,8 @@ describe("init --yes dotnet monorepo", () => {
     ]);
     writeFileSync(join(ctx.dir, "MySolution.sln"), content);
 
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("dotnet (solution)");
     expect(output).toContain("2 packages");
@@ -355,11 +359,9 @@ describe("init --yes dotnet monorepo", () => {
     // .NET setup
     writeFileSync(join(ctx.dir, "MyApp.sln"), slnContent([]));
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     // Should contain both node and dotnet feedback commands
     expect(config.feedbackCommands).toContain("pnpm build");
     expect(config.feedbackCommands).toContain("pnpm test");
@@ -375,11 +377,9 @@ describe("init --yes dotnet monorepo", () => {
     ]);
     writeFileSync(join(ctx.dir, "MySolution.sln"), content);
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.workspaces).toBeUndefined();
   });
 
@@ -405,7 +405,8 @@ describe("init --yes dotnet monorepo", () => {
     const slnText = slnContent([{ name: "Api", path: "src\\Api\\Api.csproj" }]);
     writeFileSync(join(ctx.dir, "MyApp.sln"), slnText);
 
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     // Should mention both Node and .NET workspaces
     expect(output).toContain("2 packages");

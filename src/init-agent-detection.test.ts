@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
 
 /**
  * Build a PATH containing only the directories needed for node and git,
@@ -38,9 +39,17 @@ describe.skipIf(process.platform === "win32")(
   () => {
     const ctx = useTempGitDir();
 
+    function testEnv() {
+      return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    }
+    function configPath() {
+      return getConfigFilePath(ctx.dir, testEnv());
+    }
+
     it("detects Claude Code when claude binary is in PATH", () => {
       const { path } = pathWithAgent(ctx.dir, "claude");
       const result = runCli(["init", "--yes"], ctx.dir, {
+        ...testEnv(),
         PATH: path,
         NO_COLOR: "1",
       });
@@ -49,15 +58,14 @@ describe.skipIf(process.platform === "win32")(
       expect(output).toContain("Detected Claude Code");
       expect(output).toContain("claude -p");
 
-      const config = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("claude -p");
     });
 
     it("detects OpenCode when opencode binary is in PATH (but not claude)", () => {
       const { path } = pathWithAgent(ctx.dir, "opencode");
       const result = runCli(["init", "--yes"], ctx.dir, {
+        ...testEnv(),
         PATH: path,
         NO_COLOR: "1",
       });
@@ -66,14 +74,13 @@ describe.skipIf(process.platform === "win32")(
       expect(output).toContain("Detected OpenCode");
       expect(output).toContain("opencode run --agent build");
 
-      const config = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("opencode run --agent build");
     });
 
     it("falls back to OpenCode when no agent binaries are in PATH", () => {
       const result = runCli(["init", "--yes"], ctx.dir, {
+        ...testEnv(),
         PATH: basePathWithoutAgents(),
         NO_COLOR: "1",
       });
@@ -83,9 +90,7 @@ describe.skipIf(process.platform === "win32")(
       expect(output).toContain("defaulting to OpenCode");
       expect(output).toContain("--agent-command=<cmd>");
 
-      const config = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("opencode run --agent build");
     });
 
@@ -94,7 +99,7 @@ describe.skipIf(process.platform === "win32")(
       const result = runCli(
         ["init", "--yes", "--agent-command=custom-agent --flag"],
         ctx.dir,
-        { PATH: path, NO_COLOR: "1" },
+        { ...testEnv(), PATH: path, NO_COLOR: "1" },
       );
       const output = stripLogo(result.stdout);
 
@@ -102,9 +107,7 @@ describe.skipIf(process.platform === "win32")(
       expect(output).not.toContain("Detected Claude Code");
       expect(output).not.toContain("No supported agent found");
 
-      const config = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("custom-agent --flag");
     });
 
@@ -115,6 +118,7 @@ describe.skipIf(process.platform === "win32")(
       });
 
       const result = runCli(["init", "--yes"], ctx.dir, {
+        ...testEnv(),
         PATH: path,
         NO_COLOR: "1",
       });
@@ -122,9 +126,7 @@ describe.skipIf(process.platform === "win32")(
 
       expect(output).toContain("Detected Claude Code");
 
-      const config = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("claude -p");
     });
   },

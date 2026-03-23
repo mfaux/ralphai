@@ -18,6 +18,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
+import { writeConfigFile, getConfigFilePath } from "./config.ts";
 
 describe("worktree", () => {
   // -------------------------------------------------------------------------
@@ -91,7 +92,7 @@ describe("worktree", () => {
     it("init --yes succeeds in the main repo (not a worktree)", () => {
       const output = stripLogo(runCliOutput(["init", "--yes"], mainRepo));
       expect(output).toContain("Ralphai initialized");
-      expect(existsSync(join(mainRepo, "ralphai.json"))).toBe(true);
+      expect(existsSync(getConfigFilePath(mainRepo))).toBe(true);
     });
 
     it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
@@ -99,7 +100,7 @@ describe("worktree", () => {
       runCliOutput(["init", "--yes"], mainRepo);
 
       // Run --show-config from worktree — should find .ralphai/ and
-      // ralphai.json in the main repo and resolve config successfully
+      // config.json in global state and resolve config successfully
       const result = runCli(["run", "--show-config"], worktreeDir);
       expect(result.exitCode).toBe(0);
       // Config output should include the agent command from the main repo's config
@@ -352,90 +353,6 @@ describe("worktree", () => {
       expect(readlinkSync(symlinkPath)).toBe(join(ctx.dir, ".ralphai"));
     });
 
-    it("worktree creates ralphai.json symlink when config is not committed", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Create .ralphai with a plan
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
-      writeFileSync(
-        join(backlogDir, "prd-config-symlink.md"),
-        "# Config symlink test\n",
-      );
-
-      // Create ralphai.json in main repo (not committed)
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify({ runner: "opencode" }),
-      );
-
-      const worktreeDir = join(ctx.dir, "wt-config-symlink");
-
-      const result = runCli(
-        [
-          "worktree",
-          "--plan=prd-config-symlink.md",
-          `--dir=${worktreeDir}`,
-          "--turns=1",
-        ],
-        ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
-        30000,
-      );
-
-      const combined = result.stdout + result.stderr;
-
-      // Verify the ralphai.json symlink was created
-      const configSymlink = join(worktreeDir, "ralphai.json");
-      expect(
-        existsSync(configSymlink),
-        `ralphai.json symlink not found at ${configSymlink}. CLI output: ${combined}`,
-      ).toBe(true);
-      expect(lstatSync(configSymlink).isSymbolicLink()).toBe(true);
-      expect(readlinkSync(configSymlink)).toBe(join(ctx.dir, "ralphai.json"));
-    });
-
-    it("worktree skips ralphai.json symlink when config is committed", () => {
-      gitInitialCommit(ctx.dir);
-
-      // Create .ralphai with a plan
-      const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
-      mkdirSync(backlogDir, { recursive: true });
-      writeFileSync(
-        join(backlogDir, "prd-committed-cfg.md"),
-        "# Committed config test\n",
-      );
-
-      // Create and commit ralphai.json
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify({ runner: "opencode" }),
-      );
-      execSync("git add ralphai.json && git commit -m 'add config'", {
-        cwd: ctx.dir,
-        stdio: "ignore",
-      });
-
-      const worktreeDir = join(ctx.dir, "wt-committed-cfg");
-
-      runCli(
-        [
-          "worktree",
-          "--plan=prd-committed-cfg.md",
-          `--dir=${worktreeDir}`,
-          "--turns=1",
-        ],
-        ctx.dir,
-        { RALPHAI_AGENT_COMMAND: "true" },
-        30000,
-      );
-
-      // ralphai.json should exist (checked out by git) but NOT be a symlink
-      const configPath = join(worktreeDir, "ralphai.json");
-      expect(existsSync(configPath)).toBe(true);
-      expect(lstatSync(configPath).isSymbolicLink()).toBe(false);
-    });
-
     it("worktree replaces existing .ralphai dir with symlink", () => {
       gitInitialCommit(ctx.dir);
 
@@ -522,10 +439,7 @@ describe("worktree", () => {
       mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
         recursive: true,
       });
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify({ agentCommand: "claude -p" }) + "\n",
-      );
+      writeConfigFile(ctx.dir, { agentCommand: "claude -p" });
       const planDir = join(
         ctx.dir,
         ".ralphai",
@@ -561,10 +475,7 @@ describe("worktree", () => {
       mkdirSync(join(ctx.dir, ".ralphai", "pipeline", "in-progress"), {
         recursive: true,
       });
-      writeFileSync(
-        join(ctx.dir, "ralphai.json"),
-        JSON.stringify({ agentCommand: "claude -p" }) + "\n",
-      );
+      writeConfigFile(ctx.dir, { agentCommand: "claude -p" });
       const planDir = join(
         ctx.dir,
         ".ralphai",
@@ -694,7 +605,7 @@ describe.skipIf(process.platform === "win32")(
       // Initialize ralphai in the main repo
       runCli(["init", "--yes"], mainRepo);
       // Set agentCommand to something in PATH so doctor doesn't fail on that
-      const configPath = join(mainRepo, "ralphai.json");
+      const configPath = getConfigFilePath(mainRepo);
       const config = JSON.parse(readFileSync(configPath, "utf-8"));
       config.agentCommand = "true";
       config.feedbackCommands = ["true"];

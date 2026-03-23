@@ -35,7 +35,7 @@ The agent is instructed to run feedback commands each turn, but the commands the
 
 **Check:**
 
-1. Verify `feedbackCommands` in `ralphai.json` lists the right commands:
+1. Verify `feedbackCommands` in `config.json` lists the right commands:
    ```json
    {
      "feedbackCommands": ["pnpm build", "pnpm test", "pnpm type-check"]
@@ -52,7 +52,7 @@ The agent CLI is configured via `agentCommand` with this precedence:
 
 1. `--agent-command=<cmd>` CLI flag (highest priority)
 2. `RALPHAI_AGENT_COMMAND` environment variable
-3. `agentCommand` in `ralphai.json`
+3. `agentCommand` in `config.json`
 
 **Check:**
 

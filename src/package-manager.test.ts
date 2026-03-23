@@ -1,10 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runCliOutput, useTempGitDir } from "./test-utils.ts";
+import { runCli, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
 
 describe("package manager detection", () => {
   const ctx = useTempGitDir();
+
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
 
   it("detects pnpm from pnpm-lock.yaml and populates feedbackCommands", () => {
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
@@ -20,9 +28,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([
       "pnpm build",
@@ -42,9 +50,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["npm run build", "npm test"]);
   });
@@ -63,9 +71,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([
       "yarn build",
@@ -88,9 +96,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([
       "bun run build",
@@ -109,9 +117,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // No test task in deno.json, but deno has a built-in test runner
     expect(parsed.feedbackCommands).toEqual([
@@ -135,9 +143,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
   });
@@ -149,9 +157,9 @@ describe("package manager detection", () => {
       JSON.stringify({ name: "test", scripts: { test: "jest" } }, null, 2),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["npm test"]);
   });
@@ -168,18 +176,18 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
   it("defaults feedbackCommands to empty array for non-JS projects", () => {
     // No package.json, no deno.json — nothing to detect
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
@@ -196,18 +204,18 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
   it("feedbackCommands is empty array for non-JS projects (no package.json)", () => {
     // No package.json, no deno.json — nothing to detect
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
@@ -224,9 +232,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
@@ -251,9 +259,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([
       "pnpm build",
@@ -279,9 +287,9 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = readFileSync(join(ctx.dir, "ralphai.json"), "utf-8");
+    const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // pnpm should win because lock file beats packageManager field
     expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);

@@ -35,7 +35,13 @@ import {
 } from "./project-detection.ts";
 import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
 import { runRunner, type RunnerOptions } from "./runner.ts";
-import { resolveConfig, parseCLIArgs, ConfigError } from "./config.ts";
+import {
+  resolveConfig,
+  parseCLIArgs,
+  ConfigError,
+  getConfigFilePath,
+  writeConfigFile,
+} from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +72,6 @@ interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
   yes: boolean;
   force: boolean;
-  shared: boolean;
   agentCommand?: string;
   targetDir?: string;
   runArgs: string[];
@@ -122,7 +127,6 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let subcommand: RalphaiSubcommand | undefined;
   let yes = false;
   let force = false;
-  let shared = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   const runArgs: string[] = [];
@@ -148,8 +152,6 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       yes = true;
     } else if (arg === "--force") {
       force = true;
-    } else if (arg === "--shared") {
-      shared = true;
     } else if (arg === "--help" || arg === "-h") {
       // Handled by runRalphai() dispatcher — skip here
     } else if (arg === "--no-color") {
@@ -184,7 +186,6 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     subcommand,
     yes,
     force,
-    shared,
     agentCommand,
     targetDir,
     runArgs,
@@ -588,11 +589,7 @@ function ensureGitHubLabels(cwd: string): LabelResult {
 // Scaffold logic
 // ---------------------------------------------------------------------------
 
-function scaffold(
-  answers: WizardAnswers,
-  cwd: string,
-  opts?: { shared?: boolean },
-): void {
+function scaffold(answers: WizardAnswers, cwd: string): void {
   const __dir = dirname(fileURLToPath(import.meta.url));
   const templatesDir = join(__dir, "..", "templates", "ralphai");
 
@@ -652,9 +649,8 @@ function scaffold(
     configObj.workspaces = answers.workspaces;
   }
 
-  const config = JSON.stringify(configObj, null, 2) + "\n";
-
-  writeFileSync(join(cwd, "ralphai.json"), config);
+  // Write config to global state (~/.ralphai/repos/<id>/config.json)
+  const configPath = writeConfigFile(cwd, configObj);
 
   // Create pipeline subdirectories (no .gitkeep — .ralphai/ is fully gitignored)
   for (const subdir of ["backlog", "parked", "in-progress", "out"]) {
@@ -756,43 +752,28 @@ Project-specific guidance for AI coding agents working in this codebase.
     }
   }
 
-  // Ensure .ralphai and ralphai.json are gitignored in the project's root .gitignore.
+  // Ensure .ralphai is gitignored in the project's root .gitignore.
   // Use ".ralphai" (no trailing slash) so it matches both directories and
   // symlinks — worktrees create a .ralphai symlink that ".ralphai/" won't match.
-  // ralphai.json is gitignored by default — each developer's config is personal.
-  // Teams that want shared config can remove ralphai.json from .gitignore.
+  // Config now lives in global state (~/.ralphai/repos/<id>/config.json),
+  // so ralphai.json no longer needs gitignoring.
   const rootGitignore = join(cwd, ".gitignore");
   const gitignoreEntry = ".ralphai";
   const gitignoreEntryLegacy = ".ralphai/";
-  const shouldIgnoreConfig = !opts?.shared;
   if (existsSync(rootGitignore)) {
     const content = readFileSync(rootGitignore, "utf-8");
     const lines = content.split("\n").map((l) => l.trim());
-    let updated = content;
     if (
       !lines.some(
         (line) => line === gitignoreEntry || line === gitignoreEntryLegacy,
       )
     ) {
-      updated = updated.trimEnd() + "\n\n# ralphai local state\n.ralphai\n";
-    }
-    if (shouldIgnoreConfig && !lines.some((line) => line === "ralphai.json")) {
-      // Append on a new line if .ralphai block was just added, otherwise start a new block
-      if (updated !== content) {
-        updated = updated.trimEnd() + "\nralphai.json\n";
-      } else {
-        updated =
-          updated.trimEnd() +
-          "\n\n# ralphai local state\n.ralphai\nralphai.json\n";
-      }
-    }
-    if (updated !== content) {
+      const updated =
+        content.trimEnd() + "\n\n# ralphai local state\n.ralphai\n";
       writeFileSync(rootGitignore, updated);
     }
   } else {
-    const ignoreLines = ["# ralphai local state", ".ralphai"];
-    if (shouldIgnoreConfig) ignoreLines.push("ralphai.json");
-    writeFileSync(rootGitignore, ignoreLines.join("\n") + "\n");
+    writeFileSync(rootGitignore, "# ralphai local state\n.ralphai\n");
   }
 
   // Create GitHub labels if issues integration is enabled
@@ -806,7 +787,7 @@ Project-specific guidance for AI coding agents working in this codebase.
   console.log();
   console.log(`${DIM}Created:${RESET}`);
   console.log(
-    `  ralphai.json               ${DIM}Configuration (edit to customize)${RESET}`,
+    `  config.json                ${DIM}Configuration at ${configPath}${RESET}`,
   );
   console.log(`  .ralphai/README.md         ${DIM}Operational docs${RESET}`);
   console.log(`  .ralphai/PLANNING.md       ${DIM}How to write plans${RESET}`);
@@ -1506,7 +1487,7 @@ async function runRalphaiInit(
         `Detected ${workspaces.length} workspace packages: ${names}`,
       );
       clack.log.info(
-        "Feedback commands will be auto-filtered by scope at runtime. Add custom overrides to the workspaces key in ralphai.json if needed.",
+        "Feedback commands will be auto-filtered by scope at runtime. Add custom overrides to the workspaces key in config.json if needed.",
       );
     }
   }
@@ -1525,7 +1506,7 @@ async function runRalphaiInit(
   // Warn if no feedback commands were detected — the agent won't get feedback
   if (!answers.feedbackCommands.trim()) {
     const msg =
-      "No build/test/lint scripts detected. Your agent won't get feedback between turns. Add feedbackCommands to ralphai.json.";
+      "No build/test/lint scripts detected. Your agent won't get feedback between turns. Add feedbackCommands to config.json.";
     if (options.yes) {
       console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
     } else {
@@ -1533,7 +1514,7 @@ async function runRalphaiInit(
     }
   }
 
-  scaffold(answers, cwd, { shared: options.shared });
+  scaffold(answers, cwd);
 }
 
 // ---------------------------------------------------------------------------
@@ -1716,9 +1697,6 @@ function showInitHelp(): void {
   );
   console.log(
     `  ${TEXT}--force${RESET}                ${DIM}Re-scaffold from scratch (deletes existing .ralphai/)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}--shared${RESET}               ${DIM}Track ralphai.json in git (for team-shared config)${RESET}`,
   );
   console.log(
     `  ${TEXT}--agent-command=${RESET}<cmd>   ${DIM}Set the agent command (default: opencode run --agent build)${RESET}`,
@@ -1921,11 +1899,11 @@ function checkRalphaiDirExists(cwd: string): DoctorCheckResult {
 }
 
 function checkConfigValid(cwd: string): DoctorCheckResult {
-  const configPath = join(cwd, "ralphai.json");
+  const configPath = getConfigFilePath(cwd);
   if (!existsSync(configPath)) {
     return {
       status: "fail",
-      message: "ralphai.json not found",
+      message: "config.json not found — run ralphai init",
     };
   }
   try {
@@ -1934,12 +1912,12 @@ function checkConfigValid(cwd: string): DoctorCheckResult {
     const keys = Object.keys(config);
     return {
       status: "pass",
-      message: `ralphai.json valid (${keys.length} keys)`,
+      message: `config.json valid (${keys.length} keys)`,
     };
   } catch {
     return {
       status: "fail",
-      message: "ralphai.json is not valid JSON",
+      message: "config.json is not valid JSON",
     };
   }
 }
@@ -1975,7 +1953,7 @@ function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
 function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   // Read baseBranch from config if available, else detect
   let baseBranch: string;
-  const configPath = join(cwd, "ralphai.json");
+  const configPath = getConfigFilePath(cwd);
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     baseBranch = config.baseBranch || detectBaseBranch(cwd);
@@ -2001,7 +1979,7 @@ function checkBaseBranchExists(cwd: string): DoctorCheckResult {
 }
 
 function checkAgentCommand(cwd: string): DoctorCheckResult {
-  const configPath = join(cwd, "ralphai.json");
+  const configPath = getConfigFilePath(cwd);
   let agentCommand: string;
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -2035,7 +2013,7 @@ function checkAgentCommand(cwd: string): DoctorCheckResult {
 }
 
 function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
-  const configPath = join(cwd, "ralphai.json");
+  const configPath = getConfigFilePath(cwd);
   let feedbackCommands: string[];
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -2073,7 +2051,7 @@ function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
 }
 
 function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
-  const configPath = join(cwd, "ralphai.json");
+  const configPath = getConfigFilePath(cwd);
   let workspaces: Record<string, { feedbackCommands?: string[] }>;
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -2185,7 +2163,7 @@ function runRalphaiDoctor(cwd: string): void {
   // 1. .ralphai/ exists
   results.push(checkRalphaiDirExists(cwd));
 
-  // 2. ralphai.json valid
+  // 2. config.json valid
   results.push(checkConfigValid(cwd));
 
   // 3. Git repo detected
@@ -2659,16 +2637,8 @@ async function runRalphaiWorktree(
     symlinkSync(join(cwd, ".ralphai"), worktreeRalphaiLink);
   }
 
-  // Symlink ralphai.json from worktree → main repo so config is available
-  // even when ralphai.json is not committed (gitignored / untracked).
-  // If committed, `git worktree add` already checked it out — skip.
-  const worktreeConfigLink = join(resolvedWorktreeDir, "ralphai.json");
-  if (
-    !existsSync(worktreeConfigLink) &&
-    existsSync(join(cwd, "ralphai.json"))
-  ) {
-    symlinkSync(join(cwd, "ralphai.json"), worktreeConfigLink);
-  }
+  // Config now lives in global state (~/.ralphai/repos/<id>/config.json),
+  // so no ralphai.json symlink is needed in the worktree.
 
   // Spawn ralphai runner in the worktree
   console.log("Running ralphai in worktree...");
@@ -2779,7 +2749,7 @@ function showRunHelp(): void {
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
     "",
-    "Config file: ralphai.json (optional, JSON format)",
+    "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,",
     "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,",
     "                  issueSource, issueLabel,",
@@ -2896,22 +2866,20 @@ async function runRalphaiRunner(
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
 
   // --- Resolve config: defaults -> file -> env -> CLI ---
-  const configFilePath = join(ralphaiRoot, "ralphai.json");
-  // Use relative display path when config is in cwd (matches legacy behavior).
-  // In a worktree the config may live in a different root, so use absolute.
-  const configDisplayPath =
-    ralphaiRoot === cwd ? "ralphai.json" : configFilePath;
+  const envVars = process.env as Record<string, string | undefined>;
   let config;
+  let configFilePath: string;
   try {
     const result = resolveConfig({
-      configFilePath,
-      envVars: process.env as Record<string, string | undefined>,
+      cwd,
+      envVars,
       cliArgs: runArgs,
     });
     for (const w of result.warnings) {
       console.error(w);
     }
     config = result.config;
+    configFilePath = result.configFilePath;
   } catch (e) {
     if (e instanceof ConfigError) {
       console.error(e.message);
@@ -2928,9 +2896,9 @@ async function runRalphaiRunner(
       : undefined;
     const text = formatShowConfig({
       config,
-      configFilePath: configDisplayPath,
+      configFilePath,
       configFileExists: existsSync(configFilePath),
-      envVars: process.env as Record<string, string | undefined>,
+      envVars,
       rawFlags,
       worktree,
       workspaces: config.workspaces.value,
@@ -2944,7 +2912,8 @@ async function runRalphaiRunner(
     let treeDirty = false;
     try {
       // Check for dirty state, excluding .ralphai (gitignored dir / worktree
-      // symlink) and ralphai.json (untracked config).
+      // symlink). Config now lives in global state, so no repo-local exclusion
+      // is needed.
       // Note: pathspec excludes must not be single-quoted; cmd.exe on Windows
       // passes the literal quotes to git, breaking the exclude pattern.
       execSync("git diff --quiet HEAD -- :!.ralphai", {
@@ -2956,7 +2925,7 @@ async function runRalphaiRunner(
         stdio: ["pipe", "pipe", "pipe"],
       });
       const untracked = execSync(
-        "git ls-files --others --exclude-standard -- :!.ralphai :!ralphai.json",
+        "git ls-files --others --exclude-standard -- :!.ralphai",
         { cwd, encoding: "utf-8" },
       ).trim();
       if (untracked.length > 0) {

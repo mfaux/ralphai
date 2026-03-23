@@ -4,12 +4,23 @@ import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync, execFileSync } from "child_process";
 import { fileURLToPath } from "url";
-import { runCli, runCliOutput, useTempGitDir } from "./test-utils.ts";
+import { runCli, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath } from "./config.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("runner config", () => {
   const ctx = useTempGitDir();
+
+  /** Per-test RALPHAI_HOME so config goes to a temp dir, not ~/.ralphai. */
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
+  /** Resolve the global config file path for this test's cwd. */
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
 
   // -------------------------------------------------------------------------
   // Agent type detection
@@ -732,20 +743,16 @@ echo "$AUTO_COMMIT"
   // -------------------------------------------------------------------------
 
   it("init --yes generates config with mode=branch as the default", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.mode).toBe("branch");
   });
 
   it("init --yes sets autoCommit=false by default (non-patch mode)", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const config = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     // Default mode is "branch" so auto-commit question is never asked
     expect(config.mode).toBe("branch");
     expect(config.autoCommit).toBe(false);
@@ -934,39 +941,40 @@ echo "$MODE"
     "mode --show-config display",
     () => {
       beforeEach(() => {
-        runCliOutput(["init", "--yes"], ctx.dir);
+        runCli(["init", "--yes"], ctx.dir, testEnv());
       });
 
       it("--show-config displays mode=branch as default", () => {
-        const result = runCli(["run", "--show-config"], ctx.dir);
+        const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("mode               = branch");
       });
 
       it("--show-config shows mode=pr when set in config", () => {
-        const configPath = join(ctx.dir, "ralphai.json");
-        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        const cfgPath = configPath();
+        const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
         config.mode = "pr";
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-        const result = runCli(["run", "--show-config"], ctx.dir);
+        const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("mode               = pr");
       });
 
       it("--show-config shows mode=patch when set in config", () => {
-        const configPath = join(ctx.dir, "ralphai.json");
-        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        const cfgPath = configPath();
+        const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
         config.mode = "patch";
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-        const result = runCli(["run", "--show-config"], ctx.dir);
+        const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("mode               = patch");
       });
 
       it("RALPHAI_MODE env var overrides config mode in --show-config", () => {
         const result = runCli(["run", "--show-config"], ctx.dir, {
+          ...testEnv(),
           RALPHAI_MODE: "patch",
         });
         expect(result.exitCode).toBe(0);
@@ -975,19 +983,27 @@ echo "$MODE"
       });
 
       it("--branch CLI flag overrides mode in --show-config", () => {
-        const configPath = join(ctx.dir, "ralphai.json");
-        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        const cfgPath = configPath();
+        const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
         config.mode = "pr";
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-        const result = runCli(["run", "--branch", "--show-config"], ctx.dir);
+        const result = runCli(
+          ["run", "--branch", "--show-config"],
+          ctx.dir,
+          testEnv(),
+        );
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("mode               = branch");
         expect(result.stdout).toContain("cli (--branch)");
       });
 
       it("--patch CLI flag overrides mode in --show-config", () => {
-        const result = runCli(["run", "--patch", "--show-config"], ctx.dir);
+        const result = runCli(
+          ["run", "--patch", "--show-config"],
+          ctx.dir,
+          testEnv(),
+        );
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("mode               = patch");
         expect(result.stdout).toContain("cli (--patch)");
@@ -995,6 +1011,7 @@ echo "$MODE"
 
       it("RALPHAI_MODE rejects invalid value", () => {
         const result = runCli(["run", "--show-config"], ctx.dir, {
+          ...testEnv(),
           RALPHAI_MODE: "direct",
         });
         const combined = result.stdout + result.stderr;
@@ -1013,18 +1030,22 @@ echo "$MODE"
   describe.skipIf(process.platform === "win32")("run default turns", () => {
     beforeEach(() => {
       // Scaffold ralphai (creates .ralphai/ directory)
-      runCliOutput(["init", "--yes"], ctx.dir);
+      runCli(["init", "--yes"], ctx.dir, testEnv());
     });
 
     it("run --show-config without --turns shows default turn count", () => {
-      const result = runCli(["run", "--show-config"], ctx.dir);
+      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = 5");
       expect(result.stdout).toContain("(default)");
     });
 
     it("run --turns=5 --show-config shows explicit turn count from CLI", () => {
-      const result = runCli(["run", "--turns=5", "--show-config"], ctx.dir);
+      const result = runCli(
+        ["run", "--turns=5", "--show-config"],
+        ctx.dir,
+        testEnv(),
+      );
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = 5");
       expect(result.stdout).toContain("(cli (--turns=5))");
@@ -1032,6 +1053,7 @@ echo "$MODE"
 
     it("run --dry-run produces preview output", () => {
       const result = runCli(["run", "--dry-run"], ctx.dir, {
+        ...testEnv(),
         RALPHAI_AGENT_COMMAND: "echo mock",
         RALPHAI_NO_UPDATE_CHECK: "1",
       });
@@ -1044,6 +1066,7 @@ echo "$MODE"
       const result = runCli(
         ["run", "--", "--turns=5", "--show-config"],
         ctx.dir,
+        testEnv(),
       );
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = 5");
@@ -1051,14 +1074,18 @@ echo "$MODE"
     });
 
     it("run --turns=3 --show-config shows turns=3 from CLI", () => {
-      const result = runCli(["run", "--turns=3", "--show-config"], ctx.dir);
+      const result = runCli(
+        ["run", "--turns=3", "--show-config"],
+        ctx.dir,
+        testEnv(),
+      );
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = 3");
       expect(result.stdout).toContain("(cli (--turns=3))");
     });
 
     it("run --help shows usage information", () => {
-      const result = runCli(["run", "--help"], ctx.dir);
+      const result = runCli(["run", "--help"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
       const combined = result.stdout + result.stderr;
       expect(combined).toContain("--turns=");
@@ -1067,32 +1094,33 @@ echo "$MODE"
     });
 
     it("run 3 is rejected by the bundled runner", () => {
-      const result = runCli(["run", "3"], ctx.dir);
+      const result = runCli(["run", "3"], ctx.dir, testEnv());
       const combined = result.stdout + result.stderr;
       expect(result.exitCode).not.toBe(0);
       expect(combined).toContain("Unrecognized argument: 3");
     });
 
     it("run --show-config shows turns from config file", () => {
-      // Modify ralphai.json to set turns: 3
-      const configPath = join(ctx.dir, "ralphai.json");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      // Modify global config to set turns: 3
+      const cfgPath = configPath();
+      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
       config.turns = 3;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-      const result = runCli(["run", "--show-config"], ctx.dir);
+      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = 3");
-      expect(result.stdout).toContain("(config (ralphai.json))");
+      expect(result.stdout).toContain("(config (");
     });
 
     it("RALPHAI_TURNS env var overrides config file turns", () => {
-      const configPath = join(ctx.dir, "ralphai.json");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const cfgPath = configPath();
+      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
       config.turns = 3;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
       const result = runCli(["run", "--show-config"], ctx.dir, {
+        ...testEnv(),
         RALPHAI_TURNS: "10",
       });
       expect(result.exitCode).toBe(0);
@@ -1101,12 +1129,13 @@ echo "$MODE"
     });
 
     it("CLI --turns overrides both config and env var", () => {
-      const configPath = join(ctx.dir, "ralphai.json");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const cfgPath = configPath();
+      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
       config.turns = 3;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
       const result = runCli(["run", "--turns=7", "--show-config"], ctx.dir, {
+        ...testEnv(),
         RALPHAI_TURNS: "10",
       });
       expect(result.exitCode).toBe(0);
@@ -1115,26 +1144,24 @@ echo "$MODE"
     });
 
     it("turns: 0 in config displays as unlimited", () => {
-      const configPath = join(ctx.dir, "ralphai.json");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      const cfgPath = configPath();
+      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
       config.turns = 0;
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
 
-      const result = runCli(["run", "--show-config"], ctx.dir);
+      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("turns              = unlimited");
-      expect(result.stdout).toContain("(config (ralphai.json))");
+      expect(result.stdout).toContain("(config (");
     });
 
     it("built CLI runs the TS runner directly (no shell subprocess)", () => {
       const repoRoot = join(__dirname, "..");
       const distCli = join(repoRoot, "dist", "cli.mjs");
 
-      // Read the baseBranch that init --yes wrote to ralphai.json so
+      // Read the baseBranch that init --yes wrote to global config so
       // the branch we create matches what the runner will validate.
-      const cfg = JSON.parse(
-        readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-      );
+      const cfg = JSON.parse(readFileSync(configPath(), "utf-8"));
       const branch = cfg.baseBranch || "main";
       execSync(`git checkout -b ${branch}`, {
         cwd: ctx.dir,
@@ -1177,6 +1204,7 @@ echo "$MODE"
           stdio: ["pipe", "pipe", "pipe"],
           env: {
             ...process.env,
+            ...testEnv(),
             RALPHAI_NO_UPDATE_CHECK: "1",
             RALPHAI_AGENT_COMMAND: "echo test-agent",
           },

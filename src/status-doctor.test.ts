@@ -3,12 +3,8 @@ import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import {
-  runCli,
-  runCliOutput,
-  stripLogo,
-  useTempGitDir,
-} from "./test-utils.ts";
+import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { getConfigFilePath, writeConfigFile } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // GitHub Issues integration
@@ -17,27 +13,31 @@ import {
 describe("GitHub Issues integration", () => {
   const ctx = useTempGitDir();
 
-  it("init --yes defaults issueSource to none in config", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
 
-    const parsed = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+  it("init --yes defaults issueSource to none in config", () => {
+    runCli(["init", "--yes"], ctx.dir, testEnv());
+
+    const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(parsed.issueSource).toBe("none");
   });
 
   it("init --yes includes issueSource as none in JSON config", () => {
-    runCliOutput(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
-    const parsed = JSON.parse(
-      readFileSync(join(ctx.dir, "ralphai.json"), "utf-8"),
-    );
+    const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
     // issueSource should be "none" by default (all 17 keys are explicit)
     expect(parsed.issueSource).toBe("none");
   });
 
   it("init --yes output does not contain GitHub label info", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir));
+    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).not.toContain("GitHub labels");
     expect(output).not.toContain("Label a GitHub issue");
@@ -178,14 +178,18 @@ build_continuous_pr_body
 describe("status subcommand", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+
   it("shows help text with status command listed", () => {
-    const result = runCli([], ctx.dir);
+    const result = runCli([], ctx.dir, testEnv());
     const output = stripLogo(result.stdout);
     expect(output).toContain("status");
   });
 
   it("status fails when ralphai is not initialized", () => {
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
     expect(result.exitCode).toBe(1);
     expect(combined).toContain("not set up");
@@ -193,7 +197,7 @@ describe("status subcommand", () => {
 
   it("status shows empty pipeline", () => {
     // Initialize ralphai
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Remove sample plan to test truly empty pipeline
     const samplePlanDir = join(
@@ -206,7 +210,7 @@ describe("status subcommand", () => {
     if (existsSync(samplePlanDir))
       rmSync(samplePlanDir, { recursive: true, force: true });
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -218,7 +222,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows backlog plans", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
     writeFileSync(
@@ -230,7 +234,7 @@ describe("status subcommand", () => {
       "---\ndepends-on: [prd-auth.md]\n---\n\n# Search\n\n### Task 1: Index\n",
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -241,7 +245,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows in-progress plan with task progress from receipt", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-dark-mode");
@@ -273,7 +277,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -285,7 +289,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-legacy");
@@ -309,7 +313,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -317,7 +321,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows tasks_completed from receipt, not progress.md", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-feature");
@@ -348,7 +352,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -357,7 +361,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows turn progress when receipt has turns_budget", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-search");
@@ -383,7 +387,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -391,7 +395,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows unlimited turns when turns_budget is 0", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-refactor");
@@ -417,7 +421,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -425,7 +429,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows no turns info for old receipt without turns_budget", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-old-plan");
@@ -449,7 +453,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -458,7 +462,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows orphaned receipt as a problem", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const orphanDir = join(ipDir, "orphan");
@@ -476,7 +480,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -485,7 +489,7 @@ describe("status subcommand", () => {
   });
 
   it("status counts completed plans from archive", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
     const authDir = join(outDir, "prd-auth");
@@ -497,7 +501,7 @@ describe("status subcommand", () => {
     writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
     writeFileSync(join(searchDir, "prd-search.md"), "# Search\n");
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -509,7 +513,7 @@ describe("status subcommand", () => {
   });
 
   it("status pairs non-prd plan with receipt via plan_file field", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "remove-fallback-agents");
@@ -535,7 +539,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -548,7 +552,7 @@ describe("status subcommand", () => {
   });
 
   it("status pairs gh-prefixed plan with receipt via plan_file field", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "gh-42-search");
@@ -575,7 +579,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -587,7 +591,7 @@ describe("status subcommand", () => {
   });
 
   it("status counts completed non-prd plans from archive", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const outDir = join(ctx.dir, ".ralphai", "pipeline", "out");
     const agentsDir = join(outDir, "remove-fallback-agents");
@@ -605,7 +609,7 @@ describe("status subcommand", () => {
     writeFileSync(join(searchDir, "gh-42-search.md"), "# Search\n");
     writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -617,7 +621,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows outcome when receipt has outcome field", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-stuck-plan");
@@ -643,7 +647,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -652,7 +656,7 @@ describe("status subcommand", () => {
   });
 
   it("status shows [in progress] when receipt has no outcome", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const ipDir = join(ctx.dir, ".ralphai", "pipeline", "in-progress");
     const planDir = join(ipDir, "prd-active");
@@ -677,7 +681,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir);
+    const result = runCli(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -693,14 +697,21 @@ describe("status subcommand", () => {
 describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
   const ctx = useTempGitDir();
 
+  function testEnv() {
+    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+  }
+  function configPath() {
+    return getConfigFilePath(ctx.dir, testEnv());
+  }
+
   it("shows help text with doctor command listed", () => {
-    const result = runCli([], ctx.dir);
+    const result = runCli([], ctx.dir, testEnv());
     const output = stripLogo(result.stdout);
     expect(output).toContain("doctor");
   });
 
   it("doctor --help shows doctor-specific help", () => {
-    const result = runCli(["doctor", "--help"], ctx.dir);
+    const result = runCli(["doctor", "--help"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
     expect(output).toContain("ralphai doctor");
     expect(output).toContain("diagnostic");
@@ -717,13 +728,15 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
       stdio: "ignore",
     });
     writeFileSync(join(ctx.dir, "seed.txt"), "seed");
+    // Ignore the RALPHAI_HOME dir so global config doesn't dirty the worktree
+    writeFileSync(join(ctx.dir, ".gitignore"), ".ralphai-home/\n");
     execSync("git add -A && git commit -m 'init'", {
       cwd: ctx.dir,
       stdio: "ignore",
     });
 
     // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Commit ralphai files so working tree is clean
     execSync("git add -A && git commit -m 'add ralphai'", {
@@ -732,20 +745,19 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     });
 
     // Override agentCommand to something in PATH and feedbackCommands to a passing command
-    const configPath = join(ctx.dir, "ralphai.json");
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     config.agentCommand = "true";
     config.feedbackCommands = ["true"];
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeConfigFile(ctx.dir, config, testEnv());
 
-    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
     const output = result.stdout;
 
     // All checks should pass
     expect(output).toContain("\u2713"); // checkmark
     expect(output).not.toContain("\u2717"); // x-mark
     expect(output).toContain(".ralphai/ initialized");
-    expect(output).toContain("ralphai.json valid");
+    expect(output).toContain("config.json valid");
     expect(output).toContain("git repo detected");
     expect(output).toContain("agent: true");
     expect(output).toContain("found in PATH");
@@ -754,11 +766,10 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
   });
 
   it("doctor without .ralphai/ reports first check as failed", () => {
-    // Don't run init — no .ralphai/ directory
-    // But we need a ralphai.json for config checks to not crash
-    // Actually, without .ralphai/ the doctor should still run and report failures
+    // Don't run init -- no .ralphai/ directory
+    // Without .ralphai/ the doctor should still run and report failures
 
-    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
     const output = result.stdout;
 
     expect(output).toContain("\u2717"); // x-mark
@@ -767,15 +778,14 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
   });
 
   it("doctor with unreachable agent command shows failure", () => {
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Set an agent command that won't be found in PATH
-    const configPath = join(ctx.dir, "ralphai.json");
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     config.agentCommand = "nonexistent-agent-binary-xyz";
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeConfigFile(ctx.dir, config, testEnv());
 
-    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
     const output = result.stdout;
 
     expect(output).toContain("\u2717"); // x-mark
@@ -795,13 +805,15 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
       stdio: "ignore",
     });
     writeFileSync(join(ctx.dir, "seed.txt"), "seed");
+    // Ignore the RALPHAI_HOME dir so global config doesn't dirty the worktree
+    writeFileSync(join(ctx.dir, ".gitignore"), ".ralphai-home/\n");
     execSync("git add -A && git commit -m 'init'", {
       cwd: ctx.dir,
       stdio: "ignore",
     });
 
     // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
-    runCli(["init", "--yes"], ctx.dir);
+    runCli(["init", "--yes"], ctx.dir, testEnv());
 
     // Commit ralphai files so we have a clean base
     execSync("git add -A && git commit -m 'add ralphai'", {
@@ -810,17 +822,16 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     });
 
     // Override agentCommand to something in PATH
-    const configPath = join(ctx.dir, "ralphai.json");
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     config.agentCommand = "true";
     // Set feedback commands to something that fails (to produce a warning, not a failure)
     config.feedbackCommands = ["false"];
-    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeConfigFile(ctx.dir, config, testEnv());
 
     // Make the working tree dirty (uncommitted change) — produces a warning
     writeFileSync(join(ctx.dir, "dirty.txt"), "dirty");
 
-    const result = runCli(["doctor"], ctx.dir, { NO_COLOR: "1" });
+    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
     const output = result.stdout;
 
     // Should have warnings but no failures

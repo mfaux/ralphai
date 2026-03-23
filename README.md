@@ -39,12 +39,12 @@ npx ralphai                  # run without installing
 In your project repository:
 
 ```bash
-ralphai init                 # scaffold .ralphai/ and ralphai.json
+ralphai init                 # scaffold .ralphai/ and config
 ```
 
 Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** and **C# / .NET** (full support, including monorepo workspace scoping), **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). When multiple ecosystems coexist (e.g., a .NET backend with a Node.js frontend), Ralphai detects all of them and merges their feedback commands. Use `--yes` to skip prompts and auto-detect your installed agent.
 
-All Ralphai files are gitignored by default; your workflow config is personal. To share config with your team instead, use `ralphai init --shared` to track `ralphai.json` in git. See [Workflows](docs/workflows.md) for details.
+All Ralphai files are gitignored by default; your workflow config is personal and stored in `~/.ralphai/`. See [Workflows](docs/workflows.md) for details.
 
 ## Workflow
 
@@ -120,7 +120,7 @@ ralphai run --issue-source=github              # pull labeled issues
 ralphai run --issue-label=ai-task              # custom label filter
 ```
 
-Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `ralphai.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
+Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `config.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
 
 ## Manage Your Installation
 
@@ -145,7 +145,7 @@ When a plan has a scope, Ralphai rewrites feedback commands to target the scoped
 
 `ralphai status` annotates each plan with its scope when declared, and `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config exists (failures produce warnings, not hard errors).
 
-For custom per-package overrides, add a `workspaces` key to `ralphai.json`:
+For custom per-package overrides, add a `workspaces` key to `config.json`:
 
 ```json
 {

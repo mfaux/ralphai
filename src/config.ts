@@ -6,7 +6,9 @@
  * with source tracking for --show-config.
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { getRepoStateDir } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -165,7 +167,7 @@ export function validateCommaList(value: string, label: string): void {
 // Config file parsing
 // ---------------------------------------------------------------------------
 
-/** Allowed keys in ralphai.json. */
+/** Allowed keys in config.json. */
 const ALLOWED_CONFIG_KEYS = new Set([
   "agentCommand",
   "feedbackCommands",
@@ -194,7 +196,7 @@ export interface ParsedConfigFile {
 }
 
 /**
- * Parse and validate a ralphai.json config file.
+ * Parse and validate a config.json file.
  * Returns the parsed values and any warnings.
  * Throws ConfigError for invalid values.
  * Returns null if the file does not exist.
@@ -403,6 +405,35 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
   }
 
   return { values, warnings };
+}
+
+/**
+ * Return the global config file path for a given working directory.
+ * The path is `~/.ralphai/repos/<repoId>/config.json`.
+ */
+export function getConfigFilePath(
+  cwd: string,
+  env?: Record<string, string | undefined>,
+): string {
+  return join(getRepoStateDir(cwd, env), "config.json");
+}
+
+/**
+ * Write a validated config object to the global config path.
+ * Creates parent directories as needed.
+ */
+export function writeConfigFile(
+  cwd: string,
+  config: Record<string, unknown>,
+  env?: Record<string, string | undefined>,
+): string {
+  const filePath = getConfigFilePath(cwd, env);
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(filePath, JSON.stringify(config, null, 2) + "\n");
+  return filePath;
 }
 
 // ---------------------------------------------------------------------------
@@ -685,13 +716,15 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
 // ---------------------------------------------------------------------------
 
 export interface ResolveConfigInput {
-  configFilePath: string;
+  cwd: string;
   envVars: Record<string, string | undefined>;
   cliArgs: readonly string[];
 }
 
 export interface ResolveConfigResult {
   config: ResolvedConfig;
+  /** Path to the config file that was loaded (or would be loaded). */
+  configFilePath: string;
   warnings: string[];
 }
 
@@ -705,7 +738,8 @@ export interface ResolveConfigResult {
  * Each field tracks its source for --show-config display.
  */
 export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
-  const { configFilePath, envVars, cliArgs } = input;
+  const { cwd, envVars, cliArgs } = input;
+  const configFilePath = getConfigFilePath(cwd, envVars);
   const warnings: string[] = [];
 
   // Layer 1: defaults
@@ -762,5 +796,5 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
     }
   }
 
-  return { config: resolved, warnings };
+  return { config: resolved, configFilePath, warnings };
 }

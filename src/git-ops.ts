@@ -62,8 +62,9 @@ function ghAvailable(): boolean {
 /**
  * Check if the working tree has uncommitted changes.
  *
- * Excludes `.ralphai` (worktree symlink artifact) and `ralphai.json`
- * (untracked config symlink) from the untracked-files check.
+ * Excludes `.ralphai` (worktree symlink artifact) from the untracked-files
+ * check. Config now lives in global state (~/.ralphai/repos/<id>/config.json),
+ * so no repo-local config exclusion is needed.
  *
  * Returns true if the tree is dirty, false if clean.
  */
@@ -80,9 +81,9 @@ export function isTreeDirty(cwd: string): boolean {
     return true;
   }
 
-  // 3. Untracked files (exclude .ralphai and ralphai.json)
+  // 3. Untracked files (exclude .ralphai)
   const untracked = execQuiet(
-    "git ls-files --others --exclude-standard -- :!.ralphai :!ralphai.json",
+    "git ls-files --others --exclude-standard -- :!.ralphai",
     cwd,
   );
   if (untracked && untracked.length > 0) {

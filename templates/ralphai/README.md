@@ -32,7 +32,7 @@ All pipeline files are **gitignored** (local-only state).
 
 ## How It Works
 
-1. Loads config: `ralphai.json` → env vars → CLI flags (highest priority wins)
+1. Loads config: `~/.ralphai/repos/<id>/config.json` → env vars → CLI flags (highest priority wins)
 2. Resumes in-progress work, or picks from backlog (oldest dependency-ready plan first)
 3. In PR mode, creates a `ralphai/<plan-slug>` branch. In branch mode (default), works on current branch.
 4. Agent receives plan + progress log, implements next task, runs feedback commands, commits
@@ -116,7 +116,7 @@ After runs: review candidates, promote useful ones, and prune stale learnings en
 
 ## Configuration
 
-Settings resolve: **CLI flags > env vars > `ralphai.json` > defaults**.
+Settings resolve: **CLI flags > env vars > `config.json` > defaults**.
 
 ```json
 {
