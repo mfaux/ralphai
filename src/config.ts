@@ -7,7 +7,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, resolve } from "path";
 import { resolveRepoStateDir } from "./global-state.ts";
 
 // ---------------------------------------------------------------------------
@@ -183,6 +183,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "turns",
   "maxLearnings",
   "workspaces",
+  "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
 
 export interface ParsedConfigFile {
@@ -410,6 +411,7 @@ export function getConfigFilePath(
 /**
  * Write a validated config object to the global config path.
  * Creates parent directories as needed.
+ * Automatically stamps `repoPath` with the resolved `cwd`.
  */
 export function writeConfigFile(
   cwd: string,
@@ -421,7 +423,9 @@ export function writeConfigFile(
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(filePath, JSON.stringify(config, null, 2) + "\n");
+  // Always stamp the repo path so `ralphai repos` can reverse-lookup.
+  const withPath = { ...config, repoPath: resolve(cwd) };
+  writeFileSync(filePath, JSON.stringify(withPath, null, 2) + "\n");
   return filePath;
 }
 

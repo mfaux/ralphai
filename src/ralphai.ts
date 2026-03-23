@@ -24,7 +24,11 @@ import {
   countCompletedTasks,
 } from "./plan-detection.ts";
 import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
-import { getRepoPipelineDirs, resolveRepoStateDir } from "./global-state.ts";
+import {
+  getRepoPipelineDirs,
+  resolveRepoStateDir,
+  resolveRepoByNameOrPath,
+} from "./global-state.ts";
 import {
   detectFeedbackCommands,
   detectWorkspaces,
@@ -41,6 +45,7 @@ import {
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
+import { runRepos, showReposHelp } from "./repos.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +62,8 @@ type RalphaiSubcommand =
   | "reset"
   | "purge"
   | "doctor"
-  | "backlog-dir";
+  | "backlog-dir"
+  | "repos";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -72,8 +78,10 @@ interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
   yes: boolean;
   force: boolean;
+  clean: boolean;
   agentCommand?: string;
   targetDir?: string;
+  repo?: string; // --repo=<name-or-path>
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -122,14 +130,17 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "purge",
   "doctor",
   "backlog-dir",
+  "repos",
 ]);
 
 function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let subcommand: RalphaiSubcommand | undefined;
   let yes = false;
   let force = false;
+  let clean = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
+  let repo: string | undefined;
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
@@ -153,12 +164,16 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       yes = true;
     } else if (arg === "--force") {
       force = true;
+    } else if (arg === "--clean") {
+      clean = true;
     } else if (arg === "--help" || arg === "-h") {
       // Handled by runRalphai() dispatcher — skip here
     } else if (arg === "--no-color") {
       // Handled by utils.ts at module load — skip here
     } else if (arg.startsWith("--agent-command=")) {
       agentCommand = arg.slice("--agent-command=".length);
+    } else if (arg.startsWith("--repo=")) {
+      repo = arg.slice("--repo=".length);
     } else if (!arg.startsWith("-")) {
       // First non-flag arg is the subcommand; second is targetDir
       if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
@@ -187,8 +202,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     subcommand,
     yes,
     force,
+    clean,
     agentCommand,
     targetDir,
+    repo,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -224,8 +241,23 @@ function parseWorktreeArgs(args: string[]): WorktreeOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Git error extraction
+// Git detection helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Returns true if `dir` is inside a git repository.
+ */
+function isInsideGitRepo(dir: string): boolean {
+  try {
+    execSync("git rev-parse --git-dir", {
+      cwd: dir,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Extract a trimmed stderr string from an execSync error, if available. */
 function extractExecStderr(err: unknown): string {
@@ -997,6 +1029,9 @@ function showRalphaiHelp(): void {
   console.log(
     `  ${TEXT}backlog-dir${RESET} ${DIM}Print the path to the plan backlog directory${RESET}`,
   );
+  console.log(
+    `  ${TEXT}repos${RESET}       ${DIM}List all known repos with pipeline summaries${RESET}`,
+  );
   console.log();
   console.log(
     `${DIM}Run 'ralphai <command> --help' for command-specific options.${RESET}`,
@@ -1009,8 +1044,58 @@ function showRalphaiHelp(): void {
 
 export async function runRalphai(args: string[]): Promise<void> {
   const options = parseRalphaiOptions(args);
-  const cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
+  let cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
   const helpRequested = args.includes("--help") || args.includes("-h");
+
+  // Handle --repo flag: resolve cwd from a known repo name or path
+  if (options.repo) {
+    const REPO_BLOCKED_COMMANDS = new Set<RalphaiSubcommand>([
+      "run",
+      "worktree",
+      "init",
+    ]);
+    if (
+      options.subcommand &&
+      REPO_BLOCKED_COMMANDS.has(options.subcommand) &&
+      !helpRequested
+    ) {
+      console.error(
+        `--repo cannot be used with '${options.subcommand}'. Run this command from inside the repo.`,
+      );
+      process.exit(1);
+    }
+
+    const stateDir = resolveRepoByNameOrPath(options.repo);
+    if (!stateDir) {
+      console.error(`Repo not found: ${options.repo}`);
+      console.error(
+        `${DIM}Run ${TEXT}ralphai repos${DIM} to see known repos.${RESET}`,
+      );
+      process.exit(1);
+    }
+
+    // Read the stored repoPath from config to use as cwd
+    const configPath = join(stateDir, "config.json");
+    if (existsSync(configPath)) {
+      try {
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        if (
+          typeof config.repoPath === "string" &&
+          existsSync(config.repoPath)
+        ) {
+          cwd = config.repoPath;
+        } else {
+          console.error(
+            `Repo '${options.repo}' has a stale or missing path. Re-run ${TEXT}ralphai init${RESET} from the repo.`,
+          );
+          process.exit(1);
+        }
+      } catch {
+        console.error(`Cannot read config for repo '${options.repo}'.`);
+        process.exit(1);
+      }
+    }
+  }
 
   // Subcommands that reject unknown flags (run/worktree pass through to runner)
   const STRICT_SUBCOMMANDS = new Set([
@@ -1023,6 +1108,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "uninstall",
     "doctor",
     "backlog-dir",
+    "repos",
   ]);
   if (
     options.subcommand &&
@@ -1033,6 +1119,29 @@ export async function runRalphai(args: string[]): Promise<void> {
     console.error(`Unknown flag: ${options.unknownFlags[0]}`);
     console.error(
       `${DIM}Run ${TEXT}ralphai ${options.subcommand} --help${RESET}${DIM} for usage.${RESET}`,
+    );
+    process.exit(1);
+  }
+
+  // --- Early git-repo guard for commands that require a working tree ---
+  const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>([
+    "run",
+    "worktree",
+    "init",
+  ]);
+  if (
+    options.subcommand &&
+    GIT_REQUIRED_COMMANDS.has(options.subcommand) &&
+    !helpRequested &&
+    !isInsideGitRepo(cwd)
+  ) {
+    console.error("Not inside a git repository.");
+    console.error();
+    console.error(
+      `To use ${TEXT}ralphai ${options.subcommand}${RESET}, navigate to a git repository first.`,
+    );
+    console.error(
+      `${DIM}Use ${TEXT}ralphai repos${DIM} to see your initialized repos.${RESET}`,
     );
     process.exit(1);
   }
@@ -1109,6 +1218,13 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       runBacklogDir(cwd);
+      break;
+    case "repos":
+      if (helpRequested) {
+        showReposHelp();
+        return;
+      }
+      runRepos({ clean: options.clean });
       break;
     default:
       showRalphaiHelp();
