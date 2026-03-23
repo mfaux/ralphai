@@ -31,6 +31,7 @@ ${BOLD}Commands:${RESET}
   purge        Delete archived artifacts from pipeline/out/
   update       Update ralphai to the latest (or specified) version
   teardown     Remove Ralphai from your project
+  uninstall    Remove all global state and uninstall the CLI
   doctor       Check your ralphai setup for problems
   backlog-dir  Print the path to the plan backlog directory
 
@@ -75,8 +76,10 @@ async function main(): Promise<void> {
   // Dispatch directly to runRalphai — args are already the subcommands
   await runRalphai(args);
 
-  // Update notification (after command completes, so it doesn't interfere)
-  if (!process.env.RALPHAI_NO_UPDATE_CHECK) {
+  // Update notification (after command completes, so it doesn't interfere).
+  // Skip after uninstall — the cache dir would re-create ~/.ralphai.
+  const isUninstall = args[0] === "uninstall";
+  if (!process.env.RALPHAI_NO_UPDATE_CHECK && !isUninstall) {
     const currentVersion = getVersion();
     const update = checkForUpdate("ralphai", currentVersion);
     if (update) {
