@@ -17,8 +17,10 @@ describe("init AGENTS.md integration", () => {
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("# Agent Instructions");
     expect(agentsMd).toContain("## Ralphai");
-    expect(agentsMd).toContain(".ralphai/pipeline/backlog/");
-    expect(agentsMd).toContain("PLANNING.md");
+    expect(agentsMd).toContain("autonomous task execution");
+    // Should NOT reference repo-local paths
+    expect(agentsMd).not.toContain(".ralphai/pipeline/backlog/");
+    expect(agentsMd).not.toContain(".ralphai/PLANNING.md");
   });
 
   it("appends Ralphai section to existing AGENTS.md", () => {
@@ -34,7 +36,7 @@ describe("init AGENTS.md integration", () => {
     expect(agentsMd).toContain("Existing content here.");
     // Ralphai section is appended
     expect(agentsMd).toContain("## Ralphai");
-    expect(agentsMd).toContain(".ralphai/pipeline/backlog/");
+    expect(agentsMd).toContain("autonomous task execution");
   });
 
   it("does not duplicate Ralphai section if already present", () => {
@@ -106,11 +108,8 @@ describe("init AGENTS.md integration", () => {
     expect(agentsMd).toContain(
       "This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.",
     );
-    expect(agentsMd).toContain(
-      "Plan files go in `.ralphai/pipeline/backlog/`.",
-    );
-    expect(agentsMd).toContain(
-      "See `.ralphai/PLANNING.md` for\nthe plan writing guide.",
-    );
+    // Should NOT reference repo-local paths
+    expect(agentsMd).not.toContain(".ralphai/pipeline/backlog/");
+    expect(agentsMd).not.toContain(".ralphai/PLANNING.md");
   });
 });
