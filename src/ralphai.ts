@@ -1197,6 +1197,14 @@ async function runRalphaiInit(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
+  if (isGitWorktree(cwd)) {
+    console.error("Cannot initialize ralphai inside a git worktree.");
+    console.error(
+      `Run ${TEXT}ralphai init${RESET} from the main repository instead.`,
+    );
+    process.exit(1);
+  }
+
   // Check if global config already exists
   const existingConfigPath = getConfigFilePath(cwd);
   if (existsSync(existingConfigPath)) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { execSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { useTempDir, useTempGitDir } from "./test-utils.ts";
@@ -61,6 +61,36 @@ describe("getRepoId", () => {
     expect(id1).toBe(id2);
   });
 
+  it("uses the same path fallback ID in a git worktree and main repo", () => {
+    execSync("git config user.name 'Test'", { cwd: ctx.dir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    execSync("git commit --allow-empty -m init", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    const worktreeDir = join(ctx.dir, "wt-id-test");
+    execSync(`git worktree add "${worktreeDir}" -b wt-id-test`, {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    try {
+      expect(getRepoId(worktreeDir)).toBe(getRepoId(ctx.dir));
+    } finally {
+      execSync(`git worktree remove "${worktreeDir}" --force`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+      if (existsSync(worktreeDir)) {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("slugifies ssh:// protocol URLs", () => {
     execSync('git remote add origin "ssh://git@github.com/mfaux/ralphai.git"', {
       cwd: ctx.dir,
@@ -92,6 +122,42 @@ describe("getRepoStateDir", () => {
     const home = join(ctx.dir, "ralphai-home");
     const dir = getRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
     expect(dir).toContain(join("repos", "_path-"));
+  });
+
+  it("uses the same state dir in a git worktree and main repo", () => {
+    const repoDir = join(ctx.dir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    execSync("git init", { cwd: repoDir, stdio: "ignore" });
+    execSync("git config user.name 'Test'", { cwd: repoDir, stdio: "ignore" });
+    execSync("git config user.email 'test@test.com'", {
+      cwd: repoDir,
+      stdio: "ignore",
+    });
+    execSync("git commit --allow-empty -m init", {
+      cwd: repoDir,
+      stdio: "ignore",
+    });
+
+    const worktreeDir = join(ctx.dir, "repo-wt");
+    execSync(`git worktree add "${worktreeDir}" -b wt-state-test`, {
+      cwd: repoDir,
+      stdio: "ignore",
+    });
+
+    const home = join(ctx.dir, "ralphai-home");
+    try {
+      expect(getRepoStateDir(worktreeDir, { RALPHAI_HOME: home })).toBe(
+        getRepoStateDir(repoDir, { RALPHAI_HOME: home }),
+      );
+    } finally {
+      execSync(`git worktree remove "${worktreeDir}" --force`, {
+        cwd: repoDir,
+        stdio: "ignore",
+      });
+      if (existsSync(worktreeDir)) {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      }
+    }
   });
 });
 
