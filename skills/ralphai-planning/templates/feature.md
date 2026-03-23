@@ -1,6 +1,7 @@
 # Feature Plan Guide
 
-For adding new functionality. Read [PLANNING.md](../PLANNING.md) first for shared principles.
+For adding new functionality. Read the [planning skill](../SKILL.md) first for
+shared principles.
 
 ## Before Writing the Plan
 

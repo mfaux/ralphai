@@ -6,17 +6,17 @@ ralphai <command> [options]
 
 ## Commands
 
-| Command        | Description                                         |
-| -------------- | --------------------------------------------------- |
-| `init`         | Set up Ralphai in your project                      |
-| `run`          | Start the Ralphai task runner                       |
-| `worktree`     | Run in an isolated git worktree                     |
-| `status`       | Show pipeline and worktree status                   |
-| `reset`        | Move in-progress plans back to backlog and clean up |
-| `purge`        | Delete archived artifacts from `pipeline/out/`      |
-| `doctor`       | Check your Ralphai setup for problems               |
-| `update [tag]` | Update ralphai to the latest (or specified) version |
-| `teardown`     | Remove Ralphai from your project                    |
+| Command        | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
+| `run`          | Start the Ralphai task runner                                          |
+| `worktree`     | Run in an isolated git worktree                                        |
+| `status`       | Show pipeline and worktree status                                      |
+| `reset`        | Move in-progress plans back to backlog and clean up                    |
+| `purge`        | Delete archived artifacts from `pipeline/out/`                         |
+| `doctor`       | Check your Ralphai setup for problems                                  |
+| `update [tag]` | Update ralphai to the latest (or specified) version                    |
+| `teardown`     | Remove Ralphai from your project                                       |
 
 ## Global Options
 

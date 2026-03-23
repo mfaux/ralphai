@@ -9,11 +9,11 @@ Requires Node.js 18+ (or Bun/Deno) and a [supported CLI agent](#supported-agents
 ## Try It Now
 
 ```bash
-npx ralphai init --yes           # scaffold .ralphai/ with a sample plan
-npx ralphai run                  # watch the agent complete the sample plan
+npx ralphai init --yes           # configure agent and feedback commands
+npx ralphai run                  # start running plans from the backlog
 ```
 
-`init --yes` creates a sample plan in the backlog so you can see the full loop immediately, no plan writing required. It auto-detects installed agents, checking **Claude Code** and **OpenCode** first, then other supported agents. Falls back to OpenCode if none are found. Use `--agent-command=<cmd>` to override (e.g. `--agent-command='claude -p'`).
+`init --yes` auto-detects installed agents, checking **Claude Code** and **OpenCode** first, then other supported agents. Falls back to OpenCode if none are found. Use `--agent-command=<cmd>` to override (e.g. `--agent-command='claude -p'`).
 
 ## Why Ralphai?
 
@@ -30,31 +30,32 @@ Ralphai avoids this by starting each turn with a **fresh session**: just the pla
 ## Install
 
 ```bash
-npm install -g ralphai       # install globally for regular use
-npx ralphai                  # run without installing
+npm install -g ralphai                          # install the CLI
+npx skills add mfaux/ralphai -g                 # install the planning skill
 ```
+
+The planning skill teaches your coding agent how to write Ralphai plan files. Once installed, ask your agent to "create a Ralphai plan" and it knows the format, principles, and where to put the file.
 
 ## Get Started
 
 In your project repository:
 
 ```bash
-ralphai init                 # scaffold .ralphai/ and config
+ralphai init                 # configure agent and feedback commands
 ```
 
 Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** and **C# / .NET** (full support, including monorepo workspace scoping), **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). When multiple ecosystems coexist (e.g., a .NET backend with a Node.js frontend), Ralphai detects all of them and merges their feedback commands. Use `--yes` to skip prompts and auto-detect your installed agent.
 
-All Ralphai files are gitignored by default; your workflow config is personal and stored in `~/.ralphai/`. See [Workflows](docs/workflows.md) for details.
+Configuration is stored in `~/.ralphai/` (global state, not in your repo). Pipeline files (plans, progress logs) live in `.ralphai/` and are gitignored by default. See [Workflows](docs/workflows.md) for details.
 
 ## Workflow
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in the Ralphai backlog, using `.ralphai/PLANNING.md` as a guide.
+Ask your coding agent to create plan files in the Ralphai backlog. If you installed the planning skill, the agent already knows the format and output directory.
 
 ```
-Create a plan in the ralphai backlog for adding dark mode support.
-Use .ralphai/PLANNING.md as a guide.
+Create a Ralphai plan for adding dark mode support.
 ```
 
 ### 2. Run

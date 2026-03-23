@@ -1,6 +1,7 @@
 # Refactor Plan Guide
 
-For structural changes with no user-facing behavior change. Read [PLANNING.md](../PLANNING.md) first for shared principles.
+For structural changes with no user-facing behavior change. Read the
+[planning skill](../SKILL.md) first for shared principles.
 
 ## Before Writing the Plan
 

@@ -65,7 +65,7 @@ The agent CLI is configured via `agentCommand` with this precedence:
 **Check:**
 
 1. Run `ralphai status` to see pipeline state and any reported problems (orphaned receipts, missing worktrees).
-2. Ensure the plan follows the format described in `.ralphai/PLANNING.md` — it needs a title, description, and implementation tasks.
+2. Ensure the plan follows the Ralphai plan format — it needs a title, description, and implementation tasks. Install the planning skill (`npx skills add mfaux/ralphai -g`) for format guidance.
 3. Verify the agent CLI is installed and working: run your `agentCommand` manually (e.g., `claude --version` or `opencode --version`).
 4. Run `ralphai doctor` for a full health check of your setup.
 

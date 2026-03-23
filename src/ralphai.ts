@@ -619,6 +619,8 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   const agentsMdSection = `## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
+Plan files go in the global pipeline backlog (run \`ralphai backlog-dir\` to find it).
+Install the planning skill for plan writing guidance: \`npx skills add mfaux/ralphai -g\`.
 `;
 
   let agentsMdAction: "created" | "updated" | null = null;

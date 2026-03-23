@@ -38,5 +38,5 @@ Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Py
 ## Ralphai
 
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous task execution.
-Plan files go in `.ralphai/pipeline/backlog/` as flat `.md` files (e.g., `backlog/my-plan.md`).
-See `.ralphai/PLANNING.md` for the plan writing guide.
+Plan files go in the global pipeline backlog (run `ralphai backlog-dir` to find it).
+Install the planning skill for plan writing guidance: `npx skills add mfaux/ralphai -g`.

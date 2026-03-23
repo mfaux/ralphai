@@ -14,7 +14,7 @@ tried — repeating mistakes and drifting from the goal.
 Ralphai avoids this by starting each turn with a **fresh agent session**
 containing only what matters:
 
-- The [plan file](../templates/ralphai/PLANNING.md) (what to build)
+- The plan file (what to build)
 - A progress log (what was already done)
 - Learnings from past mistakes (if any)
 
