@@ -27,7 +27,6 @@ export interface RalphaiConfig {
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   turnTimeout: number;
-  promptMode: "auto" | "at-path" | "inline";
   continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
   turns: number;
@@ -70,7 +69,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueRepo: "",
   issueCommentProgress: "true",
   turnTimeout: 0,
-  promptMode: "auto",
   continuous: "false",
   autoCommit: "false",
   turns: 5, // default turns budget (overridden by config/env/cli)
@@ -180,7 +178,6 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueRepo",
   "issueCommentProgress",
   "turnTimeout",
-  "promptMode",
   "continuous",
   "autoCommit",
   "turns",
@@ -331,14 +328,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.turnTimeout = v as number;
   }
 
-  // promptMode (enum)
-  if ("promptMode" in obj) {
-    const v = String(obj.promptMode || "");
-    if (!["auto", "at-path", "inline"].includes(v))
-      err(`'promptMode' must be 'auto', 'at-path', or 'inline', got '${v}'`);
-    values.promptMode = v as RalphaiConfig["promptMode"];
-  }
-
   // continuous (boolean)
   if ("continuous" in obj) {
     const v = obj.continuous;
@@ -455,7 +444,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
-  ["RALPHAI_PROMPT_MODE", "promptMode"],
   ["RALPHAI_CONTINUOUS", "continuous"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
   ["RALPHAI_TURNS", "turns"],
@@ -540,17 +528,6 @@ export function applyEnvOverrides(
   if (issueComment !== undefined) {
     validateBoolean(issueComment, "RALPHAI_ISSUE_COMMENT_PROGRESS");
     overrides.issueCommentProgress = issueComment;
-  }
-
-  // promptMode (enum)
-  const promptMode = get("RALPHAI_PROMPT_MODE");
-  if (promptMode !== undefined) {
-    validateEnum(promptMode, "RALPHAI_PROMPT_MODE", [
-      "auto",
-      "at-path",
-      "inline",
-    ]);
-    overrides.promptMode = promptMode as RalphaiConfig["promptMode"];
   }
 
   // continuous (boolean)
@@ -666,11 +643,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-auto-commit") {
       overrides.autoCommit = "false";
       rawFlags.autoCommit = "--no-auto-commit";
-    } else if (arg.startsWith("--prompt-mode=")) {
-      const v = arg.slice("--prompt-mode=".length);
-      validateEnum(v, "--prompt-mode", ["auto", "at-path", "inline"]);
-      overrides.promptMode = v as RalphaiConfig["promptMode"];
-      rawFlags.promptMode = arg;
     } else if (arg.startsWith("--issue-source=")) {
       const v = arg.slice("--issue-source=".length);
       validateEnum(v, "--issue-source", ["none", "github"]);

@@ -2,67 +2,32 @@ import { describe, it, expect } from "vitest";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import { resolvePromptMode, formatFileRef, assemblePrompt } from "./prompt.ts";
+import { formatFileRef, assemblePrompt } from "./prompt.ts";
 import type { AssemblePromptOptions } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
-// resolvePromptMode
-// ---------------------------------------------------------------------------
-
-describe("resolvePromptMode", () => {
-  it('passes through "at-path" unchanged', () => {
-    expect(resolvePromptMode("at-path", "claude")).toBe("at-path");
-  });
-
-  it('passes through "inline" unchanged', () => {
-    expect(resolvePromptMode("inline", "opencode")).toBe("inline");
-  });
-
-  it('resolves "auto" to "at-path" for claude', () => {
-    expect(resolvePromptMode("auto", "claude")).toBe("at-path");
-  });
-
-  it('resolves "auto" to "at-path" for opencode', () => {
-    expect(resolvePromptMode("auto", "opencode")).toBe("at-path");
-  });
-
-  it('resolves "auto" to "at-path" for unknown agents', () => {
-    expect(resolvePromptMode("auto", "unknown")).toBe("at-path");
-  });
-
-  it('resolves "auto" to "at-path" for codex', () => {
-    expect(resolvePromptMode("auto", "codex")).toBe("at-path");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// formatFileRef
+// formatFileRef (always inline)
 // ---------------------------------------------------------------------------
 
 describe("formatFileRef", () => {
   const ctx = useTempDir();
 
-  it("returns @path in at-path mode", () => {
-    const result = formatFileRef("plan.md", "at-path");
-    expect(result).toBe("@plan.md");
-  });
-
-  it("returns @path in inline mode when file does not exist", () => {
-    const result = formatFileRef("/nonexistent/file.md", "inline");
+  it("returns @path when file does not exist", () => {
+    const result = formatFileRef("/nonexistent/file.md");
     expect(result).toBe("@/nonexistent/file.md");
   });
 
-  it("wraps file contents in XML tags in inline mode", () => {
+  it("wraps file contents in XML tags", () => {
     const filePath = join(ctx.dir, "test.md");
     writeFileSync(filePath, "# Hello\nWorld");
-    const result = formatFileRef(filePath, "inline");
+    const result = formatFileRef(filePath);
     expect(result).toBe(`<file path="${filePath}">\n# Hello\nWorld\n</file>`);
   });
 
-  it("handles empty file in inline mode", () => {
+  it("handles empty file", () => {
     const filePath = join(ctx.dir, "empty.md");
     writeFileSync(filePath, "");
-    const result = formatFileRef(filePath, "inline");
+    const result = formatFileRef(filePath);
     expect(result).toBe(`<file path="${filePath}">\n\n</file>`);
   });
 });
@@ -80,7 +45,6 @@ describe("assemblePrompt", () => {
     return {
       planFile: "plan.md",
       progressFile: "progress.md",
-      promptMode: "at-path",
       feedbackCommands: "",
       scopeHint: "",
       mode: "branch",
@@ -184,7 +148,7 @@ describe("assemblePrompt", () => {
     // Learnings hint in step 1
     expect(prompt).toContain("rolling anti-repeat memory");
     // Learnings reference in file refs
-    expect(prompt).toContain(`@${learningsPath}`);
+    expect(prompt).toContain(`<file path="${learningsPath}">`);
     // Learnings steps 6-10
     expect(prompt).toContain("6. Read");
     expect(prompt).toContain("advisory memory");
@@ -216,9 +180,9 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Stage and commit ALL changes");
   });
 
-  // --- Inline mode ---
+  // --- Inline file references ---
 
-  it("inlines file content in inline prompt mode", () => {
+  it("inlines file content when file exists", () => {
     const planPath = join(ctx.dir, "plan.md");
     const progressPath = join(ctx.dir, "progress.md");
     writeFileSync(planPath, "# My Plan\nTask 1: do stuff");
@@ -228,7 +192,6 @@ describe("assemblePrompt", () => {
       baseOptions({
         planFile: planPath,
         progressFile: progressPath,
-        promptMode: "inline",
       }),
     );
     expect(prompt).toContain(`<file path="${planPath}">`);

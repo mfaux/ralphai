@@ -189,7 +189,6 @@ function makeResolvedConfig(
     issueRepo: "",
     issueCommentProgress: "true",
     turnTimeout: 0,
-    promptMode: "auto",
     continuous: "false",
     autoCommit: "false",
     turns: 1,

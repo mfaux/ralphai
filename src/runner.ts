@@ -23,11 +23,8 @@ import {
   getRepoCandidatesPath,
 } from "./global-state.ts";
 import { processLearnings } from "./learnings.ts";
-import {
-  resolvePromptMode,
-  assemblePrompt,
-  type ResolvedPromptMode,
-} from "./prompt.ts";
+import { assemblePrompt } from "./prompt.ts";
+import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { pullGithubIssues } from "./issues.ts";
 import {
   archiveRun,
@@ -435,7 +432,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
   const maxLearnings = config.maxLearnings.value;
-  const promptModeConfig = config.promptMode.value;
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
@@ -508,12 +504,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   };
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
-
-  // --- Resolve prompt mode ---
-  const promptMode: ResolvedPromptMode = resolvePromptMode(
-    promptModeConfig as "auto" | "at-path" | "inline",
-    agentCommand,
-  );
 
   // --- Main plan loop ---
   let plansCompleted = 0;
@@ -844,7 +834,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       const prompt = assemblePrompt({
         planFile,
         progressFile,
-        promptMode,
         feedbackCommands,
         scopeHint,
         mode,
@@ -873,6 +862,13 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         maxLearnings,
       );
       console.log(learningsResult.message);
+
+      // --- Extract and append progress block ---
+      const progressContent = extractProgressBlock(output);
+      if (progressContent) {
+        appendProgressBlock(progressFile, turn, progressContent);
+        console.log(`Appended progress block from turn ${turn}.`);
+      }
 
       if (exitCode !== 0 && !timedOut) {
         console.log();

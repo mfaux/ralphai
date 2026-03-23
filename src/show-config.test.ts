@@ -113,7 +113,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  turns              = 5  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  turnTimeout        = off  (default)");
-    expect(output).toContain("  promptMode         = auto  (default)");
     expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
   });

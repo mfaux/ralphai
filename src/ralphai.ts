@@ -599,7 +599,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     mode: answers.mode ?? "branch",
     autoCommit: answers.autoCommit ?? false,
     turnTimeout: 0,
-    promptMode: "auto",
     continuous: false,
     issueSource: answers.issueSource ?? "none",
     issueLabel: "ralphai",

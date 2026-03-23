@@ -1,6 +1,9 @@
 /**
- * Prompt assembly: resolves prompt mode, formats file references, and builds
- * the full agent prompt string for each turn of the runner loop.
+ * Prompt assembly: formats file references and builds the full agent
+ * prompt string for each turn of the runner loop.
+ *
+ * All file references are inlined (file content embedded in `<file>` XML
+ * tags). The `at-path` and `auto` prompt modes have been removed.
  */
 import { existsSync, readFileSync } from "fs";
 
@@ -8,17 +11,12 @@ import { existsSync, readFileSync } from "fs";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Concrete prompt mode after resolving "auto". */
-export type ResolvedPromptMode = "at-path" | "inline";
-
 /** Options for assembling the full agent prompt. */
 export interface AssemblePromptOptions {
   /** Plan file path (relative to repo root). */
   planFile: string;
   /** Progress file path (relative to repo root). */
   progressFile: string;
-  /** Resolved prompt mode. */
-  promptMode: ResolvedPromptMode;
   /** Comma-separated feedback commands (may be empty). */
   feedbackCommands: string;
   /** Monorepo scope hint (may be empty). */
@@ -32,54 +30,21 @@ export interface AssemblePromptOptions {
 }
 
 // ---------------------------------------------------------------------------
-// resolvePromptMode
-// ---------------------------------------------------------------------------
-
-/**
- * Map the configured prompt mode + detected agent type to a concrete mode.
- *
- * - "at-path" and "inline" pass through unchanged.
- * - "auto" selects based on agent type. Currently all agents default to
- *   "at-path" (the conservative default that works with all agents).
- */
-export function resolvePromptMode(
-  configMode: "auto" | "at-path" | "inline",
-  _agentType: string,
-): ResolvedPromptMode {
-  if (configMode === "at-path" || configMode === "inline") {
-    return configMode;
-  }
-  // "auto" mode: pick based on agent type.
-  // Conservative default: everything maps to "at-path".
-  // Agent-specific overrides can be added here as support is verified.
-  return "at-path";
-}
-
-// ---------------------------------------------------------------------------
 // formatFileRef
 // ---------------------------------------------------------------------------
 
 /**
  * Format a file reference for the agent prompt.
  *
- * - **at-path** mode: returns `@<filepath>` (the agent's tool reads the file).
- * - **inline** mode: reads the file and wraps contents in
- *   `<file path="...">...</file>` XML tags. Falls back to `@<filepath>` if
- *   the file does not exist.
+ * Reads the file and wraps contents in `<file path="...">...</file>` XML
+ * tags. Falls back to `@<filepath>` if the file does not exist.
  */
-export function formatFileRef(
-  filepath: string,
-  mode: ResolvedPromptMode,
-): string {
-  if (mode === "inline") {
-    if (existsSync(filepath)) {
-      const content = readFileSync(filepath, "utf8");
-      return `<file path="${filepath}">\n${content}\n</file>`;
-    }
-    // File doesn't exist — fall back to at-path reference
-    return `@${filepath}`;
+export function formatFileRef(filepath: string): string {
+  if (existsSync(filepath)) {
+    const content = readFileSync(filepath, "utf8");
+    return `<file path="${filepath}">\n${content}\n</file>`;
   }
-  // at-path mode (default)
+  // File doesn't exist — fall back to at-path reference
   return `@${filepath}`;
 }
 
@@ -96,7 +61,6 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const {
     planFile,
     progressFile,
-    promptMode,
     feedbackCommands,
     scopeHint,
     mode,
@@ -104,8 +68,8 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     learningCandidatesFile,
   } = options;
 
-  const planRef = formatFileRef(planFile, promptMode);
-  const progressRef = formatFileRef(progressFile, promptMode);
+  const planRef = formatFileRef(planFile);
+  const progressRef = formatFileRef(progressFile);
   const hasLearnings = existsSync(learningsFile);
 
   // --- File references header ---
@@ -114,7 +78,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   let learningsStep = "";
 
   if (hasLearnings) {
-    const learningsRef = formatFileRef(learningsFile, promptMode);
+    const learningsRef = formatFileRef(learningsFile);
     fileRefs += ` ${learningsRef}`;
     learningsHint =
       ` Also read ${learningsFile} as a rolling anti-repeat memory.` +
@@ -185,7 +149,12 @@ If no learnings this turn, use:
 status: none
 </entry>
 </learnings>
-The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.`;
+The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
+REQUIRED: Also include a <progress> block summarizing what you accomplished this turn:
+<progress>
+Short summary of what was done, decisions made, and current status.
+</progress>
+Ralphai extracts this block and appends it to the progress file automatically.`;
 }
 
 // ---------------------------------------------------------------------------

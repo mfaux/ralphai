@@ -344,3 +344,19 @@ Ralphai maintains two gitignored files for learning from mistakes:
 - **`.ralphai/LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
 
 **After runs:** review candidates, promote useful ones, and prune stale learnings entries.
+
+## Progress Extraction
+
+After each turn, Ralphai scans the agent's output for a `<progress>` block:
+
+```
+<progress>
+Completed Task 2. Tests pass. Moving to Task 3.
+</progress>
+```
+
+If found, the content is appended to `progress.md` in the plan's
+`in-progress/<slug>/` folder with a turn header (`### Turn N`). This
+keeps the progress log up to date even when the agent forgets to edit
+`progress.md` directly. The prompt instructs the agent to include a
+`<progress>` block in every response.

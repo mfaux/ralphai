@@ -490,17 +490,6 @@ describe("parseCLIArgs", () => {
     expect(result.rawFlags.autoCommit).toBe("--no-auto-commit");
   });
 
-  it("parses --prompt-mode=value", () => {
-    const result = parseCLIArgs(["--prompt-mode=inline"]);
-    expect(result.overrides.promptMode).toBe("inline");
-  });
-
-  it("rejects invalid --prompt-mode", () => {
-    expect(() => parseCLIArgs(["--prompt-mode=bad"])).toThrow(
-      "must be 'auto', 'at-path', or 'inline'",
-    );
-  });
-
   it("parses --issue-source=github", () => {
     const result = parseCLIArgs(["--issue-source=github"]);
     expect(result.overrides.issueSource).toBe("github");
