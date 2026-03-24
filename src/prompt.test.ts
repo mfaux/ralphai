@@ -134,8 +134,8 @@ describe("assemblePrompt", () => {
 
   it("omits learnings steps when LEARNINGS.md does not exist", () => {
     const prompt = assemblePrompt(baseOptions());
-    // Step 6 should be progress update, not learnings
-    expect(prompt).toContain("6. Update progress.md");
+    // Step 6 should be commit, not learnings
+    expect(prompt).toContain("6. Stage and commit ALL changes");
     expect(prompt).not.toContain("advisory memory");
     expect(prompt).not.toContain("LEARNING_CANDIDATES");
   });
@@ -147,22 +147,20 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(baseOptions());
     // Learnings hint in step 1
     expect(prompt).toContain("rolling anti-repeat memory");
-    // Learnings reference in file refs
-    expect(prompt).toContain(`<file path="${learningsPath}">`);
-    // Learnings steps 6-10
+    // Learnings reference uses label, not absolute path
+    expect(prompt).toContain(`<file path="LEARNINGS.md">`);
+    expect(prompt).not.toContain(`<file path="${learningsPath}">`);
+    // Learnings steps 6-9
     expect(prompt).toContain("6. Read");
     expect(prompt).toContain("advisory memory");
     expect(prompt).toContain("7. If you make a mistake");
     expect(prompt).toContain("8. If a lesson appears durable");
-    expect(prompt).toContain("9. Treat");
-    expect(prompt).toContain("10. Never edit AGENTS.md");
-    // Progress update step shifts to 7
-    expect(prompt).toContain("7. Update progress.md");
-    // Commit step shifts to 8
-    expect(prompt).toContain("8. Stage and commit ALL changes");
+    expect(prompt).toContain("9. Never edit AGENTS.md");
+    // Commit step shifts to 10
+    expect(prompt).toContain("10. Stage and commit ALL changes");
   });
 
-  it("includes LEARNING_CANDIDATES path in learnings steps", () => {
+  it("does not expose absolute paths for learnings files", () => {
     const learningsPath = join(ctx.dir, "LEARNINGS.md");
     writeFileSync(learningsPath, "# Learnings\n");
     const candidatesPath = join(ctx.dir, "LEARNING_CANDIDATES.md");
@@ -170,7 +168,9 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(
       baseOptions({ learningCandidatesFile: candidatesPath }),
     );
-    expect(prompt).toContain(candidatesPath);
+    // Labels are used, not absolute paths
+    expect(prompt).not.toContain(candidatesPath);
+    expect(prompt).not.toContain(learningsPath);
   });
 
   // --- PR mode ---
@@ -182,7 +182,7 @@ describe("assemblePrompt", () => {
 
   // --- Inline file references ---
 
-  it("inlines file content when file exists", () => {
+  it("inlines file content with labels instead of absolute paths", () => {
     const planPath = join(ctx.dir, "plan.md");
     const progressPath = join(ctx.dir, "progress.md");
     writeFileSync(planPath, "# My Plan\nTask 1: do stuff");
@@ -194,10 +194,14 @@ describe("assemblePrompt", () => {
         progressFile: progressPath,
       }),
     );
-    expect(prompt).toContain(`<file path="${planPath}">`);
+    // Labels are used in file tags, not absolute paths
+    expect(prompt).toContain(`<file path="plan.md">`);
     expect(prompt).toContain("# My Plan");
-    expect(prompt).toContain(`<file path="${progressPath}">`);
+    expect(prompt).toContain(`<file path="progress.md">`);
     expect(prompt).toContain("Nothing yet.");
+    // Absolute paths must NOT appear
+    expect(prompt).not.toContain(`<file path="${planPath}">`);
+    expect(prompt).not.toContain(`<file path="${progressPath}">`);
   });
 
   // --- Documentation step ---
@@ -216,5 +220,28 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Bug fix: Write a failing test FIRST");
     expect(prompt).toContain("New feature: Implement the feature");
     expect(prompt).toContain("Refactor: Verify existing tests pass");
+  });
+
+  // --- Progress via structured output ---
+
+  it("requires structured task markers inside <progress> block", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("<progress>");
+    expect(prompt).toContain("### Task N: <title>");
+    expect(prompt).toContain("**Status:** Complete");
+    expect(prompt).toContain("ralphai parses it to track task completion");
+    expect(prompt).toContain("Do NOT write progress.md directly");
+  });
+
+  it("does not instruct agents to update progress.md directly", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("Update progress.md");
+  });
+
+  it("does not instruct agents to update progress.md with learnings", () => {
+    const learningsPath = join(ctx.dir, "LEARNINGS.md");
+    writeFileSync(learningsPath, "# Learnings\n");
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("Update progress.md");
   });
 });

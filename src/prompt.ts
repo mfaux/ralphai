@@ -3,7 +3,10 @@
  * prompt string for each turn of the runner loop.
  *
  * All file references are inlined (file content embedded in `<file>` XML
- * tags). The `at-path` and `auto` prompt modes have been removed.
+ * tags). Progress is reported via structured `<progress>` output blocks
+ * in agent stdout, not by agents writing to the filesystem directly.
+ * The runner extracts these blocks and appends them to the global
+ * progress file.
  */
 import { existsSync, readFileSync } from "fs";
 
@@ -37,15 +40,20 @@ export interface AssemblePromptOptions {
  * Format a file reference for the agent prompt.
  *
  * Reads the file and wraps contents in `<file path="...">...</file>` XML
- * tags. Falls back to `@<filepath>` if the file does not exist.
+ * tags. Uses the provided `label` (if given) instead of the raw filesystem
+ * path so that agents running inside a sandbox never see absolute paths
+ * outside the repository and do not attempt to re-read them.
+ *
+ * Falls back to `@<label>` if the file does not exist.
  */
-export function formatFileRef(filepath: string): string {
+export function formatFileRef(filepath: string, label?: string): string {
+  const tag = label ?? filepath;
   if (existsSync(filepath)) {
     const content = readFileSync(filepath, "utf8");
-    return `<file path="${filepath}">\n${content}\n</file>`;
+    return `<file path="${tag}">\n${content}\n</file>`;
   }
   // File doesn't exist — fall back to at-path reference
-  return `@${filepath}`;
+  return `@${tag}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,8 +76,15 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     learningCandidatesFile,
   } = options;
 
-  const planRef = formatFileRef(planFile);
-  const progressRef = formatFileRef(progressFile);
+  // Use short labels instead of absolute paths so sandboxed agents never
+  // see external filesystem paths and don't try to re-read/write them.
+  const planLabel = "plan.md";
+  const progressLabel = "progress.md";
+  const learningsLabel = "LEARNINGS.md";
+  const learningCandidatesLabel = "LEARNING_CANDIDATES.md";
+
+  const planRef = formatFileRef(planFile, planLabel);
+  const progressRef = formatFileRef(progressFile, progressLabel);
   const hasLearnings = existsSync(learningsFile);
 
   // --- File references header ---
@@ -78,12 +93,12 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   let learningsStep = "";
 
   if (hasLearnings) {
-    const learningsRef = formatFileRef(learningsFile);
+    const learningsRef = formatFileRef(learningsFile, learningsLabel);
     fileRefs += ` ${learningsRef}`;
     learningsHint =
-      ` Also read ${learningsFile} as a rolling anti-repeat memory.` +
+      ` Also read ${learningsLabel} as a rolling anti-repeat memory.` +
       ` Apply durable lessons, but do not overfit to stale or overly specific anecdotes.`;
-    learningsStep = buildLearningsStep(learningsFile, learningCandidatesFile);
+    learningsStep = buildLearningsStep(learningsLabel, learningCandidatesLabel);
   }
 
   // --- Feedback commands text ---
@@ -92,8 +107,9 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : "";
 
   // --- Step numbering (shifts when learnings steps are present) ---
-  const progressStepNum = hasLearnings ? "7" : "6";
-  const commitStepNum = hasLearnings ? "8" : "7";
+  // Without learnings: steps 1-5 (core) + 6 (commit)
+  // With learnings: steps 1-5 (core) + 6-9 (learnings) + 10 (commit)
+  const commitStepNum = hasLearnings ? "10" : "6";
 
   // --- Mode-aware instructions ---
   const feedbackStep = feedbackText
@@ -124,13 +140,8 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${learningsStep}
-${progressStepNum}. Update ${progressFile} with what you did, decisions made, files changed, and any blockers. For each task you completed, include a heading and status marker in this exact format:
-   ### Task N: <title>
-   **Status:** Complete
-   <summary of what was done>
-   This format is required — ralphai parses it to track task completion.
 ${commitStepNum}. ${commitInstruction}
-Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window. Log each completed task in progress.md with its own heading and status marker.
+Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window.
 If all tasks are complete, output <promise>COMPLETE</promise> — ${completeInstruction}
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
 <learnings>
@@ -150,11 +161,19 @@ status: none
 </entry>
 </learnings>
 The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
-REQUIRED: Also include a <progress> block summarizing what you accomplished this turn:
+REQUIRED: Also include a <progress> block at the very end of your response (after learnings). For each task you completed this turn, use this exact format inside the block:
+### Task N: <title>
+**Status:** Complete
+<summary of what was done>
+This format is required — ralphai parses it to track task completion.
+If no tasks were fully completed this turn, include a brief summary of partial progress.
+Example:
 <progress>
-Short summary of what was done, decisions made, and current status.
+### Task 3: Add validation
+**Status:** Complete
+Added input validation to the parser module. Updated tests.
 </progress>
-Ralphai extracts this block and appends it to the progress file automatically.`;
+Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +181,7 @@ Ralphai extracts this block and appends it to the progress file automatically.`;
 // ---------------------------------------------------------------------------
 
 /**
- * Build the learnings instruction steps (steps 6-10 when learnings exist).
+ * Build the learnings instruction steps (steps 6-9 when learnings exist).
  */
 function buildLearningsStep(
   learningsFile: string,
@@ -175,7 +194,7 @@ function buildLearningsStep(
    - Be cautious with old, task-specific, or overly detailed entries.
    - If multiple entries overlap, follow the shared rule rather than the most specific incident.
 
-7. If you make a mistake, add or update an entry in ${learningsFile} only if it would help future runs avoid the same class of error.
+7. If you make a mistake, log it via the <learnings> block at the end of your response (see below). Do NOT edit ${learningsFile} directly — ralphai persists logged entries automatically.
    Each entry must include:
    - Date
    - What went wrong
@@ -189,14 +208,7 @@ function buildLearningsStep(
    - Do not create duplicate entries; merge or refine an existing entry when the lesson already exists.
 
 8. If a lesson appears durable, repo-specific, or useful beyond the current task, do not edit AGENTS.md.
-   Instead, append a short candidate entry to ${learningCandidatesFile} for later human review.
+   Instead, note it as a candidate in your <learnings> block for later human review.
 
-9. Treat ${learningCandidatesFile} as a review queue, not as active instructions.
-   Candidate entries should include:
-   - Date
-   - Proposed rule
-   - Why it matters
-   - Suggested destination
-
-10. Never edit AGENTS.md automatically based on learnings or candidates.`;
+9. Never edit AGENTS.md automatically based on learnings or candidates.`;
 }
