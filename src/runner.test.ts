@@ -138,6 +138,41 @@ describe("spawnAgent", () => {
     expect(result.output).toContain("err");
     expect(result.exitCode).toBe(0);
   });
+
+  test("writes output to outputLogPath when provided", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "spawn-log-"));
+    const logPath = join(tmpDir, "agent-output.log");
+    const result = await spawnAgent(
+      "bash -c 'echo logged-stdout; echo logged-stderr >&2'",
+      "",
+      0,
+      process.cwd(),
+      logPath,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(logPath)).toBe(true);
+    const logContent = readFileSync(logPath, "utf-8");
+    expect(logContent).toContain("logged-stdout");
+    expect(logContent).toContain("logged-stderr");
+  });
+
+  test("appends to existing outputLogPath", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "spawn-log-"));
+    const logPath = join(tmpDir, "agent-output.log");
+    writeFileSync(logPath, "--- Turn 1 ---\nprevious content\n");
+    const result = await spawnAgent(
+      "echo",
+      "turn2-output",
+      0,
+      process.cwd(),
+      logPath,
+    );
+    expect(result.exitCode).toBe(0);
+    const logContent = readFileSync(logPath, "utf-8");
+    expect(logContent).toContain("--- Turn 1 ---");
+    expect(logContent).toContain("previous content");
+    expect(logContent).toContain("turn2-output");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -313,6 +348,40 @@ describe("runRunner — completion", () => {
     // Plan should have been archived
     expect(existsSync(join(archiveDir, "simple", "simple.md"))).toBe(true);
     expect(existsSync(join(wipDir, "simple", "simple.md"))).toBe(false);
+  });
+
+  test("persists agent-output.log and archives it with the plan", async () => {
+    const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
+
+    writeFileSync(
+      join(backlogDir, "logtest.md"),
+      "# Plan: Log Test\n\n## Implementation Tasks\n\n### Task 1: Verify logging\n",
+    );
+
+    const agentScript = `bash -c 'echo "agent-says-hello"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        turns: 1,
+        autoCommit: "true",
+      }),
+      cwd: dir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+    };
+
+    await runRunner(opts);
+
+    // agent-output.log should be archived alongside the plan
+    const logFile = join(archiveDir, "logtest", "agent-output.log");
+    expect(existsSync(logFile)).toBe(true);
+    const content = readFileSync(logFile, "utf-8");
+    expect(content).toContain("--- Turn 1 ---");
+    expect(content).toContain("agent-says-hello");
   });
 
   test("stuck detection triggers after maxStuck turns with no progress", async () => {

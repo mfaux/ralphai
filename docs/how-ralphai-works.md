@@ -160,8 +160,9 @@ backlog/  →  in-progress/  →  out/
 - **`backlog/`** — the queue. Plans are flat `.md` files (e.g., `backlog/my-plan.md`).
   Ralphai picks dependency-ready plans
   (oldest first when multiple are ready).
-- **`in-progress/`** — active work. The plan folder contains the plan file and
-  `progress.md`. Files stay on interruption for resumption.
+- **`in-progress/`** — active work. The plan folder contains the plan file,
+  `progress.md`, `receipt.txt`, and `agent-output.log` (raw agent stdout/stderr
+  with turn headers). Files stay on interruption for resumption.
 - **`out/`** — archive. Plan folders move here when the agent signals completion.
 
 Plans can declare `depends-on` in YAML frontmatter. A plan runs only when

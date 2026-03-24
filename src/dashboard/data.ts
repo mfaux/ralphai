@@ -2,7 +2,7 @@
  * Data loading for the dashboard — reads pipeline state from disk.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import {
   listAllRepos,
@@ -87,15 +87,32 @@ export function loadPlans(cwd: string): PlanInfo[] {
       totalTasks: totalTasks > 0 ? totalTasks : undefined,
       outcome: receipt?.outcome ?? undefined,
       receiptSource: receipt?.source as "main" | "worktree" | undefined,
+      startedAt: receipt?.started_at ?? undefined,
+      branch: receipt?.branch ?? undefined,
+      worktreePath: receipt?.worktree_path ?? undefined,
     });
   }
 
   // Completed plans
   for (const slug of listPlanFolders(archiveDir)) {
+    const planFilePath = join(archiveDir, slug, `${slug}.md`);
+    const receiptPath = join(archiveDir, slug, "receipt.txt");
+    const receipt = parseReceipt(receiptPath);
+    const totalTasks = countPlanTasks(planFilePath);
+
     plans.push({
       filename: `${slug}.md`,
       slug,
       state: "completed",
+      turnsCompleted: receipt?.turns_completed,
+      turnsBudget: receipt?.turns_budget,
+      tasksCompleted: receipt?.tasks_completed,
+      totalTasks: totalTasks > 0 ? totalTasks : undefined,
+      outcome: receipt?.outcome ?? undefined,
+      receiptSource: receipt?.source as "main" | "worktree" | undefined,
+      startedAt: receipt?.started_at ?? undefined,
+      branch: receipt?.branch ?? undefined,
+      worktreePath: receipt?.worktree_path ?? undefined,
     });
   }
 
@@ -130,6 +147,81 @@ export function loadPlanContent(cwd: string, plan: PlanInfo): string | null {
 
   try {
     return readFileSync(planPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/** Read progress.md for a plan. */
+export function loadProgressContent(
+  cwd: string,
+  plan: PlanInfo,
+): string | null {
+  let dirs: ReturnType<typeof getRepoPipelineDirs>;
+  try {
+    dirs = getRepoPipelineDirs(cwd);
+  } catch {
+    return null;
+  }
+
+  const { wipDir: inProgressDir, archiveDir } = dirs;
+
+  let progressPath: string | null = null;
+  if (plan.state === "in-progress") {
+    progressPath = join(inProgressDir, plan.slug, "progress.md");
+  } else if (plan.state === "completed") {
+    progressPath = join(archiveDir, plan.slug, "progress.md");
+  }
+
+  if (!progressPath || !existsSync(progressPath)) return null;
+
+  try {
+    return readFileSync(progressPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the last `maxLines` of agent-output.log for a plan.
+ * Returns null if the file does not exist.
+ */
+export function loadOutputTail(
+  cwd: string,
+  plan: PlanInfo,
+  maxLines = 200,
+): { content: string; totalLines: number; isLive: boolean } | null {
+  let dirs: ReturnType<typeof getRepoPipelineDirs>;
+  try {
+    dirs = getRepoPipelineDirs(cwd);
+  } catch {
+    return null;
+  }
+
+  const { wipDir: inProgressDir, archiveDir } = dirs;
+
+  let outputPath: string | null = null;
+  if (plan.state === "in-progress") {
+    outputPath = join(inProgressDir, plan.slug, "agent-output.log");
+  } else if (plan.state === "completed") {
+    outputPath = join(archiveDir, plan.slug, "agent-output.log");
+  }
+
+  if (!outputPath || !existsSync(outputPath)) return null;
+
+  try {
+    const raw = readFileSync(outputPath, "utf-8");
+    const lines = raw.split("\n");
+    const totalLines = lines.length;
+
+    // Check if file was modified in the last 30 seconds (likely live)
+    const stat = statSync(outputPath);
+    const isLive = Date.now() - stat.mtimeMs < 30_000;
+
+    const tail =
+      totalLines > maxLines ? lines.slice(-maxLines).join("\n") : raw;
+
+    return { content: tail, totalLines, isLive };
   } catch {
     return null;
   }

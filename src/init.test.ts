@@ -178,8 +178,9 @@ describe("init command", () => {
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
-    expect(output).toContain("ralphai worktree");
+    expect(output).toContain("ralphai run");
     expect(output).toContain("config.json");
+    expect(output).toContain("hello-ralphai.md");
   });
 
   it("init --yes works without package.json", () => {

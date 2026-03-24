@@ -6,6 +6,7 @@ import { execSync, execFileSync } from "child_process";
 import { fileURLToPath } from "url";
 import { runCli, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -848,13 +849,8 @@ echo "$MODE"
       });
 
       // Remove sample plan so the backlog is empty for this test
-      const samplePlanFile = join(
-        ctx.dir,
-        ".ralphai",
-        "pipeline",
-        "backlog",
-        "hello-ralphai.md",
-      );
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const samplePlanFile = join(backlogDir, "hello-ralphai.md");
       if (existsSync(samplePlanFile)) rmSync(samplePlanFile, { force: true });
 
       const output = execFileSync(

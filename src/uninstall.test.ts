@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import {
   runCli,
@@ -69,7 +69,7 @@ describe("uninstall command", () => {
     );
 
     expect(output).toContain("Warning: active plans found");
-    expect(output).toContain("1 in backlog");
+    expect(output).toContain("2 in backlog");
   });
 
   it("uninstall --yes warns about plans in progress", () => {
@@ -108,12 +108,17 @@ describe("uninstall command", () => {
     );
 
     expect(output).toContain("Warning: active plans found");
-    expect(output).toContain("2 in backlog");
+    expect(output).toContain("3 in backlog");
     expect(output).toContain("1 in progress");
   });
 
   it("uninstall --yes does not warn when no plans exist", () => {
     runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+
+    // Remove sample plan so the backlog is truly empty
+    const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+    const samplePlan = join(backlogDir, "hello-ralphai.md");
+    if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
 
     const output = stripLogo(
       runCliOutput(["uninstall", "--yes"], ctx.dir, testEnv()),

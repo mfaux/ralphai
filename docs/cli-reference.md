@@ -44,10 +44,27 @@ Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`. Blo
 
 ### Interactive Dashboard
 
-Running `ralphai` with no subcommand in a TTY launches an interactive dashboard. The dashboard shows all known repos, lets you drill into plans by state (backlog, in-progress, completed), and provides keyboard shortcuts for common actions:
+Running `ralphai` with no subcommand in a TTY launches an interactive dashboard with a two-pane layout. The left pane lists plans grouped by state (active, queued, done); the right pane shows detail for the selected plan across four tabs.
 
-- **Arrow keys** to navigate, **Enter** to select, **Esc** to go back, **q** to quit
-- **r** to run a backlog plan, **w** to run in a worktree, **p** to preview, **x** to reset
+**Navigation:**
+
+- **Tab** toggles focus between the plan list and detail pane
+- **Up/Down** navigates the focused pane (list selection or scroll)
+- **Enter** selects a repo from the repo list
+- **Esc** goes back to the repo list, **q** quits
+
+**Detail tabs** (when detail pane is focused):
+
+- **s** Summary: plan description, branch, start time, task progress bar, and receipt fields for completed plans
+- **p** Plan: the raw plan markdown
+- **g** Progress: contents of `progress.md`
+- **o** Output: tail of `agent-output.log` with a live indicator while the agent is running
+
+**Actions:**
+
+- **r** run a backlog plan, **w** run in a worktree, **x** reset an in-progress plan
+- **f** toggle follow-tail in the output tab
+- **PgUp/PgDn** scroll content, **G** jump to bottom
 
 The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. In non-TTY environments (e.g., piped output), `ralphai` shows help text instead.
 

@@ -196,6 +196,11 @@ describe("worktree", () => {
       // Initialize config in global state with empty backlog
       runCli(["init", "--yes"], ctx.dir, testEnv());
 
+      // Remove sample plan so the backlog is empty for this test
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const samplePlan = join(backlogDir, "hello-ralphai.md");
+      if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
+
       const result = runCli(["worktree"], ctx.dir, testEnv());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("No plans in backlog");
@@ -317,6 +322,11 @@ describe("worktree", () => {
 
       // Initialize config in global state
       runCli(["init", "--yes"], ctx.dir, testEnv());
+
+      // Remove sample plan so only the in-progress plan is available
+      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const samplePlan = join(backlogDir, "hello-ralphai.md");
+      if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
 
       // Create in-progress plan in global state
       const { wipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
