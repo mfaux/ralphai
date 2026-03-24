@@ -138,13 +138,13 @@ The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-di
 
 ## Interactive Dashboard
 
-Running bare `ralphai` in a terminal launches an interactive dashboard. Browse repos, view plans by state, and manage runs with keyboard shortcuts.
+Running bare `ralphai` in a terminal launches an interactive two-pane dashboard. The left pane lists plans grouped by state (active, queued, done); the right pane shows detail tabs for the selected plan: summary, plan content, progress log, and live agent output.
 
 ```bash
 ralphai                  # launches the dashboard (TTY only)
 ```
 
-The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
+Press **Tab** to toggle focus between panes, **s/p/g/o** to switch detail tabs, and **r/w/x** to run, worktree, or reset plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
 
 This is a convenience layer. The headless `ralphai run` and `ralphai worktree` commands remain the primary workflow.
 

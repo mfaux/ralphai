@@ -9,7 +9,13 @@
  * Exported entry point: `runRunner(options)`.
  */
 import { spawn, execSync, type ChildProcess } from "child_process";
-import { existsSync, mkdirSync, writeFileSync, renameSync } from "fs";
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  renameSync,
+} from "fs";
 import { basename, dirname, join } from "path";
 
 import {
@@ -134,12 +140,24 @@ export function spawnAgent(
   prompt: string,
   turnTimeout: number,
   cwd: string,
+  outputLogPath?: string,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Split the agent command respecting quotes
     const parts = shellSplit(agentCommand);
     const cmd = parts[0]!;
     const args = [...parts.slice(1), prompt];
+
+    // Open a write stream for the agent output log (append mode).
+    // Errors are swallowed so logging never breaks the run.
+    let logStream: ReturnType<typeof createWriteStream> | undefined;
+    if (outputLogPath) {
+      try {
+        logStream = createWriteStream(outputLogPath, { flags: "a" });
+      } catch {
+        // Best-effort: if we can't open the log, continue without it
+      }
+    }
 
     let ac: AbortController | undefined;
     let timedOut = false;
@@ -168,6 +186,7 @@ export function spawnAgent(
       console.error(
         `Failed to spawn agent: ${err instanceof Error ? err.message : err}`,
       );
+      logStream?.end();
       resolve({ output: "", exitCode: 1, timedOut: false });
       return;
     }
@@ -180,20 +199,29 @@ export function spawnAgent(
 
     child.stdout?.on("data", (data: Buffer) => {
       process.stdout.write(data);
+      logStream?.write(data);
       chunks.push(data);
     });
 
     child.stderr?.on("data", (data: Buffer) => {
       process.stderr.write(data);
+      logStream?.write(data);
       chunks.push(data);
     });
 
     child.on("close", (code) => {
       const output = Buffer.concat(chunks).toString("utf-8");
-      resolve({ output, exitCode: code ?? 1, timedOut });
+      if (logStream) {
+        logStream.end(() => {
+          resolve({ output, exitCode: code ?? 1, timedOut });
+        });
+      } else {
+        resolve({ output, exitCode: code ?? 1, timedOut });
+      }
     });
 
     child.on("error", (err) => {
+      logStream?.end();
       if (timedOut) {
         const output = Buffer.concat(chunks).toString("utf-8");
         resolve({ output, exitCode: 124, timedOut: true });
@@ -841,12 +869,20 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         learningCandidatesFile,
       });
 
-      // --- Spawn agent ---
+      // --- Spawn agent (with output log persistence) ---
+      const outputLogPath = join(wipDir, "agent-output.log");
+      try {
+        const header = `\n--- Turn ${turn} ---\n`;
+        writeFileSync(outputLogPath, header, { flag: "a" });
+      } catch {
+        // Best-effort; non-fatal if we can't write the header
+      }
       const { output, exitCode, timedOut } = await spawnAgent(
         agentCommand,
         prompt,
         turnTimeout,
         cwd,
+        outputLogPath,
       );
 
       if (timedOut) {

@@ -4,6 +4,12 @@
 
 export type DashboardScreen = "repos" | "plans";
 
+/** Which pane has keyboard focus in the two-pane workspace. */
+export type PaneFocus = "list" | "detail";
+
+/** Tabs available in the detail pane. */
+export type DetailTab = "summary" | "plan" | "progress" | "output";
+
 export interface PlanInfo {
   filename: string;
   slug: string;
@@ -16,4 +22,8 @@ export interface PlanInfo {
   totalTasks?: number;
   outcome?: string;
   receiptSource?: "main" | "worktree";
+  /** Extra receipt fields for the summary tab. */
+  startedAt?: string;
+  branch?: string;
+  worktreePath?: string;
 }

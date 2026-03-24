@@ -103,4 +103,4 @@ ralphai repos --clean
 ralphai
 ```
 
-Running `ralphai` with no arguments in a terminal opens the interactive dashboard. Navigate repos, view plans by state, and trigger actions (run, preview, reset) with keyboard shortcuts. The dashboard auto-refreshes every 3 seconds.
+Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. The dashboard auto-refreshes every 3 seconds.

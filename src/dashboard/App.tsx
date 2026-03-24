@@ -9,7 +9,7 @@ import type { DashboardScreen, PlanInfo } from "./types.ts";
 import { loadRepos, loadPlans } from "./data.ts";
 import { useAutoRefresh } from "./hooks.ts";
 import { RepoList } from "./RepoList.tsx";
-import { PlanList } from "./PlanList.tsx";
+import { PlanWorkspace } from "./PlanWorkspace.tsx";
 
 const REFRESH_INTERVAL_MS = 3000;
 
@@ -59,7 +59,7 @@ export function App() {
           onQuit={handleQuit}
         />
       ) : selectedRepo ? (
-        <PlanList
+        <PlanWorkspace
           repo={selectedRepo}
           plans={plans}
           onBack={handleBack}
