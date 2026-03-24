@@ -19,16 +19,6 @@ export interface ActionMenuItem {
 }
 
 // ---------------------------------------------------------------------------
-// Deprecated aliases — kept until old components are removed in Task 5
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use PanelId instead. */
-export type DashboardScreen = "repos" | "plans";
-
-/** @deprecated Use FocusTarget instead. */
-export type PaneFocus = "list" | "detail";
-
-// ---------------------------------------------------------------------------
 // Worktree data
 // ---------------------------------------------------------------------------
 

@@ -18,6 +18,7 @@ interface PipelinePanelProps {
   width: number;
   height?: number;
   collapsed?: boolean;
+  repoName?: string;
 }
 
 const STATE_ORDER: PlanInfo["state"][] = [
@@ -41,10 +42,14 @@ const STATE_BADGE_COLOR: Record<
   completed: "gray",
 };
 
-function panelHeader(width: number, active: boolean): string {
-  const prefix = "2 Pipeline ";
-  const lineLen = Math.max(0, width - prefix.length);
-  return prefix + "\u2500".repeat(lineLen);
+function panelHeader(
+  width: number,
+  active: boolean,
+  repoName?: string,
+): string {
+  const label = repoName ? `2 Pipeline (${repoName}) ` : "2 Pipeline ";
+  const lineLen = Math.max(0, width - label.length);
+  return label + "\u2500".repeat(lineLen);
 }
 
 function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
@@ -77,8 +82,9 @@ export function PipelinePanel({
   width,
   height,
   collapsed,
+  repoName,
 }: PipelinePanelProps) {
-  const header = panelHeader(width, active);
+  const header = panelHeader(width, active, repoName);
 
   if (collapsed) {
     return (
