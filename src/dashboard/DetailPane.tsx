@@ -9,6 +9,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
+import { wrapText } from "./format.ts";
 
 interface DetailPaneProps {
   plan: PlanInfo | null;
@@ -20,6 +21,7 @@ interface DetailPaneProps {
   outputData: { content: string; totalLines: number; isLive: boolean } | null;
   contentHeight: number;
   followTail: boolean;
+  width: number;
 }
 
 const TABS: DetailTab[] = ["summary", "plan", "progress", "output"];
@@ -249,10 +251,19 @@ export function DetailPane({
   outputData,
   contentHeight,
   followTail,
+  width,
 }: DetailPaneProps) {
+  // Usable content width after paddingLeft={2}
+  const contentWidth = Math.max(1, width - 2);
+
   if (!plan) {
     return (
-      <Box flexDirection="column" paddingLeft={2} flexGrow={1}>
+      <Box
+        flexDirection="column"
+        paddingLeft={2}
+        width={width}
+        overflow="hidden"
+      >
         <Text dimColor>Select a plan to view details.</Text>
         <Text dimColor>
           Navigate to the Pipeline panel and press Enter on a plan.
@@ -262,7 +273,7 @@ export function DetailPane({
   }
 
   return (
-    <Box flexDirection="column" paddingLeft={2} flexGrow={1}>
+    <Box flexDirection="column" paddingLeft={2} width={width} overflow="hidden">
       {/* Plan title + live badge */}
       <Box>
         <Text bold color={focused ? "cyan" : undefined}>
@@ -291,7 +302,7 @@ export function DetailPane({
         {tab === "plan" &&
           (planContent ? (
             <ContentView
-              lines={planContent.split("\n")}
+              lines={wrapText(planContent, contentWidth)}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -302,7 +313,7 @@ export function DetailPane({
         {tab === "progress" &&
           (progressContent ? (
             <ContentView
-              lines={progressContent.split("\n")}
+              lines={wrapText(progressContent, contentWidth)}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -313,7 +324,7 @@ export function DetailPane({
         {tab === "output" &&
           (outputData ? (
             <ContentView
-              lines={outputData.content.split("\n")}
+              lines={wrapText(outputData.content, contentWidth)}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
               footer={

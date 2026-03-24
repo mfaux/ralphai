@@ -63,6 +63,9 @@ export function App() {
     Math.min(Math.floor(termCols * 0.3), Math.floor(termCols * 0.4)),
   );
 
+  // --- Detail pane width (fills remaining space) ---
+  const detailWidth = termCols - leftWidth;
+
   // --- Left panels share vertical space. Pipeline gets most room. ---
   const availableRows = termRows - CHROME_ROWS;
   const reposHeight = Math.max(
@@ -134,6 +137,7 @@ export function App() {
           outputData={outputData}
           contentHeight={contentHeight}
           followTail={followTail}
+          width={detailWidth}
         />
       </Box>
 

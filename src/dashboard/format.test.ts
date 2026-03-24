@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateSlug } from "./format.ts";
+import { truncateSlug, wrapText } from "./format.ts";
 
 describe("truncateSlug", () => {
   it("returns slug unchanged when shorter than maxLen", () => {
@@ -39,5 +39,68 @@ describe("truncateSlug", () => {
     // "-leading-dash" with maxLen 5
     // truncatable = "-lead", lastDash at 0 — but lastDash > 0 is false, so hard-truncate
     expect(truncateSlug("-leading-dash", 5)).toBe("-lea\u2026");
+  });
+});
+
+describe("wrapText", () => {
+  it("returns short lines unchanged", () => {
+    expect(wrapText("hello world", 40)).toEqual(["hello world"]);
+  });
+
+  it("preserves existing newlines", () => {
+    expect(wrapText("line one\nline two\nline three", 40)).toEqual([
+      "line one",
+      "line two",
+      "line three",
+    ]);
+  });
+
+  it("wraps a long line at word boundaries", () => {
+    expect(wrapText("the quick brown fox jumps", 15)).toEqual([
+      "the quick brown",
+      "fox jumps",
+    ]);
+  });
+
+  it("hard-breaks a single word longer than width", () => {
+    expect(wrapText("abcdefghij", 4)).toEqual(["abcd", "efgh", "ij"]);
+  });
+
+  it("handles empty input", () => {
+    expect(wrapText("", 40)).toEqual([""]);
+  });
+
+  it("handles empty lines between content", () => {
+    expect(wrapText("hello\n\nworld", 40)).toEqual(["hello", "", "world"]);
+  });
+
+  it("wraps multi-line text with mixed short and long lines", () => {
+    const input = "short\nthis is a longer line that needs wrapping here";
+    expect(wrapText(input, 20)).toEqual([
+      "short",
+      "this is a longer",
+      "line that needs",
+      "wrapping here",
+    ]);
+  });
+
+  it("handles width of 1", () => {
+    expect(wrapText("ab", 1)).toEqual(["a", "b"]);
+  });
+
+  it("handles width <= 0 gracefully by returning unsplit lines", () => {
+    expect(wrapText("hello\nworld", 0)).toEqual(["hello", "world"]);
+  });
+
+  it("wraps the progress log example correctly", () => {
+    const longLine =
+      "Completed Task 1 (types/hooks) and Task 2 (three left panels + format helpers).";
+    const result = wrapText(longLine, 40);
+    // Every wrapped line should fit within width
+    for (const line of result) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+    // Joined content should match original (minus the space where we broke)
+    expect(result.join(" ")).toBe(longLine);
   });
 });
