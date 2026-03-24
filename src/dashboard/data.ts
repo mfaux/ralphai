@@ -3,6 +3,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "fs";
+import { execSync } from "child_process";
 import { join } from "path";
 import {
   listAllRepos,
@@ -17,7 +18,7 @@ import {
 } from "../plan-detection.ts";
 import { parseReceipt } from "../receipt.ts";
 import { extractScope, extractDependsOn } from "../frontmatter.ts";
-import type { PlanInfo } from "./types.ts";
+import type { PlanInfo, WorktreeInfo } from "./types.ts";
 
 export { type RepoSummary };
 
@@ -225,4 +226,101 @@ export function loadOutputTail(
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Worktree loading
+// ---------------------------------------------------------------------------
+
+interface RawWorktreeEntry {
+  path: string;
+  branch: string;
+  head: string;
+  bare: boolean;
+}
+
+/**
+ * Parse the porcelain output of `git worktree list --porcelain`.
+ */
+function parseWorktreeList(output: string): RawWorktreeEntry[] {
+  const entries: RawWorktreeEntry[] = [];
+  let current: Partial<RawWorktreeEntry> = {};
+
+  for (const line of output.split("\n")) {
+    if (line === "") {
+      if (current.path) {
+        entries.push({
+          path: current.path,
+          branch: current.branch ?? "",
+          head: current.head ?? "",
+          bare: current.bare ?? false,
+        });
+      }
+      current = {};
+    } else if (line.startsWith("worktree ")) {
+      current.path = line.slice("worktree ".length);
+    } else if (line.startsWith("HEAD ")) {
+      current.head = line.slice("HEAD ".length);
+    } else if (line.startsWith("branch ")) {
+      current.branch = line.slice("branch ".length).replace("refs/heads/", "");
+    } else if (line === "bare") {
+      current.bare = true;
+    }
+  }
+
+  // Handle last entry if no trailing newline
+  if (current.path) {
+    entries.push({
+      path: current.path,
+      branch: current.branch ?? "",
+      head: current.head ?? "",
+      bare: current.bare ?? false,
+    });
+  }
+
+  return entries;
+}
+
+/**
+ * Load worktrees for a repo, filtered to `ralphai/` branches.
+ * Returns enriched WorktreeInfo with status and linked plan data.
+ */
+export function loadWorktrees(cwd: string, plans?: PlanInfo[]): WorktreeInfo[] {
+  let output: string;
+  try {
+    output = execSync("git worktree list --porcelain", {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch {
+    return [];
+  }
+
+  const raw = parseWorktreeList(output).filter((wt) =>
+    wt.branch.startsWith("ralphai/"),
+  );
+
+  const activeSlugs = new Set(
+    (plans ?? []).filter((p) => p.state === "in-progress").map((p) => p.slug),
+  );
+
+  return raw.map((wt) => {
+    const shortBranch = wt.branch.replace(/^ralphai\//, "");
+    const linkedPlan = (plans ?? []).find(
+      (p) => p.branch === wt.branch || p.slug === shortBranch,
+    );
+
+    return {
+      path: wt.path,
+      branch: wt.branch,
+      head: wt.head,
+      bare: wt.bare,
+      shortBranch,
+      status: activeSlugs.has(shortBranch)
+        ? ("active" as const)
+        : ("idle" as const),
+      linkedPlan: linkedPlan?.slug,
+    };
+  });
 }
