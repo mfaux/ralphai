@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type { PlanInfo } from "./types.ts";
 import { truncateSlug } from "./format.ts";
 import { PanelBox } from "./PanelBox.tsx";
+import { useSpinner } from "./hooks.ts";
 
 interface PipelinePanelProps {
   plans: PlanInfo[];
@@ -66,6 +67,53 @@ function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
   );
 }
 
+/** State badge character for non-active states. */
+function stateBadge(state: PlanInfo["state"]): string {
+  switch (state) {
+    case "backlog":
+      return "\u25CB";
+    case "completed":
+      return "\u2713";
+    default:
+      return "";
+  }
+}
+
+function PlanRow({
+  plan,
+  selected,
+  panelActive,
+  maxSlugLen,
+  width,
+}: {
+  plan: PlanInfo;
+  selected: boolean;
+  panelActive: boolean;
+  maxSlugLen: number;
+  width: number;
+}) {
+  const spinner = useSpinner(plan.state === "in-progress");
+  const pointer = selected ? "\u27A4" : " ";
+  const badge = plan.state === "in-progress" ? spinner : stateBadge(plan.state);
+  const truncated = truncateSlug(plan.slug, maxSlugLen);
+
+  return (
+    <Box key={plan.slug + plan.state}>
+      <Text
+        color={
+          selected && panelActive ? "cyan" : selected ? "white" : undefined
+        }
+        bold={selected}
+      >
+        {pointer}
+        {badge ? ` ${badge}` : ""} {truncated}
+      </Text>
+      {width >= 35 && plan.scope && <Text dimColor> [{plan.scope}]</Text>}
+      <ProgressIndicator plan={plan} width={width} />
+    </Box>
+  );
+}
+
 export function PipelinePanel({
   plans,
   cursor,
@@ -116,24 +164,16 @@ export function PipelinePanel({
           const items = group.map((plan) => {
             const idx = flatIndex++;
             const selected = idx === cursor;
-            const pointer = selected ? "\u27A4" : " ";
-            const truncated = truncateSlug(plan.slug, maxSlugLen);
 
             return (
-              <Box key={plan.slug + plan.state}>
-                <Text
-                  color={
-                    selected && active ? "cyan" : selected ? "white" : undefined
-                  }
-                  bold={selected}
-                >
-                  {pointer} {truncated}
-                </Text>
-                {width >= 35 && plan.scope && (
-                  <Text dimColor> [{plan.scope}]</Text>
-                )}
-                <ProgressIndicator plan={plan} width={width} />
-              </Box>
+              <PlanRow
+                key={plan.slug + plan.state}
+                plan={plan}
+                selected={selected}
+                panelActive={active}
+                maxSlugLen={maxSlugLen}
+                width={width}
+              />
             );
           });
 

@@ -114,6 +114,44 @@ export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
 }
 
 // ---------------------------------------------------------------------------
+// useSpinner
+// ---------------------------------------------------------------------------
+
+/** Braille dot animation frames. */
+export const SPINNER_FRAMES = [
+  "\u280B",
+  "\u2819",
+  "\u2839",
+  "\u2838",
+  "\u283C",
+  "\u2834",
+  "\u2826",
+  "\u2827",
+  "\u2807",
+  "\u280F",
+] as const;
+
+/**
+ * Animated braille-dot spinner hook. When `active` is true, cycles through
+ * SPINNER_FRAMES at ~100ms. Returns the current frame character, or an
+ * empty string when inactive.
+ */
+export function useSpinner(active: boolean): string {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      setFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
+    }, 100);
+    return () => clearInterval(id);
+  }, [active]);
+
+  if (!active) return "";
+  return SPINNER_FRAMES[frame % SPINNER_FRAMES.length]!;
+}
+
+// ---------------------------------------------------------------------------
 // usePanelNavigation
 // ---------------------------------------------------------------------------
 

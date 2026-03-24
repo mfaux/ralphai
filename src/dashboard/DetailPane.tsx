@@ -11,6 +11,7 @@ import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
 import { PanelBox } from "./PanelBox.tsx";
+import { useSpinner } from "./hooks.ts";
 
 interface DetailPaneProps {
   plan: PlanInfo | null;
@@ -78,6 +79,7 @@ function ProgressBar({
 }
 
 function SummaryView({ plan }: { plan: PlanInfo }) {
+  const spinner = useSpinner(plan.state === "in-progress");
   const stateColor =
     plan.state === "in-progress"
       ? "green"
@@ -86,7 +88,7 @@ function SummaryView({ plan }: { plan: PlanInfo }) {
         : "gray";
   const stateBadge =
     plan.state === "in-progress"
-      ? "\u25CF"
+      ? spinner
       : plan.state === "backlog"
         ? "\u25CB"
         : "\u2713";
@@ -257,6 +259,9 @@ export function DetailPane({
   // Usable content width after border chrome (2 columns)
   const contentWidth = Math.max(1, width - 2);
 
+  const isLive = tab === "output" && (outputData?.isLive ?? false);
+  const liveSpinner = useSpinner(isLive);
+
   if (!plan) {
     return (
       <PanelBox title="Details" active={focused} width={width}>
@@ -270,7 +275,7 @@ export function DetailPane({
 
   const planTitle =
     plan.slug +
-    (tab === "output" && outputData?.isLive ? "  \u25CF LIVE" : "") +
+    (isLive ? `  ${liveSpinner} LIVE` : "") +
     (tab === "output" && followTail ? " [follow]" : "") +
     (plan.state === "completed" ? "  \u2713 done" : "");
 
