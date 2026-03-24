@@ -3,7 +3,10 @@
  * prompt string for each turn of the runner loop.
  *
  * All file references are inlined (file content embedded in `<file>` XML
- * tags). The `at-path` and `auto` prompt modes have been removed.
+ * tags). Progress is reported via structured `<progress>` output blocks
+ * in agent stdout, not by agents writing to the filesystem directly.
+ * The runner extracts these blocks and appends them to the global
+ * progress file.
  */
 import { existsSync, readFileSync } from "fs";
 
@@ -104,10 +107,9 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : "";
 
   // --- Step numbering (shifts when learnings steps are present) ---
-  // Without learnings: steps 1-5 (core) + 6 (progress) + 7 (commit)
-  // With learnings: steps 1-5 (core) + 6-9 (learnings) + 10 (progress) + 11 (commit)
-  const progressStepNum = hasLearnings ? "10" : "6";
-  const commitStepNum = hasLearnings ? "11" : "7";
+  // Without learnings: steps 1-5 (core) + 6 (commit)
+  // With learnings: steps 1-5 (core) + 6-9 (learnings) + 10 (commit)
+  const commitStepNum = hasLearnings ? "10" : "6";
 
   // --- Mode-aware instructions ---
   const feedbackStep = feedbackText
@@ -138,13 +140,8 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${learningsStep}
-${progressStepNum}. Update ${progressLabel} with what you did, decisions made, files changed, and any blockers. For each task you completed, include a heading and status marker in this exact format:
-   ### Task N: <title>
-   **Status:** Complete
-   <summary of what was done>
-   This format is required — ralphai parses it to track task completion.
 ${commitStepNum}. ${commitInstruction}
-Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window. Log each completed task in progress.md with its own heading and status marker.
+Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window.
 If all tasks are complete, output <promise>COMPLETE</promise> — ${completeInstruction}
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
 <learnings>
@@ -164,11 +161,19 @@ status: none
 </entry>
 </learnings>
 The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
-REQUIRED: Also include a <progress> block summarizing what you accomplished this turn:
+REQUIRED: Also include a <progress> block at the very end of your response (after learnings). For each task you completed this turn, use this exact format inside the block:
+### Task N: <title>
+**Status:** Complete
+<summary of what was done>
+This format is required — ralphai parses it to track task completion.
+If no tasks were fully completed this turn, include a brief summary of partial progress.
+Example:
 <progress>
-Short summary of what was done, decisions made, and current status.
+### Task 3: Add validation
+**Status:** Complete
+Added input validation to the parser module. Updated tests.
 </progress>
-Ralphai extracts this block and appends it to the progress file automatically.`;
+Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
 }
 
 // ---------------------------------------------------------------------------
