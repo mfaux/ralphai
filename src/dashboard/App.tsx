@@ -153,6 +153,8 @@ export function App() {
         toast={toast}
         repoName={selectedRepo?.id ?? null}
         planCount={plans.length}
+        selectedPlan={selectedPlan}
+        hasActiveRunners={plans.some((p) => p.state === "in-progress")}
       />
 
       {/* Overlays — rendered inside a full-screen backdrop to prevent

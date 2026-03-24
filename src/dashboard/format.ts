@@ -21,6 +21,31 @@ export function truncateSlug(slug: string, maxLen: number): string {
 }
 
 /**
+ * Format an ISO timestamp as a compact elapsed-time string relative to now.
+ * Returns `""` for undefined/invalid input.
+ * Accepts an optional `now` timestamp (ms) for deterministic testing.
+ */
+export function formatElapsed(
+  startedAt: string | undefined,
+  now?: number,
+): string {
+  if (!startedAt) return "";
+  const start = new Date(startedAt).getTime();
+  if (Number.isNaN(start)) return "";
+  const diffMs = (now ?? Date.now()) - start;
+  if (diffMs < 0) return "";
+
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return "< 1m";
+}
+
+/**
  * Word-wrap a single line to fit within `width` columns.
  * Splits at the last space before the limit. If a single word exceeds
  * `width`, it is hard-broken at the boundary.
