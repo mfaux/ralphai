@@ -1,8 +1,17 @@
+import { join } from "path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be set up before importing the module under test
 // ---------------------------------------------------------------------------
+
+// Use path.join so expected paths use the platform separator (backslash on
+// Windows, forward slash elsewhere). The production code already uses
+// path.join, so both sides stay consistent.
+const REPO = join("/repo");
+const BACKLOG = join("/repo", ".ralphai", "pipeline", "backlog");
+const WIP = join("/repo", ".ralphai", "pipeline", "wip");
+const ARCHIVE = join("/repo", ".ralphai", "pipeline", "out");
 
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
@@ -21,9 +30,9 @@ vi.mock("fs", () => ({
 
 vi.mock("../global-state.ts", () => ({
   getRepoPipelineDirs: vi.fn(() => ({
-    backlogDir: "/repo/.ralphai/pipeline/backlog",
-    wipDir: "/repo/.ralphai/pipeline/wip",
-    archiveDir: "/repo/.ralphai/pipeline/out",
+    backlogDir: join("/repo", ".ralphai", "pipeline", "backlog"),
+    wipDir: join("/repo", ".ralphai", "pipeline", "wip"),
+    archiveDir: join("/repo", ".ralphai", "pipeline", "out"),
   })),
 }));
 
@@ -57,8 +66,8 @@ beforeEach(() => {
 describe("removeWorktree", () => {
   it("runs prune, remove --force, and branch -D in sequence", () => {
     const result = removeWorktree(
-      "/repo",
-      "/repo/.worktrees/my-feature",
+      REPO,
+      join(REPO, ".worktrees", "my-feature"),
       "ralphai/my-feature",
     );
 
@@ -68,13 +77,13 @@ describe("removeWorktree", () => {
     const calls = mockExecSync.mock.calls;
     expect(calls[0]![0]).toBe("git worktree prune");
     expect(calls[1]![0]).toBe(
-      'git worktree remove --force "/repo/.worktrees/my-feature"',
+      `git worktree remove --force "${join(REPO, ".worktrees", "my-feature")}"`,
     );
     expect(calls[2]![0]).toBe('git branch -D "ralphai/my-feature"');
 
     // All called with cwd
     for (const call of calls) {
-      expect(call[1]).toMatchObject({ cwd: "/repo" });
+      expect(call[1]).toMatchObject({ cwd: REPO });
     }
   });
 
@@ -87,8 +96,8 @@ describe("removeWorktree", () => {
     });
 
     const result = removeWorktree(
-      "/repo",
-      "/repo/.worktrees/locked-wt",
+      REPO,
+      join(REPO, ".worktrees", "locked-wt"),
       "ralphai/locked-wt",
     );
     expect(result).toBe(false);
@@ -109,37 +118,35 @@ describe("removeWorktree", () => {
 
 describe("resetPlan", () => {
   it("moves plan back to backlog and cleans up slug dir", () => {
-    const result = resetPlan("/repo", "add-auth");
+    const result = resetPlan(REPO, "add-auth");
 
     expect(result).toBe(true);
-    expect(mkdirSync).toHaveBeenCalledWith("/repo/.ralphai/pipeline/backlog", {
+    expect(mkdirSync).toHaveBeenCalledWith(BACKLOG, {
       recursive: true,
     });
     // Removes progress.md and receipt.txt
-    expect(rmSync).toHaveBeenCalledWith(
-      "/repo/.ralphai/pipeline/wip/add-auth/progress.md",
-      { force: true },
-    );
-    expect(rmSync).toHaveBeenCalledWith(
-      "/repo/.ralphai/pipeline/wip/add-auth/receipt.txt",
-      { force: true },
-    );
+    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "progress.md"), {
+      force: true,
+    });
+    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "receipt.txt"), {
+      force: true,
+    });
     // Renames plan file
     expect(renameSync).toHaveBeenCalledWith(
-      "/repo/.ralphai/pipeline/wip/add-auth/add-auth.md",
-      "/repo/.ralphai/pipeline/backlog/add-auth.md",
+      join(WIP, "add-auth", "add-auth.md"),
+      join(BACKLOG, "add-auth.md"),
     );
     // Removes slug directory
-    expect(rmSync).toHaveBeenCalledWith(
-      "/repo/.ralphai/pipeline/wip/add-auth",
-      { recursive: true, force: true },
-    );
+    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth"), {
+      recursive: true,
+      force: true,
+    });
   });
 
   it("returns false when slug directory does not exist", () => {
     mockExistsSync.mockReturnValue(false);
 
-    expect(resetPlan("/repo", "nonexistent")).toBe(false);
+    expect(resetPlan(REPO, "nonexistent")).toBe(false);
   });
 
   it("returns false on filesystem error", () => {
@@ -148,7 +155,7 @@ describe("resetPlan", () => {
       throw new Error("EACCES");
     });
 
-    expect(resetPlan("/repo", "locked-plan")).toBe(false);
+    expect(resetPlan(REPO, "locked-plan")).toBe(false);
   });
 });
 
@@ -158,19 +165,19 @@ describe("resetPlan", () => {
 
 describe("purgePlan", () => {
   it("removes the archive slug directory", () => {
-    const result = purgePlan("/repo", "old-plan");
+    const result = purgePlan(REPO, "old-plan");
 
     expect(result).toBe(true);
-    expect(rmSync).toHaveBeenCalledWith(
-      "/repo/.ralphai/pipeline/out/old-plan",
-      { recursive: true, force: true },
-    );
+    expect(rmSync).toHaveBeenCalledWith(join(ARCHIVE, "old-plan"), {
+      recursive: true,
+      force: true,
+    });
   });
 
   it("returns false when archive directory does not exist", () => {
     mockExistsSync.mockReturnValue(false);
 
-    expect(purgePlan("/repo", "missing")).toBe(false);
+    expect(purgePlan(REPO, "missing")).toBe(false);
   });
 });
 
@@ -180,7 +187,7 @@ describe("purgePlan", () => {
 
 describe("spawnRunner", () => {
   it("spawns a detached process with correct args", () => {
-    const pid = spawnRunner("/repo", "my-plan");
+    const pid = spawnRunner(REPO, "my-plan");
 
     expect(pid).toBe(12345);
     expect(mockSpawn).toHaveBeenCalledTimes(1);
@@ -188,14 +195,14 @@ describe("spawnRunner", () => {
     const [cmd, args, opts] = mockSpawn.mock.calls[0]!;
     expect(args).toEqual(expect.arrayContaining(["run", "--plan=my-plan"]));
     expect(opts).toMatchObject({
-      cwd: "/repo",
+      cwd: REPO,
       detached: true,
       stdio: "ignore",
     });
   });
 
   it("calls unref on the child process", () => {
-    spawnRunner("/repo", "my-plan");
+    spawnRunner(REPO, "my-plan");
 
     const child = mockSpawn.mock.results[0]!.value;
     expect(child.unref).toHaveBeenCalled();
@@ -206,7 +213,7 @@ describe("spawnRunner", () => {
       throw new Error("spawn failed");
     });
 
-    expect(spawnRunner("/repo", "bad")).toBeNull();
+    expect(spawnRunner(REPO, "bad")).toBeNull();
   });
 });
 
@@ -216,7 +223,7 @@ describe("spawnRunner", () => {
 
 describe("spawnWorktreeRunner", () => {
   it("spawns with worktree subcommand", () => {
-    const pid = spawnWorktreeRunner("/repo", "wt-plan");
+    const pid = spawnWorktreeRunner(REPO, "wt-plan");
 
     expect(pid).toBe(12345);
 
@@ -231,6 +238,6 @@ describe("spawnWorktreeRunner", () => {
       throw new Error("nope");
     });
 
-    expect(spawnWorktreeRunner("/repo", "bad")).toBeNull();
+    expect(spawnWorktreeRunner(REPO, "bad")).toBeNull();
   });
 });
