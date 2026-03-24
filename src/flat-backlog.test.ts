@@ -60,12 +60,12 @@ describe("flat backlog plan discovery", () => {
     expect(output).toContain("flat-two.md");
   });
 
-  it("init --yes does not create sample plan (global state only)", () => {
+  it("init --yes creates sample plan in global backlog", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // No sample plan should be created (init writes only config now)
-    expect(existsSync(join(bd, "hello-ralphai.md"))).toBe(false);
-    // Slug-folder should NOT exist either
+    // Sample plan should be created as a flat file in the global backlog
+    expect(existsSync(join(bd, "hello-ralphai.md"))).toBe(true);
+    // Slug-folder should NOT exist (it's a flat backlog file)
     expect(existsSync(join(bd, "hello-ralphai", "hello-ralphai.md"))).toBe(
       false,
     );
@@ -74,12 +74,12 @@ describe("flat backlog plan discovery", () => {
   it("doctor detects flat backlog plans", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // Add a flat plan
+    // Add a flat plan (hello-ralphai.md already exists from init)
     writeFileSync(join(bd, "doc-plan.md"), "# Plan: Doc Plan\n");
 
     const output = runCliOutput(["doctor"], ctx.dir, testEnv());
     expect(output).toContain("backlog:");
-    expect(output).toContain("1 plan");
+    expect(output).toContain("2 plan");
   });
 });
 
@@ -149,6 +149,9 @@ describe.skipIf(process.platform === "win32")(
 
       // Write the plan to the global state backlog directory
       const { backlogDir } = getRepoPipelineDirs(testDir, env);
+      // Remove the sample plan so test-flat.md is the first detected plan
+      const samplePlan = join(backlogDir, "hello-ralphai.md");
+      if (existsSync(samplePlan)) rmSync(samplePlan);
       writeFileSync(join(backlogDir, "test-flat.md"), "# Plan: Test Flat\n");
 
       // Run the CLI in dry-run mode (which invokes the bundled runner)

@@ -228,7 +228,7 @@ describe("status subcommand", () => {
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
-    expect(output).toContain("2 plans"); // prd-auth.md + prd-search.md
+    expect(output).toContain("3 plans"); // hello-ralphai.md + prd-auth.md + prd-search.md
     expect(output).toContain("prd-auth.md");
     expect(output).toContain("prd-search.md");
     expect(output).toContain("waiting on prd-auth.md");
