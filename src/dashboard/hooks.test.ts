@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterPlans } from "./hooks.ts";
+import { filterPlans, SPINNER_FRAMES } from "./hooks.ts";
 import type { PlanInfo } from "./types.ts";
 
 /** Helper to build a minimal PlanInfo for testing. */
@@ -129,5 +129,37 @@ describe("filterPlans", () => {
     const result = filterPlans(plans, "scope:backend");
     // update-readme has no scope, so it should not appear
     expect(result.find((p) => p.slug === "update-readme")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPINNER_FRAMES
+// ---------------------------------------------------------------------------
+
+describe("SPINNER_FRAMES", () => {
+  it("contains 10 braille dot characters", () => {
+    expect(SPINNER_FRAMES).toHaveLength(10);
+  });
+
+  it("every frame is a single non-empty character", () => {
+    for (const frame of SPINNER_FRAMES) {
+      expect(frame).toHaveLength(1);
+      expect(frame.trim()).not.toBe("");
+    }
+  });
+
+  it("contains the expected braille sequence", () => {
+    expect([...SPINNER_FRAMES]).toEqual([
+      "\u280B",
+      "\u2819",
+      "\u2839",
+      "\u2838",
+      "\u283C",
+      "\u2834",
+      "\u2826",
+      "\u2827",
+      "\u2807",
+      "\u280F",
+    ]);
   });
 });
