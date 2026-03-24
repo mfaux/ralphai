@@ -1,25 +1,25 @@
 /**
- * PlanDetailPane — right pane of the two-pane workspace.
+ * DetailPane — right-side tabbed detail pane for the selected plan.
  *
- * Shows detail tabs for the selected plan: summary, plan, progress, output.
- * Content is scrollable when the detail pane has focus.
+ * Four tabs: Summary, Plan, Progress, Output.
+ * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
+ * Output tab shows green LIVE indicator and supports follow-tail mode.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 
-interface PlanDetailPaneProps {
+interface DetailPaneProps {
   plan: PlanInfo | null;
   tab: DetailTab;
   focused: boolean;
   scrollOffset: number;
-  /** Pre-loaded content for the current tab. */
   planContent: string | null;
   progressContent: string | null;
   outputData: { content: string; totalLines: number; isLive: boolean } | null;
-  /** Visible height for content area (rows). */
   contentHeight: number;
+  followTail: boolean;
 }
 
 const TABS: DetailTab[] = ["summary", "plan", "progress", "output"];
@@ -29,16 +29,20 @@ function TabBar({ active }: { active: DetailTab }) {
     <Box>
       {TABS.map((tab, i) => {
         const isActive = tab === active;
-        const label = tab.toUpperCase();
+        const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+        const shortcut = tab.charAt(0);
         return (
           <Box key={tab}>
-            {i > 0 && <Text dimColor> </Text>}
+            {i > 0 && <Text dimColor>{" \u2502 "}</Text>}
             {isActive ? (
               <Text bold color="cyan">
-                [{label}]
+                {label}
               </Text>
             ) : (
-              <Text dimColor>[{tab}]</Text>
+              <Text dimColor>
+                <Text>{shortcut}</Text>
+                {tab.slice(1)}
+              </Text>
             )}
           </Box>
         );
@@ -64,7 +68,7 @@ function ProgressBar({
       <Text dimColor>{"\u2591".repeat(empty)}</Text>
       <Text>
         {" "}
-        {current} / {total}
+        {current}/{total}
       </Text>
     </Text>
   );
@@ -188,25 +192,29 @@ function ContentView({
   contentHeight: number;
   footer?: string;
 }) {
-  const visible = lines.slice(scrollOffset, scrollOffset + contentHeight);
-  const hasMore = scrollOffset + contentHeight < lines.length;
-  const hasPrev = scrollOffset > 0;
+  const clampedOffset = Math.min(
+    scrollOffset,
+    Math.max(0, lines.length - contentHeight),
+  );
+  const visible = lines.slice(clampedOffset, clampedOffset + contentHeight);
+  const hasMore = clampedOffset + contentHeight < lines.length;
+  const hasPrev = clampedOffset > 0;
 
   return (
     <Box flexDirection="column">
       {hasPrev && (
         <Text dimColor>
-          {"\u2191"} {scrollOffset} more lines above
+          {"\u2191"} {clampedOffset} more lines above
         </Text>
       )}
       {visible.map((line, i) => (
-        <Text key={scrollOffset + i} wrap="truncate">
+        <Text key={clampedOffset + i} wrap="truncate">
           {line}
         </Text>
       ))}
       {hasMore && (
         <Text dimColor>
-          {"\u2193"} {lines.length - scrollOffset - contentHeight} more lines
+          {"\u2193"} {lines.length - clampedOffset - contentHeight} more lines
           below
         </Text>
       )}
@@ -219,18 +227,19 @@ function ContentView({
   );
 }
 
-function actionsHint(plan: PlanInfo): string {
-  switch (plan.state) {
-    case "backlog":
-      return "r run  w worktree  p plan  g progress";
+/** Pick the best default tab for a plan based on its state. */
+export function defaultTabForState(state: PlanInfo["state"]): DetailTab {
+  switch (state) {
     case "in-progress":
-      return "x reset  p plan  g progress  o output";
+      return "progress";
+    case "backlog":
+      return "plan";
     case "completed":
-      return "p plan  g progress  o output";
+      return "summary";
   }
 }
 
-export function PlanDetailPane({
+export function DetailPane({
   plan,
   tab,
   focused,
@@ -239,28 +248,33 @@ export function PlanDetailPane({
   progressContent,
   outputData,
   contentHeight,
-}: PlanDetailPaneProps) {
+  followTail,
+}: DetailPaneProps) {
   if (!plan) {
     return (
-      <Box flexDirection="column" paddingLeft={2}>
+      <Box flexDirection="column" paddingLeft={2} flexGrow={1}>
         <Text dimColor>Select a plan to view details.</Text>
+        <Text dimColor>
+          Navigate to the Pipeline panel and press Enter on a plan.
+        </Text>
       </Box>
     );
   }
-
-  const borderColor = focused ? "cyan" : undefined;
 
   return (
     <Box flexDirection="column" paddingLeft={2} flexGrow={1}>
       {/* Plan title + live badge */}
       <Box>
-        <Text bold color={borderColor}>
+        <Text bold color={focused ? "cyan" : undefined}>
           {plan.slug}
         </Text>
         {tab === "output" && outputData?.isLive && (
           <Text color="green" bold>
             {"  \u25CF LIVE"}
           </Text>
+        )}
+        {tab === "output" && followTail && (
+          <Text color="yellow">{" [follow]"}</Text>
         )}
         {plan.state === "completed" && <Text dimColor>{"  \u2713 done"}</Text>}
       </Box>
@@ -311,11 +325,6 @@ export function PlanDetailPane({
           ) : (
             <Text dimColor>No agent output available.</Text>
           ))}
-      </Box>
-
-      {/* Actions footer */}
-      <Box marginTop={1}>
-        <Text dimColor>{actionsHint(plan)}</Text>
       </Box>
     </Box>
   );

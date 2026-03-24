@@ -11,6 +11,9 @@ import type { PlanInfo, PanelId } from "./types.ts";
 
 /**
  * Auto-refresh hook: calls `loader` immediately and then every `intervalMs`.
+ * Re-invokes the loader whenever its identity changes (fixing the flash
+ * where stale data would show for up to one interval after a dependency
+ * change, e.g. selecting a new repo).
  * Returns the latest data and a manual `refresh` trigger.
  */
 export function useAutoRefresh<T>(
@@ -20,6 +23,11 @@ export function useAutoRefresh<T>(
   const [data, setData] = useState<T>(() => loader());
 
   const refresh = useCallback(() => {
+    setData(loader());
+  }, [loader]);
+
+  // Re-invoke immediately when loader identity changes
+  useEffect(() => {
     setData(loader());
   }, [loader]);
 
