@@ -1,13 +1,14 @@
 /**
  * ReposPanel — top-left stacked panel showing known repos.
  *
- * Header: `1 Repos ───────`
  * Each row: cursor indicator, activity dot, repo name, plan counts.
+ * Wrapped in a PanelBox with rounded borders.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { RepoSummary } from "../global-state.ts";
+import { PanelBox } from "./PanelBox.tsx";
 
 interface ReposPanelProps {
   repos: RepoSummary[];
@@ -26,17 +27,6 @@ function formatCounts(repo: RepoSummary): string {
   return parts.length > 0 ? parts.join(" \u00B7 ") : "empty";
 }
 
-function panelHeader(
-  label: string,
-  number: string,
-  width: number,
-  active: boolean,
-): string {
-  const prefix = `${number} ${label} `;
-  const lineLen = Math.max(0, width - prefix.length);
-  return prefix + "\u2500".repeat(lineLen);
-}
-
 export function ReposPanel({
   repos,
   cursor,
@@ -45,33 +35,15 @@ export function ReposPanel({
   height,
   collapsed,
 }: ReposPanelProps) {
-  const header = panelHeader("Repos", "1", width, active);
-
   if (collapsed) {
-    return (
-      <Box flexDirection="column" width={width} height={1}>
-        <Text
-          color={active ? "cyan" : undefined}
-          bold={active}
-          dimColor={!active}
-        >
-          {header}
-        </Text>
-      </Box>
-    );
+    return <PanelBox title="1 Repos" active={active} width={width} collapsed />;
   }
 
-  const maxNameLen = Math.max(8, width - 18);
+  // Account for 2 columns of border chrome
+  const maxNameLen = Math.max(8, width - 20);
 
   return (
-    <Box flexDirection="column" width={width} height={height}>
-      <Text
-        color={active ? "cyan" : undefined}
-        bold={active}
-        dimColor={!active}
-      >
-        {header}
-      </Text>
+    <PanelBox title="1 Repos" active={active} width={width} height={height}>
       {repos.length === 0 ? (
         <Text dimColor> No repos found.</Text>
       ) : (
@@ -110,6 +82,6 @@ export function ReposPanel({
           );
         })
       )}
-    </Box>
+    </PanelBox>
   );
 }

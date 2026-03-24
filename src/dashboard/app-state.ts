@@ -36,8 +36,8 @@ import {
 
 const REFRESH_MS = 3000;
 
-/** Height reserved for status bar + borders. */
-export const CHROME_ROWS = 3;
+/** Height reserved for status bar + panel border chrome (2 rows per panel × 3 panels + 1 status bar). */
+export const CHROME_ROWS = 9;
 
 /** Overlay types for the modal stack. */
 export type Overlay =
@@ -140,7 +140,9 @@ export function useAppState(termRows: number) {
   );
   const { data: outputData } = useAutoRefresh(outputLoader, REFRESH_MS);
 
-  const contentHeight = Math.max(5, termRows - CHROME_ROWS - 6);
+  // Detail pane content area: terminal height minus status bar (1),
+  // detail border chrome (2), title row (1), tab bar (1), content margin (1).
+  const contentHeight = Math.max(5, termRows - 6);
 
   // --- Auto-set default tab when plan selection changes ---
   useEffect(() => {

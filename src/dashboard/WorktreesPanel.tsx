@@ -1,14 +1,15 @@
 /**
  * WorktreesPanel — bottom-left stacked panel showing git worktrees.
  *
- * Header: `3 Worktrees ───`
  * Each row: cursor indicator, branch name (stripped of ralphai/ prefix),
  * status (active/idle), linked plan slug if found.
+ * Wrapped in a PanelBox with rounded borders.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { WorktreeInfo } from "./types.ts";
+import { PanelBox } from "./PanelBox.tsx";
 
 interface WorktreesPanelProps {
   worktrees: WorktreeInfo[];
@@ -19,12 +20,6 @@ interface WorktreesPanelProps {
   collapsed?: boolean;
 }
 
-function panelHeader(width: number, active: boolean): string {
-  const prefix = "3 Worktrees ";
-  const lineLen = Math.max(0, width - prefix.length);
-  return prefix + "\u2500".repeat(lineLen);
-}
-
 export function WorktreesPanel({
   worktrees,
   cursor,
@@ -33,33 +28,17 @@ export function WorktreesPanel({
   height,
   collapsed,
 }: WorktreesPanelProps) {
-  const header = panelHeader(width, active);
-
   if (collapsed) {
     return (
-      <Box flexDirection="column" width={width} height={1}>
-        <Text
-          color={active ? "cyan" : undefined}
-          bold={active}
-          dimColor={!active}
-        >
-          {header}
-        </Text>
-      </Box>
+      <PanelBox title="3 Worktrees" active={active} width={width} collapsed />
     );
   }
 
-  const maxBranchLen = Math.max(8, width - 16);
+  // Account for 2 columns of border chrome
+  const maxBranchLen = Math.max(8, width - 18);
 
   return (
-    <Box flexDirection="column" width={width} height={height}>
-      <Text
-        color={active ? "cyan" : undefined}
-        bold={active}
-        dimColor={!active}
-      >
-        {header}
-      </Text>
+    <PanelBox title="3 Worktrees" active={active} width={width} height={height}>
       {worktrees.length === 0 ? (
         <Text dimColor> No worktrees.</Text>
       ) : (
@@ -97,6 +76,6 @@ export function WorktreesPanel({
           );
         })
       )}
-    </Box>
+    </PanelBox>
   );
 }

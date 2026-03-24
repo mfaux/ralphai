@@ -10,6 +10,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
+import { PanelBox } from "./PanelBox.tsx";
 
 interface DetailPaneProps {
   plan: PlanInfo | null;
@@ -253,45 +254,30 @@ export function DetailPane({
   followTail,
   width,
 }: DetailPaneProps) {
-  // Usable content width after paddingLeft={2}
+  // Usable content width after border chrome (2 columns)
   const contentWidth = Math.max(1, width - 2);
 
   if (!plan) {
     return (
-      <Box
-        flexDirection="column"
-        paddingLeft={2}
-        width={width}
-        overflow="hidden"
-      >
+      <PanelBox title="Details" active={focused} width={width}>
         <Text dimColor>Select a plan to view details.</Text>
         <Text dimColor>
           Navigate to the Pipeline panel and press Enter on a plan.
         </Text>
-      </Box>
+      </PanelBox>
     );
   }
 
-  return (
-    <Box flexDirection="column" paddingLeft={2} width={width} overflow="hidden">
-      {/* Plan title + live badge */}
-      <Box>
-        <Text bold color={focused ? "cyan" : undefined}>
-          {plan.slug}
-        </Text>
-        {tab === "output" && outputData?.isLive && (
-          <Text color="green" bold>
-            {"  \u25CF LIVE"}
-          </Text>
-        )}
-        {tab === "output" && followTail && (
-          <Text color="yellow">{" [follow]"}</Text>
-        )}
-        {plan.state === "completed" && <Text dimColor>{"  \u2713 done"}</Text>}
-      </Box>
+  const planTitle =
+    plan.slug +
+    (tab === "output" && outputData?.isLive ? "  \u25CF LIVE" : "") +
+    (tab === "output" && followTail ? " [follow]" : "") +
+    (plan.state === "completed" ? "  \u2713 done" : "");
 
+  return (
+    <PanelBox title={planTitle} active={focused} width={width}>
       {/* Tab bar */}
-      <Box marginTop={1}>
+      <Box>
         <TabBar active={tab} />
       </Box>
 
@@ -337,6 +323,6 @@ export function DetailPane({
             <Text dimColor>No agent output available.</Text>
           ))}
       </Box>
-    </Box>
+    </PanelBox>
   );
 }

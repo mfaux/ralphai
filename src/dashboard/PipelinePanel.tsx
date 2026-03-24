@@ -1,15 +1,16 @@
 /**
  * PipelinePanel — middle-left stacked panel showing plans for the selected repo.
  *
- * Header: `2 Pipeline ────`
  * Plans grouped under state headers (ACTIVE, QUEUED, DONE).
  * Each plan shows slug (smart-truncated), and when width allows, scope + progress bar.
+ * Wrapped in a PanelBox with rounded borders.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo } from "./types.ts";
 import { truncateSlug } from "./format.ts";
+import { PanelBox } from "./PanelBox.tsx";
 
 interface PipelinePanelProps {
   plans: PlanInfo[];
@@ -41,16 +42,6 @@ const STATE_BADGE_COLOR: Record<
   backlog: "yellow",
   completed: "gray",
 };
-
-function panelHeader(
-  width: number,
-  active: boolean,
-  repoName?: string,
-): string {
-  const label = repoName ? `2 Pipeline (${repoName}) ` : "2 Pipeline ";
-  const lineLen = Math.max(0, width - label.length);
-  return label + "\u2500".repeat(lineLen);
-}
 
 function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
   if (width < 35) return null;
@@ -84,24 +75,14 @@ export function PipelinePanel({
   collapsed,
   repoName,
 }: PipelinePanelProps) {
-  const header = panelHeader(width, active, repoName);
+  const title = repoName ? `2 Pipeline (${repoName})` : "2 Pipeline";
 
   if (collapsed) {
-    return (
-      <Box flexDirection="column" width={width} height={1}>
-        <Text
-          color={active ? "cyan" : undefined}
-          bold={active}
-          dimColor={!active}
-        >
-          {header}
-        </Text>
-      </Box>
-    );
+    return <PanelBox title={title} active={active} width={width} collapsed />;
   }
 
-  // Max slug length depends on available width (leave room for pointer + badge)
-  const maxSlugLen = Math.max(8, width - 6);
+  // Account for 2 columns of border chrome
+  const maxSlugLen = Math.max(8, width - 8);
 
   // Group plans by state
   const grouped = new Map<PlanInfo["state"], PlanInfo[]>();
@@ -116,15 +97,7 @@ export function PipelinePanel({
   let flatIndex = 0;
 
   return (
-    <Box flexDirection="column" width={width} height={height}>
-      <Text
-        color={active ? "cyan" : undefined}
-        bold={active}
-        dimColor={!active}
-      >
-        {header}
-      </Text>
-
+    <PanelBox title={title} active={active} width={width} height={height}>
       {plans.length === 0 ? (
         <Text dimColor> No plans in pipeline.</Text>
       ) : (
@@ -172,6 +145,6 @@ export function PipelinePanel({
           );
         })
       )}
-    </Box>
+    </PanelBox>
   );
 }
