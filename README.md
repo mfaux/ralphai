@@ -46,7 +46,7 @@ ralphai init                 # configure agent and feedback commands
 
 Ralphai detects your project ecosystem and build scripts automatically. Supported ecosystems: **Node.js/TypeScript** and **C# / .NET** (full support, including monorepo workspace scoping), **Go**, **Rust**, **Python**, and **Java/Kotlin** (basic detection with auto-suggested build/test commands). When multiple ecosystems coexist (e.g., a .NET backend with a Node.js frontend), Ralphai detects all of them and merges their feedback commands. Use `--yes` to skip prompts and auto-detect your installed agent.
 
-Configuration is stored in `~/.ralphai/` (global state, not in your repo). Pipeline files (plans, progress logs) live in `.ralphai/` and are gitignored by default. See [Workflows](docs/workflows.md) for details.
+Configuration and pipeline state are stored in `~/.ralphai/` (global state, not in your repo). See [Workflows](docs/workflows.md) for details.
 
 ## Workflow
 
@@ -110,7 +110,7 @@ ralphai purge            # delete archived artifacts from pipeline/out/
 
 ### 5. Close the learnings loop
 
-Ralphai logs mistakes to `.ralphai/LEARNINGS.md` (gitignored) and flags durable lessons in `.ralphai/LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
+Ralphai logs mistakes to `LEARNINGS.md` (in global state) and flags durable lessons in `LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
 
 ## GitHub Issues Integration
 
@@ -123,11 +123,37 @@ ralphai run --issue-label=ai-task              # custom label filter
 
 Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `config.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
 
+## Multi-Repo Management
+
+Ralphai tracks every initialized repo automatically. Run `ralphai repos` from anywhere to see all known repos with pipeline summaries, or use `--repo` to target a specific repo without `cd`-ing into it.
+
+```bash
+ralphai repos                           # list all known repos with plan counts
+ralphai repos --clean                   # remove stale entries (dead paths, no plans)
+ralphai status --repo=my-app            # check status of a different repo
+ralphai backlog-dir --repo=~/work/api   # get backlog path by repo path
+```
+
+The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `worktree`, and `init`, which must be run inside the target repo.
+
+## Interactive Dashboard
+
+Running bare `ralphai` in a terminal launches an interactive dashboard. Browse repos, view plans by state, and manage runs with keyboard shortcuts.
+
+```bash
+ralphai                  # launches the dashboard (TTY only)
+```
+
+The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
+
+This is a convenience layer. The headless `ralphai run` and `ralphai worktree` commands remain the primary workflow.
+
 ## Manage Your Installation
 
 ```bash
 ralphai update           # update to the latest version
 ralphai teardown         # remove Ralphai from your project
+ralphai uninstall        # remove all global state and uninstall the CLI
 ```
 
 ## Monorepo Support

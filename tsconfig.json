@@ -5,6 +5,7 @@
     "module": "ESNext",
     "moduleDetection": "force",
     "allowJs": true,
+    "jsx": "react-jsx",
 
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

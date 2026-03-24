@@ -14,18 +14,42 @@ ralphai <command> [options]
 | `status`       | Show pipeline and worktree status                                      |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
+| `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update ralphai to the latest (or specified) version                    |
 | `teardown`     | Remove Ralphai from your project                                       |
+| `uninstall`    | Remove all global state and uninstall the CLI                          |
 
 ## Global Options
 
 ```
---help, -h        Show help
---version, -v     Show version
---no-color        Disable colored output (also respects NO_COLOR env var)
+--help, -h              Show help
+--version, -v           Show version
+--no-color              Disable colored output (also respects NO_COLOR env var)
+--repo=<name-or-path>   Target a different repo by name or path (see below)
 ```
+
+### `--repo` Flag
+
+The `--repo` flag lets you run read-only commands against a different repo without changing directories. Pass a repo name (as shown by `ralphai repos`) or an absolute/relative path.
+
+```bash
+ralphai status --repo=my-app            # by name
+ralphai doctor --repo=~/work/api        # by path
+ralphai backlog-dir --repo=my-app       # print another repo's backlog path
+```
+
+Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`. Blocked for `run`, `worktree`, and `init`, which must run inside the target repo.
+
+### Interactive Dashboard
+
+Running `ralphai` with no subcommand in a TTY launches an interactive dashboard. The dashboard shows all known repos, lets you drill into plans by state (backlog, in-progress, completed), and provides keyboard shortcuts for common actions:
+
+- **Arrow keys** to navigate, **Enter** to select, **Esc** to go back, **q** to quit
+- **r** to run a backlog plan, **w** to run in a worktree, **p** to preview, **x** to reset
+
+The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. In non-TTY environments (e.g., piped output), `ralphai` shows help text instead.
 
 ## Init
 
@@ -131,7 +155,7 @@ Deletes all archived plan artifacts from `pipeline/out/`. Use this to clean up a
 
 Validates your Ralphai setup with diagnostic checks:
 
-1. `.ralphai/` directory exists
+1. Config exists (global state)
 2. `config.json` is valid JSON with recognized keys
 3. Git repository detected
 4. Working tree is clean
@@ -149,7 +173,35 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project: deletes `.ralphai/` and cleans up `.gitignore` entries.
+Removes Ralphai from your project: deletes global state for this repo (`~/.ralphai/repos/<id>/`).
+
+## Uninstall
+
+Removes **all** global state (`~/.ralphai/`) and uninstalls the CLI. Unlike `teardown`, which only removes state for the current repo, `uninstall` is a full removal.
+
+## Backlog Dir
+
+Prints the absolute path to the plan backlog directory for the current repository. Useful for scripting or finding where to place plan files.
+
+```bash
+ralphai backlog-dir
+# ~/.ralphai/repos/<repo-id>/pipeline/backlog
+```
+
+## Repos
+
+```
+--clean           Remove stale entries (dead paths with no plans)
+```
+
+Lists all known repos with pipeline summaries showing backlog, in-progress, and completed plan counts.
+
+```bash
+ralphai repos              # list all repos
+ralphai repos --clean      # remove stale entries, then list
+```
+
+A repo entry is considered stale when its stored `repoPath` no longer exists on disk AND its pipeline is completely empty (no backlog, in-progress, or completed plans). Repos with plans are always preserved, even if the path is gone.
 
 ## Backlog Dir
 

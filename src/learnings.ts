@@ -1,6 +1,7 @@
 /**
  * Learnings parser and writer: extracts structured <learnings> blocks
- * from agent output and appends logged entries to .ralphai/LEARNINGS.md.
+ * from agent output and appends logged entries to LEARNINGS.md
+ * (in global state: ~/.ralphai/repos/<id>/LEARNINGS.md).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname } from "path";
@@ -170,7 +171,7 @@ export function appendLearningEntry(
 }
 
 /**
- * Create .ralphai/LEARNING_CANDIDATES.md with a seed header if it
+ * Create LEARNING_CANDIDATES.md with a seed header if it
  * doesn't already exist.
  */
 export function seedLearningCandidatesFile(filePath: string): void {

@@ -40,7 +40,7 @@ Runs a single turn to verify the agent understands the plan before committing to
 ## Resume after editing a stuck plan
 
 ```bash
-# Edit the plan or progress file in .ralphai/pipeline/in-progress/<slug>/
+# Edit the plan or progress file in ~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/
 ralphai run
 ```
 
@@ -80,3 +80,27 @@ ralphai run --patch
 ```
 
 The agent makes changes but doesn't commit. Useful for reviewing diffs before committing manually. Patch mode requires a feature branch — it refuses to run on `main`/`master`.
+
+## Manage multiple repos
+
+```bash
+ralphai repos                           # see all repos at a glance
+ralphai status --repo=my-app            # check a repo without cd-ing
+ralphai reset --repo=~/work/api --yes   # reset a stuck plan remotely
+```
+
+Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `purge`, `teardown`, and `backlog-dir`.
+
+To clean up stale entries (from deleted temp dirs or old projects):
+
+```bash
+ralphai repos --clean
+```
+
+## Browse plans with the dashboard
+
+```bash
+ralphai
+```
+
+Running `ralphai` with no arguments in a terminal opens the interactive dashboard. Navigate repos, view plans by state, and trigger actions (run, preview, reset) with keyboard shortcuts. The dashboard auto-refreshes every 3 seconds.

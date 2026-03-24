@@ -179,6 +179,7 @@ describe("CLI help and flags", () => {
 
   it("backlog-dir prints a directory path", () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    runCli(["init", "--yes"], ctx.dir, env);
     const result = runCli(["backlog-dir"], ctx.dir, env);
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toContain("pipeline");

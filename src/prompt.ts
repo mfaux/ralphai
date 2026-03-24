@@ -23,9 +23,9 @@ export interface AssemblePromptOptions {
   scopeHint: string;
   /** Runner mode: "branch", "pr", or "patch". */
   mode: "branch" | "pr" | "patch";
-  /** Path to .ralphai/LEARNINGS.md (checked for existence). */
+  /** Path to LEARNINGS.md (in global state; checked for existence). */
   learningsFile: string;
-  /** Path to .ralphai/LEARNING_CANDIDATES.md. */
+  /** Path to LEARNING_CANDIDATES.md (in global state). */
   learningCandidatesFile: string;
 }
 
