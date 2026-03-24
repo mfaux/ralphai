@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { PlanInfo, PanelId } from "./types.ts";
+import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // useAutoRefresh
@@ -40,30 +40,8 @@ export function useAutoRefresh<T>(
 }
 
 // ---------------------------------------------------------------------------
-// useFilter
+// filterPlans
 // ---------------------------------------------------------------------------
-
-export interface FilterResult {
-  filtered: PlanInfo[];
-  query: string;
-  setQuery: (q: string) => void;
-  isActive: boolean;
-}
-
-/**
- * Filters a plan list by a query string. Supports prefix filters:
- * - `state:<value>` — matches plan state (backlog, in-progress, completed,
- *   or aliases: active, queued, done)
- * - `scope:<value>` — matches plan scope
- * - Remaining text matches against plan slugs (case-insensitive)
- */
-export function useFilter(plans: PlanInfo[]): FilterResult {
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => filterPlans(plans, query), [plans, query]);
-
-  return { filtered, query, setQuery, isActive: query.length > 0 };
-}
 
 /** State alias mapping for friendlier filter terms. */
 const STATE_ALIASES: Record<string, PlanInfo["state"]> = {
@@ -77,6 +55,12 @@ const STATE_ALIASES: Record<string, PlanInfo["state"]> = {
 
 /**
  * Pure function that applies filter logic. Exported for testing.
+ *
+ * Supports prefix filters:
+ * - `state:<value>` — matches plan state (backlog, in-progress, completed,
+ *   or aliases: active, queued, done)
+ * - `scope:<value>` — matches plan scope
+ * - Remaining text matches against plan slugs (case-insensitive)
  */
 export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
   if (!query.trim()) return plans;
@@ -152,70 +136,32 @@ export function useSpinner(active: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
-// usePanelNavigation
+// useListCursor
 // ---------------------------------------------------------------------------
 
-const PANEL_ORDER: PanelId[] = ["repos", "pipeline", "worktrees"];
-
-export interface PanelNavigationResult {
-  activePanel: PanelId;
+export interface ListCursorResult {
   cursor: number;
   moveCursor: (delta: number, listLength: number) => void;
-  setActivePanel: (panel: PanelId) => void;
-  /** Move to next/previous panel. */
-  cyclePanels: (delta: 1 | -1) => void;
-  /** Get cursor for a specific panel. */
-  getCursor: (panel: PanelId) => number;
+  setCursor: (index: number) => void;
 }
 
 /**
- * Manages focus across three stacked panels and per-panel cursor positions.
+ * Simple single-list cursor hook. Replaces the old multi-panel navigation.
+ * Clamps cursor within [0, listLength - 1].
  */
-export function usePanelNavigation(): PanelNavigationResult {
-  const [activePanel, setActivePanelState] = useState<PanelId>("repos");
-  const [cursorByPanel, setCursorByPanel] = useState<Record<PanelId, number>>({
-    repos: 0,
-    pipeline: 0,
-    worktrees: 0,
-  });
+export function useListCursor(): ListCursorResult {
+  const [cursor, setCursorState] = useState(0);
 
-  const cursor = cursorByPanel[activePanel];
-
-  const moveCursor = useCallback(
-    (delta: number, listLength: number) => {
-      setCursorByPanel((prev) => {
-        const current = prev[activePanel];
-        const next = Math.max(0, Math.min(listLength - 1, current + delta));
-        if (next === current) return prev;
-        return { ...prev, [activePanel]: next };
-      });
-    },
-    [activePanel],
-  );
-
-  const setActivePanel = useCallback((panel: PanelId) => {
-    setActivePanelState(panel);
-  }, []);
-
-  const cyclePanels = useCallback((delta: 1 | -1) => {
-    setActivePanelState((prev) => {
-      const idx = PANEL_ORDER.indexOf(prev);
-      const next = (idx + delta + PANEL_ORDER.length) % PANEL_ORDER.length;
-      return PANEL_ORDER[next]!;
+  const moveCursor = useCallback((delta: number, listLength: number) => {
+    setCursorState((prev) => {
+      const next = Math.max(0, Math.min(listLength - 1, prev + delta));
+      return next;
     });
   }, []);
 
-  const getCursor = useCallback(
-    (panel: PanelId) => cursorByPanel[panel],
-    [cursorByPanel],
-  );
+  const setCursor = useCallback((index: number) => {
+    setCursorState(Math.max(0, index));
+  }, []);
 
-  return {
-    activePanel,
-    cursor,
-    moveCursor,
-    setActivePanel,
-    cyclePanels,
-    getCursor,
-  };
+  return { cursor, moveCursor, setCursor };
 }

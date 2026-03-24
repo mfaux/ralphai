@@ -1,14 +1,14 @@
 /**
  * ActionMenu — centered vertical overlay showing context-sensitive actions.
  *
- * Actions vary by panel and selected item state. The parent provides the
+ * Actions vary by context and selected item state. The parent provides the
  * action items; this component handles rendering and cursor navigation.
  * ↑/↓ navigate, Enter triggers, Esc dismisses.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
-import type { ActionMenuItem } from "./types.ts";
+import type { ActionMenuItem, ActionContext } from "./types.ts";
 
 interface ActionMenuProps {
   items: ActionMenuItem[];
@@ -70,19 +70,15 @@ export function ActionMenu({ items, cursor, title }: ActionMenuProps) {
 // Action menu builders — produce the menu items for each context
 // ---------------------------------------------------------------------------
 
-import type { PlanInfo, PanelId, WorktreeInfo } from "./types.ts";
+import type { PlanInfo, WorktreeInfo } from "./types.ts";
 
-/** Build action items for the currently selected item in a panel. */
+/** Build action items for the current selection context. */
 export function buildMenuItems(
-  panel: PanelId,
+  context: ActionContext,
   plan: PlanInfo | null,
   worktree: WorktreeInfo | null,
 ): ActionMenuItem[] {
-  if (panel === "repos") {
-    return [{ label: "Select repo", action: "select-repo", shortcut: "Enter" }];
-  }
-
-  if (panel === "worktrees") {
+  if (context === "worktree") {
     if (!worktree) return [];
     const items: ActionMenuItem[] = [
       { label: "View linked plan", action: "view-linked-plan" },
@@ -93,34 +89,38 @@ export function buildMenuItems(
     return items;
   }
 
-  // pipeline panel
-  if (!plan) return [];
+  if (context === "plan") {
+    if (!plan) return [];
 
-  const items: ActionMenuItem[] = [];
+    const items: ActionMenuItem[] = [];
 
-  switch (plan.state) {
-    case "backlog":
-      items.push(
-        { label: "Run plan", action: "run", shortcut: "r" },
-        { label: "Run in worktree", action: "run-worktree", shortcut: "w" },
-        { label: "View plan file", action: "view-plan" },
-      );
-      break;
-    case "in-progress":
-      items.push(
-        { label: "View progress", action: "view-progress" },
-        { label: "View output", action: "view-output" },
-        { label: "Reset plan", action: "reset", shortcut: "R" },
-      );
-      break;
-    case "completed":
-      items.push(
-        { label: "View summary", action: "view-summary" },
-        { label: "View output", action: "view-output" },
-        { label: "Purge plan", action: "purge", shortcut: "P" },
-      );
-      break;
+    switch (plan.state) {
+      case "backlog":
+        items.push(
+          { label: "Run plan", action: "run", shortcut: "r" },
+          { label: "Run in worktree", action: "run-worktree", shortcut: "w" },
+          { label: "View plan file", action: "view-plan" },
+        );
+        break;
+      case "in-progress":
+        items.push(
+          { label: "View progress", action: "view-progress" },
+          { label: "View output", action: "view-output" },
+          { label: "Reset plan", action: "reset", shortcut: "R" },
+        );
+        break;
+      case "completed":
+        items.push(
+          { label: "View summary", action: "view-summary" },
+          { label: "View output", action: "view-output" },
+          { label: "Purge plan", action: "purge", shortcut: "P" },
+        );
+        break;
+    }
+
+    return items;
   }
 
-  return items;
+  // context === "none"
+  return [];
 }

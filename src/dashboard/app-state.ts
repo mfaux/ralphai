@@ -3,16 +3,18 @@
  *
  * Manages: data loading (repos, plans, worktrees), selection tracking,
  * overlay state, toast messages, filter state, and action/confirm handlers.
+ *
+ * Option B layout: single full-width plan list with detail overlay.
  */
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { RepoSummary } from "../global-state.ts";
 import type {
-  PanelId,
   FocusTarget,
   DetailTab,
   PlanInfo,
   ActionMenuItem,
+  ActionContext,
   WorktreeInfo,
 } from "./types.ts";
 import {
@@ -23,8 +25,8 @@ import {
   loadProgressContent,
   loadOutputTail,
 } from "./data.ts";
-import { useAutoRefresh, filterPlans, usePanelNavigation } from "./hooks.ts";
-import { defaultTabForState } from "./DetailPane.tsx";
+import { useAutoRefresh, filterPlans, useListCursor } from "./hooks.ts";
+import { defaultTabForState } from "./DetailOverlay.tsx";
 import { buildMenuItems } from "./ActionMenu.tsx";
 import {
   spawnRunner,
@@ -36,8 +38,13 @@ import {
 
 const REFRESH_MS = 3000;
 
-/** Height reserved for status bar + panel border chrome (2 rows per panel × 3 panels + 1 status bar). */
-export const CHROME_ROWS = 9;
+/**
+ * Height reserved for non-plan-list chrome.
+ * 1 RepoBar + 1 WorktreeStrip + 1 StatusBar + 2 PanelBox border rows = 5.
+ * WorktreeStrip may be 0 rows when empty but we reserve the space anyway
+ * so the plan list height stays stable.
+ */
+export const CHROME_ROWS = 5;
 
 /** Overlay types for the modal stack. */
 export type Overlay =
@@ -47,17 +54,18 @@ export type Overlay =
   | { kind: "help" };
 
 export function useAppState(termRows: number) {
-  // --- Panel navigation ---
-  const panelNav = usePanelNavigation();
-  const { activePanel, setActivePanel, getCursor } = panelNav;
+  // --- List cursor (single plan list) ---
+  const listCursor = useListCursor();
+  const { cursor: planCursor, moveCursor, setCursor } = listCursor;
 
   // --- Focus target ---
-  const [focus, setFocus] = useState<FocusTarget>("panel");
+  const [focus, setFocus] = useState<FocusTarget>("list");
 
   // --- Selected repo ---
   const [selectedRepoIdx, setSelectedRepoIdx] = useState(0);
 
-  // --- Detail state ---
+  // --- Detail overlay state ---
+  const [showDetail, setShowDetail] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>("summary");
   const [scrollOffset, setScrollOffset] = useState(0);
   const [followTail, setFollowTail] = useState(false);
@@ -79,8 +87,32 @@ export function useAppState(termRows: number) {
   const repoLoader = useCallback(() => loadRepos(), []);
   const { data: repos } = useAutoRefresh(repoLoader, REFRESH_MS);
 
+  // Clamp selectedRepoIdx when repo list changes
+  useEffect(() => {
+    if (repos.length === 0) return;
+    if (selectedRepoIdx >= repos.length) {
+      setSelectedRepoIdx(Math.max(0, repos.length - 1));
+    }
+  }, [repos.length, selectedRepoIdx]);
+
   const selectedRepo: RepoSummary | null =
     repos[selectedRepoIdx] ?? repos[0] ?? null;
+
+  // Repo switching via [ / ]
+  const switchRepo = useCallback(
+    (delta: number) => {
+      if (repos.length === 0) return;
+      setSelectedRepoIdx((prev) => {
+        const next = prev + delta;
+        if (next < 0) return repos.length - 1;
+        if (next >= repos.length) return 0;
+        return next;
+      });
+      // Reset plan cursor when switching repos
+      setCursor(0);
+    },
+    [repos.length, setCursor],
+  );
 
   const planLoader = useCallback(
     () => (selectedRepo?.repoPath ? loadPlans(selectedRepo.repoPath) : []),
@@ -105,12 +137,16 @@ export function useAppState(termRows: number) {
     [plans, filterQuery],
   );
 
+  // Clamp plan cursor when display plans change
+  useEffect(() => {
+    if (displayPlans.length === 0) return;
+    if (planCursor >= displayPlans.length) {
+      setCursor(Math.max(0, displayPlans.length - 1));
+    }
+  }, [displayPlans.length, planCursor, setCursor]);
+
   // --- Derived selections ---
-  const pipelineCursor = getCursor("pipeline");
-  const selectedPlan: PlanInfo | null = displayPlans[pipelineCursor] ?? null;
-  const worktreeCursor = getCursor("worktrees");
-  const selectedWorktree: WorktreeInfo | null =
-    worktrees[worktreeCursor] ?? null;
+  const selectedPlan: PlanInfo | null = displayPlans[planCursor] ?? null;
 
   // --- Detail content ---
   const planContent = useMemo(
@@ -140,8 +176,8 @@ export function useAppState(termRows: number) {
   );
   const { data: outputData } = useAutoRefresh(outputLoader, REFRESH_MS);
 
-  // Detail pane content area: terminal height minus status bar (1),
-  // detail border chrome (2), title row (1), tab bar (1), content margin (1).
+  // Detail overlay content area: terminal height minus border chrome (2),
+  // title row (1), tab bar (1), content margin (1).
   const contentHeight = Math.max(5, termRows - 6);
 
   // --- Auto-set default tab when plan selection changes ---
@@ -161,42 +197,53 @@ export function useAppState(termRows: number) {
     }
   }, [followTail, activeTab, outputData?.content, contentHeight]);
 
+  // --- Open detail overlay ---
+  const openDetail = useCallback(() => {
+    if (!selectedPlan) return;
+    setShowDetail(true);
+    setFocus("detail");
+  }, [selectedPlan]);
+
+  // --- Close detail overlay ---
+  const closeDetail = useCallback(() => {
+    setShowDetail(false);
+    setFocus("list");
+  }, []);
+
   // --- Action handler ---
   const handleAction = useCallback(
     (action: string) => {
       setOverlay({ kind: "none" });
 
       switch (action) {
-        case "select-repo": {
-          const repoIdx = getCursor("repos");
-          setSelectedRepoIdx(repoIdx);
-          setActivePanel("pipeline");
-          break;
-        }
         case "view-plan":
           setActiveTab("plan");
+          setShowDetail(true);
           setFocus("detail");
           break;
         case "view-progress":
           setActiveTab("progress");
+          setShowDetail(true);
           setFocus("detail");
           break;
         case "view-output":
           setActiveTab("output");
+          setShowDetail(true);
           setFocus("detail");
           break;
         case "view-summary":
           setActiveTab("summary");
+          setShowDetail(true);
           setFocus("detail");
           break;
         case "view-linked-plan": {
-          if (selectedWorktree?.linkedPlan) {
-            const idx = displayPlans.findIndex(
-              (p) => p.slug === selectedWorktree.linkedPlan,
-            );
+          // Find the worktree's linked plan in display plans
+          const linkedSlug = worktrees.find((w) => w.linkedPlan)?.linkedPlan;
+          if (linkedSlug) {
+            const idx = displayPlans.findIndex((p) => p.slug === linkedSlug);
             if (idx >= 0) {
-              setActivePanel("pipeline");
-              showToast(`Linked: ${selectedWorktree.linkedPlan}`);
+              setCursor(idx);
+              showToast(`Linked: ${linkedSlug}`);
             } else {
               showToast("Linked plan not in current view");
             }
@@ -239,7 +286,7 @@ export function useAppState(termRows: number) {
           ) {
             const slug =
               action === "remove-worktree"
-                ? (selectedWorktree?.shortBranch ?? "")
+                ? (worktrees[0]?.shortBranch ?? "")
                 : (selectedPlan?.slug ?? "");
             setOverlay({ kind: "confirm", action, slug });
             setFocus("menu");
@@ -250,12 +297,12 @@ export function useAppState(termRows: number) {
       }
     },
     [
-      getCursor,
       selectedPlan,
-      selectedWorktree,
+      worktrees,
       displayPlans,
-      setActivePanel,
+      setCursor,
       showToast,
+      selectedRepo?.repoPath,
     ],
   );
 
@@ -298,34 +345,28 @@ export function useAppState(termRows: number) {
         }
       }
       setOverlay({ kind: "none" });
-      setFocus("panel");
+      setFocus("list");
     },
     [overlay, selectedRepo?.repoPath, worktrees, showToast],
   );
 
-  // --- Open action menu for the current selection ---
+  // --- Open action menu for the selected plan ---
   const openActionMenu = useCallback(() => {
-    const menuItems = buildMenuItems(
-      activePanel,
-      selectedPlan,
-      selectedWorktree,
-    );
+    const context: ActionContext = selectedPlan ? "plan" : "none";
+    const menuItems = buildMenuItems(context, selectedPlan, null);
     if (menuItems.length > 0) {
-      const title =
-        activePanel === "pipeline"
-          ? (selectedPlan?.slug ?? "Actions")
-          : activePanel === "worktrees"
-            ? (selectedWorktree?.shortBranch ?? "Actions")
-            : "Actions";
+      const title = selectedPlan?.slug ?? "Actions";
       setOverlay({ kind: "menu", items: menuItems, cursor: 0, title });
       setFocus("menu");
     }
-  }, [activePanel, selectedPlan, selectedWorktree]);
+  }, [selectedPlan]);
 
   return {
-    // Panel navigation
-    panelNav,
-    activePanel,
+    // List cursor
+    listCursor,
+    planCursor,
+    moveCursor,
+    setCursor,
     // Focus
     focus,
     setFocus,
@@ -333,15 +374,17 @@ export function useAppState(termRows: number) {
     repos,
     selectedRepo,
     selectedRepoIdx,
-    setSelectedRepoIdx,
+    switchRepo,
     // Plans
     plans,
     displayPlans,
     selectedPlan,
     // Worktrees
     worktrees,
-    selectedWorktree,
     // Detail
+    showDetail,
+    openDetail,
+    closeDetail,
     activeTab,
     setActiveTab,
     scrollOffset,

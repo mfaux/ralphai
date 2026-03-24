@@ -1,9 +1,11 @@
 /**
- * App — master layout for the lazygit-style dashboard.
+ * App — master layout for the dashboard (Option B: list + overlay).
  *
- * Three stacked panels on the left (Repos, Pipeline, Worktrees), a tabbed
- * detail pane on the right, and a status bar at the bottom. Overlays for
- * actions, confirmation, filter, and help.
+ * Single-column layout:
+ *   RepoBar (1 row) -> FilterBar (conditional) -> PlanList (fills space)
+ *   -> WorktreeStrip (1 row) -> StatusBar (1 row)
+ *
+ * Overlays: DetailOverlay, ActionMenu, ConfirmDialog, HelpOverlay.
  *
  * State management lives in app-state.ts, keyboard routing in keyboard.ts.
  * This file is responsible only for layout and rendering.
@@ -13,10 +15,10 @@ import React from "react";
 import { Box, Text, useApp, useStdout } from "ink";
 import { useAppState, CHROME_ROWS } from "./app-state.ts";
 import { useKeyboardRouting } from "./keyboard.ts";
-import { ReposPanel } from "./ReposPanel.tsx";
-import { PipelinePanel } from "./PipelinePanel.tsx";
-import { WorktreesPanel } from "./WorktreesPanel.tsx";
-import { DetailPane } from "./DetailPane.tsx";
+import { RepoBar } from "./RepoBar.tsx";
+import { PlanList } from "./PlanList.tsx";
+import { WorktreeStrip } from "./WorktreeStrip.tsx";
+import { DetailOverlay } from "./DetailOverlay.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ActionMenu } from "./ActionMenu.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -33,14 +35,15 @@ export function App() {
   useKeyboardRouting(state, exit);
 
   const {
-    panelNav,
-    activePanel,
     focus,
     repos,
     selectedRepo,
+    selectedRepoIdx,
     displayPlans,
     worktrees,
     selectedPlan,
+    planCursor,
+    showDetail,
     activeTab,
     scrollOffset,
     followTail,
@@ -55,91 +58,32 @@ export function App() {
     plans,
   } = state;
 
-  const { getCursor } = panelNav;
-
-  // --- Left panel width ---
-  const leftWidth = Math.max(
-    20,
-    Math.min(Math.floor(termCols * 0.3), Math.floor(termCols * 0.4)),
-  );
-
-  // --- Detail pane width (fills remaining space) ---
-  const detailWidth = termCols - leftWidth;
-
-  // --- Left panels share vertical space. Pipeline gets most room. ---
-  const availableRows = termRows - CHROME_ROWS;
-  const reposHeight = Math.max(
-    2,
-    Math.min(repos.length + 1, Math.floor(availableRows * 0.2)),
-  );
-  const worktreesHeight = Math.max(
-    2,
-    Math.min(worktrees.length + 1, Math.floor(availableRows * 0.2)),
-  );
-  const pipelineHeight = Math.max(
-    4,
-    availableRows - reposHeight - worktreesHeight,
-  );
+  // Plan list gets all vertical space not used by chrome
+  const filterRows = filterActive || filterQuery ? 1 : 0;
+  const planListHeight = Math.max(4, termRows - CHROME_ROWS - filterRows);
 
   return (
     <Box flexDirection="column" height={termRows}>
-      <Box flexDirection="row" flexGrow={1}>
-        {/* Left column: three stacked panels */}
-        <Box flexDirection="column" width={leftWidth}>
-          <ReposPanel
-            repos={repos}
-            cursor={getCursor("repos")}
-            active={focus === "panel" && activePanel === "repos"}
-            width={leftWidth}
-            height={reposHeight}
-            collapsed={
-              focus === "panel" && activePanel !== "repos" && repos.length > 3
-            }
-          />
-          {(filterActive || filterQuery) && (
-            <FilterBar query={filterQuery} resultCount={displayPlans.length} />
-          )}
-          <PipelinePanel
-            plans={displayPlans}
-            cursor={getCursor("pipeline")}
-            active={focus === "panel" && activePanel === "pipeline"}
-            width={leftWidth}
-            height={pipelineHeight}
-            repoName={selectedRepo?.id}
-            collapsed={
-              focus === "panel" &&
-              activePanel !== "pipeline" &&
-              displayPlans.length > 5
-            }
-          />
-          <WorktreesPanel
-            worktrees={worktrees}
-            cursor={getCursor("worktrees")}
-            active={focus === "panel" && activePanel === "worktrees"}
-            width={leftWidth}
-            height={worktreesHeight}
-            collapsed={
-              focus === "panel" &&
-              activePanel !== "worktrees" &&
-              worktrees.length > 3
-            }
-          />
-        </Box>
+      {/* Repo tab bar */}
+      <RepoBar repos={repos} selectedIndex={selectedRepoIdx} width={termCols} />
 
-        {/* Right column: detail pane */}
-        <DetailPane
-          plan={selectedPlan}
-          tab={activeTab}
-          focused={focus === "detail"}
-          scrollOffset={scrollOffset}
-          planContent={planContent}
-          progressContent={progressContent}
-          outputData={outputData}
-          contentHeight={contentHeight}
-          followTail={followTail}
-          width={detailWidth}
-        />
-      </Box>
+      {/* Filter bar (conditional) */}
+      {(filterActive || filterQuery) && (
+        <FilterBar query={filterQuery} resultCount={displayPlans.length} />
+      )}
+
+      {/* Full-width plan list */}
+      <PlanList
+        plans={displayPlans}
+        cursor={planCursor}
+        active={focus === "list"}
+        width={termCols}
+        height={planListHeight}
+        repoName={selectedRepo?.id}
+      />
+
+      {/* Compact worktree strip */}
+      <WorktreeStrip worktrees={worktrees} width={termCols} />
 
       {/* Status bar */}
       <StatusBar
@@ -157,8 +101,46 @@ export function App() {
         hasActiveRunners={plans.some((p) => p.state === "in-progress")}
       />
 
-      {/* Overlays — rendered inside a full-screen backdrop to prevent
-          text bleed-through from the panels behind. */}
+      {/* --- Overlays --- */}
+
+      {/* Detail overlay (full-screen, shown on Enter) */}
+      {showDetail && selectedPlan && (
+        <Box
+          position="absolute"
+          width={termCols}
+          height={termRows}
+          flexDirection="column"
+        >
+          {/* Opaque backdrop */}
+          {Array.from({ length: termRows }, (_, i) => (
+            <Text key={i}>{" ".repeat(termCols)}</Text>
+          ))}
+        </Box>
+      )}
+      {showDetail && selectedPlan && (
+        <Box
+          position="absolute"
+          width={termCols}
+          height={termRows}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <DetailOverlay
+            plan={selectedPlan}
+            tab={activeTab}
+            scrollOffset={scrollOffset}
+            planContent={planContent}
+            progressContent={progressContent}
+            outputData={outputData}
+            contentHeight={contentHeight}
+            followTail={followTail}
+            width={Math.min(termCols, termCols - 2)}
+            height={termRows - 2}
+          />
+        </Box>
+      )}
+
+      {/* Action menu / confirm / help overlays */}
       {overlay.kind !== "none" && (
         <Box
           position="absolute"
@@ -166,7 +148,6 @@ export function App() {
           height={termRows}
           flexDirection="column"
         >
-          {/* Opaque backdrop: fill every row with spaces */}
           {Array.from({ length: termRows }, (_, i) => (
             <Text key={i}>{" ".repeat(termCols)}</Text>
           ))}
