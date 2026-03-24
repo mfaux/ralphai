@@ -26,29 +26,17 @@ function makeWorktree(
 }
 
 // ---------------------------------------------------------------------------
-// repos panel
+// plan context
 // ---------------------------------------------------------------------------
 
-describe("buildMenuItems — repos panel", () => {
-  it('returns a single "Select repo" action', () => {
-    const items = buildMenuItems("repos", null, null);
-    expect(items).toHaveLength(1);
-    expect(items[0]!.action).toBe("select-repo");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// pipeline panel
-// ---------------------------------------------------------------------------
-
-describe("buildMenuItems — pipeline panel", () => {
+describe("buildMenuItems — plan context", () => {
   it("returns empty array when no plan is selected", () => {
-    expect(buildMenuItems("pipeline", null, null)).toEqual([]);
+    expect(buildMenuItems("plan", null, null)).toEqual([]);
   });
 
   it("returns run actions for backlog plans", () => {
     const plan = makePlan({ slug: "add-auth", state: "backlog" });
-    const items = buildMenuItems("pipeline", plan, null);
+    const items = buildMenuItems("plan", plan, null);
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("run");
@@ -59,7 +47,7 @@ describe("buildMenuItems — pipeline panel", () => {
 
   it("returns monitoring actions for in-progress plans", () => {
     const plan = makePlan({ slug: "running-task", state: "in-progress" });
-    const items = buildMenuItems("pipeline", plan, null);
+    const items = buildMenuItems("plan", plan, null);
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("view-progress");
@@ -70,7 +58,7 @@ describe("buildMenuItems — pipeline panel", () => {
 
   it("returns archive actions for completed plans", () => {
     const plan = makePlan({ slug: "done-task", state: "completed" });
-    const items = buildMenuItems("pipeline", plan, null);
+    const items = buildMenuItems("plan", plan, null);
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("view-summary");
@@ -81,24 +69,24 @@ describe("buildMenuItems — pipeline panel", () => {
 
   it("includes keyboard shortcut hints", () => {
     const plan = makePlan({ slug: "my-plan", state: "backlog" });
-    const items = buildMenuItems("pipeline", plan, null);
+    const items = buildMenuItems("plan", plan, null);
     const runItem = items.find((i) => i.action === "run");
     expect(runItem?.shortcut).toBe("r");
   });
 });
 
 // ---------------------------------------------------------------------------
-// worktrees panel
+// worktree context
 // ---------------------------------------------------------------------------
 
-describe("buildMenuItems — worktrees panel", () => {
+describe("buildMenuItems — worktree context", () => {
   it("returns empty array when no worktree is selected", () => {
-    expect(buildMenuItems("worktrees", null, null)).toEqual([]);
+    expect(buildMenuItems("worktree", null, null)).toEqual([]);
   });
 
   it("returns view + remove for idle worktrees", () => {
     const wt = makeWorktree({ shortBranch: "old-feature", status: "idle" });
-    const items = buildMenuItems("worktrees", null, wt);
+    const items = buildMenuItems("worktree", null, wt);
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("view-linked-plan");
@@ -108,11 +96,21 @@ describe("buildMenuItems — worktrees panel", () => {
 
   it("omits remove for active worktrees", () => {
     const wt = makeWorktree({ shortBranch: "busy-feature", status: "active" });
-    const items = buildMenuItems("worktrees", null, wt);
+    const items = buildMenuItems("worktree", null, wt);
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("view-linked-plan");
     expect(actions).not.toContain("remove-worktree");
     expect(items).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// none context
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — none context", () => {
+  it("returns empty array", () => {
+    expect(buildMenuItems("none", null, null)).toEqual([]);
   });
 });

@@ -2,8 +2,8 @@
  * StatusBar — bottom bar with context-sensitive keyboard hints and toast.
  *
  * Hints change based on the current FocusTarget:
- * - panel:  ↑↓ navigate · Tab/1-3 panels · Enter actions · / filter · ? help · q quit
- * - detail: ↑↓ scroll · ←→ tabs · f follow · Esc back
+ * - list:   ↑↓ navigate · Enter detail · a actions · [/] repos · / filter · ? help · q quit
+ * - detail: ↑↓ scroll · ←→ tabs · a actions · f follow · Esc back
  * - menu:   ↑↓ select · Enter confirm · Esc cancel
  * - filter: type to filter · Enter apply · Esc clear
  * - help:   ? or Esc to close
@@ -29,10 +29,9 @@ interface StatusBarProps {
 }
 
 const HINTS: Record<FocusTarget, string> = {
-  panel:
-    "\u2191\u2193 navigate \u00B7 Enter actions \u00B7 Tab detail \u00B7 / filter \u00B7 ? help \u00B7 q quit",
+  list: "\u2191\u2193 navigate \u00B7 Enter detail \u00B7 a actions \u00B7 [/] repos \u00B7 / filter \u00B7 ? help \u00B7 q quit",
   detail:
-    "\u2191\u2193 scroll \u00B7 \u2190\u2192 tabs \u00B7 Enter actions \u00B7 f follow \u00B7 1-3 panels \u00B7 Esc back",
+    "\u2191\u2193 scroll \u00B7 \u2190\u2192 tabs \u00B7 a actions \u00B7 f follow \u00B7 Esc back",
   menu: "\u2191\u2193 select \u00B7 Enter confirm \u00B7 Esc cancel",
   filter: "type to filter \u00B7 Enter apply \u00B7 Esc clear",
   help: "? or Esc to close",

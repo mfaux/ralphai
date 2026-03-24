@@ -1,27 +1,24 @@
 /**
  * useKeyboardRouting — single useInput handler that routes keys
  * based on the current FocusTarget and overlay state.
+ *
+ * Option B layout: list focus + detail overlay (no panel cycling).
  */
 
 import { useInput } from "ink";
-import type { DetailTab, PanelId, PlanInfo, WorktreeInfo } from "./types.ts";
-import type { Overlay } from "./app-state.ts";
+import type { DetailTab } from "./types.ts";
 import type { useAppState } from "./app-state.ts";
-import type { RepoSummary } from "../global-state.ts";
 
 type AppState = ReturnType<typeof useAppState>;
 
 export function useKeyboardRouting(state: AppState, exit: () => void) {
   const {
-    panelNav,
-    activePanel,
     focus,
     setFocus,
-    repos,
-    setSelectedRepoIdx,
     displayPlans,
-    worktrees,
     selectedPlan,
+    moveCursor,
+    switchRepo,
     activeTab,
     setActiveTab,
     scrollOffset,
@@ -29,6 +26,9 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     followTail,
     setFollowTail,
     contentHeight,
+    showDetail,
+    openDetail,
+    closeDetail,
     overlay,
     setOverlay,
     filterQuery,
@@ -37,8 +37,6 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     handleConfirm,
     openActionMenu,
   } = state;
-
-  const { moveCursor, setActivePanel, cyclePanels, getCursor } = panelNav;
 
   useInput((input, key) => {
     // --- Confirm dialog ---
@@ -55,7 +53,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     if (overlay.kind === "help") {
       if (input === "?" || key.escape) {
         setOverlay({ kind: "none" });
-        setFocus("panel");
+        setFocus("list");
       }
       return;
     }
@@ -64,7 +62,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     if (overlay.kind === "menu") {
       if (key.escape) {
         setOverlay({ kind: "none" });
-        setFocus("panel");
+        setFocus(showDetail ? "detail" : "list");
         return;
       }
       if (key.upArrow) {
@@ -98,11 +96,11 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     if (focus === "filter") {
       if (key.escape) {
         setFilterQuery("");
-        setFocus("panel");
+        setFocus("list");
         return;
       }
       if (key.return) {
-        setFocus("panel");
+        setFocus("list");
         return;
       }
       if (key.backspace || key.delete) {
@@ -115,8 +113,8 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
-    // --- Global keys ---
-    if (input === "q") {
+    // --- Global keys (both list and detail focus) ---
+    if (input === "q" && focus === "list") {
       exit();
       return;
     }
@@ -125,26 +123,11 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       setFocus("help");
       return;
     }
-    if (input === "1") {
-      setActivePanel("repos");
-      setFocus("panel");
-      return;
-    }
-    if (input === "2") {
-      setActivePanel("pipeline");
-      setFocus("panel");
-      return;
-    }
-    if (input === "3") {
-      setActivePanel("worktrees");
-      setFocus("panel");
-      return;
-    }
 
-    // --- Detail focus ---
+    // --- Detail overlay focus ---
     if (focus === "detail") {
       if (key.escape) {
-        setFocus("panel");
+        closeDetail();
         return;
       }
       if (key.upArrow) {
@@ -195,55 +178,42 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
         setFollowTail((prev) => !prev);
         return;
       }
-      if (key.return) {
+      if (input === "a" || key.return) {
         openActionMenu();
         return;
       }
       return;
     }
 
-    // --- Panel focus ---
+    // --- List focus ---
     if (key.escape) return;
 
-    if (key.tab) {
-      cyclePanels(key.shift ? -1 : 1);
-      return;
-    }
-
     if (key.upArrow) {
-      const len = listLengthForPanel(
-        activePanel,
-        repos,
-        displayPlans,
-        worktrees,
-      );
-      moveCursor(-1, len);
+      moveCursor(-1, displayPlans.length);
       return;
     }
     if (key.downArrow) {
-      const len = listLengthForPanel(
-        activePanel,
-        repos,
-        displayPlans,
-        worktrees,
-      );
-      moveCursor(1, len);
+      moveCursor(1, displayPlans.length);
       return;
     }
 
     if (key.return) {
-      if (activePanel === "repos" && repos.length > 0) {
-        const repoIdx = getCursor("repos");
-        setSelectedRepoIdx(repoIdx);
-        setActivePanel("pipeline");
-        return;
-      }
+      openDetail();
+      return;
+    }
+
+    if (input === "a") {
       openActionMenu();
       return;
     }
 
-    if (input === "l" || key.rightArrow) {
-      if (selectedPlan) setFocus("detail");
+    // [ / ] switch repos
+    if (input === "[") {
+      switchRepo(-1);
+      return;
+    }
+    if (input === "]") {
+      switchRepo(1);
       return;
     }
 
@@ -268,20 +238,4 @@ function cycleTabs(
     return TAB_ORDER[(idx + delta + TAB_ORDER.length) % TAB_ORDER.length]!;
   });
   setScrollOffset(0);
-}
-
-function listLengthForPanel(
-  panel: PanelId,
-  repos: RepoSummary[],
-  plans: PlanInfo[],
-  worktrees: WorktreeInfo[],
-): number {
-  switch (panel) {
-    case "repos":
-      return repos.length;
-    case "pipeline":
-      return plans.length;
-    case "worktrees":
-      return worktrees.length;
-  }
 }

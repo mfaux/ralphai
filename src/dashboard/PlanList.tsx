@@ -1,25 +1,24 @@
 /**
- * PipelinePanel — middle-left stacked panel showing plans for the selected repo.
+ * PlanList — full-width plan list, the primary view of the dashboard.
  *
- * Plans grouped under state headers (ACTIVE, QUEUED, DONE).
- * Each plan shows slug (smart-truncated), and when width allows, scope + progress bar.
- * Wrapped in a PanelBox with rounded borders.
+ * Plans are grouped by state (ACTIVE, QUEUED, DONE) with headers.
+ * Each row shows cursor, state badge, slug, scope, progress bar,
+ * and elapsed time. Gets all available vertical space.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo } from "./types.ts";
-import { truncateSlug } from "./format.ts";
+import { truncateSlug, formatElapsed } from "./format.ts";
 import { PanelBox } from "./PanelBox.tsx";
 import { useSpinner } from "./hooks.ts";
 
-interface PipelinePanelProps {
+interface PlanListProps {
   plans: PlanInfo[];
   cursor: number;
   active: boolean;
   width: number;
-  height?: number;
-  collapsed?: boolean;
+  height: number;
   repoName?: string;
 }
 
@@ -35,17 +34,20 @@ const STATE_LABELS: Record<PlanInfo["state"], string> = {
   completed: "DONE",
 };
 
-const STATE_BADGE_COLOR: Record<
-  PlanInfo["state"],
-  "green" | "yellow" | "gray"
-> = {
-  "in-progress": "green",
-  backlog: "yellow",
-  completed: "gray",
-};
+/** State badge character for non-active states. */
+function stateBadge(state: PlanInfo["state"]): string {
+  switch (state) {
+    case "backlog":
+      return "\u25CB";
+    case "completed":
+      return "\u2713";
+    default:
+      return "";
+  }
+}
 
 function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
-  if (width < 35) return null;
+  if (width < 45) return null;
   if (plan.state !== "in-progress") return null;
   if (plan.tasksCompleted === undefined && plan.totalTasks === undefined)
     return null;
@@ -67,28 +69,26 @@ function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
   );
 }
 
-/** State badge character for non-active states. */
-function stateBadge(state: PlanInfo["state"]): string {
-  switch (state) {
-    case "backlog":
-      return "\u25CB";
-    case "completed":
-      return "\u2713";
-    default:
-      return "";
-  }
+function ElapsedTime({ plan, width }: { plan: PlanInfo; width: number }) {
+  if (width < 55) return null;
+  if (!plan.startedAt) return null;
+
+  const elapsed = formatElapsed(plan.startedAt);
+  if (!elapsed) return null;
+
+  return <Text dimColor> {elapsed}</Text>;
 }
 
 function PlanRow({
   plan,
   selected,
-  panelActive,
+  listActive,
   maxSlugLen,
   width,
 }: {
   plan: PlanInfo;
   selected: boolean;
-  panelActive: boolean;
+  listActive: boolean;
   maxSlugLen: number;
   width: number;
 }) {
@@ -100,37 +100,31 @@ function PlanRow({
   return (
     <Box key={plan.slug + plan.state}>
       <Text
-        color={
-          selected && panelActive ? "cyan" : selected ? "white" : undefined
-        }
+        color={selected && listActive ? "cyan" : selected ? "white" : undefined}
         bold={selected}
       >
         {pointer}
         {badge ? ` ${badge}` : ""} {truncated}
       </Text>
-      {width >= 35 && plan.scope && <Text dimColor> [{plan.scope}]</Text>}
+      {width >= 40 && plan.scope && <Text dimColor> [{plan.scope}]</Text>}
       <ProgressIndicator plan={plan} width={width} />
+      <ElapsedTime plan={plan} width={width} />
     </Box>
   );
 }
 
-export function PipelinePanel({
+export function PlanList({
   plans,
   cursor,
   active,
   width,
   height,
-  collapsed,
   repoName,
-}: PipelinePanelProps) {
-  const title = repoName ? `2 Pipeline (${repoName})` : "2 Pipeline";
-
-  if (collapsed) {
-    return <PanelBox title={title} active={active} width={width} collapsed />;
-  }
+}: PlanListProps) {
+  const title = repoName ? `Pipeline (${repoName})` : "Pipeline";
 
   // Account for 2 columns of border chrome
-  const maxSlugLen = Math.max(8, width - 8);
+  const maxSlugLen = Math.max(8, width - 10);
 
   // Group plans by state
   const grouped = new Map<PlanInfo["state"], PlanInfo[]>();
@@ -170,7 +164,7 @@ export function PipelinePanel({
                 key={plan.slug + plan.state}
                 plan={plan}
                 selected={selected}
-                panelActive={active}
+                listActive={active}
                 maxSlugLen={maxSlugLen}
                 width={width}
               />

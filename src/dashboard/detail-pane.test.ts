@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultTabForState } from "./DetailPane.tsx";
+import { defaultTabForState } from "./DetailOverlay.tsx";
 
 describe("defaultTabForState", () => {
   it('returns "progress" for in-progress plans', () => {

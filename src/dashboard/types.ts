@@ -2,13 +2,10 @@
  * Shared types for the dashboard components.
  */
 
-/** Identifies one of the three left-side panels. */
-export type PanelId = "repos" | "pipeline" | "worktrees";
-
 /** Which component currently owns keyboard input. */
-export type FocusTarget = "panel" | "detail" | "menu" | "filter" | "help";
+export type FocusTarget = "list" | "detail" | "menu" | "filter" | "help";
 
-/** Tabs available in the detail pane. */
+/** Tabs available in the detail overlay. */
 export type DetailTab = "summary" | "plan" | "progress" | "output";
 
 /** A single item in an action context menu. */
@@ -17,6 +14,12 @@ export interface ActionMenuItem {
   action: string;
   shortcut?: string;
 }
+
+/**
+ * Context for building action menu items.
+ * Replaces the old PanelId approach with a simpler "what is selected" model.
+ */
+export type ActionContext = "plan" | "worktree" | "none";
 
 // ---------------------------------------------------------------------------
 // Worktree data

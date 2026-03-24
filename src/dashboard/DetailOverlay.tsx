@@ -1,22 +1,22 @@
 /**
- * DetailPane — right-side tabbed detail pane for the selected plan.
+ * DetailOverlay — full-screen overlay for viewing plan details.
  *
  * Four tabs: Summary, Plan, Progress, Output.
  * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
  * Output tab shows green LIVE indicator and supports follow-tail mode.
+ *
+ * Opened by pressing Enter on a plan in the list, dismissed with Esc.
  */
 
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
-import { PanelBox } from "./PanelBox.tsx";
 import { useSpinner } from "./hooks.ts";
 
-interface DetailPaneProps {
-  plan: PlanInfo | null;
+interface DetailOverlayProps {
+  plan: PlanInfo;
   tab: DetailTab;
-  focused: boolean;
   scrollOffset: number;
   planContent: string | null;
   progressContent: string | null;
@@ -24,6 +24,7 @@ interface DetailPaneProps {
   contentHeight: number;
   followTail: boolean;
   width: number;
+  height: number;
 }
 
 const TABS: DetailTab[] = ["summary", "plan", "progress", "output"];
@@ -244,10 +245,9 @@ export function defaultTabForState(state: PlanInfo["state"]): DetailTab {
   }
 }
 
-export function DetailPane({
+export function DetailOverlay({
   plan,
   tab,
-  focused,
   scrollOffset,
   planContent,
   progressContent,
@@ -255,23 +255,13 @@ export function DetailPane({
   contentHeight,
   followTail,
   width,
-}: DetailPaneProps) {
+  height,
+}: DetailOverlayProps) {
   // Usable content width after border chrome (2 columns)
-  const contentWidth = Math.max(1, width - 2);
+  const contentWidth = Math.max(1, width - 4);
 
   const isLive = tab === "output" && (outputData?.isLive ?? false);
   const liveSpinner = useSpinner(isLive);
-
-  if (!plan) {
-    return (
-      <PanelBox title="Details" active={focused} width={width}>
-        <Text dimColor>Select a plan to view details.</Text>
-        <Text dimColor>
-          Navigate to the Pipeline panel and press Enter on a plan.
-        </Text>
-      </PanelBox>
-    );
-  }
 
   const planTitle =
     plan.slug +
@@ -280,7 +270,19 @@ export function DetailPane({
     (plan.state === "completed" ? "  \u2713 done" : "");
 
   return (
-    <PanelBox title={planTitle} active={focused} width={width}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="cyan"
+      width={width}
+      height={height}
+      overflow="hidden"
+    >
+      {/* Title */}
+      <Text bold color="cyan">
+        {planTitle}
+      </Text>
+
       {/* Tab bar */}
       <Box>
         <TabBar active={tab} />
@@ -328,6 +330,6 @@ export function DetailPane({
             <Text dimColor>No agent output available.</Text>
           ))}
       </Box>
-    </PanelBox>
+    </Box>
   );
 }
