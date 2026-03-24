@@ -203,6 +203,15 @@ ralphai repos --clean      # remove stale entries, then list
 
 A repo entry is considered stale when its stored `repoPath` no longer exists on disk AND its pipeline is completely empty (no backlog, in-progress, or completed plans). Repos with plans are always preserved, even if the path is gone.
 
+## Backlog Dir
+
+Prints the absolute path to the plan backlog directory for the current repository. Useful for scripting or finding where to place plan files.
+
+```bash
+ralphai backlog-dir
+# ~/.ralphai/repos/<repo-id>/pipeline/backlog
+```
+
 ## Configuration
 
 Settings resolve in this order: **CLI flags > env vars > `config.json` > defaults**.
