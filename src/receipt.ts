@@ -102,9 +102,12 @@ export function initReceipt(path: string, fields: InitReceiptFields): void {
 /**
  * Count completed tasks from a progress.md file and update the receipt.
  *
- * Counts:
- * - Individual `**Status:** Complete` markers (case-insensitive)
- * - Batch entries like `### Tasks 1-3` which contribute (end - start + 1) tasks
+ * Counts individual `**Status:** Complete` markers (case-insensitive).
+ *
+ * @deprecated Batch `### Tasks X-Y` headings are no longer generated
+ * (the execution model is now one iteration per task). The batch pattern
+ * is still accepted for backward-compatibility with older progress files
+ * but will be removed in a future release.
  *
  * No-op if either the receipt or progress file does not exist.
  */
@@ -126,6 +129,9 @@ export function updateReceiptTasks(
     count += individualMatches.length;
   }
 
+  // DEPRECATED: batch entries from older progress files.
+  // One iteration now completes exactly one task, so batch headings
+  // should not appear in new progress files.
   // Count batch entries: ### Tasks X-Y or ### Tasks X–Y (en-dash or hyphen)
   const batchPattern = /^### .*[Tt]asks?\s+(\d+)\s*[–-]\s*(\d+)/gim;
   let match;

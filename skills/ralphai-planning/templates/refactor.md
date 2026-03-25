@@ -54,6 +54,10 @@ renamed, what gets extracted.>
 
 **Invariant:** <What existing tests validate that behavior is preserved.>
 
+#### 1.1: <Subtask title>
+
+<Description of the subtask.>
+
 ### Task 2: <Title>
 
 ...

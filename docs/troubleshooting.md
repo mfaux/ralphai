@@ -4,20 +4,20 @@ Common issues and how to resolve them.
 
 ## "My plan is stuck"
 
-Ralphai aborts when it detects 3 consecutive tasks with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
+Ralphai aborts when it detects 3 consecutive iterations with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
 
 **Steps:**
 
 1. Check `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
 2. Open the progress file in `pipeline/in-progress/<slug>/progress.md` to see what the agent attempted and where it got stuck.
-3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the stuck task, add hints, or break it into smaller steps.
+3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the current step, add hints, or break it into smaller subtasks.
 4. Resume: `ralphai run --resume`
 
 The `--resume` flag auto-commits any dirty working tree state and continues from where the agent left off, preserving the existing progress file.
 
 ## "Agent keeps making the same mistake"
 
-Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it in the next session.
+Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it in the next iteration.
 
 ```markdown
 ### 2025-01-15 — Describe the mistake briefly
@@ -31,7 +31,7 @@ Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear des
 
 ## "Build/test didn't run"
 
-The agent is instructed to run feedback commands each task, but the commands themselves come from your configuration.
+The agent is instructed to run feedback commands each iteration, but the commands themselves come from your configuration.
 
 **Check:**
 
@@ -60,7 +60,7 @@ The agent CLI is configured via `agentCommand` with this precedence:
 - Verify the first token of the command is in your `PATH` — `ralphai doctor` checks this.
 - If unset, ralphai exits with: `ERROR: agentCommand is required.`
 
-## "Plan failed on first task"
+## "Plan failed on first iteration"
 
 **Check:**
 

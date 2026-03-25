@@ -111,7 +111,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  continuous         = false  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
-    expect(output).toContain("  taskTimeout        = off  (default)");
+    expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
   });

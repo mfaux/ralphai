@@ -53,10 +53,16 @@ numbers.>
 
 **Docs:** <What docs to update, if any.>
 
-**Subtasks** (optional, for multi-step tasks):
+#### 1.1: <Subtask title>
 
-- **Step description:** what to do
-- **Another step:** what to do
+<Description of the subtask.>
+
+#### 1.2: <Subtask title>
+
+<Description of the subtask.>
+
+Subtasks break a task into steps the agent handles within a single
+iteration. They are optional — use them when a task has distinct parts.
 
 ### Task 2: <Title>
 

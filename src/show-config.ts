@@ -46,7 +46,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   baseBranch: "RALPHAI_BASE_BRANCH",
   maxStuck: "RALPHAI_MAX_STUCK",
   mode: "RALPHAI_MODE",
-  taskTimeout: "RALPHAI_TASK_TIMEOUT",
+  iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
   issueSource: "RALPHAI_ISSUE_SOURCE",
   issueLabel: "RALPHAI_ISSUE_LABEL",
   issueInProgressLabel: "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
@@ -173,15 +173,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     `  maxStuck           = ${config.maxStuck.value}  (${maxStuckSrc})`,
   );
 
-  // taskTimeout: 0 displays as "off", otherwise "<N>s"
-  const timeoutVal = config.taskTimeout.value;
+  // iterationTimeout: 0 displays as "off", otherwise "<N>s"
+  const timeoutVal = config.iterationTimeout.value;
   const timeoutDisplay = timeoutVal > 0 ? `${timeoutVal}s` : "off";
   const timeoutSrc = sourceLabel(
-    "taskTimeout",
-    config.taskTimeout.source,
+    "iterationTimeout",
+    config.iterationTimeout.source,
     input,
   );
-  lines.push(`  taskTimeout        = ${timeoutDisplay}  (${timeoutSrc})`);
+  lines.push(`  iterationTimeout   = ${timeoutDisplay}  (${timeoutSrc})`);
 
   // maxLearnings: 0 displays as "unlimited"
   const maxLearnVal = config.maxLearnings.value;

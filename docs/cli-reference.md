@@ -9,7 +9,7 @@ ralphai <command> [options]
 | Command        | Description                                                            |
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
-| `run`          | Start the Ralphai task runner                                          |
+| `run`          | Start the Ralphai runner                                          |
 | `worktree`     | Run in an isolated git worktree                                        |
 | `status`       | Show pipeline and worktree status                                      |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
@@ -55,7 +55,7 @@ Running `ralphai` with no subcommand in a TTY launches an interactive dashboard 
 
 **Detail tabs** (when detail pane is focused):
 
-- **s** Summary: plan description, branch, start time, task progress bar, and receipt fields for completed plans
+- **s** Summary: plan description, branch, start time, progress bar, and receipt fields for completed plans
 - **p** Plan: the raw plan markdown
 - **g** Progress: contents of `progress.md`
 - **o** Output: tail of `agent-output.log` with a live indicator while the agent is running
@@ -100,7 +100,7 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 --base-branch=<branch>            Override base branch (default: main)
 --continuous                      Keep processing backlog plans after the first completes
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
---task-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
+--iteration-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
 --prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
 --show-config                     Print resolved settings and exit
 ```
@@ -108,7 +108,7 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 ### Patch Mode Options
 
 ```
---auto-commit                     Enable auto-commit of agent changes (per-task and resume recovery)
+--auto-commit                     Enable auto-commit of agent changes (per-iteration and resume recovery)
 --no-auto-commit                  Disable auto-commit (default)
 ```
 
@@ -229,7 +229,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
-| `RALPHAI_TASK_TIMEOUT`            | `taskTimeout`          |
+| `RALPHAI_ITERATION_TIMEOUT`            | `iterationTimeout`          |
 | `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_MAX_LEARNINGS`           | `maxLearnings`         |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |

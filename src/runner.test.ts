@@ -223,7 +223,7 @@ function makeResolvedConfig(
     issueInProgressLabel: "ralphai:in-progress",
     issueRepo: "",
     issueCommentProgress: "true",
-    taskTimeout: 0,
+    iterationTimeout: 0,
     continuous: "false",
     autoCommit: "false",
     maxLearnings: 20,
@@ -377,7 +377,7 @@ describe("runRunner — completion", () => {
     const logFile = join(archiveDir, "logtest", "agent-output.log");
     expect(existsSync(logFile)).toBe(true);
     const content = readFileSync(logFile, "utf-8");
-    expect(content).toContain("--- Task 1 ---");
+    expect(content).toContain("--- Iteration 1 ---");
     expect(content).toContain("agent-says-hello");
   });
 

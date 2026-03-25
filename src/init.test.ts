@@ -75,7 +75,7 @@ describe("init command", () => {
     // New config keys from wizard expansion
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
-    expect(parsed.taskTimeout).toBe(0);
+    expect(parsed.iterationTimeout).toBe(0);
   });
 
   it("init --yes writes all config keys with defaults", () => {
@@ -98,7 +98,7 @@ describe("init command", () => {
     expect(parsed.autoCommit).toBe(false);
 
     // Runtime defaults
-    expect(parsed.taskTimeout).toBe(0);
+    expect(parsed.iterationTimeout).toBe(0);
     expect(parsed.continuous).toBe(false);
 
     // Issue tracking defaults
@@ -246,7 +246,7 @@ describe("init command", () => {
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("## Ralphai");
-    expect(agentsMd).toContain("autonomous task execution");
+    expect(agentsMd).toContain("autonomous execution");
     // Should NOT reference .ralphai/pipeline/backlog/ or .ralphai/PLANNING.md
     expect(agentsMd).not.toContain(".ralphai/pipeline/backlog/");
     expect(agentsMd).not.toContain(".ralphai/PLANNING.md");

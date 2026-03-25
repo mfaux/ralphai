@@ -54,7 +54,7 @@ ralphai run --allow-dirty
 ralphai run --continuous --pr
 ```
 
-Processes the entire backlog (`--continuous`), opens/updates a PR (`--pr`). Stuck detection (`--max-stuck`, default 3 consecutive tasks with no commits) still stops runaway plans.
+Processes the entire backlog (`--continuous`), opens/updates a PR (`--pr`). Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) still stops runaway plans.
 
 ## Work on a specific plan
 

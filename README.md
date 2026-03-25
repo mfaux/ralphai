@@ -19,9 +19,9 @@ npx ralphai run                  # start running plans from the backlog
 
 AI coding agents get worse the longer they run. As the conversation grows, the model drops older context: it forgets what it tried, repeats mistakes, and drifts.
 
-Ralphai avoids this by starting each task with a **fresh agent session**: just the plan and a progress log. No conversation history to lose. No drift.
+Ralphai avoids this by starting each iteration with a **fresh agent session**: just the plan and a progress log. No conversation history to lose. No drift.
 
-- **No context rot** — task 10 is as sharp as task 1
+- **No context rot** — iteration 10 is as sharp as iteration 1
 - **Fresh feedback** — real build output every cycle, never recalled from memory
 - **Stuck detection** — stops burning tokens when progress stalls
 
@@ -66,7 +66,7 @@ Ralphai creates a **`ralphai/<plan-slug>`** branch from your base branch by defa
 ralphai run
 ```
 
-Each task gets a fresh agent session: read the plan, implement the next task, run build/test/lint, fix errors, and commit.
+Each iteration gets a fresh agent session: read the plan, implement the next task, run build/test/lint, fix errors, and commit.
 
 ```bash
 ralphai run --pr         # create a ralphai/* branch and open a PR

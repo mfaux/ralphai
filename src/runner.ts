@@ -2,7 +2,7 @@
  * TypeScript runner: the main orchestration loop for Ralphai.
  *
  * Drives an AI coding agent to autonomously implement tasks from plan
- * files. Handles plan detection, task iteration, agent invocation,
+ * files. Handles plan detection, iteration management, agent invocation,
  * stuck detection, auto-commit, learnings processing, and completion/PR
  * lifecycle.
  *
@@ -137,7 +137,7 @@ function rollbackPlan(planFile: string, backlogDir: string): void {
 export function spawnAgent(
   agentCommand: string,
   prompt: string,
-  taskTimeout: number,
+  iterationTimeout: number,
   cwd: string,
   outputLogPath?: string,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
@@ -169,13 +169,13 @@ export function spawnAgent(
       stdio: ["pipe", "pipe", "pipe"],
     };
 
-    if (taskTimeout > 0) {
+    if (iterationTimeout > 0) {
       ac = new AbortController();
       spawnOpts.signal = ac.signal;
       setTimeout(() => {
         timedOut = true;
         ac!.abort();
-      }, taskTimeout * 1000);
+      }, iterationTimeout * 1000);
     }
 
     let child: ChildProcess;
@@ -453,7 +453,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const mode = config.mode.value;
   const baseBranch = config.baseBranch.value;
   const maxStuck = config.maxStuck.value;
-  const taskTimeout = config.taskTimeout.value;
+  const iterationTimeout = config.iterationTimeout.value;
   const agentCommand = config.agentCommand.value;
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
@@ -541,7 +541,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   while (!interrupted) {
     console.log();
     console.log("========================================");
-    console.log("  Ralphai — detecting next task...");
+    console.log("  Ralphai — detecting next iteration...");
     console.log("========================================");
 
     // Detect the next plan
@@ -817,28 +817,28 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       });
     }
 
-    // --- Task loop (per-plan) ---
+    // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
     let lastDiffHash = "";
     let completed = false;
 
     const totalTasks = countPlanTasks(planFile);
-    let taskNumber = 0;
+    let iterationNumber = 0;
 
     while (!interrupted) {
-      taskNumber++;
+      iterationNumber++;
       const completedTasks = countCompletedTasks(progressFile);
       const currentTask = Math.min(completedTasks + 1, totalTasks);
 
       console.log();
       if (totalTasks > 0) {
         console.log(
-          `=== Ralphai task ${currentTask} of ${totalTasks} (plan: ${basename(planFile)}) ===`,
+          `=== Ralphai iteration ${iterationNumber} — task ${currentTask} of ${totalTasks} (plan: ${basename(planFile)}) ===`,
         );
       } else {
         console.log(
-          `=== Ralphai task ${taskNumber} (plan: ${basename(planFile)}) ===`,
+          `=== Ralphai iteration ${iterationNumber} (plan: ${basename(planFile)}) ===`,
         );
       }
 
@@ -856,7 +856,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Spawn agent (with output log persistence) ---
       const outputLogPath = join(wipDir, "agent-output.log");
       try {
-        const header = `\n--- Task ${taskNumber} ---\n`;
+        const header = `\n--- Iteration ${iterationNumber} ---\n`;
         writeFileSync(outputLogPath, header, { flag: "a" });
       } catch {
         // Best-effort; non-fatal if we can't write the header
@@ -864,14 +864,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       const { output, exitCode, timedOut } = await spawnAgent(
         agentCommand,
         prompt,
-        taskTimeout,
+        iterationTimeout,
         cwd,
         outputLogPath,
       );
 
       if (timedOut) {
         console.log();
-        console.log(`WARNING: Agent command timed out after ${taskTimeout}s.`);
+        console.log(`WARNING: Agent command timed out after ${iterationTimeout}s.`);
       }
 
       // --- Process learnings block (before completion check) ---
@@ -886,8 +886,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Extract and append progress block ---
       const progressContent = extractProgressBlock(output);
       if (progressContent) {
-        appendProgressBlock(progressFile, taskNumber, progressContent);
-        console.log(`Appended progress block from task ${taskNumber}.`);
+        appendProgressBlock(progressFile, iterationNumber, progressContent);
+        console.log(`Appended progress block from iteration ${iterationNumber}.`);
       }
 
       if (exitCode !== 0 && !timedOut) {
@@ -901,11 +901,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         if (currentDiffHash === lastDiffHash) {
           stuckCount++;
           console.log(
-            `WARNING: No working-tree changes this task (${stuckCount}/${maxStuck}).`,
+            `WARNING: No working-tree changes this iteration (${stuckCount}/${maxStuck}).`,
           );
           if (stuckCount >= maxStuck) {
             console.error(
-              `ERROR: ${maxStuck} consecutive tasks with no progress. Aborting.`,
+              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
             );
             console.error(`Branch: ${branch}`);
             console.error(
@@ -922,11 +922,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         if (currentHash === lastHash) {
           stuckCount++;
           console.log(
-            `WARNING: No new commits this task (${stuckCount}/${maxStuck}).`,
+            `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
           );
           if (stuckCount >= maxStuck) {
             console.error(
-              `ERROR: ${maxStuck} consecutive tasks with no progress. Aborting.`,
+              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
             );
             console.error(`Branch: ${branch}`);
             console.error(
@@ -960,7 +960,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           );
           gitExec("git add -A", cwd);
           gitExec(
-            `git commit -m "chore(ralphai): auto-commit uncommitted changes from task ${taskNumber}"`,
+            `git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration ${iterationNumber}"`,
             cwd,
           );
         }
@@ -972,7 +972,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
         console.log();
-        console.log(`Plan complete after ${taskNumber} tasks: ${planDesc}`);
+        console.log(`Plan complete after ${iterationNumber} iterations: ${planDesc}`);
         completedPlans.push(basename(planFile));
 
         archiveRun({

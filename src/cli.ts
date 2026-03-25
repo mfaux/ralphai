@@ -39,7 +39,7 @@ function showHelp(): void {
 
 ${BOLD}Commands:${RESET}
   init         Set up Ralphai in your project (interactive wizard)
-  run          Start the Ralphai task runner
+  run          Start the Ralphai runner
   worktree     Run in an isolated git worktree
   status       Show pipeline and worktree status
   reset        Move in-progress plans back to backlog and clean up

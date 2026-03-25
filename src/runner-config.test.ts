@@ -699,7 +699,7 @@ echo "$MODE"
     it("run --show-config shows default values", () => {
       const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("taskTimeout        = off");
+      expect(result.stdout).toContain("iterationTimeout   = off");
       expect(result.stdout).toContain("(default)");
     });
 

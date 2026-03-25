@@ -80,7 +80,7 @@ describe("appendProgressBlock", () => {
 
     const content = readFileSync(file, "utf-8");
     expect(content).toContain("## Progress Log");
-    expect(content).toContain("### Task 1");
+    expect(content).toContain("### Iteration 1");
     expect(content).toContain("### Task 1: Done");
     expect(content).toContain("**Status:** Complete");
   });
@@ -92,7 +92,7 @@ describe("appendProgressBlock", () => {
 
     const content = readFileSync(file, "utf-8");
     expect(content).toContain("## Progress Log");
-    expect(content).toContain("### Task 3");
+    expect(content).toContain("### Iteration 3");
     expect(content).toContain("Some progress content");
   });
 
@@ -104,9 +104,9 @@ describe("appendProgressBlock", () => {
     appendProgressBlock(file, 2, "Second task work");
 
     const content = readFileSync(file, "utf-8");
-    expect(content).toContain("### Task 1");
+    expect(content).toContain("### Iteration 1");
     expect(content).toContain("First task work");
-    expect(content).toContain("### Task 2");
+    expect(content).toContain("### Iteration 2");
     expect(content).toContain("Second task work");
   });
 });

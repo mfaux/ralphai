@@ -166,9 +166,13 @@ export function countPlanTasks(planPath: string): number {
 }
 
 /**
- * Count completed tasks in a progress file. Handles two patterns:
- * 1. Individual: `### Task N:` followed by `**Status:** Complete`
- * 2. Batch: `### ... Tasks X-Y:` or `### ... Tasks X-Y:` headings
+ * Count completed tasks in a progress file.
+ * Counts individual `**Status:** Complete` markers.
+ *
+ * @deprecated Batch `### Tasks X-Y` headings are no longer generated
+ * (the execution model is now one iteration per task). The batch pattern
+ * is still accepted for backward-compatibility with older progress files
+ * but will be removed in a future release.
  */
 export function countCompletedTasks(progressPath: string): number {
   if (!existsSync(progressPath)) return 0;
@@ -178,7 +182,9 @@ export function countCompletedTasks(progressPath: string): number {
   const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
   let count = completeMatches ? completeMatches.length : 0;
 
-  // Count batch entries: `### ... Tasks X-Y` or `### ... Tasks X-Y` headings only
+  // DEPRECATED: batch entries from older progress files.
+  // One iteration now completes exactly one task, so batch headings
+  // should not appear in new progress files.
   const batchMatches = content.matchAll(
     /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
   );

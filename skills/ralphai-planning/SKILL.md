@@ -1,7 +1,7 @@
 ---
 name: ralphai-planning
 description: >-
-  Write Ralphai plan files for autonomous task execution. Use when asked to
+  Write Ralphai plan files for autonomous execution. Use when asked to
   create a plan, task, or backlog item for Ralphai.
 ---
 

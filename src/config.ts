@@ -26,7 +26,7 @@ export interface RalphaiConfig {
   issueInProgressLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
-  taskTimeout: number;
+  iterationTimeout: number;
   continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
   maxLearnings: number;
@@ -67,7 +67,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueInProgressLabel: "ralphai:in-progress",
   issueRepo: "",
   issueCommentProgress: "true",
-  taskTimeout: 0,
+  iterationTimeout: 0,
   continuous: "false",
   autoCommit: "false",
   maxLearnings: 20,
@@ -175,7 +175,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueInProgressLabel",
   "issueRepo",
   "issueCommentProgress",
-  "taskTimeout",
+  "iterationTimeout",
   "continuous",
   "autoCommit",
   "maxLearnings",
@@ -318,12 +318,12 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueCommentProgress = String(v);
   }
 
-  // taskTimeout (non-negative integer)
-  if ("taskTimeout" in obj) {
-    const v = obj.taskTimeout;
+  // iterationTimeout (non-negative integer)
+  if ("iterationTimeout" in obj) {
+    const v = obj.iterationTimeout;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(`'taskTimeout' must be a non-negative integer (seconds), got '${v}'`);
-    values.taskTimeout = v as number;
+      err(`'iterationTimeout' must be a non-negative integer (seconds), got '${v}'`);
+    values.iterationTimeout = v as number;
   }
 
   // continuous (boolean)
@@ -431,7 +431,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_BASE_BRANCH", "baseBranch"],
   ["RALPHAI_MAX_STUCK", "maxStuck"],
   ["RALPHAI_MODE", "mode"],
-  ["RALPHAI_TASK_TIMEOUT", "taskTimeout"],
+  ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
   ["RALPHAI_ISSUE_SOURCE", "issueSource"],
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
@@ -489,11 +489,11 @@ export function applyEnvOverrides(
     overrides.mode = mode as RalphaiConfig["mode"];
   }
 
-  // taskTimeout (non-negative integer)
-  const taskTimeout = get("RALPHAI_TASK_TIMEOUT");
-  if (taskTimeout !== undefined) {
-    validateNonNegInt(taskTimeout, "RALPHAI_TASK_TIMEOUT", "seconds");
-    overrides.taskTimeout = parseInt(taskTimeout, 10);
+  // iterationTimeout (non-negative integer)
+  const iterationTimeout = get("RALPHAI_ITERATION_TIMEOUT");
+  if (iterationTimeout !== undefined) {
+    validateNonNegInt(iterationTimeout, "RALPHAI_ITERATION_TIMEOUT", "seconds");
+    overrides.iterationTimeout = parseInt(iterationTimeout, 10);
   }
 
   // issueSource (enum)
@@ -600,11 +600,11 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validatePositiveInt(v, "--max-stuck");
       overrides.maxStuck = parseInt(v, 10);
       rawFlags.maxStuck = arg;
-    } else if (arg.startsWith("--task-timeout=")) {
-      const v = arg.slice("--task-timeout=".length);
-      validateNonNegInt(v, "--task-timeout", "seconds");
-      overrides.taskTimeout = parseInt(v, 10);
-      rawFlags.taskTimeout = arg;
+    } else if (arg.startsWith("--iteration-timeout=")) {
+      const v = arg.slice("--iteration-timeout=".length);
+      validateNonNegInt(v, "--iteration-timeout", "seconds");
+      overrides.iterationTimeout = parseInt(v, 10);
+      rawFlags.iterationTimeout = arg;
     } else if (arg === "--branch") {
       overrides.mode = "branch";
       rawFlags.mode = "--branch";
