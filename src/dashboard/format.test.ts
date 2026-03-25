@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { truncateSlug, wrapText } from "./format.ts";
+import { truncateSlug, wrapText, repoDisplayName } from "./format.ts";
+import type { RepoSummary } from "../global-state.ts";
+
+function makeRepo(overrides: Partial<RepoSummary> = {}): RepoSummary {
+  return {
+    id: "github.com-mfaux-ralphai",
+    repoPath: "/home/user/work/ralphai",
+    pathExists: true,
+    backlogCount: 0,
+    inProgressCount: 0,
+    completedCount: 0,
+    ...overrides,
+  };
+}
 
 describe("truncateSlug", () => {
   it("returns slug unchanged when shorter than maxLen", () => {
@@ -102,5 +115,46 @@ describe("wrapText", () => {
     }
     // Joined content should match original (minus the space where we broke)
     expect(result.join(" ")).toBe(longLine);
+  });
+});
+
+describe("repoDisplayName", () => {
+  it("returns basename of repoPath", () => {
+    const repo = makeRepo({ repoPath: "/home/user/work/ralphai" });
+    expect(repoDisplayName(repo, [repo])).toBe("ralphai");
+  });
+
+  it("falls back to id when repoPath is null", () => {
+    const repo = makeRepo({ repoPath: null, id: "_path-abc123def456" });
+    expect(repoDisplayName(repo, [repo])).toBe("_path-abc123def456");
+  });
+
+  it("disambiguates when two repos share the same basename", () => {
+    const a = makeRepo({
+      id: "github.com-mfaux-ralphai",
+      repoPath: "/home/user/work/ralphai",
+    });
+    const b = makeRepo({
+      id: "github.com-other-ralphai",
+      repoPath: "/home/user/personal/ralphai",
+    });
+    const all = [a, b];
+    expect(repoDisplayName(a, all)).toBe("ralphai (work)");
+    expect(repoDisplayName(b, all)).toBe("ralphai (personal)");
+  });
+
+  it("does not disambiguate when basenames differ", () => {
+    const a = makeRepo({ repoPath: "/home/user/work/alpha" });
+    const b = makeRepo({ repoPath: "/home/user/work/beta" });
+    const all = [a, b];
+    expect(repoDisplayName(a, all)).toBe("alpha");
+    expect(repoDisplayName(b, all)).toBe("beta");
+  });
+
+  it("ignores repos with null repoPath for disambiguation", () => {
+    const a = makeRepo({ repoPath: "/home/user/work/ralphai" });
+    const b = makeRepo({ id: "_path-abc", repoPath: null });
+    const all = [a, b];
+    expect(repoDisplayName(a, all)).toBe("ralphai");
   });
 });

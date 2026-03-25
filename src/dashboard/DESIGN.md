@@ -4,7 +4,7 @@ Architecture and rationale for the interactive dashboard (`src/dashboard/`).
 
 ## Layout: Lazygit-Style Multi-Panel
 
-The dashboard uses a **three-panel left column** (Repos, Pipeline, Worktrees) with a **tabbed detail pane** on the right, inspired by lazygit's split-panel approach.
+The dashboard uses a **two-pane layout** (RepoBar + Pipeline) with a **tabbed detail overlay**, inspired by lazygit's split-panel approach.
 
 **Why not the original two-screen design?** The prior architecture (RepoList screen -> PlanWorkspace screen) had three usability problems:
 
@@ -14,7 +14,7 @@ The dashboard uses a **three-panel left column** (Repos, Pipeline, Worktrees) wi
 
 The multi-panel layout keeps all context visible at once and allows drill-down without screen transitions.
 
-The Pipeline panel header includes the selected repo name (e.g., `2 Pipeline (ralphai) ───`) so users always know which repo's plans they're viewing. The StatusBar also shows the repo name on the right side. Pressing Space opens a `RepoSelector` overlay for switching repos directly, replacing the old `[`/`]` linear cycling and the always-visible `RepoBar`.
+A persistent `RepoBar` at the top of the screen always shows the currently selected repo with a dropdown indicator (`▾`) and plan counts. When no repos are registered, it displays an empty-state hint: "No repos · run `ralphai add <path>` to get started." When the RepoBar is focused, `↑`/`↓` directly cycles through repos and `Enter` opens an inline `RepoSelector` dropdown anchored directly below the RepoBar, providing a natural dropdown feel. The dropdown shows all repos with cursor navigation, an active-repo marker, and per-repo plan counts.
 
 ## Keyboard-Only Input
 
@@ -22,10 +22,39 @@ Ink 6.x has no mouse support (no `useMouse`, no mouse event parsing, no plugins)
 
 Key routing uses a **single `useInput` handler** (`keyboard.ts`) that dispatches based on `FocusTarget`:
 
-- **panel** — arrow keys navigate items, Tab cycles panels, Enter opens action menu
+- **repo** — arrow keys cycle repos, Enter opens dropdown, number keys / Tab switch panes
+- **list** — arrow keys navigate plans, Enter opens detail, `a` opens action menu
 - **detail** — arrow keys scroll, left/right switch tabs, `f` toggles follow-tail
 - **menu** — arrow keys select, Enter triggers, Esc dismisses
 - **filter** — typing appends to query, Esc closes
+
+## Pane Navigation
+
+The dashboard uses a **lazygit-style pane model** where number keys and Tab provide fast focus switching between panes:
+
+| Key         | Action                                    |
+| ----------- | ----------------------------------------- |
+| `1`         | Focus RepoBar                             |
+| `2`         | Focus Pipeline                            |
+| `3`         | Focus Detail (opens split if not already) |
+| `Tab`       | Cycle focus to next pane                  |
+| `Shift+Tab` | Cycle focus to previous pane              |
+
+The `PANE_ORDER` array in `types.ts` defines the canonical order: `["repo", "list", "detail"]`. Number keys map directly to array indices. Tab/Shift+Tab wrap around using modular arithmetic. When the detail pane is not open, `cyclePane` filters it out so Tab skips directly between repo and list.
+
+When **RepoBar is focused**, `↑`/`↓` directly cycle through registered repos without opening the dropdown, providing fast switching. `Enter` opens the full dropdown for an overview of all repos with plan counts.
+
+When **Pipeline is focused**, `↑`/`↓` navigate the plan list and `Enter` opens the detail split (or action menu if detail is already open).
+
+When **Detail is focused**, `↑`/`↓` scroll content, `←`/`→` switch tabs, and letter shortcuts (`s`/`p`/`g`/`o`) jump directly to a tab.
+
+This replaces the prior `Space`-to-open-repo-selector approach with a more consistent, discoverable navigation model.
+
+### Worktree Visibility
+
+Worktree information is shown **inline on plan rows** rather than in a separate panel or strip. Plans that were run in a worktree display a `[worktree]` badge next to their slug in the Pipeline list. This applies to both in-progress plans (where the worktree is actively in use) and completed plans (where the worktree may still need cleanup).
+
+**Why not a separate worktree strip or panel?** An earlier design used a `WorktreeStrip` component that rendered a compact single-line list of worktrees between the Pipeline and StatusBar. This had two problems: it was non-interactive (no cursor, no focus, no actions), and it silently clipped entries on narrow terminals. Showing worktree info on the plan row itself surfaces the information in context, next to the plan it belongs to, and the detail overlay already shows the full `worktreePath` for plans with worktrees.
 
 ### Why arrow keys don't cross panel boundaries
 
@@ -35,8 +64,6 @@ Arrow keys navigate **within** the focused panel. They do not overflow into the 
 2. **Edge behavior is ambiguous.** If down-arrow at the bottom of Repos jumps to Pipeline, where should up-arrow at the top of Pipeline land? The last Repos item? The previously selected one? Both answers are surprising in some scenario.
 3. **Each panel has independent cursor state.** Cursors are tracked per-panel in `cursorByPanel`. Overflow would conflate "moving within my list" with "switching context."
 4. **Fast alternatives already exist.** Tab cycles in order, Shift+Tab goes backward, and 1/2/3 jump directly. Overflow would save one keystroke at best while adding cognitive load.
-
-Left/right arrow overflow **does** make sense and is implemented: right-arrow or `l` moves from panel focus to the detail pane, and Esc goes back. This maps naturally to the spatial layout (left panels, right detail).
 
 ## File Organization: App Split
 
@@ -100,6 +127,31 @@ No component render tests. The presentational components (`ReposPanel`, `Pipelin
 
 The launcher (`index.ts`) passes `patchConsole: false` to Ink's `render()`. The dashboard does not use `console.log`, and patching adds overhead that can interfere with spawned child processes. `waitUntilExit()` ensures a clean `process.exit(0)` after the app unmounts.
 
-## Adaptive Layout
+## Split Pane Detail
 
-Left panel width: `Math.max(20, Math.min(floor(cols * 0.3), floor(cols * 0.4)))`. The three left panels share vertical space dynamically: repos and worktrees each take up to 20% of available rows (capped by item count), and pipeline gets the remainder. Panels collapse to a single header line when unfocused and have many items, keeping the layout compact.
+When the user presses Enter on a plan (or `3` from any pane) and the terminal is at least 80 columns wide, the layout switches from a single full-width plan list to a side-by-side split:
+
+```
+┌─────────────── RepoBar (full width) ───────────────┐
+├── 2 PlanList (~30%) ──┬── 3 Detail (~70%) ─────────┤
+│ ACTIVE (2)            │ 3 feat/auth-flow  ✓ done   │
+│ ➤ ◌ feat/auth-flow   │ Summary | Plan | ...       │
+│   ◌ fix/null-check    │                            │
+│ QUEUED (1)            │ State       ✓ done         │
+│   ○ refactor/types    │ Scope       backend        │
+│ DONE (3)              │ Branch      ralphai/...    │
+│   ✓ feat/export       │                            │
+├───────────────────────┴────────────────────────────┤
+│ ↑↓ navigate · 3 detail · a actions · Esc close     │
+└────────────────────────────────────────────────────┘
+```
+
+**Width allocation.** The plan list gets `Math.max(20, floor(termCols * 0.3))`, the detail pane gets the remainder. The plan list's `maxSlugLen` recalculates automatically from its narrower width, truncating slugs as needed. Scope and worktree badges hide below 40 columns (existing responsive guards).
+
+**Focus model.** The detail pane is pane `3` in the `PANE_ORDER`, navigable via the `3` key, Tab, and Shift+Tab, just like the other panes. When the split opens (via Enter or `3`), focus stays on the plan list. Navigating plans with `↑`/`↓` updates the detail pane reactively. Pressing `3` or Tab moves focus to the detail pane for scrolling and tab switching. `2` or Shift+Tab returns focus to the list. `Esc` from the detail pane returns to the list; `Esc` from the list closes the split entirely. When the split is closed, Tab and `cyclePane` skip the detail pane automatically.
+
+**Border highlighting.** Both panels use rounded borders. The focused panel gets a cyan border; the unfocused panel gets a dim gray border. This provides a clear visual indicator of which panel owns keyboard input.
+
+**Narrow terminal fallback.** When `termCols < 80`, Enter opens the original full-screen overlay with an opaque backdrop, preserving usability on small screens. The `SPLIT_MIN_COLS` constant in `app-state.ts` controls the threshold.
+
+**State model.** The split introduces a new valid combination: `focus === "list" && showDetail === true`. Previously these were mutually exclusive. `isSplitMode` is a derived boolean (`showDetail && termCols >= SPLIT_MIN_COLS`) that controls which layout path renders.

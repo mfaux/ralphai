@@ -1,15 +1,42 @@
 /**
- * useKeyboardRouting — single useInput handler that routes keys
+ * useKeyboardRouting -- single useInput handler that routes keys
  * based on the current FocusTarget and overlay state.
  *
- * Option B layout: list focus + detail overlay (no panel cycling).
+ * Pane navigation: `1` RepoBar, `2` Pipeline, `3` Detail (when open).
+ * Tab cycles forward through panes, Shift+Tab cycles backward.
+ * When the detail pane is not open, `3` and Tab skip past it.
+ * Arrow keys navigate within the focused pane only.
  */
 
 import { useInput } from "ink";
-import type { DetailTab } from "./types.ts";
+import type { DetailTab, FocusTarget } from "./types.ts";
+import { PANE_ORDER } from "./types.ts";
 import type { useAppState } from "./app-state.ts";
 
 type AppState = ReturnType<typeof useAppState>;
+
+/** Map number keys to pane focus targets. */
+const PANE_BY_NUMBER: Record<string, FocusTarget> = {
+  "1": "repo",
+  "2": "list",
+  "3": "detail",
+};
+
+/**
+ * Cycle to the next/prev pane, skipping "detail" when it is not available.
+ */
+function cyclePane(
+  current: FocusTarget,
+  delta: 1 | -1,
+  detailAvailable: boolean,
+): FocusTarget {
+  const order = detailAvailable
+    ? PANE_ORDER
+    : PANE_ORDER.filter((p) => p !== "detail");
+  const idx = order.indexOf(current);
+  if (idx < 0) return order[0]!;
+  return order[(idx + delta + order.length) % order.length]!;
+}
 
 export function useKeyboardRouting(state: AppState, exit: () => void) {
   const {
@@ -21,6 +48,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     moveCursor,
     openRepoSelect,
     selectRepo,
+    cycleRepo,
     activeTab,
     setActiveTab,
     scrollOffset,
@@ -31,6 +59,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     showDetail,
     openDetail,
     closeDetail,
+    isSplitMode,
     overlay,
     setOverlay,
     filterQuery,
@@ -94,11 +123,11 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
-    // --- Repo selector overlay ---
+    // --- Repo selector dropdown overlay ---
     if (overlay.kind === "repoSelect") {
       if (key.escape) {
         setOverlay({ kind: "none" });
-        setFocus(showDetail ? "detail" : "list");
+        setFocus("repo");
         return;
       }
       if (key.upArrow) {
@@ -146,8 +175,8 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
-    // --- Global keys (both list and detail focus) ---
-    if (input === "q" && focus === "list") {
+    // --- Global keys (available from repo, list, and detail focus) ---
+    if (input === "q" && (focus === "list" || focus === "repo")) {
       exit();
       return;
     }
@@ -157,10 +186,39 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
-    // --- Detail overlay focus ---
+    // --- Pane switching (number keys and Tab) ---
+    // Works from any non-overlay focus. "3" / detail is only reachable
+    // when the split pane is open; otherwise it is skipped.
+    if (input && PANE_BY_NUMBER[input]) {
+      const target = PANE_BY_NUMBER[input]!;
+      // "3" (detail) is only valid when split is open
+      if (target === "detail" && !showDetail) {
+        // Pressing 3 with no detail open: open detail in split mode
+        openDetail();
+        return;
+      }
+      setFocus(target);
+      return;
+    }
+
+    if (key.tab) {
+      const next = key.shift
+        ? cyclePane(focus, -1, showDetail)
+        : cyclePane(focus, 1, showDetail);
+      setFocus(next);
+      return;
+    }
+
+    // --- Detail pane focus ---
     if (focus === "detail") {
       if (key.escape) {
-        closeDetail();
+        // Split mode: Esc returns focus to list (split stays open).
+        // Overlay mode: Esc closes the overlay entirely.
+        if (isSplitMode) {
+          setFocus("list");
+        } else {
+          closeDetail();
+        }
         return;
       }
       if (key.upArrow) {
@@ -218,8 +276,31 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
+    // --- Repo bar focus ---
+    if (focus === "repo") {
+      if (key.upArrow) {
+        cycleRepo(-1);
+        return;
+      }
+      if (key.downArrow) {
+        cycleRepo(1);
+        return;
+      }
+      if (key.return) {
+        openRepoSelect();
+        return;
+      }
+      return;
+    }
+
     // --- List focus ---
-    if (key.escape) return;
+    if (key.escape) {
+      // If split is open, Esc from list closes the split.
+      if (showDetail) {
+        closeDetail();
+      }
+      return;
+    }
 
     if (key.upArrow) {
       moveCursor(-1, displayPlans.length);
@@ -231,18 +312,18 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     }
 
     if (key.return) {
-      openDetail();
+      // If split is already open, Enter opens action menu (plan is visible).
+      // If split is closed, Enter opens detail.
+      if (showDetail) {
+        openActionMenu();
+      } else {
+        openDetail();
+      }
       return;
     }
 
     if (input === "a") {
       openActionMenu();
-      return;
-    }
-
-    // Space opens repo selector
-    if (input === " ") {
-      openRepoSelect();
       return;
     }
 

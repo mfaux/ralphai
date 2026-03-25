@@ -1,11 +1,13 @@
 /**
- * DetailOverlay — full-screen overlay for viewing plan details.
+ * DetailOverlay — plan detail view, used both as a full-screen overlay
+ * (narrow terminals) and as an inline split pane (wide terminals).
  *
  * Four tabs: Summary, Plan, Progress, Output.
  * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
  * Output tab shows green LIVE indicator and supports follow-tail mode.
  *
- * Opened by pressing Enter on a plan in the list, dismissed with Esc.
+ * In overlay mode: opened by pressing Enter, dismissed with Esc.
+ * In split mode: sits beside the plan list, border highlights when focused.
  */
 
 import React from "react";
@@ -25,6 +27,8 @@ interface DetailOverlayProps {
   followTail: boolean;
   width: number;
   height: number;
+  /** Whether this pane is focused (controls border color in split mode). */
+  active?: boolean;
 }
 
 const TABS: DetailTab[] = ["summary", "plan", "progress", "output"];
@@ -245,14 +249,18 @@ export function DetailOverlay({
   followTail,
   width,
   height,
+  active,
 }: DetailOverlayProps) {
   // Usable content width after border chrome (2 columns)
   const contentWidth = Math.max(1, width - 4);
+  // Default to active styling when prop is not provided (overlay mode)
+  const isFocused = active ?? true;
 
   const isLive = tab === "output" && (outputData?.isLive ?? false);
   const liveSpinner = useSpinner(isLive);
 
   const planTitle =
+    "3 " +
     plan.slug +
     (isLive ? `  ${liveSpinner} LIVE` : "") +
     (tab === "output" && followTail ? " [follow]" : "") +
@@ -262,13 +270,18 @@ export function DetailOverlay({
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor={isFocused ? "cyan" : "gray"}
+      borderDimColor={!isFocused}
       width={width}
       height={height}
       overflow="hidden"
     >
       {/* Title */}
-      <Text bold color="cyan">
+      <Text
+        bold={isFocused}
+        color={isFocused ? "cyan" : undefined}
+        dimColor={!isFocused}
+      >
         {planTitle}
       </Text>
 

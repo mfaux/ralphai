@@ -1,12 +1,18 @@
 /**
- * App — master layout for the dashboard (Option B: list + overlay).
+ * App -- master layout for the dashboard.
  *
- * Single-column layout:
- *   FilterBar (conditional) -> PlanList (fills space)
- *   -> WorktreeStrip (1 row) -> StatusBar (1 row)
+ * Two layout modes:
  *
- * Overlays: DetailOverlay, ActionMenu, ConfirmDialog, HelpOverlay, RepoSelector.
+ * 1. **Default** (no detail or narrow terminal):
+ *    RepoBar -> FilterBar (conditional) -> PlanList (full width) -> StatusBar
  *
+ * 2. **Split pane** (detail open, termCols >= 80):
+ *    RepoBar (full width) -> [PlanList (~30%) | DetailOverlay (~70%)] -> StatusBar
+ *    RepoBar stays visible; plan list narrows but remains interactive.
+ *
+ * Falls back to a full-screen overlay for detail when termCols < 80.
+ *
+ * Overlays: ActionMenu, ConfirmDialog, HelpOverlay, RepoSelector.
  * State management lives in app-state.ts, keyboard routing in keyboard.ts.
  * This file is responsible only for layout and rendering.
  */
@@ -15,9 +21,9 @@ import React from "react";
 import { Box, Text, useApp, useStdout } from "ink";
 import { useAppState, CHROME_ROWS } from "./app-state.ts";
 import { useKeyboardRouting } from "./keyboard.ts";
+import { RepoBar } from "./RepoBar.tsx";
 import { RepoSelector } from "./RepoSelector.tsx";
 import { PlanList } from "./PlanList.tsx";
-import { WorktreeStrip } from "./WorktreeStrip.tsx";
 import { DetailOverlay } from "./DetailOverlay.tsx";
 import { StatusBar } from "./StatusBar.tsx";
 import { ActionMenu } from "./ActionMenu.tsx";
@@ -31,7 +37,7 @@ export function App() {
   const termCols = stdout?.columns ?? 80;
   const termRows = stdout?.rows ?? 24;
 
-  const state = useAppState(termRows);
+  const state = useAppState(termRows, termCols);
   useKeyboardRouting(state, exit);
 
   const {
@@ -40,7 +46,6 @@ export function App() {
     selectedRepo,
     selectedRepoIdx,
     displayPlans,
-    worktrees,
     selectedPlan,
     planCursor,
     showDetail,
@@ -56,7 +61,13 @@ export function App() {
     filterQuery,
     filterActive,
     plans,
+    isSplitMode,
+    splitListWidth,
+    splitDetailWidth,
+    splitContentHeight,
   } = state;
+
+  const dropdownOpen = overlay.kind === "repoSelect";
 
   // Plan list gets all vertical space not used by chrome
   const filterRows = filterActive || filterQuery ? 1 : 0;
@@ -64,23 +75,53 @@ export function App() {
 
   return (
     <Box flexDirection="column" height={termRows}>
+      {/* Repo bar (persistent, always visible) */}
+      <RepoBar
+        repos={repos}
+        selectedRepo={selectedRepo}
+        dropdownOpen={dropdownOpen}
+        active={focus === "repo"}
+        width={termCols}
+      />
+
       {/* Filter bar (conditional) */}
       {(filterActive || filterQuery) && (
         <FilterBar query={filterQuery} resultCount={displayPlans.length} />
       )}
 
-      {/* Full-width plan list */}
-      <PlanList
-        plans={displayPlans}
-        cursor={planCursor}
-        active={focus === "list"}
-        width={termCols}
-        height={planListHeight}
-        repoName={selectedRepo?.id}
-      />
-
-      {/* Compact worktree strip */}
-      <WorktreeStrip worktrees={worktrees} width={termCols} />
+      {/* Main content area: split pane or full-width list */}
+      {isSplitMode && selectedPlan ? (
+        <Box flexDirection="row">
+          <PlanList
+            plans={displayPlans}
+            cursor={planCursor}
+            active={focus === "list"}
+            width={splitListWidth}
+            height={planListHeight}
+          />
+          <DetailOverlay
+            plan={selectedPlan}
+            tab={activeTab}
+            scrollOffset={scrollOffset}
+            planContent={planContent}
+            progressContent={progressContent}
+            outputData={outputData}
+            contentHeight={splitContentHeight}
+            followTail={followTail}
+            width={splitDetailWidth}
+            height={planListHeight}
+            active={focus === "detail"}
+          />
+        </Box>
+      ) : (
+        <PlanList
+          plans={displayPlans}
+          cursor={planCursor}
+          active={focus === "list"}
+          width={termCols}
+          height={planListHeight}
+        />
+      )}
 
       {/* Status bar */}
       <StatusBar
@@ -92,16 +133,16 @@ export function App() {
             : focus
         }
         toast={toast}
-        repoName={selectedRepo?.id ?? null}
         planCount={plans.length}
         selectedPlan={selectedPlan}
         hasActiveRunners={plans.some((p) => p.state === "in-progress")}
+        splitOpen={isSplitMode}
       />
 
       {/* --- Overlays --- */}
 
-      {/* Detail overlay (full-screen, shown on Enter) */}
-      {showDetail && selectedPlan && (
+      {/* Detail overlay (full-screen fallback for narrow terminals) */}
+      {showDetail && !isSplitMode && selectedPlan && (
         <Box
           position="absolute"
           width={termCols}
@@ -114,7 +155,7 @@ export function App() {
           ))}
         </Box>
       )}
-      {showDetail && selectedPlan && (
+      {showDetail && !isSplitMode && selectedPlan && (
         <Box
           position="absolute"
           width={termCols}
@@ -137,8 +178,34 @@ export function App() {
         </Box>
       )}
 
-      {/* Action menu / confirm / help overlays */}
-      {overlay.kind !== "none" && (
+      {/* Repo selector dropdown (anchored below RepoBar) */}
+      {dropdownOpen && (
+        <Box
+          position="absolute"
+          width={termCols}
+          height={termRows}
+          flexDirection="column"
+        >
+          {/* Opaque backdrop to prevent bleed-through from content below */}
+          {Array.from({ length: termRows }, (_, i) => (
+            <Text key={i}>{" ".repeat(termCols)}</Text>
+          ))}
+        </Box>
+      )}
+      {dropdownOpen && (
+        <Box position="absolute" marginTop={3} marginLeft={1}>
+          <RepoSelector
+            repos={repos}
+            cursor={overlay.cursor}
+            selectedIndex={selectedRepoIdx}
+          />
+        </Box>
+      )}
+
+      {/* Action menu / confirm / help overlays (centered) */}
+      {(overlay.kind === "menu" ||
+        overlay.kind === "confirm" ||
+        overlay.kind === "help") && (
         <Box
           position="absolute"
           width={termCols}
@@ -188,22 +255,6 @@ export function App() {
           justifyContent="center"
         >
           <HelpOverlay />
-        </Box>
-      )}
-
-      {overlay.kind === "repoSelect" && (
-        <Box
-          position="absolute"
-          width={termCols}
-          height={termRows}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <RepoSelector
-            repos={repos}
-            cursor={overlay.cursor}
-            selectedIndex={selectedRepoIdx}
-          />
         </Box>
       )}
     </Box>

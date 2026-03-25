@@ -2,6 +2,9 @@
  * Formatting helpers for the dashboard.
  */
 
+import { basename, dirname } from "path";
+import type { RepoSummary } from "../global-state.ts";
+
 /**
  * Truncate a slug at the last `-` boundary before `maxLen`, appending `…`.
  * If the slug fits within `maxLen`, it is returned unchanged.
@@ -97,4 +100,27 @@ export function wrapText(text: string, width: number): string[] {
   }
 
   return result;
+}
+
+/**
+ * Derive a user-friendly display name for a repo.
+ *
+ * Uses `basename(repoPath)` as the primary name (e.g. "ralphai").
+ * When multiple repos share the same basename, appends the parent
+ * directory for disambiguation (e.g. "ralphai (work)" vs "ralphai (personal)").
+ * Falls back to `repo.id` when `repoPath` is null.
+ */
+export function repoDisplayName(
+  repo: RepoSummary,
+  allRepos: RepoSummary[],
+): string {
+  if (!repo.repoPath) return repo.id;
+
+  const name = basename(repo.repoPath);
+  const hasDuplicate = allRepos.some(
+    (r) => r !== repo && r.repoPath != null && basename(r.repoPath) === name,
+  );
+
+  if (!hasDuplicate) return name;
+  return `${name} (${basename(dirname(repo.repoPath))})`;
 }

@@ -2,8 +2,8 @@
  * PlanList — full-width plan list, the primary view of the dashboard.
  *
  * Plans are grouped by state (ACTIVE, QUEUED, DONE) with headers.
- * Each row shows cursor, state badge, slug, scope, progress bar,
- * and elapsed time. Gets all available vertical space.
+ * Each row shows cursor, state badge, slug, scope, worktree badge,
+ * progress bar, and elapsed time. Gets all available vertical space.
  */
 
 import React from "react";
@@ -19,7 +19,6 @@ interface PlanListProps {
   active: boolean;
   width: number;
   height: number;
-  repoName?: string;
 }
 
 const STATE_ORDER: PlanInfo["state"][] = [
@@ -71,6 +70,7 @@ function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
 
 function ElapsedTime({ plan, width }: { plan: PlanInfo; width: number }) {
   if (width < 55) return null;
+  if (plan.state === "completed") return null;
   if (!plan.startedAt) return null;
 
   const elapsed = formatElapsed(plan.startedAt);
@@ -107,6 +107,9 @@ function PlanRow({
         {badge ? ` ${badge}` : ""} {truncated}
       </Text>
       {width >= 40 && plan.scope && <Text dimColor> [{plan.scope}]</Text>}
+      {width >= 40 && plan.receiptSource === "worktree" && (
+        <Text dimColor> [worktree]</Text>
+      )}
       <ProgressIndicator plan={plan} width={width} />
       <ElapsedTime plan={plan} width={width} />
     </Box>
@@ -119,9 +122,8 @@ export function PlanList({
   active,
   width,
   height,
-  repoName,
 }: PlanListProps) {
-  const title = repoName ? `Pipeline (${repoName})` : "Pipeline";
+  const title = "2 Pipeline";
 
   // Account for 2 columns of border chrome
   const maxSlugLen = Math.max(8, width - 10);
