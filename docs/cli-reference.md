@@ -9,7 +9,7 @@ ralphai <command> [options]
 | Command        | Description                                                            |
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
-| `run`          | Start the Ralphai task runner                                          |
+| `run`          | Start the Ralphai runner                                          |
 | `worktree`     | Run in an isolated git worktree                                        |
 | `status`       | Show pipeline and worktree status                                      |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
@@ -55,7 +55,7 @@ Running `ralphai` with no subcommand in a TTY launches an interactive dashboard 
 
 **Detail tabs** (when detail pane is focused):
 
-- **s** Summary: plan description, branch, start time, task progress bar, and receipt fields for completed plans
+- **s** Summary: plan description, branch, start time, progress bar, and receipt fields for completed plans
 - **p** Plan: the raw plan markdown
 - **g** Progress: contents of `progress.md`
 - **o** Output: tail of `agent-output.log` with a live indicator while the agent is running
@@ -91,7 +91,6 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 ### General Options
 
 ```
---turns=<n>                       Turns per plan (default: 5, 0 = unlimited)
 --dry-run, -n                     Preview what would happen without changing anything
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
@@ -101,7 +100,7 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 --base-branch=<branch>            Override base branch (default: main)
 --continuous                      Keep processing backlog plans after the first completes
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
---turn-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
+--iteration-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
 --prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
 --show-config                     Print resolved settings and exit
 ```
@@ -109,7 +108,7 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 ### Patch Mode Options
 
 ```
---auto-commit                     Enable auto-commit of agent changes (per-turn and resume recovery)
+--auto-commit                     Enable auto-commit of agent changes (per-iteration and resume recovery)
 --no-auto-commit                  Disable auto-commit (default)
 ```
 
@@ -122,20 +121,6 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 --issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
 --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 ```
-
-### Turn Budget
-
-How many turns to allocate depends on plan complexity. Related tasks may be combined into a single turn if they won't fill the context window.
-
-| Plan complexity                       | Recommended `--turns` |
-| ------------------------------------- | --------------------- |
-| Bug fix (1-2 tasks)                   | 2-3                   |
-| Small feature (2-4 tasks)             | 3-5                   |
-| Medium feature (4-8 tasks)            | 5-10                  |
-| Large feature (8+ tasks, new modules) | 10-20                 |
-| Structural refactor                   | 5-10                  |
-
-Pass `--turns=0` for unlimited turns.
 
 ## Worktree
 
@@ -242,11 +227,10 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
-| `RALPHAI_TURNS`                   | `turns`                |
-| `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
-| `RALPHAI_TURN_TIMEOUT`            | `turnTimeout`          |
+| `RALPHAI_ITERATION_TIMEOUT`            | `iterationTimeout`          |
+| `RALPHAI_PROMPT_MODE`             | `promptMode`           |
 | `RALPHAI_MAX_LEARNINGS`           | `maxLearnings`         |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |

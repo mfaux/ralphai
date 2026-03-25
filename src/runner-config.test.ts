@@ -687,31 +687,20 @@ echo "$MODE"
   );
 
   // -------------------------------------------------------------------------
-  // Run default turn tests
+  // Run config tests
   // -------------------------------------------------------------------------
 
-  describe.skipIf(process.platform === "win32")("run default turns", () => {
+  describe.skipIf(process.platform === "win32")("run config", () => {
     beforeEach(() => {
       // Scaffold ralphai (creates .ralphai/ directory)
       runCli(["init", "--yes"], ctx.dir, testEnv());
     });
 
-    it("run --show-config without --turns shows default turn count", () => {
+    it("run --show-config shows default values", () => {
       const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 5");
+      expect(result.stdout).toContain("iterationTimeout   = off");
       expect(result.stdout).toContain("(default)");
-    });
-
-    it("run --turns=5 --show-config shows explicit turn count from CLI", () => {
-      const result = runCli(
-        ["run", "--turns=5", "--show-config"],
-        ctx.dir,
-        testEnv(),
-      );
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 5");
-      expect(result.stdout).toContain("(cli (--turns=5))");
     });
 
     it("run --dry-run produces preview output", () => {
@@ -725,33 +714,10 @@ echo "$MODE"
       expect(combined).toContain("dry-run");
     });
 
-    it("run --turns=5 --show-config with -- separator works the same", () => {
-      const result = runCli(
-        ["run", "--", "--turns=5", "--show-config"],
-        ctx.dir,
-        testEnv(),
-      );
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 5");
-      expect(result.stdout).toContain("(cli (--turns=5))");
-    });
-
-    it("run --turns=3 --show-config shows turns=3 from CLI", () => {
-      const result = runCli(
-        ["run", "--turns=3", "--show-config"],
-        ctx.dir,
-        testEnv(),
-      );
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 3");
-      expect(result.stdout).toContain("(cli (--turns=3))");
-    });
-
     it("run --help shows usage information", () => {
       const result = runCli(["run", "--help"], ctx.dir, testEnv());
       expect(result.exitCode).toBe(0);
       const combined = result.stdout + result.stderr;
-      expect(combined).toContain("--turns=");
       expect(combined).toContain("--dry-run");
       expect(combined).toContain("--branch");
     });
@@ -761,61 +727,6 @@ echo "$MODE"
       const combined = result.stdout + result.stderr;
       expect(result.exitCode).not.toBe(0);
       expect(combined).toContain("Unrecognized argument: 3");
-    });
-
-    it("run --show-config shows turns from config file", () => {
-      // Modify global config to set turns: 3
-      const cfgPath = configPath();
-      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
-      config.turns = 3;
-      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
-
-      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 3");
-      expect(result.stdout).toContain("(config (");
-    });
-
-    it("RALPHAI_TURNS env var overrides config file turns", () => {
-      const cfgPath = configPath();
-      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
-      config.turns = 3;
-      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
-
-      const result = runCli(["run", "--show-config"], ctx.dir, {
-        ...testEnv(),
-        RALPHAI_TURNS: "10",
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 10");
-      expect(result.stdout).toContain("(env (RALPHAI_TURNS=10))");
-    });
-
-    it("CLI --turns overrides both config and env var", () => {
-      const cfgPath = configPath();
-      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
-      config.turns = 3;
-      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
-
-      const result = runCli(["run", "--turns=7", "--show-config"], ctx.dir, {
-        ...testEnv(),
-        RALPHAI_TURNS: "10",
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = 7");
-      expect(result.stdout).toContain("(cli (--turns=7))");
-    });
-
-    it("turns: 0 in config displays as unlimited", () => {
-      const cfgPath = configPath();
-      const config = JSON.parse(readFileSync(cfgPath, "utf-8"));
-      config.turns = 0;
-      writeFileSync(cfgPath, JSON.stringify(config, null, 2));
-
-      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("turns              = unlimited");
-      expect(result.stdout).toContain("(config (");
     });
 
     it("built CLI runs the TS runner directly (no shell subprocess)", () => {

@@ -46,7 +46,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   baseBranch: "RALPHAI_BASE_BRANCH",
   maxStuck: "RALPHAI_MAX_STUCK",
   mode: "RALPHAI_MODE",
-  turnTimeout: "RALPHAI_TURN_TIMEOUT",
+  iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
   issueSource: "RALPHAI_ISSUE_SOURCE",
   issueLabel: "RALPHAI_ISSUE_LABEL",
   issueInProgressLabel: "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
@@ -54,7 +54,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   continuous: "RALPHAI_CONTINUOUS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
-  turns: "RALPHAI_TURNS",
   maxLearnings: "RALPHAI_MAX_LEARNINGS",
 };
 
@@ -169,26 +168,20 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     `  autoCommit         = ${config.autoCommit.value}  (${autoCommitSrc})`,
   );
 
-  // turns: 0 displays as "unlimited"
-  const turnsVal = config.turns.value;
-  const turnsDisplay = turnsVal === 0 ? "unlimited" : String(turnsVal);
-  const turnsSrc = sourceLabel("turns", config.turns.source, input);
-  lines.push(`  turns              = ${turnsDisplay}  (${turnsSrc})`);
-
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(
     `  maxStuck           = ${config.maxStuck.value}  (${maxStuckSrc})`,
   );
 
-  // turnTimeout: 0 displays as "off", otherwise "<N>s"
-  const timeoutVal = config.turnTimeout.value;
+  // iterationTimeout: 0 displays as "off", otherwise "<N>s"
+  const timeoutVal = config.iterationTimeout.value;
   const timeoutDisplay = timeoutVal > 0 ? `${timeoutVal}s` : "off";
   const timeoutSrc = sourceLabel(
-    "turnTimeout",
-    config.turnTimeout.source,
+    "iterationTimeout",
+    config.iterationTimeout.source,
     input,
   );
-  lines.push(`  turnTimeout        = ${timeoutDisplay}  (${timeoutSrc})`);
+  lines.push(`  iterationTimeout   = ${timeoutDisplay}  (${timeoutSrc})`);
 
   // maxLearnings: 0 displays as "unlimited"
   const maxLearnVal = config.maxLearnings.value;

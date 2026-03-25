@@ -40,7 +40,7 @@ describe("patch mode", () => {
       "# Plan: Hello Ralphai\n\n### Task 1: Create file\n",
     );
 
-    const result = runCli(["run", "--patch", "--turns=1"], ctx.dir, {
+    const result = runCli(["run", "--patch"], ctx.dir, {
       RALPHAI_NO_UPDATE_CHECK: "1",
       RALPHAI_AGENT_COMMAND: "true",
       RALPHAI_HOME: ralphaiHome,

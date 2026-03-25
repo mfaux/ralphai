@@ -26,10 +26,9 @@ export interface RalphaiConfig {
   issueInProgressLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
-  turnTimeout: number;
+  iterationTimeout: number;
   continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
-  turns: number;
   maxLearnings: number;
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
@@ -68,10 +67,9 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueInProgressLabel: "ralphai:in-progress",
   issueRepo: "",
   issueCommentProgress: "true",
-  turnTimeout: 0,
+  iterationTimeout: 0,
   continuous: "false",
   autoCommit: "false",
-  turns: 5, // default turns budget (overridden by config/env/cli)
   maxLearnings: 20,
   workspaces: null,
 };
@@ -177,10 +175,9 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueInProgressLabel",
   "issueRepo",
   "issueCommentProgress",
-  "turnTimeout",
+  "iterationTimeout",
   "continuous",
   "autoCommit",
-  "turns",
   "maxLearnings",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
@@ -321,12 +318,12 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueCommentProgress = String(v);
   }
 
-  // turnTimeout (non-negative integer)
-  if ("turnTimeout" in obj) {
-    const v = obj.turnTimeout;
+  // iterationTimeout (non-negative integer)
+  if ("iterationTimeout" in obj) {
+    const v = obj.iterationTimeout;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(`'turnTimeout' must be a non-negative integer (seconds), got '${v}'`);
-    values.turnTimeout = v as number;
+      err(`'iterationTimeout' must be a non-negative integer (seconds), got '${v}'`);
+    values.iterationTimeout = v as number;
   }
 
   // continuous (boolean)
@@ -343,14 +340,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     if (typeof v !== "boolean")
       err(`'autoCommit' must be 'true' or 'false', got '${v}'`);
     values.autoCommit = String(v);
-  }
-
-  // turns (non-negative integer, 0 = unlimited)
-  if ("turns" in obj) {
-    const v = obj.turns;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(`'turns' must be a non-negative integer (0 = unlimited), got '${v}'`);
-    values.turns = v as number;
   }
 
   // maxLearnings (non-negative integer, 0 = unlimited)
@@ -442,7 +431,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_BASE_BRANCH", "baseBranch"],
   ["RALPHAI_MAX_STUCK", "maxStuck"],
   ["RALPHAI_MODE", "mode"],
-  ["RALPHAI_TURN_TIMEOUT", "turnTimeout"],
+  ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
   ["RALPHAI_ISSUE_SOURCE", "issueSource"],
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
@@ -450,7 +439,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_CONTINUOUS", "continuous"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
-  ["RALPHAI_TURNS", "turns"],
   ["RALPHAI_MAX_LEARNINGS", "maxLearnings"],
 ];
 
@@ -501,11 +489,11 @@ export function applyEnvOverrides(
     overrides.mode = mode as RalphaiConfig["mode"];
   }
 
-  // turnTimeout (non-negative integer)
-  const turnTimeout = get("RALPHAI_TURN_TIMEOUT");
-  if (turnTimeout !== undefined) {
-    validateNonNegInt(turnTimeout, "RALPHAI_TURN_TIMEOUT", "seconds");
-    overrides.turnTimeout = parseInt(turnTimeout, 10);
+  // iterationTimeout (non-negative integer)
+  const iterationTimeout = get("RALPHAI_ITERATION_TIMEOUT");
+  if (iterationTimeout !== undefined) {
+    validateNonNegInt(iterationTimeout, "RALPHAI_ITERATION_TIMEOUT", "seconds");
+    overrides.iterationTimeout = parseInt(iterationTimeout, 10);
   }
 
   // issueSource (enum)
@@ -548,13 +536,6 @@ export function applyEnvOverrides(
     overrides.autoCommit = autoCommit;
   }
 
-  // turns (non-negative integer)
-  const turns = get("RALPHAI_TURNS");
-  if (turns !== undefined) {
-    validateNonNegInt(turns, "RALPHAI_TURNS", "0 = unlimited");
-    overrides.turns = parseInt(turns, 10);
-  }
-
   // maxLearnings (non-negative integer)
   const maxLearnings = get("RALPHAI_MAX_LEARNINGS");
   if (maxLearnings !== undefined) {
@@ -586,12 +567,7 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
   const rawFlags: Partial<Record<keyof RalphaiConfig, string>> = {};
 
   for (const arg of args) {
-    if (arg.startsWith("--turns=")) {
-      const v = arg.slice("--turns=".length);
-      validateNonNegInt(v, "--turns");
-      overrides.turns = parseInt(v, 10);
-      rawFlags.turns = arg;
-    } else if (arg.startsWith("--agent-command=")) {
+    if (arg.startsWith("--agent-command=")) {
       const v = arg.slice("--agent-command=".length);
       if (v === "") {
         throw new ConfigError(
@@ -624,11 +600,11 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validatePositiveInt(v, "--max-stuck");
       overrides.maxStuck = parseInt(v, 10);
       rawFlags.maxStuck = arg;
-    } else if (arg.startsWith("--turn-timeout=")) {
-      const v = arg.slice("--turn-timeout=".length);
-      validateNonNegInt(v, "--turn-timeout", "seconds");
-      overrides.turnTimeout = parseInt(v, 10);
-      rawFlags.turnTimeout = arg;
+    } else if (arg.startsWith("--iteration-timeout=")) {
+      const v = arg.slice("--iteration-timeout=".length);
+      validateNonNegInt(v, "--iteration-timeout", "seconds");
+      overrides.iterationTimeout = parseInt(v, 10);
+      rawFlags.iterationTimeout = arg;
     } else if (arg === "--branch") {
       overrides.mode = "branch";
       rawFlags.mode = "--branch";

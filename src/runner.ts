@@ -2,7 +2,7 @@
  * TypeScript runner: the main orchestration loop for Ralphai.
  *
  * Drives an AI coding agent to autonomously implement tasks from plan
- * files. Handles plan detection, turn management, agent invocation,
+ * files. Handles plan detection, iteration management, agent invocation,
  * stuck detection, auto-commit, learnings processing, and completion/PR
  * lifecycle.
  *
@@ -53,7 +53,6 @@ import { extractScope } from "./frontmatter.ts";
 import { resolveScope } from "./scope.ts";
 import {
   initReceipt,
-  updateReceiptTurn,
   updateReceiptTasks,
   checkReceiptSource,
 } from "./receipt.ts";
@@ -138,7 +137,7 @@ function rollbackPlan(planFile: string, backlogDir: string): void {
 export function spawnAgent(
   agentCommand: string,
   prompt: string,
-  turnTimeout: number,
+  iterationTimeout: number,
   cwd: string,
   outputLogPath?: string,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
@@ -170,13 +169,13 @@ export function spawnAgent(
       stdio: ["pipe", "pipe", "pipe"],
     };
 
-    if (turnTimeout > 0) {
+    if (iterationTimeout > 0) {
       ac = new AbortController();
       spawnOpts.signal = ac.signal;
       setTimeout(() => {
         timedOut = true;
         ac!.abort();
-      }, turnTimeout * 1000);
+      }, iterationTimeout * 1000);
     }
 
     let child: ChildProcess;
@@ -453,9 +452,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Unpack config values
   const mode = config.mode.value;
   const baseBranch = config.baseBranch.value;
-  const turns = config.turns.value;
   const maxStuck = config.maxStuck.value;
-  const turnTimeout = config.turnTimeout.value;
+  const iterationTimeout = config.iterationTimeout.value;
   const agentCommand = config.agentCommand.value;
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
@@ -543,7 +541,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   while (!interrupted) {
     console.log();
     console.log("========================================");
-    console.log("  Ralphai — detecting next task...");
+    console.log("  Ralphai — detecting next iteration...");
     console.log("========================================");
 
     // Detect the next plan
@@ -709,7 +707,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
-        turns_budget: turns,
       });
     } else if (continuous && continuousBranch) {
       // Continuous mode, subsequent plan: reuse the existing branch
@@ -726,7 +723,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
-        turns_budget: turns,
       });
     } else if (isWorktree) {
       // Worktree mode: the user already created the worktree on the right branch
@@ -757,7 +753,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
-        turns_budget: turns,
       });
     } else {
       // Branch/PR mode: create a new branch
@@ -819,43 +814,32 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
-        turns_budget: turns,
       });
     }
 
-    // --- Turn loop (per-plan) ---
+    // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
     let lastDiffHash = "";
     let completed = false;
 
-    for (let turn = 1; (turns === 0 || turn <= turns) && !interrupted; turn++) {
-      console.log();
-      if (turns === 0) {
-        console.log(
-          `=== Ralphai turn ${turn} (unlimited) (plan: ${basename(planFile)}) ===`,
-        );
-      } else {
-        console.log(
-          `=== Ralphai turn ${turn} of ${turns} (plan: ${basename(planFile)}) ===`,
-        );
-      }
+    const totalTasks = countPlanTasks(planFile);
+    let iterationNumber = 0;
 
-      // --- Turn summary: show task progress ---
-      const totalTasks = countPlanTasks(planFile);
+    while (!interrupted) {
+      iterationNumber++;
       const completedTasks = countCompletedTasks(progressFile);
       const currentTask = Math.min(completedTasks + 1, totalTasks);
 
+      console.log();
       if (totalTasks > 0) {
-        if (turns === 0) {
-          console.log(
-            `── Turn ${turn} ── Task ${currentTask} of ${totalTasks} ──`,
-          );
-        } else {
-          console.log(
-            `── Turn ${turn}/${turns} ── Task ${currentTask} of ${totalTasks} ──`,
-          );
-        }
+        console.log(
+          `=== Ralphai iteration ${iterationNumber} — task ${currentTask} of ${totalTasks} (plan: ${basename(planFile)}) ===`,
+        );
+      } else {
+        console.log(
+          `=== Ralphai iteration ${iterationNumber} (plan: ${basename(planFile)}) ===`,
+        );
       }
 
       // --- Assemble prompt ---
@@ -872,7 +856,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Spawn agent (with output log persistence) ---
       const outputLogPath = join(wipDir, "agent-output.log");
       try {
-        const header = `\n--- Turn ${turn} ---\n`;
+        const header = `\n--- Iteration ${iterationNumber} ---\n`;
         writeFileSync(outputLogPath, header, { flag: "a" });
       } catch {
         // Best-effort; non-fatal if we can't write the header
@@ -880,14 +864,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       const { output, exitCode, timedOut } = await spawnAgent(
         agentCommand,
         prompt,
-        turnTimeout,
+        iterationTimeout,
         cwd,
         outputLogPath,
       );
 
       if (timedOut) {
         console.log();
-        console.log(`WARNING: Agent command timed out after ${turnTimeout}s.`);
+        console.log(`WARNING: Agent command timed out after ${iterationTimeout}s.`);
       }
 
       // --- Process learnings block (before completion check) ---
@@ -902,8 +886,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Extract and append progress block ---
       const progressContent = extractProgressBlock(output);
       if (progressContent) {
-        appendProgressBlock(progressFile, turn, progressContent);
-        console.log(`Appended progress block from turn ${turn}.`);
+        appendProgressBlock(progressFile, iterationNumber, progressContent);
+        console.log(`Appended progress block from iteration ${iterationNumber}.`);
       }
 
       if (exitCode !== 0 && !timedOut) {
@@ -917,11 +901,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         if (currentDiffHash === lastDiffHash) {
           stuckCount++;
           console.log(
-            `WARNING: No working-tree changes this turn (${stuckCount}/${maxStuck}).`,
+            `WARNING: No working-tree changes this iteration (${stuckCount}/${maxStuck}).`,
           );
           if (stuckCount >= maxStuck) {
             console.error(
-              `ERROR: ${maxStuck} consecutive turns with no progress. Aborting.`,
+              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
             );
             console.error(`Branch: ${branch}`);
             console.error(
@@ -938,11 +922,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         if (currentHash === lastHash) {
           stuckCount++;
           console.log(
-            `WARNING: No new commits this turn (${stuckCount}/${maxStuck}).`,
+            `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
           );
           if (stuckCount >= maxStuck) {
             console.error(
-              `ERROR: ${maxStuck} consecutive turns with no progress. Aborting.`,
+              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
             );
             console.error(`Branch: ${branch}`);
             console.error(
@@ -976,14 +960,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           );
           gitExec("git add -A", cwd);
           gitExec(
-            `git commit -m "chore(ralphai): auto-commit uncommitted changes from turn ${turn}"`,
+            `git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration ${iterationNumber}"`,
             cwd,
           );
         }
       }
-
-      // --- Update receipt turn counter ---
-      updateReceiptTurn(receiptFile);
 
       // --- Update receipt tasks_completed from progress.md ---
       updateReceiptTasks(receiptFile, progressFile);
@@ -991,7 +972,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
         console.log();
-        console.log(`Plan complete after ${turn} turns: ${planDesc}`);
+        console.log(`Plan complete after ${iterationNumber} iterations: ${planDesc}`);
         completedPlans.push(basename(planFile));
 
         archiveRun({
@@ -1053,9 +1034,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
     }
 
-    if (!completed) {
+    if (!completed && interrupted) {
       console.log();
-      console.log(`Finished ${turns} turns without completing: ${planDesc}`);
+      console.log(`Interrupted during plan: ${planDesc}`);
       console.log(`Plan files remain in ${wipDir}/ — resume with another run.`);
       console.log(`Branch: ${branch}`);
 
@@ -1069,7 +1050,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           pushBranch(branch, cwd);
         }
       }
-      // Non-continuous or interrupted: exit
       break;
     }
 
@@ -1083,7 +1063,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       break;
     }
 
-    // Loop back to pick the next plan (turn budget resets)
+    // Loop back to pick the next plan
   }
 
   // --- Continuous mode: finalize PR when backlog is drained ---

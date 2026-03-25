@@ -49,8 +49,6 @@ export interface PlanInfo {
   state: "backlog" | "in-progress" | "completed";
   scope?: string;
   deps?: string[];
-  turnsCompleted?: number;
-  turnsBudget?: number;
   tasksCompleted?: number;
   totalTasks?: number;
   outcome?: string;

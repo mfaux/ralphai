@@ -2,8 +2,14 @@
 
 ## 0.7.0 (WIP)
 
+### Breaking
+
+- **`taskTimeout` renamed to `iterationTimeout`** — the config key, CLI flag (`--iteration-timeout`), and environment variable (`RALPHAI_ITERATION_TIMEOUT`) all use the new name. Update your `config.json`, scripts, and CI environments accordingly.
+
 ### Features
 
+- **Strict one-iteration-one-task execution** — each runner iteration now works on exactly one plan task (including its subtasks) instead of allowing the agent to combine multiple tasks. This keeps agent context focused and progress predictable.
+- **Subtask syntax** — plans can use `#### N.M:` headings to break tasks into subtasks. The agent completes all subtasks within a task before ending its iteration.
 - **.NET monorepo support** — `ralphai init` parses `.sln` files to discover `.csproj` projects as workspaces. Scoped plans rewrite `dotnet build` and `dotnet test` to target specific project paths (e.g., `dotnet build src/Api`).
 - **Mixed-repo detection** — when multiple ecosystems coexist (e.g., .NET + Node.js), Ralphai detects all of them and merges their feedback commands into a single list.
 

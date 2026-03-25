@@ -16,7 +16,6 @@ Back to the [README](../README.md) for setup and quickstart.
 
 ```bash
 ralphai worktree                          # auto-pick next backlog plan
-ralphai worktree --turns=3                # limit turns
 ralphai worktree --plan=dark-mode.md      # target a specific plan
 ralphai worktree list                     # show active worktrees
 ralphai worktree clean                    # remove completed worktrees

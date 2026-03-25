@@ -156,7 +156,7 @@ describe("worktree", () => {
       expect(output).toContain("clean");
       expect(output).toContain("--plan=");
       expect(output).toContain("--dir=");
-      expect(output).toContain("--turns=<n>");
+      expect(output).not.toContain("--turns=<n>");
     });
 
     it("worktree refuses inside a worktree", () => {
@@ -304,9 +304,9 @@ describe("worktree", () => {
       writeFileSync(join(backlogDir, "prd-first.md"), "# First\n");
       writeFileSync(join(backlogDir, "prd-second.md"), "# Second\n");
 
-      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly (1 turn)
+      // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly (1 task)
       const result = runCli(
-        ["worktree", "--plan=prd-second.md", "--turns=1"],
+        ["worktree", "--plan=prd-second.md"],
         ctx.dir,
         { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
@@ -342,7 +342,7 @@ describe("worktree", () => {
 
       // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly
       const result = runCli(
-        ["worktree", "--turns=3"],
+        ["worktree"],
         ctx.dir,
         { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
@@ -378,7 +378,6 @@ describe("worktree", () => {
           "worktree_path=/tmp/wt-dark-mode",
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
-          "turns_completed=3",
         ].join("\n"),
       );
 
@@ -407,7 +406,6 @@ describe("worktree", () => {
           "branch=ralphai/prd-search",
           "slug=prd-search",
           "plan_file=prd-search.md",
-          "turns_completed=1",
         ].join("\n"),
       );
 
@@ -444,7 +442,6 @@ describe("worktree", () => {
           "worktree_path=" + worktreeDir,
           "branch=ralphai/done",
           "slug=done",
-          "turns_completed=5",
         ].join("\n"),
       );
 

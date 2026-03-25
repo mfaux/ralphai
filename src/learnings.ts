@@ -254,7 +254,7 @@ export function processLearnings(
   if (entry.status === "none") {
     return {
       outcome: "none",
-      message: "No learning logged this turn.",
+      message: "No learning logged this task.",
     };
   }
 

@@ -65,7 +65,7 @@ code to make it pass.
 
 Bug fixes should be 1-2 tasks. Don't over-decompose:
 
-**Too granular:**
+**Too granular** (these are subtasks, not separate tasks):
 
 ```
 Task 1: Write failing test
@@ -73,8 +73,11 @@ Task 2: Fix the bug
 Task 3: Verify no regressions
 ```
 
-**Right-sized:**
+**Right-sized** (one task, with subtasks as guidance):
 
 ```
-Task 1: Reproduce and fix — write failing test, fix root cause
+Task 1: Reproduce and fix
+  - Write a failing test that reproduces the bug
+  - Fix the root cause
+  - Verify no regressions
 ```

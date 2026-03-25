@@ -29,14 +29,6 @@ ralphai run --dry-run
 
 Previews which plan would be selected, what branch would be created, and which mode would be used. No files are moved, no branches created, no agent invoked.
 
-## Limit turns for a quick test
-
-```bash
-ralphai run --turns=1
-```
-
-Runs a single turn to verify the agent understands the plan before committing to a full run. The default is 5 turns per plan.
-
 ## Resume after editing a stuck plan
 
 ```bash
@@ -59,10 +51,10 @@ ralphai run --allow-dirty
 ## Run overnight unattended
 
 ```bash
-ralphai run --continuous --pr --turns=0
+ralphai run --continuous --pr
 ```
 
-Unlimited turns per plan (`--turns=0`), processes the entire backlog (`--continuous`), opens/updates a PR (`--pr`). Stuck detection (`--max-stuck`, default 3 consecutive turns with no commits) still stops runaway plans.
+Processes the entire backlog (`--continuous`), opens/updates a PR (`--pr`). Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) still stops runaway plans.
 
 ## Work on a specific plan
 

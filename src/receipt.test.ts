@@ -5,7 +5,6 @@ import { useTempDir } from "./test-utils.ts";
 import {
   parseReceipt,
   initReceipt,
-  updateReceiptTurn,
   updateReceiptTasks,
   resolveReceiptPath,
   checkReceiptSource,
@@ -53,8 +52,6 @@ describe("parseReceipt", () => {
         "branch=feat/dark-mode",
         "slug=dark-mode",
         "plan_file=dark-mode.md",
-        "turns_budget=10",
-        "turns_completed=3",
         "tasks_completed=2",
         "outcome=success",
       ].join("\n") + "\n",
@@ -68,8 +65,6 @@ describe("parseReceipt", () => {
     expect(receipt!.branch).toBe("feat/dark-mode");
     expect(receipt!.slug).toBe("dark-mode");
     expect(receipt!.plan_file).toBe("dark-mode.md");
-    expect(receipt!.turns_budget).toBe(10);
-    expect(receipt!.turns_completed).toBe(3);
     expect(receipt!.tasks_completed).toBe(2);
     expect(receipt!.outcome).toBe("success");
   });
@@ -94,8 +89,6 @@ describe("parseReceipt", () => {
     // Defaults for missing fields
     expect(receipt!.source).toBe("main");
     expect(receipt!.branch).toBe("");
-    expect(receipt!.turns_budget).toBe(0);
-    expect(receipt!.turns_completed).toBe(0);
     expect(receipt!.tasks_completed).toBe(0);
   });
 
@@ -108,8 +101,6 @@ describe("parseReceipt", () => {
         "source=main",
         "branch=main",
         "slug=test",
-        "turns_budget=5",
-        "turns_completed=1",
         "tasks_completed=0",
       ].join("\n") + "\n",
     );
@@ -136,7 +127,6 @@ describe("initReceipt", () => {
       branch: "feat/my-feature",
       slug: "my-feature",
       plan_file: "my-feature.md",
-      turns_budget: 5,
     });
 
     const content = readFileSync(receiptPath, "utf-8");
@@ -145,8 +135,6 @@ describe("initReceipt", () => {
     expect(content).toContain("branch=feat/my-feature");
     expect(content).toContain("slug=my-feature");
     expect(content).toContain("plan_file=my-feature.md");
-    expect(content).toContain("turns_budget=5");
-    expect(content).toContain("turns_completed=0");
     expect(content).toContain("tasks_completed=0");
   });
 
@@ -158,7 +146,6 @@ describe("initReceipt", () => {
       branch: "feat/wt",
       slug: "wt-plan",
       plan_file: "wt-plan.md",
-      turns_budget: 3,
     });
 
     const content = readFileSync(receiptPath, "utf-8");
@@ -173,7 +160,6 @@ describe("initReceipt", () => {
       branch: "main",
       slug: "test",
       plan_file: "test.md",
-      turns_budget: 5,
     });
 
     const content = readFileSync(receiptPath, "utf-8");
@@ -187,7 +173,6 @@ describe("initReceipt", () => {
       branch: "main",
       slug: "test",
       plan_file: "test.md",
-      turns_budget: 0,
     });
 
     const content = readFileSync(receiptPath, "utf-8");
@@ -213,7 +198,6 @@ describe("receipt round-trip", () => {
       branch: "feat/round-trip",
       slug: "round-trip",
       plan_file: "round-trip.md",
-      turns_budget: 10,
     });
 
     const receipt = parseReceipt(receiptPath);
@@ -223,49 +207,8 @@ describe("receipt round-trip", () => {
     expect(receipt!.branch).toBe("feat/round-trip");
     expect(receipt!.slug).toBe("round-trip");
     expect(receipt!.plan_file).toBe("round-trip.md");
-    expect(receipt!.turns_budget).toBe(10);
-    expect(receipt!.turns_completed).toBe(0);
     expect(receipt!.tasks_completed).toBe(0);
     expect(receipt!.outcome).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// updateReceiptTurn
-// ---------------------------------------------------------------------------
-
-describe("updateReceiptTurn", () => {
-  const ctx = useTempDir();
-
-  it("increments turns_completed from 0 to 1", () => {
-    const receiptPath = join(ctx.dir, "receipt.txt");
-    writeFileSync(receiptPath, "turns_completed=0\ntasks_completed=0\n");
-
-    updateReceiptTurn(receiptPath);
-
-    const content = readFileSync(receiptPath, "utf-8");
-    expect(content).toContain("turns_completed=1");
-  });
-
-  it("increments turns_completed from 3 to 4", () => {
-    const receiptPath = join(ctx.dir, "receipt.txt");
-    writeFileSync(
-      receiptPath,
-      "slug=test\nturns_completed=3\ntasks_completed=1\n",
-    );
-
-    updateReceiptTurn(receiptPath);
-
-    const content = readFileSync(receiptPath, "utf-8");
-    expect(content).toContain("turns_completed=4");
-    // Other fields should be unchanged
-    expect(content).toContain("slug=test");
-    expect(content).toContain("tasks_completed=1");
-  });
-
-  it("is a no-op when receipt file does not exist", () => {
-    // Should not throw
-    updateReceiptTurn(join(ctx.dir, "missing.txt"));
   });
 });
 
@@ -364,7 +307,7 @@ describe("updateReceiptTasks", () => {
   it("appends tasks_completed when field is missing from receipt", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     const progressPath = join(ctx.dir, "progress.md");
-    writeFileSync(receiptPath, "slug=test\nturns_completed=1\n");
+    writeFileSync(receiptPath, "slug=test\n");
     writeFileSync(progressPath, "### Task 1: Done\n**Status:** Complete\n");
 
     updateReceiptTasks(receiptPath, progressPath);

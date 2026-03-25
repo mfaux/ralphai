@@ -110,9 +110,8 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  mode               = branch  (default)");
     expect(output).toContain("  continuous         = false  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
-    expect(output).toContain("  turns              = 5  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
-    expect(output).toContain("  turnTimeout        = off  (default)");
+    expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
   });
@@ -157,27 +156,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  issueCommentProgress = true  (default)");
   });
 
-  it("shows turns=0 as unlimited", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      turns: { value: 0, source: "config" },
-    });
-    input.configFileExists = true;
-    const output = formatShowConfig(input);
-    expect(output).toContain("  turns              = unlimited");
-  });
-
-  it("shows turnTimeout > 0 with s suffix", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      turnTimeout: { value: 300, source: "env" },
-    });
-    input.envVars = { RALPHAI_TURN_TIMEOUT: "300" };
-    const output = formatShowConfig(input);
-    expect(output).toContain("  turnTimeout        = 300s");
-    expect(output).toContain("env (RALPHAI_TURN_TIMEOUT=300)");
-  });
-
   it("shows maxLearnings=0 as unlimited", () => {
     const input = defaultInput();
     input.config = makeResolved({
@@ -213,16 +191,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain(
       "  mode               = patch  (env (RALPHAI_MODE=patch))",
     );
-  });
-
-  it("shows cli source with raw flag", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      turns: { value: 7, source: "cli" },
-    });
-    input.rawFlags = { turns: "--turns=7" };
-    const output = formatShowConfig(input);
-    expect(output).toContain("  turns              = 7  (cli (--turns=7))");
   });
 
   it("shows cli source for mode with raw flag (--branch)", () => {

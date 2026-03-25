@@ -34,21 +34,21 @@ export function extractProgressBlock(text: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Append extracted progress content to the global progress file with a
- * turn header. No-op if content is null.
+ * Append extracted progress content to the global progress file with an
+ * iteration header. No-op if content is null.
  *
  * Format appended:
  * ```
- * ### Turn N
+ * ### Iteration N
  * <content>
  * ```
  */
 export function appendProgressBlock(
   progressFile: string,
-  turn: number,
+  iterationNumber: number,
   content: string,
 ): void {
-  const block = `\n### Turn ${turn}\n${content}\n`;
+  const block = `\n### Iteration ${iterationNumber}\n${content}\n`;
 
   if (existsSync(progressFile)) {
     const existing = readFileSync(progressFile, "utf-8");
