@@ -72,8 +72,6 @@ describe("init command", () => {
     expect(parsed).not.toHaveProperty("protectedBranches");
     // feedbackCommands should be an empty array when not detected
     expect(parsed.feedbackCommands).toEqual([]);
-    // New config keys from wizard expansion
-    expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
     expect(parsed.iterationTimeout).toBe(0);
   });
@@ -84,8 +82,8 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 13 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(13);
+    // Verify exactly 12 keys are present (includes repoPath)
+    expect(Object.keys(parsed)).toHaveLength(12);
 
     // Core settings from wizard
     expect(typeof parsed.agentCommand).toBe("string");
@@ -93,8 +91,6 @@ describe("init command", () => {
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed.feedbackCommands).toEqual([]);
 
-    // New wizard settings
-    expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
 
     // Runtime defaults
@@ -116,8 +112,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(13);
-    expect(parsed.mode).toBe("branch");
+    expect(Object.keys(parsed)).toHaveLength(12);
     expect(parsed.autoCommit).toBe(false);
   });
 

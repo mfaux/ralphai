@@ -135,7 +135,7 @@ describe("reset command", () => {
     writeFileSync(join(planDir, "prd-test.md"), "# Test");
     writeFileSync(
       join(planDir, "receipt.txt"),
-      "started_at=2025-01-15T10:30:00Z\nsource=main\nbranch=ralphai/test\nslug=test",
+      "started_at=2025-01-15T10:30:00Z\nbranch=ralphai/test\nslug=test",
     );
 
     runCliOutput(["reset", "--yes"], ctx.dir, testEnv());

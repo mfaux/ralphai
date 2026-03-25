@@ -45,7 +45,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   feedbackCommands: "RALPHAI_FEEDBACK_COMMANDS",
   baseBranch: "RALPHAI_BASE_BRANCH",
   maxStuck: "RALPHAI_MAX_STUCK",
-  mode: "RALPHAI_MODE",
   iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
   issueSource: "RALPHAI_ISSUE_SOURCE",
   issueLabel: "RALPHAI_ISSUE_LABEL",
@@ -143,10 +142,6 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   lines.push(
     `  baseBranch         = ${config.baseBranch.value}  (${baseBranchSrc})`,
   );
-
-  // mode: CLI label uses resolved mode value (e.g., "--branch"), not "--mode=branch"
-  const modeSrc = sourceLabel("mode", config.mode.source, input);
-  lines.push(`  mode               = ${config.mode.value}  (${modeSrc})`);
 
   // continuous: CLI label is just "--continuous"
   const continuousSrc = sourceLabel(

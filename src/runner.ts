@@ -18,11 +18,7 @@ import {
 } from "fs";
 import { basename, dirname, join } from "path";
 
-import {
-  branchHasOpenWork,
-  getCurrentCommitHash,
-  getWorkingTreeDiffHash,
-} from "./git-ops.ts";
+import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
 import {
   getRepoPipelineDirs,
   getRepoLearningsPath,
@@ -327,7 +323,6 @@ function printBlockedDiagnostics(
 
 function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   const { config, cwd, isWorktree, mainWorktree } = opts;
-  const mode = config.mode.value;
   const baseBranch = config.baseBranch.value;
   const continuous = config.continuous.value === "true";
 
@@ -335,10 +330,6 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   console.log("========================================");
   console.log("  Ralphai dry-run — preview only");
   console.log("========================================");
-
-  if (isWorktree) {
-    console.log(`[dry-run] Running in worktree (main repo: ${mainWorktree})`);
-  }
 
   const result = detectPlan({ dirs, dryRun: true });
   if (!result.detected) {
@@ -374,68 +365,52 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     console.log(`[dry-run] Scope: ${planScope}`);
   }
 
-  if (continuous && mode === "pr") {
+  if (continuous) {
     console.log(
-      "[dry-run] Continuous+PR mode: all backlog plans will run on a single branch with one PR.",
-    );
-  } else if (continuous && mode === "branch") {
-    console.log(
-      "[dry-run] Continuous+branch mode: all backlog plans will run on a single branch.",
+      "[dry-run] Continuous mode: all backlog plans will run on a single worktree branch with one draft PR.",
     );
   }
 
-  // The plan was detected as in-progress or from backlog
-  if (result.plan.resumed) {
-    const currentBranch =
-      gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
-    const progressFile = join(dirname(planFile), "progress.md");
-    console.log("[dry-run] Mode: resume in-progress");
-    console.log(`[dry-run] Would run on current branch: ${currentBranch}`);
-    console.log(`[dry-run] Would keep existing ${progressFile}`);
-  } else if (mode === "patch") {
-    const currentBranch =
-      gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
-    const progressFile = join(dirs.wipDir, planSlug, "progress.md");
+  const branch = `ralphai/${planSlug}`;
+  const progressFile = join(dirs.wipDir, planSlug, "progress.md");
+  const worktreeDir = join(cwd, "..", ".ralphai-worktrees", planSlug);
+
+  if (isWorktree) {
+    console.log(`[dry-run] Running in worktree (main repo: ${mainWorktree})`);
+    console.log(`[dry-run] Would continue on current branch: ${branch}`);
+  } else if (result.plan.resumed) {
     console.log(
-      `[dry-run] Mode: patch — would leave changes uncommitted on '${currentBranch}'`,
+      "[dry-run] Would reuse existing worktree for in-progress plan.",
     );
-    console.log(`[dry-run] Would initialize: ${progressFile}`);
   } else {
-    const branch = `ralphai/${planSlug}`;
-    const progressFile = join(dirs.wipDir, planSlug, "progress.md");
-
-    // Check for bare "ralphai" branch blocking hierarchy
-    if (gitOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
-      console.log(
-        `[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '${branch}'.`,
-      );
-      console.log(
-        "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai",
-      );
-    }
-
-    const collision = branchHasOpenWork(branch, cwd);
-    if (collision.collision) {
-      console.log(`[dry-run] WARNING: ${collision.reason}`);
-      console.log("[dry-run] This plan would be SKIPPED in a real run.");
-    }
-
-    if (mode === "pr") {
-      console.log(
-        `[dry-run] Mode: pr — would create branch from ${baseBranch}: ${branch}`,
-      );
-      console.log("[dry-run] Would create PR via 'gh' on completion");
-    } else {
-      console.log(
-        `[dry-run] Mode: branch — would create branch from ${baseBranch}: ${branch}`,
-      );
-      console.log("[dry-run] Would commit but not push or create a PR");
-    }
-    console.log(`[dry-run] Would initialize: ${progressFile}`);
+    console.log(`[dry-run] Would create worktree: ${worktreeDir}`);
   }
+
+  if (gitOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
+    console.log(
+      `[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '${branch}'.`,
+    );
+    console.log(
+      "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai",
+    );
+  }
+
+  const collision = branchHasOpenWork(branch, cwd);
+  if (collision.collision) {
+    console.log(`[dry-run] WARNING: ${collision.reason}`);
+    console.log(
+      "[dry-run] This plan would be reused or skipped in a real run.",
+    );
+  }
+
+  console.log(`[dry-run] Branch: ${branch} (from ${baseBranch})`);
+  console.log(`[dry-run] Would initialize: ${progressFile}`);
+  console.log(
+    "[dry-run] Would push commits and open a draft PR on completion.",
+  );
 
   console.log(
-    "[dry-run] No files moved, no branches created, no agent run executed.",
+    "[dry-run] No files moved, no worktrees created, no agent run executed.",
   );
 }
 
@@ -450,7 +425,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan } = opts;
 
   // Unpack config values
-  const mode = config.mode.value;
   const baseBranch = config.baseBranch.value;
   const maxStuck = config.maxStuck.value;
   const iterationTimeout = config.iterationTimeout.value;
@@ -470,52 +444,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Learnings file paths (resolved from global state)
   const learningsFile = getRepoLearningsPath(cwd);
   const learningCandidatesFile = getRepoCandidatesPath(cwd);
-
-  // --- Patch mode guard: cannot run on main/master ---
-  if (mode === "patch") {
-    const currentBranch = gitExec("git rev-parse --abbrev-ref HEAD", cwd);
-    if (currentBranch === "main" || currentBranch === "master") {
-      console.log(`Patch mode cannot run on '${currentBranch}'.`);
-      console.log();
-      console.log(
-        "Either run in branch mode (an isolated branch is created for you):",
-      );
-      console.log("  ralphai run --branch");
-      console.log();
-      console.log(
-        "Or run in PR mode (a branch and pull request are created for you):",
-      );
-      console.log("  ralphai run --pr");
-
-      // Peek at backlog to suggest a branch name
-      const backlogPlans = collectBacklogPlans(dirs.backlogDir);
-      if (backlogPlans.length > 0) {
-        const slug = basename(backlogPlans[0]!).replace(/\.md$/, "");
-        console.log();
-        if (isWorktree) {
-          console.log("Or create a worktree on a feature branch:");
-          console.log(
-            `  git worktree add ../<dir> -b ralphai/${slug} ${currentBranch}`,
-          );
-        } else {
-          console.log("Or switch to a feature branch:");
-          console.log(`  git checkout -b ralphai/${slug}`);
-        }
-      } else {
-        console.log();
-        if (isWorktree) {
-          console.log("Or create a worktree on a feature branch:");
-          console.log(
-            `  git worktree add ../<dir> -b ralphai/<name> ${currentBranch}`,
-          );
-        } else {
-          console.log("Or switch to a feature branch first.");
-        }
-      }
-      console.log();
-      process.exit(1);
-    }
-  }
 
   // --- Dry-run mode ---
   if (dryRun) {
@@ -578,8 +506,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           console.log(
             `All done. Completed ${plansCompleted} plan(s) this session.`,
           );
-          if (continuous && mode === "pr" && continuousPrUrl) {
-            finalizeContinuousPr({
+          if (continuous && continuousPrUrl) {
+            const finalize = finalizeContinuousPr({
               branch: continuousBranch,
               baseBranch,
               completedPlans,
@@ -587,6 +515,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
             });
+            console.log(finalize.message);
           }
         } else {
           console.log(
@@ -611,8 +540,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           console.log(
             `All done. Completed ${plansCompleted} plan(s) this session.`,
           );
-          if (continuous && mode === "pr" && continuousPrUrl) {
-            finalizeContinuousPr({
+          if (continuous && continuousPrUrl) {
+            const finalize = finalizeContinuousPr({
               branch: continuousBranch,
               baseBranch,
               completedPlans,
@@ -620,6 +549,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
             });
+            console.log(finalize.message);
           }
           break;
         }
@@ -678,7 +608,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     if (resumed || resume) {
       const currentBranch =
         gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
-      if (mode !== "patch" && currentBranch === baseBranch) {
+      if (currentBranch === baseBranch) {
         console.error(
           `ERROR: Resuming requires being on a ralphai/* branch, not '${baseBranch}'.`,
         );
@@ -688,26 +618,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         process.exit(1);
       }
       branch = currentBranch;
+      if (continuous && !continuousBranch) {
+        continuousBranch = branch;
+      }
       console.log(`Resuming on existing branch: ${branch}`);
       console.log(`Resuming — keeping existing ${progressFile}`);
-    } else if (mode === "patch") {
-      branch = gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
-      console.log(
-        `Patch mode: working on current branch '${branch}' (changes will be left uncommitted)`,
-      );
-
-      // Initialize progress file
-      mkdirSync(dirname(progressFile), { recursive: true });
-      writeFileSync(progressFile, "## Progress Log\n\n");
-      console.log(`Initialized ${progressFile}`);
-
-      initReceipt(receiptFile, {
-        source: isWorktree ? "worktree" : "main",
-        worktree_path: isWorktree ? cwd : undefined,
-        branch,
-        slug: planSlug,
-        plan_file: basename(planFile),
-      });
     } else if (continuous && continuousBranch) {
       // Continuous mode, subsequent plan: reuse the existing branch
       branch = continuousBranch;
@@ -718,14 +633,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       console.log(`Initialized ${progressFile}`);
 
       initReceipt(receiptFile, {
-        source: isWorktree ? "worktree" : "main",
         worktree_path: isWorktree ? cwd : undefined,
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
       });
     } else if (isWorktree) {
-      // Worktree mode: the user already created the worktree on the right branch
       branch = gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
 
       if (branch === baseBranch) {
@@ -739,88 +652,30 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         rollbackPlan(planFile, dirs.backlogDir);
         process.exit(1);
       }
-      console.log(
-        `Worktree mode: working on existing branch '${branch}' (no checkout)`,
-      );
+      console.log(`Running in worktree on branch '${branch}'`);
+      if (continuous) {
+        continuousBranch = branch;
+      }
 
       mkdirSync(dirname(progressFile), { recursive: true });
       writeFileSync(progressFile, "## Progress Log\n\n");
       console.log(`Initialized ${progressFile}`);
 
       initReceipt(receiptFile, {
-        source: "worktree",
         worktree_path: cwd,
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
       });
     } else {
-      // Branch/PR mode: create a new branch
-      gitExec(`git checkout ${baseBranch}`, cwd);
-
-      branch = `ralphai/${planSlug}`;
-
-      // Guard: a bare "ralphai" branch blocks all "ralphai/*" branches
-      if (gitOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
-        console.log();
-        console.error(
-          `ERROR: Branch 'ralphai' exists and blocks creation of '${branch}'.`,
-        );
-        console.error(
-          "Git cannot create 'ralphai/<slug>' when a branch named 'ralphai' already exists.",
-        );
-        console.error();
-        console.error("Fix: delete or rename the stale branch, then retry:");
-        console.error("  git branch -m ralphai ralphai-legacy   # rename");
-        console.error("  git branch -D ralphai                # or delete");
-        rollbackPlan(planFile, dirs.backlogDir);
-        process.exit(1);
-      }
-
-      // Safety: check for existing branch/PR collision
-      const collision = branchHasOpenWork(branch, cwd);
-      if (collision.collision) {
-        console.log();
-        console.log(`SKIP: ${collision.reason}`);
-        console.log(
-          `Plan '${basename(planFile)}' already has open work. Skipping to next plan.`,
-        );
-        rollbackPlan(planFile, dirs.backlogDir);
-        skippedSlugs.add(planSlug);
-        continue;
-      }
-
-      if (!gitOk(`git checkout -b ${branch}`, cwd)) {
-        console.log();
-        console.error(`ERROR: Failed to create branch '${branch}'.`);
-        rollbackPlan(planFile, dirs.backlogDir);
-        process.exit(1);
-      }
-      console.log(`Created branch from ${baseBranch}: ${branch}`);
-
-      // In continuous mode, remember the branch for subsequent plans
-      if (continuous && (mode === "pr" || mode === "branch")) {
-        continuousBranch = branch;
-      }
-
-      // Initialize progress file
-      mkdirSync(dirname(progressFile), { recursive: true });
-      writeFileSync(progressFile, "## Progress Log\n\n");
-      console.log(`Initialized ${progressFile}`);
-
-      initReceipt(receiptFile, {
-        source: isWorktree ? "worktree" : "main",
-        worktree_path: isWorktree ? cwd : undefined,
-        branch,
-        slug: planSlug,
-        plan_file: basename(planFile),
-      });
+      console.error("ERROR: Ralphai runs plans only inside managed worktrees.");
+      rollbackPlan(planFile, dirs.backlogDir);
+      process.exit(1);
     }
 
     // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
-    let lastDiffHash = "";
     let completed = false;
 
     const totalTasks = countPlanTasks(planFile);
@@ -848,7 +703,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         progressFile,
         feedbackCommands,
         scopeHint,
-        mode,
         learningsFile,
         learningCandidatesFile,
       });
@@ -871,7 +725,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
       if (timedOut) {
         console.log();
-        console.log(`WARNING: Agent command timed out after ${iterationTimeout}s.`);
+        console.log(
+          `WARNING: Agent command timed out after ${iterationTimeout}s.`,
+        );
       }
 
       // --- Process learnings block (before completion check) ---
@@ -887,7 +743,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       const progressContent = extractProgressBlock(output);
       if (progressContent) {
         appendProgressBlock(progressFile, iterationNumber, progressContent);
-        console.log(`Appended progress block from iteration ${iterationNumber}.`);
+        console.log(
+          `Appended progress block from iteration ${iterationNumber}.`,
+        );
       }
 
       if (exitCode !== 0 && !timedOut) {
@@ -896,53 +754,30 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
 
       // --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
-      if (mode === "patch") {
-        const currentDiffHash = getWorkingTreeDiffHash(cwd);
-        if (currentDiffHash === lastDiffHash) {
-          stuckCount++;
-          console.log(
-            `WARNING: No working-tree changes this iteration (${stuckCount}/${maxStuck}).`,
+      const currentHash = getCurrentCommitHash(cwd) ?? "";
+      if (currentHash === lastHash) {
+        stuckCount++;
+        console.log(
+          `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
+        );
+        if (stuckCount >= maxStuck) {
+          console.error(
+            `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
           );
-          if (stuckCount >= maxStuck) {
-            console.error(
-              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
-            );
-            console.error(`Branch: ${branch}`);
-            console.error(
-              `Plan files remain in ${wipDir}/ — resume with another run.`,
-            );
-            process.exit(1);
+          console.error(`Branch: ${branch}`);
+          console.error(
+            `Plan files remain in ${wipDir}/ — resume with another run.`,
+          );
+          if (continuous && continuousBranch) {
+            console.log("Pushing partial work to continuous branch...");
+            const push = pushBranch(branch, cwd);
+            console.log(push.message);
           }
-        } else {
-          stuckCount = 0;
-          lastDiffHash = currentDiffHash;
+          process.exit(1);
         }
       } else {
-        const currentHash = getCurrentCommitHash(cwd) ?? "";
-        if (currentHash === lastHash) {
-          stuckCount++;
-          console.log(
-            `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
-          );
-          if (stuckCount >= maxStuck) {
-            console.error(
-              `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
-            );
-            console.error(`Branch: ${branch}`);
-            console.error(
-              `Plan files remain in ${wipDir}/ — resume with another run.`,
-            );
-            // In continuous+PR mode, push partial work
-            if (continuous && mode === "pr" && continuousBranch) {
-              console.log("Pushing partial work to continuous branch...");
-              pushBranch(branch, cwd);
-            }
-            process.exit(1);
-          }
-        } else {
-          stuckCount = 0;
-          lastHash = currentHash;
-        }
+        stuckCount = 0;
+        lastHash = currentHash;
       }
 
       // --- Auto-commit dirty state (AFTER stuck detection) ---
@@ -950,7 +785,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         !gitOk("git diff --quiet HEAD", cwd) ||
         !gitOk("git diff --cached --quiet", cwd);
       if (hasDiff) {
-        if (!autoCommit && mode === "patch") {
+        if (!autoCommit) {
           console.log(
             "WARNING: Agent left uncommitted changes (autoCommit=false, skipping recovery commit).",
           );
@@ -972,7 +807,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
         console.log();
-        console.log(`Plan complete after ${iterationNumber} iterations: ${planDesc}`);
+        console.log(
+          `Plan complete after ${iterationNumber} iterations: ${planDesc}`,
+        );
         completedPlans.push(basename(planFile));
 
         archiveRun({
@@ -982,7 +819,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           cwd,
         });
 
-        if (continuous && mode === "pr") {
+        if (continuous) {
           if (!continuousPrUrl) {
             const prResult = createContinuousPr({
               branch,
@@ -992,11 +829,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               firstPlanDescription: planDesc,
             });
+            console.log(prResult.message);
             if (prResult.ok) {
               continuousPrUrl = prResult.prUrl;
             }
           } else {
-            updateContinuousPr({
+            const update = updateContinuousPr({
               branch,
               baseBranch,
               completedPlans,
@@ -1004,28 +842,16 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
             });
+            console.log(update.message);
           }
-        } else if (mode === "pr") {
-          createPr({
+        } else {
+          const prResult = createPr({
             branch,
             baseBranch,
             planDescription: planDesc,
             cwd,
           });
-        } else if (mode === "branch") {
-          console.log(
-            `Branch mode: changes committed on branch '${branch}'. No PR created.`,
-          );
-          console.log(
-            "Tip: use --pr to automatically push and open a pull request.",
-          );
-        } else {
-          console.log(
-            `Patch mode: changes left in working tree on branch '${branch}'. No commits created.`,
-          );
-          console.log(
-            "Tip: use --branch to create an isolated branch with commits.",
-          );
+          console.log(prResult.message);
         }
 
         plansCompleted++;
@@ -1040,35 +866,32 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       console.log(`Plan files remain in ${wipDir}/ — resume with another run.`);
       console.log(`Branch: ${branch}`);
 
-      // In continuous+PR mode, push partial work and update PR
-      if (continuous && mode === "pr") {
-        if (continuousPrUrl) {
-          console.log("Pushing partial work to continuous PR...");
-          pushBranch(branch, cwd);
-        } else if (plansCompleted > 0) {
-          console.log("Pushing partial work...");
-          pushBranch(branch, cwd);
-        }
+      if (continuous) {
+        console.log("Pushing partial work...");
+        const push = pushBranch(
+          branch,
+          cwd,
+          !continuousPrUrl && plansCompleted === 0,
+        );
+        console.log(push.message);
       }
       break;
     }
 
     // --- Non-continuous modes: stop after one plan ---
     if (!continuous) {
-      if (mode !== "pr") {
-        console.log();
-        console.log("Plan complete. Stopping after one plan by default.");
-        console.log("Tip: use --continuous to keep processing backlog plans.");
-      }
+      console.log();
+      console.log("Plan complete. Stopping after one plan by default.");
+      console.log("Tip: use --continuous to keep processing backlog plans.");
       break;
     }
 
     // Loop back to pick the next plan
   }
 
-  // --- Continuous mode: finalize PR when backlog is drained ---
-  if (continuous && mode === "pr" && continuousPrUrl && plansCompleted > 0) {
-    finalizeContinuousPr({
+  // --- Continuous mode: refresh draft PR when backlog is drained ---
+  if (continuous && continuousPrUrl && plansCompleted > 0) {
+    const finalize = finalizeContinuousPr({
       branch: continuousBranch,
       baseBranch,
       completedPlans,
@@ -1076,6 +899,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       cwd,
       prUrl: continuousPrUrl,
     });
+    console.log(finalize.message);
   }
 
   // Clean up signal handlers

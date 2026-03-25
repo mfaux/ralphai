@@ -28,7 +28,6 @@ const SHORTCUTS: Array<{ key: string; desc: string }> = [
   { key: "l", desc: "Toggle live-scroll mode (Output tab)" },
   { key: "", desc: "" },
   { key: "r", desc: "Run selected plan (backlog only)" },
-  { key: "w", desc: "Run in worktree (backlog only)" },
   { key: "R", desc: "Reset in-progress plan to backlog" },
   { key: "P", desc: "Purge completed plan" },
 ];

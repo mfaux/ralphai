@@ -14,7 +14,6 @@ import { join } from "path";
 
 export interface Receipt {
   started_at: string;
-  source: "main" | "worktree";
   worktree_path?: string;
   branch: string;
   slug: string;
@@ -25,7 +24,6 @@ export interface Receipt {
 
 /** Fields required when initializing a new receipt. */
 export interface InitReceiptFields {
-  source: "main" | "worktree";
   worktree_path?: string;
   branch: string;
   slug: string;
@@ -66,7 +64,6 @@ export function parseReceipt(filePath: string): Receipt | null {
   }
   return {
     started_at: fields.started_at ?? "",
-    source: (fields.source as "main" | "worktree") ?? "main",
     worktree_path: fields.worktree_path,
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
@@ -87,7 +84,6 @@ export function parseReceipt(filePath: string): Receipt | null {
 export function initReceipt(path: string, fields: InitReceiptFields): void {
   const lines: string[] = [
     `started_at=${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}`,
-    `source=${fields.source}`,
   ];
   if (fields.worktree_path) {
     lines.push(`worktree_path=${fields.worktree_path}`);
@@ -176,11 +172,8 @@ function listDirs(dir: string): string[] {
 }
 
 /**
- * Check receipt files for cross-source conflicts.
+ * Check receipt files for resume guidance conflicts.
  * Returns true if the run should proceed, false (with error output) if blocked.
- *
- * Detects when a plan started in a worktree is being resumed from the main repo
- * or vice versa.
  */
 export function checkReceiptSource(
   wipDir: string,
@@ -194,7 +187,7 @@ export function checkReceiptSource(
     const receipt = parseReceipt(receiptPath);
     if (!receipt) continue;
 
-    if (receipt.source === "worktree" && !isWorktree) {
+    if (receipt.worktree_path && !isWorktree) {
       console.error();
       console.error(`Plan "${receipt.slug}" is running in a worktree.`);
       console.error();
@@ -202,23 +195,8 @@ export function checkReceiptSource(
       console.error(`  Branch:   ${receipt.branch || "unknown"}`);
       console.error(`  Started:  ${receipt.started_at || "unknown"}`);
       console.error();
-      console.error(`  To resume:  ralphai worktree`);
+      console.error(`  To resume:  ralphai run`);
       console.error(`  To discard: ralphai worktree clean`);
-      return false;
-    }
-
-    if (receipt.source === "main" && isWorktree) {
-      console.error();
-      console.error(
-        `Plan "${receipt.slug}" is already running in the main repository.`,
-      );
-      console.error();
-      console.error(`  Branch:  ${receipt.branch || "unknown"}`);
-      console.error(`  Started: ${receipt.started_at || "unknown"}`);
-      console.error();
-      console.error(
-        `  Finish or interrupt the main-repo run first, then retry.`,
-      );
       return false;
     }
   }

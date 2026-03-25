@@ -47,7 +47,6 @@ describe("parseReceipt", () => {
       receiptPath,
       [
         "started_at=2025-06-15T10:30:00Z",
-        "source=worktree",
         "worktree_path=/tmp/wt",
         "branch=feat/dark-mode",
         "slug=dark-mode",
@@ -60,7 +59,6 @@ describe("parseReceipt", () => {
     const receipt = parseReceipt(receiptPath);
     expect(receipt).not.toBeNull();
     expect(receipt!.started_at).toBe("2025-06-15T10:30:00Z");
-    expect(receipt!.source).toBe("worktree");
     expect(receipt!.worktree_path).toBe("/tmp/wt");
     expect(receipt!.branch).toBe("feat/dark-mode");
     expect(receipt!.slug).toBe("dark-mode");
@@ -86,8 +84,6 @@ describe("parseReceipt", () => {
     expect(receipt).not.toBeNull();
     expect(receipt!.started_at).toBe("2025-01-01T00:00:00Z");
     expect(receipt!.slug).toBe("test");
-    // Defaults for missing fields
-    expect(receipt!.source).toBe("main");
     expect(receipt!.branch).toBe("");
     expect(receipt!.tasks_completed).toBe(0);
   });
@@ -98,7 +94,6 @@ describe("parseReceipt", () => {
       receiptPath,
       [
         "started_at=2025-01-01T00:00:00Z",
-        "source=main",
         "branch=main",
         "slug=test",
         "tasks_completed=0",
@@ -123,7 +118,6 @@ describe("initReceipt", () => {
   it("creates a valid receipt file", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
-      source: "main",
       branch: "feat/my-feature",
       slug: "my-feature",
       plan_file: "my-feature.md",
@@ -131,17 +125,15 @@ describe("initReceipt", () => {
 
     const content = readFileSync(receiptPath, "utf-8");
     expect(content).toContain("started_at=");
-    expect(content).toContain("source=main");
     expect(content).toContain("branch=feat/my-feature");
     expect(content).toContain("slug=my-feature");
     expect(content).toContain("plan_file=my-feature.md");
     expect(content).toContain("tasks_completed=0");
   });
 
-  it("includes worktree_path when source is worktree", () => {
+  it("includes worktree_path when provided", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
-      source: "worktree",
       worktree_path: "/tmp/my-worktree",
       branch: "feat/wt",
       slug: "wt-plan",
@@ -149,14 +141,12 @@ describe("initReceipt", () => {
     });
 
     const content = readFileSync(receiptPath, "utf-8");
-    expect(content).toContain("source=worktree");
     expect(content).toContain("worktree_path=/tmp/my-worktree");
   });
 
-  it("omits worktree_path when source is main", () => {
+  it("omits worktree_path when not provided", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
-      source: "main",
       branch: "main",
       slug: "test",
       plan_file: "test.md",
@@ -169,7 +159,6 @@ describe("initReceipt", () => {
   it("generates a valid ISO timestamp", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
-      source: "main",
       branch: "main",
       slug: "test",
       plan_file: "test.md",
@@ -193,7 +182,6 @@ describe("receipt round-trip", () => {
   it("init then parse returns matching fields", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
-      source: "worktree",
       worktree_path: "/home/user/wt",
       branch: "feat/round-trip",
       slug: "round-trip",
@@ -202,7 +190,6 @@ describe("receipt round-trip", () => {
 
     const receipt = parseReceipt(receiptPath);
     expect(receipt).not.toBeNull();
-    expect(receipt!.source).toBe("worktree");
     expect(receipt!.worktree_path).toBe("/home/user/wt");
     expect(receipt!.branch).toBe("feat/round-trip");
     expect(receipt!.slug).toBe("round-trip");
@@ -345,38 +332,37 @@ describe("checkReceiptSource", () => {
     expect(checkReceiptSource(join(ctx.dir, "nonexistent"), false)).toBe(true);
   });
 
-  it("returns true when receipt source matches (both main)", () => {
+  it("returns true when receipt has no worktree_path and running from main", () => {
     const wipDir = join(ctx.dir, "in-progress");
     const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
-      "source=main\nslug=test-plan\nbranch=main\n",
+      "slug=test-plan\nbranch=main\n",
     );
 
     expect(checkReceiptSource(wipDir, false)).toBe(true);
   });
 
-  it("returns true when receipt source matches (both worktree)", () => {
+  it("returns true when receipt has worktree_path and running in worktree", () => {
     const wipDir = join(ctx.dir, "in-progress");
     const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
-      "source=worktree\nslug=test-plan\nbranch=feat/x\nworktree_path=/tmp/wt\n",
+      "slug=test-plan\nbranch=feat/x\nworktree_path=/tmp/wt\n",
     );
 
     expect(checkReceiptSource(wipDir, true)).toBe(true);
   });
 
-  it("blocks when receipt says worktree but running from main", () => {
+  it("blocks when receipt has worktree_path but running from main", () => {
     const wipDir = join(ctx.dir, "in-progress");
     const slugDir = join(wipDir, "test-plan");
     mkdirSync(slugDir, { recursive: true });
     writeFileSync(
       join(slugDir, "receipt.txt"),
       [
-        "source=worktree",
         "slug=test-plan",
         "branch=feat/x",
         "worktree_path=/tmp/wt",
@@ -392,35 +378,11 @@ describe("checkReceiptSource", () => {
     expect(result).toBe(false);
   });
 
-  it("blocks when receipt says main but running from worktree", () => {
-    const wipDir = join(ctx.dir, "in-progress");
-    const slugDir = join(wipDir, "test-plan");
-    mkdirSync(slugDir, { recursive: true });
-    writeFileSync(
-      join(slugDir, "receipt.txt"),
-      [
-        "source=main",
-        "slug=test-plan",
-        "branch=main",
-        "started_at=2025-01-01T00:00:00Z",
-      ].join("\n") + "\n",
-    );
-
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = checkReceiptSource(wipDir, true);
-    spy.mockRestore();
-
-    expect(result).toBe(false);
-  });
-
   it("returns true when receipt has no source conflict", () => {
     const wipDir = join(ctx.dir, "in-progress");
     const slugDir = join(wipDir, "plan-a");
     mkdirSync(slugDir, { recursive: true });
-    writeFileSync(
-      join(slugDir, "receipt.txt"),
-      "source=main\nslug=plan-a\nbranch=main\n",
-    );
+    writeFileSync(join(slugDir, "receipt.txt"), "slug=plan-a\nbranch=main\n");
 
     // Running from main, receipt says main: no conflict
     expect(checkReceiptSource(wipDir, false)).toBe(true);

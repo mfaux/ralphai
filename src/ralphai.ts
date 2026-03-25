@@ -91,7 +91,6 @@ interface WizardAnswers {
   agentCommand: string;
   baseBranch: string;
   feedbackCommands: string;
-  mode?: "branch" | "pr" | "patch";
   autoCommit?: boolean;
   issueSource: "none" | "github";
   updateAgentsMd?: boolean;
@@ -215,7 +214,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
 const WORKTREE_SUBCOMMANDS = new Set<WorktreeSubcommand>(["list", "clean"]);
 
 function parseWorktreeArgs(args: string[]): WorktreeOptions {
-  let wtSubcommand: WorktreeSubcommand = "run"; // default
+  let wtSubcommand: WorktreeSubcommand = "run";
   let plan: string | undefined;
   let dir: string | undefined;
   const wtRunArgs: string[] = [];
@@ -406,35 +405,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 4. Workflow mode
-  const modeSelection = await clack.select({
-    message: "Workflow mode:",
-    options: [
-      {
-        value: "branch",
-        label: "Branch",
-        hint: "create a branch, don't push or open a PR",
-      },
-      {
-        value: "pr",
-        label: "PR",
-        hint: "create a branch and open a pull request",
-      },
-      {
-        value: "patch",
-        label: "Patch",
-        hint: "leave changes uncommitted in the working tree",
-      },
-    ],
-  });
-
-  if (clack.isCancel(modeSelection)) {
-    clack.cancel("Setup cancelled.");
-    return null;
-  }
-
-  const mode = modeSelection as "branch" | "pr" | "patch";
-
   let autoCommit = false;
 
   // 6. GitHub Issues integration
@@ -495,7 +465,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     agentCommand,
     baseBranch,
     feedbackCommands: feedbackCommands || "",
-    mode,
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
@@ -625,7 +594,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     agentCommand: answers.agentCommand,
     feedbackCommands,
     baseBranch: answers.baseBranch,
-    mode: answers.mode ?? "branch",
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     continuous: false,
@@ -1221,7 +1189,7 @@ export async function runRalphai(args: string[]): Promise<void> {
       await runUninstall({ yes: options.yes, cwd });
       break;
     case "run":
-      await runRalphaiRunner(options, cwd);
+      await runRalphaiInManagedWorktree(options, cwd);
       break;
     case "worktree":
       await runRalphaiWorktree(options, cwd);
@@ -1416,7 +1384,6 @@ async function runRalphaiInit(
       agentCommand,
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
-      mode: "branch",
       autoCommit: false,
       issueSource: "none",
       updateAgentsMd: !agentsMdHasSection,
@@ -1625,7 +1592,7 @@ function selectPlanForWorktree(
 
   if (unattendedPlans.length > 1) {
     console.error(
-      `Multiple unattended in-progress plans. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
+      `Multiple unattended in-progress plans. Use ${TEXT}ralphai run --plan=<file>${RESET} to choose which one to resume.`,
     );
     for (const planFile of unattendedPlans) {
       console.error(`  ${planFile}`);
@@ -1655,7 +1622,7 @@ function selectPlanForWorktree(
 
   if (attendedPlans.length > 1) {
     console.error(
-      `Multiple in-progress plans with active worktrees. Use ${TEXT}ralphai worktree --plan=<file>${RESET} to choose which one to resume.`,
+      `Multiple in-progress plans with active worktrees. Use ${TEXT}ralphai run --plan=<file>${RESET} to choose which one to resume.`,
     );
     for (const planFile of attendedPlans) {
       console.error(`  ${planFile}`);
@@ -1787,9 +1754,6 @@ function showWorktreeHelp(): void {
   console.log();
   console.log(`${TEXT}Commands:${RESET}`);
   console.log(
-    `  ${DIM}(default)${RESET}   ${DIM}Create or reuse a worktree and run a plan in PR mode${RESET}`,
-  );
-  console.log(
     `  ${TEXT}list${RESET}        ${DIM}Show active ralphai-managed worktrees${RESET}`,
   );
   console.log(
@@ -1798,14 +1762,7 @@ function showWorktreeHelp(): void {
   console.log();
   console.log(`${TEXT}Options:${RESET}`);
   console.log(
-    `  ${TEXT}--plan=${RESET}<file>   ${DIM}Target a specific backlog plan (default: auto-detect)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}--dir=${RESET}<path>    ${DIM}Worktree directory (default: ../.ralphai-worktrees/<slug>)${RESET}`,
-  );
-  console.log();
-  console.log(
-    `${DIM}All other options are forwarded to the runner (for example, --resume, --feedback-commands=...).${RESET}`,
+    `${DIM}Use ${TEXT}ralphai run${DIM} to create or reuse a worktree for execution.${RESET}`,
   );
 }
 
@@ -2331,7 +2288,7 @@ function runRalphaiStatus(cwd: string): void {
     }
 
     // Worktree info from receipt
-    if (receipt?.source === "worktree") {
+    if (receipt?.worktree_path) {
       parts.push(`worktree: ${slug}`);
     }
 
@@ -2435,196 +2392,12 @@ async function runRalphaiWorktree(
       cleanWorktrees(cwd);
       return;
     case "run":
-      break; // fall through to worktree run logic below
-  }
-
-  // --- worktree run ---
-
-  // Dry-run: skip all worktree/branch/symlink creation and run the
-  // runner from the main repo so it can print the preview.
-  const isDryRun =
-    wtOpts.runArgs.includes("--dry-run") || wtOpts.runArgs.includes("-n");
-  if (isDryRun) {
-    const dryRunOptions: RalphaiOptions = {
-      ...options,
-      subcommand: "run",
-      runArgs: ["--pr", ...wtOpts.runArgs],
-    };
-    try {
-      await runRalphaiRunner(dryRunOptions, cwd);
-    } catch {
-      // runRalphaiRunner may call process.exit() on fatal errors
-    }
-    return;
-  }
-
-  // Guard: must be in main repo, not a worktree
-  if (isGitWorktree(cwd)) {
-    console.error(`'ralphai worktree' must be run from the main repository.`);
-    console.error(
-      "You are inside a worktree. Run this command from the main repo.",
-    );
-    process.exit(1);
-  }
-
-  // Guard: config must exist
-  if (!existsSync(getConfigFilePath(cwd))) {
-    console.error(
-      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
-    );
-    process.exit(1);
-  }
-
-  // Guard: repo must have at least one commit (git worktree requires a valid ref)
-  try {
-    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
-  } catch {
-    console.error(
-      `This repository has no commits yet. Git worktrees require at least one commit.`,
-    );
-    console.error(
-      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
-    );
-    console.error(`\nThen re-run ${TEXT}ralphai worktree${RESET}.`);
-    process.exit(1);
-  }
-
-  // Select plan (in-progress first, then backlog)
-  const activeWorktrees = listRalphaiWorktrees(cwd);
-  const plan = selectPlanForWorktree(cwd, wtOpts.plan, activeWorktrees);
-  if (!plan) process.exit(1);
-
-  // Check receipt for cross-source conflicts: block if plan is running in main repo
-  const { wipDir } = getRepoPipelineDirs(cwd);
-  const receiptPath = join(wipDir, plan.slug, "receipt.txt");
-  const receipt = parseReceipt(receiptPath);
-  if (receipt && receipt.source === "main") {
-    console.error();
-    console.error(
-      `Plan "${plan.slug}" is already running in the main repository.`,
-    );
-    console.error();
-    console.error(`  Branch:  ${receipt.branch || "unknown"}`);
-    console.error(`  Started: ${receipt.started_at || "unknown"}`);
-    console.error();
-    console.error(`  Finish or interrupt the main-repo run first, then retry.`);
-    process.exit(1);
-  }
-
-  // Determine base branch
-  const baseBranch = detectBaseBranch(cwd);
-  const branch = `ralphai/${plan.slug}`;
-  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
-
-  // Determine worktree directory
-  const worktreeBase = wtOpts.dir
-    ? resolve(wtOpts.dir)
-    : join(cwd, "..", ".ralphai-worktrees");
-  const worktreeDir = wtOpts.dir
-    ? resolve(wtOpts.dir)
-    : join(worktreeBase, plan.slug);
-  if (!wtOpts.dir) {
-    mkdirSync(worktreeBase, { recursive: true });
-  }
-
-  let resolvedWorktreeDir = worktreeDir;
-
-  if (activeWorktree) {
-    resolvedWorktreeDir = activeWorktree.path;
-    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
-    console.log(`Branch: ${branch}`);
-    if (wtOpts.dir && resolvedWorktreeDir !== worktreeDir) {
-      console.log(
-        `${DIM}Ignoring --dir because branch ${branch} is already active at ${resolvedWorktreeDir}.${RESET}`,
+      console.error("'ralphai worktree' no longer starts runs.");
+      console.error(
+        "Use 'ralphai run' to create or reuse a worktree and execute work.",
       );
-    }
-  } else {
-    // Clean up orphaned worktree directory: exists on disk but not tracked
-    // by git (e.g. from a prior run that was interrupted or manually removed).
-    if (existsSync(resolvedWorktreeDir)) {
-      console.log(
-        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
-      );
-      execSync("git worktree prune", { cwd, stdio: "ignore" });
-      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
-    }
-
-    let branchExists = false;
-    try {
-      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
-        cwd,
-        stdio: "ignore",
-      });
-      branchExists = true;
-    } catch {
-      branchExists = false;
-    }
-
-    if (branchExists) {
-      console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
-      console.log(`Branch: ${branch}`);
-      try {
-        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
-          cwd,
-          stdio: ["inherit", "pipe", "pipe"],
-        });
-      } catch (err: unknown) {
-        const stderr = extractExecStderr(err);
-        console.error(
-          `${TEXT}Error:${RESET} Failed to attach existing branch '${branch}' to a worktree.`,
-        );
-        if (stderr) console.error(`  git: ${stderr}`);
-        process.exit(1);
-      }
-    } else {
-      console.log(`Creating worktree: ${resolvedWorktreeDir}`);
-      console.log(`Branch: ${branch} (from ${baseBranch})`);
-      try {
-        execSync(
-          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-          { cwd, stdio: ["inherit", "pipe", "pipe"] },
-        );
-      } catch (err: unknown) {
-        const stderr = extractExecStderr(err);
-        console.error(`${TEXT}Error:${RESET} Failed to create worktree.`);
-        if (stderr) console.error(`  git: ${stderr}`);
-        process.exit(1);
-      }
-    }
+      process.exit(1);
   }
-
-  // Config and pipeline data live in global state (~/.ralphai/repos/<id>/...),
-  // so no local .ralphai/ or config symlinks are needed in the worktree.
-
-  // Spawn ralphai runner in the worktree
-  console.log("Running ralphai in worktree...");
-  const shouldResume =
-    plan.source === "in-progress" || activeWorktree !== undefined;
-  const hasResumeFlag =
-    wtOpts.runArgs.includes("--resume") || wtOpts.runArgs.includes("-r");
-  const runnerArgs = [
-    "--pr",
-    ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-    ...wtOpts.runArgs,
-  ];
-
-  // Reuse runRalphaiRunner by constructing options with the worktree as cwd
-  const worktreeRunOptions: RalphaiOptions = {
-    ...options,
-    subcommand: "run",
-    runArgs: runnerArgs,
-  };
-
-  try {
-    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
-  } catch {
-    // runRalphaiRunner may call process.exit() on fatal errors
-  }
-
-  // Note: the runner now returns normally on success. Fatal errors still
-  // call process.exit(). For proper lifecycle management (cleanup on
-  // success, preserve on failure), the worktree command would need to
-  // inspect the runner's result. That's a future improvement.
 }
 
 /** Known non-config flags accepted by `ralphai run`. */
@@ -2649,9 +2422,6 @@ const CONFIG_FLAG_PATTERNS = [
   /^--base-branch=/,
   /^--max-stuck=/,
   /^--iteration-timeout=/,
-  /^--branch$/,
-  /^--pr$/,
-  /^--patch$/,
   /^--continuous$/,
   /^--auto-commit$/,
   /^--no-auto-commit$/,
@@ -2669,12 +2439,22 @@ function isRecognizedRunFlag(arg: string): boolean {
   return CONFIG_FLAG_PATTERNS.some((p) => p.test(arg));
 }
 
+function validateRunArgs(runArgs: string[]): void {
+  for (const arg of runArgs) {
+    if (!isRecognizedRunFlag(arg)) {
+      console.error(`ERROR: Unrecognized argument: ${arg}`);
+      showRunHelp();
+      process.exit(1);
+    }
+  }
+}
+
 function showRunHelp(): void {
   const lines = [
     "Usage: ralphai run [options]",
     "",
-    "  Auto-detects work: resumes in-progress plans, or picks from backlog.",
-    "  Runs until all tasks are complete, or stuck detection stops the run.",
+    "  Auto-detects work, creates or reuses a worktree, and runs there.",
+    "  Ralphai commits on a ralphai/<slug> branch, pushes it, and opens a draft PR when possible.",
     "",
     "Options:",
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
@@ -2684,14 +2464,11 @@ function showRunHelp(): void {
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
     "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
     "  --base-branch=<branch>           Override base branch (default: main)",
-    "  --branch                         Branch mode (default): create isolated branch, commit, no PR",
-    "  --pr                             PR mode: create branch, push, and open PR",
-    "  --patch                          Patch mode: leave changes uncommitted in working tree",
     "  --continuous                     Keep processing backlog plans after the first completes",
     "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
     "  --auto-commit                    Enable auto-commit of agent changes (per-iteration and resume recovery)",
-    "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)",
+    "  --no-auto-commit                 Disable auto-commit recovery snapshots (default: off)",
     "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
     "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)",
     "  --issue-label=<label>            Label to filter issues by (default: ralphai)",
@@ -2703,14 +2480,14 @@ function showRunHelp(): void {
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,",
-    "                  mode, continuous, autoCommit, iterationTimeout, promptMode,",
+    "                  continuous, autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, issueLabel,",
     "                  issueInProgressLabel, issueRepo,",
     "                  issueCommentProgress",
     "",
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
-    "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,",
+    "                   RALPHAI_CONTINUOUS,",
     "                   RALPHAI_AUTO_COMMIT,",
     "                   RALPHAI_ITERATION_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
@@ -2722,17 +2499,13 @@ function showRunHelp(): void {
     "Precedence: CLI flags > env vars > config file > built-in defaults",
     "",
     "Examples:",
-    "  ralphai run                                             # run until all tasks complete",
+    "  ralphai run                                             # create or reuse a worktree and run one plan",
     "  ralphai run --dry-run                                   # preview only",
     "  ralphai run --resume                                    # recover dirty state and continue",
     "  ralphai run --agent-command='claude -p'                 # use Claude Code",
     "  ralphai run --agent-command='opencode run --agent build'  # use OpenCode",
-    "  ralphai run --branch                                    # create isolated branch, commit (no PR)",
-    "  ralphai run --branch --continuous                       # keep draining backlog on isolated branches",
+    "  ralphai run --continuous                                # keep draining backlog on one worktree branch",
     "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run          # override via env var",
-    "",
-    "Feature branch workflow:",
-    "  ralphai run --patch --base-branch=feature/big-thing     # leave changes uncommitted on a feature branch",
   ];
   console.log(lines.join("\n"));
 }
@@ -2768,11 +2541,36 @@ function resolveWorktreeInfo(dir: string): {
   return { isWorktree: false, mainWorktree: "" };
 }
 
-async function runRalphaiRunner(
+async function runRalphaiInManagedWorktree(
   options: RalphaiOptions,
   cwd: string,
 ): Promise<void> {
-  // Check that ralphai has been initialized (global config exists).
+  const runArgs = options.runArgs;
+  const hasHelp = runArgs.includes("--help") || runArgs.includes("-h");
+  const hasShowConfig = runArgs.includes("--show-config");
+  const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
+  const planFlag = runArgs.find((a) => a.startsWith("--plan="));
+  const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
+
+  if (hasHelp || hasShowConfig || isDryRun) {
+    try {
+      await runRalphaiRunner(options, cwd);
+    } catch {
+      // runRalphaiRunner may call process.exit() on fatal errors
+    }
+    return;
+  }
+
+  validateRunArgs(runArgs);
+
+  if (isGitWorktree(cwd)) {
+    console.error(`'ralphai run' must be run from the main repository.`);
+    console.error(
+      "You are inside a worktree. Run this command from the main repo.",
+    );
+    process.exit(1);
+  }
+
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
       `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
@@ -2780,13 +2578,104 @@ async function runRalphaiRunner(
     process.exit(1);
   }
 
-  // Check receipt files for cross-source conflicts before running.
-  const worktreeInfo = resolveWorktreeInfo(cwd);
-  const { wipDir } = getRepoPipelineDirs(cwd);
-  if (!checkReceiptSource(wipDir, worktreeInfo.isWorktree)) {
+  try {
+    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
+  } catch {
+    console.error(
+      `This repository has no commits yet. Git worktrees require at least one commit.`,
+    );
+    console.error(
+      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
+    );
+    console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
     process.exit(1);
   }
 
+  const activeWorktrees = listRalphaiWorktrees(cwd);
+  const plan = selectPlanForWorktree(cwd, targetPlan, activeWorktrees);
+  if (!plan) process.exit(1);
+
+  const baseBranch = detectBaseBranch(cwd);
+  const branch = `ralphai/${plan.slug}`;
+  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+  const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
+  const desiredWorktreeDir = join(worktreeBase, plan.slug);
+  mkdirSync(worktreeBase, { recursive: true });
+
+  let resolvedWorktreeDir = desiredWorktreeDir;
+  if (activeWorktree) {
+    resolvedWorktreeDir = activeWorktree.path;
+    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
+    console.log(`Branch: ${branch}`);
+  } else {
+    if (existsSync(resolvedWorktreeDir)) {
+      console.log(
+        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
+      );
+      execSync("git worktree prune", { cwd, stdio: "ignore" });
+      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+    }
+
+    let branchExists = false;
+    try {
+      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
+        cwd,
+        stdio: "ignore",
+      });
+      branchExists = true;
+    } catch {
+      branchExists = false;
+    }
+
+    try {
+      if (branchExists) {
+        console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
+        console.log(`Branch: ${branch}`);
+        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
+          cwd,
+          stdio: ["inherit", "pipe", "pipe"],
+        });
+      } else {
+        console.log(`Creating worktree: ${resolvedWorktreeDir}`);
+        console.log(`Branch: ${branch} (from ${baseBranch})`);
+        execSync(
+          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
+          { cwd, stdio: ["inherit", "pipe", "pipe"] },
+        );
+      }
+    } catch (err: unknown) {
+      const stderr = extractExecStderr(err);
+      console.error(`${TEXT}Error:${RESET} Failed to prepare worktree.`);
+      if (stderr) console.error(`  git: ${stderr}`);
+      process.exit(1);
+    }
+  }
+
+  console.log("Running ralphai in worktree...");
+  const shouldResume =
+    plan.source === "in-progress" || activeWorktree !== undefined;
+  const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
+  const worktreeRunOptions: RalphaiOptions = {
+    ...options,
+    subcommand: "run",
+    runArgs: [
+      ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+      ...runArgs,
+    ],
+  };
+
+  try {
+    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
+  } catch {
+    // runRalphaiRunner may call process.exit() on fatal errors
+  }
+}
+
+async function runRalphaiRunner(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  const worktreeInfo = resolveWorktreeInfo(cwd);
   const runArgs = options.runArgs;
 
   // --- Handle --help ---
@@ -2796,13 +2685,7 @@ async function runRalphaiRunner(
   }
 
   // --- Reject unrecognized flags ---
-  for (const arg of runArgs) {
-    if (!isRecognizedRunFlag(arg)) {
-      console.error(`ERROR: Unrecognized argument: ${arg}`);
-      showRunHelp();
-      process.exit(1);
-    }
-  }
+  validateRunArgs(runArgs);
 
   // --- Parse flags ---
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
@@ -2852,6 +2735,22 @@ async function runRalphaiRunner(
     });
     console.log(text);
     return;
+  }
+
+  // Check that ralphai has been initialized (global config exists).
+  if (!existsSync(configFilePath) && !isDryRun) {
+    console.error(
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  // Check receipt files for cross-source conflicts before running.
+  if (!isDryRun) {
+    const { wipDir } = getRepoPipelineDirs(cwd);
+    if (!checkReceiptSource(wipDir, worktreeInfo.isWorktree)) {
+      process.exit(1);
+    }
   }
 
   // --- Pre-flight: interactive dirty-state check ---

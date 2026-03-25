@@ -39,8 +39,8 @@ function showHelp(): void {
 
 ${BOLD}Commands:${RESET}
   init         Set up Ralphai in your project (interactive wizard)
-  run          Start the Ralphai runner
-  worktree     Run in an isolated git worktree
+  run          Create or reuse a worktree and run a plan
+  worktree     Manage ralphai git worktrees
   status       Show pipeline and worktree status
   reset        Move in-progress plans back to backlog and clean up
   purge        Delete archived artifacts from pipeline/out/
@@ -61,7 +61,8 @@ Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
   ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan${RESET}
-  ${DIM}$${RESET} ralphai run --pr      ${DIM}# run and open a PR${RESET}`);
+  ${DIM}$${RESET} ralphai worktree list ${DIM}# show active worktrees${RESET}
+  ${DIM}$${RESET} ralphai worktree clean ${DIM}# remove completed worktrees${RESET}`);
 }
 
 async function main(): Promise<void> {

@@ -40,9 +40,8 @@ describe("buildMenuItems — plan context", () => {
 
     const actions = items.map((i) => i.action);
     expect(actions).toContain("run");
-    expect(actions).toContain("run-worktree");
     expect(actions).toContain("view-plan");
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(2);
   });
 
   it("returns monitoring actions for in-progress plans", () => {

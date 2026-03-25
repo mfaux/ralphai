@@ -60,26 +60,24 @@ Create a Ralphai plan for adding dark mode support.
 
 ### 2. Run
 
-Ralphai creates a **`ralphai/<plan-slug>`** branch from your base branch by default, so there is no need to create a feature branch yourself.
+Ralphai always creates or reuses a managed worktree on **`ralphai/<plan-slug>`**, so there is no need to create a feature branch yourself.
 
 ```bash
 ralphai run
 ```
 
-Each iteration gets a fresh agent session: read the plan, implement the next task, run build/test/lint, fix errors, and commit.
+Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>` branch, runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
 
 ```bash
-ralphai run --pr         # create a ralphai/* branch and open a PR
-ralphai run --patch      # leave changes uncommitted (requires feature branch)
+ralphai run              # create or reuse a worktree and open a draft PR
 ralphai run --continuous # keep processing backlog plans after the first
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
 
-For parallel work, run in a [git worktree](docs/worktrees.md):
+Ralphai already uses [git worktrees](docs/worktrees.md) for every run. These commands help you inspect and clean them up:
 
 ```bash
-ralphai worktree                    # auto-pick next backlog plan
 ralphai worktree list               # show active worktrees
 ralphai worktree clean              # remove completed worktrees
 ```
@@ -142,9 +140,9 @@ Running bare `ralphai` in a terminal launches an interactive two-pane dashboard.
 ralphai                  # launches the dashboard (TTY only)
 ```
 
-Press **Tab** to toggle focus between panes, **s/p/g/o** to switch detail tabs, and **r/w/x** to run, worktree, or reset plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
+Press **Tab** to toggle focus between panes, **s/p/g/o** to switch detail tabs, and **r/R/P** to run, reset, or purge plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
 
-This is a convenience layer. The headless `ralphai run` and `ralphai worktree` commands remain the primary workflow.
+This is a convenience layer. The headless `ralphai run`, `ralphai worktree list`, and `ralphai worktree clean` commands remain the primary workflow.
 
 ## Manage Your Installation
 

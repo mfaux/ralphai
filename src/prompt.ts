@@ -24,8 +24,6 @@ export interface AssemblePromptOptions {
   feedbackCommands: string;
   /** Monorepo scope hint (may be empty). */
   scopeHint: string;
-  /** Runner mode: "branch", "pr", or "patch". */
-  mode: "branch" | "pr" | "patch";
   /** Path to LEARNINGS.md (in global state; checked for existence). */
   learningsFile: string;
   /** Path to LEARNING_CANDIDATES.md (in global state). */
@@ -63,7 +61,7 @@ export function formatFileRef(filepath: string, label?: string): string {
 /**
  * Build the full agent prompt for a single iteration.
  *
- * Mode-aware conditionals handle patch vs. branch/PR mode differences.
+ * Always assumes Ralphai runs in an isolated worktree branch and commits.
  */
 export function assemblePrompt(options: AssemblePromptOptions): string {
   const {
@@ -71,7 +69,6 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     progressFile,
     feedbackCommands,
     scopeHint,
-    mode,
     learningsFile,
     learningCandidatesFile,
   } = options;
@@ -117,14 +114,10 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : `Run your project's build, test, and lint commands. Fix any failures before continuing.`;
 
   const commitInstruction =
-    mode === "patch"
-      ? "Leave all changes uncommitted in the working tree. Do NOT run git add or git commit."
-      : "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.";
+    "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.";
 
   const completeInstruction =
-    mode === "patch"
-      ? "no commit is needed in patch mode."
-      : "but ONLY after committing. Never output COMPLETE with uncommitted changes.";
+    "but ONLY after committing. Never output COMPLETE with uncommitted changes.";
 
   // --- Assemble the prompt ---
   return `${fileRefs}${scopeHint}

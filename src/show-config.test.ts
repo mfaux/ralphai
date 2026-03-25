@@ -107,7 +107,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  agentCommand       = <none>  (default (none))");
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
-    expect(output).toContain("  mode               = branch  (default)");
     expect(output).toContain("  continuous         = false  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
@@ -179,28 +178,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain(
       "  baseBranch         = develop  (config (/home/user/.ralphai/repos/test-repo/config.json))",
     );
-  });
-
-  it("shows env source with var name and value", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      mode: { value: "patch", source: "env" },
-    });
-    input.envVars = { RALPHAI_MODE: "patch" };
-    const output = formatShowConfig(input);
-    expect(output).toContain(
-      "  mode               = patch  (env (RALPHAI_MODE=patch))",
-    );
-  });
-
-  it("shows cli source for mode with raw flag (--branch)", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      mode: { value: "branch", source: "cli" },
-    });
-    input.rawFlags = { mode: "--branch" };
-    const output = formatShowConfig(input);
-    expect(output).toContain("  mode               = branch  (cli (--branch))");
   });
 
   it("shows cli source for autoCommit --no-auto-commit", () => {

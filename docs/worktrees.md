@@ -15,24 +15,19 @@ Back to the [README](../README.md) for setup and quickstart.
 ## Commands
 
 ```bash
-ralphai worktree                          # auto-pick next backlog plan
-ralphai worktree --plan=dark-mode.md      # target a specific plan
 ralphai worktree list                     # show active worktrees
 ralphai worktree clean                    # remove completed worktrees
 ```
 
-The lifecycle: create worktree → run plan → create PR → clean up. If the
-agent gets stuck, the worktree is preserved — re-run `ralphai worktree`
-to reuse it, or resume inside with `ralphai run --resume`.
+The lifecycle: `ralphai run` creates or reuses a worktree → runs the plan there → pushes a branch → opens or updates a draft PR → `ralphai worktree clean` removes finished worktrees.
 
-`ralphai worktree` must be run from the **main repository**, not from inside
-a worktree. All runner options are forwarded automatically.
+Run `ralphai run` from the **main repository**, not from inside a worktree.
 
 ## How it works
 
-1. Creates a git worktree with a `ralphai/<plan-slug>` branch.
-   Reuses existing worktrees for in-progress plans.
-2. Spawns the runner in the worktree directory.
+1. `ralphai run` creates a git worktree with a `ralphai/<plan-slug>` branch.
+   It reuses existing worktrees for in-progress plans.
+2. Ralphai runs the agent inside that worktree and keeps the main checkout clean.
 
 Configuration and pipeline data live in global state (`~/.ralphai/repos/<id>/`),
 so they are automatically available in every worktree without symlinks.

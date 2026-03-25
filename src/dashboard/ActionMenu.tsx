@@ -98,7 +98,6 @@ export function buildMenuItems(
       case "backlog":
         items.push(
           { label: "Run plan", action: "run", shortcut: "r" },
-          { label: "Run in worktree", action: "run-worktree", shortcut: "w" },
           { label: "View plan file", action: "view-plan" },
         );
         break;

@@ -9,15 +9,15 @@ ralphai <command> [options]
 | Command        | Description                                                            |
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
-| `run`          | Start the Ralphai runner                                          |
-| `worktree`     | Run in an isolated git worktree                                        |
+| `run`          | Create or reuse a worktree and run the next plan                       |
+| `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
-| `update [tag]` | Update ralphai to the latest (or specified) version                    |
+| `update [tag]` | Update Ralphai to the latest (or specified) version                    |
 | `teardown`     | Remove Ralphai from your project                                       |
 | `uninstall`    | Remove all global state and uninstall the CLI                          |
 
@@ -30,65 +30,73 @@ ralphai <command> [options]
 --repo=<name-or-path>   Target a different repo by name or path (see below)
 ```
 
-### `--repo` Flag
+## `--repo` Flag
 
-The `--repo` flag lets you run read-only commands against a different repo without changing directories. Pass a repo name (as shown by `ralphai repos`) or an absolute/relative path.
+The `--repo` flag lets you run read-only commands against a different repo without changing directories. Pass a repo name, as shown by `ralphai repos`, or an absolute or relative path.
 
 ```bash
-ralphai status --repo=my-app            # by name
-ralphai doctor --repo=~/work/api        # by path
-ralphai backlog-dir --repo=my-app       # print another repo's backlog path
+ralphai status --repo=my-app
+ralphai doctor --repo=~/work/api
+ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`. Blocked for `run`, `worktree`, and `init`, which must run inside the target repo.
+Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`.
 
-### Interactive Dashboard
+Blocked for: `run`, `worktree`, `init`.
 
-Running `ralphai` with no subcommand in a TTY launches an interactive dashboard with a two-pane layout. The left pane lists plans grouped by state (active, queued, done); the right pane shows detail for the selected plan across four tabs.
+## Interactive Dashboard
 
-**Navigation:**
+Running `ralphai` with no subcommand in a TTY launches the interactive dashboard.
 
-- **Tab** toggles focus between the plan list and detail pane
-- **Up/Down** navigates the focused pane (list selection or scroll)
-- **Enter** selects a repo from the repo list
-- **Esc** goes back to the repo list, **q** quits
+Navigation:
 
-**Detail tabs** (when detail pane is focused):
+- `1`, `2`, `3` focus the repo bar, pipeline, or detail pane
+- `Tab` and `Shift+Tab` cycle between panes
+- `Up` and `Down` move within the focused pane
+- `Enter` opens detail or selects the current dropdown item
+- `Esc` closes overlays or returns to the previous view
+- `q` quits the dashboard from repo or pipeline focus
 
-- **s** Summary: plan description, branch, start time, progress bar, and receipt fields for completed plans
-- **p** Plan: the raw plan markdown
-- **g** Progress: contents of `progress.md`
-- **o** Output: tail of `agent-output.log` with a live indicator while the agent is running
+Detail tabs:
 
-**Actions:**
+- `s` summary
+- `p` plan
+- `g` progress
+- `o` output
+- `l` toggles live-scroll in the output tab
 
-- **r** run a backlog plan, **w** run in a worktree, **x** reset an in-progress plan
-- **f** toggle follow-tail in the output tab
-- **PgUp/PgDn** scroll content, **G** jump to bottom
+Actions:
 
-The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. In non-TTY environments (e.g., piped output), `ralphai` shows help text instead.
+- `a` opens the action menu for the selected plan
+- `r` runs the selected backlog plan
+- `R` resets an in-progress plan to backlog
+- `P` purges a completed plan archive
+- `/` opens the filter bar
+- `?` opens keyboard help
+
+The dashboard auto-refreshes every 3 seconds. In non-TTY environments, `ralphai` shows help text instead.
 
 ## Init
 
 ```
---yes, -y              Skip prompts; auto-detect agent (Claude Code → OpenCode → others)
+--yes, -y              Skip prompts; auto-detect agent (Claude Code -> OpenCode -> others)
 --force                Re-scaffold from scratch
 --agent-command=CMD    Set the agent command
 ```
 
-In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (for .NET projects). In mixed repos, workspaces from all ecosystems are merged. Both modes display workspace info without adding config; feedback commands are auto-filtered by scope at runtime.
+In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files for .NET projects. In mixed repos, workspaces from all ecosystems are merged. Both modes display workspace info without adding config, and feedback commands are auto-filtered by scope at runtime.
 
 ## Run
 
-### Mode Selection
+`ralphai run` is the only execution entrypoint. It always works through a managed git worktree.
 
-```
---branch                          Branch mode (default): create isolated branch, commit, no PR
---pr                              PR mode: create branch, push, and open PR
---patch                           Patch mode: leave changes uncommitted in working tree
-```
+What it does:
 
-### General Options
+1. Picks a plan from `backlog/` or resumes one from `in-progress/`
+2. Creates or reuses a worktree on `ralphai/<slug>`
+3. Runs the agent inside that worktree
+4. Commits and pushes the branch
+5. Opens or updates a draft PR when `gh` is available
 
 ```
 --dry-run, -n                     Preview what would happen without changing anything
@@ -100,17 +108,20 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 --base-branch=<branch>            Override base branch (default: main)
 --continuous                      Keep processing backlog plans after the first completes
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
---iteration-timeout=<seconds>          Timeout per agent invocation (default: 0 = no timeout)
---prompt-mode=<mode>              Prompt format: 'auto', 'at-path', or 'inline' (default: auto)
+--iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
+--auto-commit                     Enable auto-commit recovery snapshots
+--no-auto-commit                  Disable auto-commit recovery snapshots (default)
 --show-config                     Print resolved settings and exit
 ```
 
-### Patch Mode Options
+### Continuous Mode
 
-```
---auto-commit                     Enable auto-commit of agent changes (per-iteration and resume recovery)
---no-auto-commit                  Disable auto-commit (default)
-```
+`--continuous` keeps draining the backlog on one long-lived worktree branch.
+
+- The first completed plan creates a draft PR
+- Later plans update that same draft PR
+- If the run is interrupted or gets stuck, Ralphai still pushes partial work
+- The PR stays draft until a human marks it ready
 
 ### Issue Tracking
 
@@ -124,12 +135,17 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 
 ## Worktree
 
+`ralphai worktree` is now a maintenance command. It does not start runs.
+
+```bash
+ralphai worktree list
+ralphai worktree clean
 ```
---plan=<file>     Target a specific backlog plan (default: auto-detect)
---dir=<path>      Worktree directory (default: ../.ralphai-worktrees/<slug>)
-worktree list     Show active ralphai-managed worktrees
-worktree clean    Remove completed/orphaned worktrees
-```
+
+- `list` shows active Ralphai-managed worktrees
+- `clean` removes completed or orphaned worktrees and archives any leftover receipt
+
+Use `ralphai run` to start or resume work.
 
 ## Reset
 
@@ -139,9 +155,9 @@ worktree clean    Remove completed/orphaned worktrees
 
 Resets pipeline state so you can start fresh:
 
-- **Plans** — moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
-- **Artifacts** — deletes `progress.md` and `receipt.txt` for each in-progress plan
-- **Worktrees** — removes ralphai-managed worktrees and force-deletes their branches
+- **Plans** -> moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
+- **Artifacts** -> deletes `progress.md` and `receipt.txt` for each in-progress plan
+- **Worktrees** -> removes Ralphai-managed worktrees and force-deletes their branches
 
 Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
 
@@ -151,13 +167,13 @@ Use `reset` when a run is stuck and you want to re-queue the plan, or when you w
 --yes, -y         Skip confirmation prompt
 ```
 
-Deletes all archived plan artifacts from `pipeline/out/`. Use this to clean up after completed runs.
+Deletes all archived plan artifacts from `pipeline/out/`.
 
 ## Doctor
 
-Validates your Ralphai setup with diagnostic checks:
+`ralphai doctor` validates your setup with these checks:
 
-1. Config exists (global state)
+1. Config exists in global state
 2. `config.json` is valid JSON with recognized keys
 3. Git repository detected
 4. Working tree is clean
@@ -175,15 +191,15 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project: deletes global state for this repo (`~/.ralphai/repos/<id>/`).
+Removes Ralphai from your project by deleting global state for this repo at `~/.ralphai/repos/<id>/`.
 
 ## Uninstall
 
-Removes **all** global state (`~/.ralphai/`) and uninstalls the CLI. Unlike `teardown`, which only removes state for the current repo, `uninstall` is a full removal.
+Removes all global state in `~/.ralphai/` and uninstalls the CLI.
 
 ## Backlog Dir
 
-Prints the absolute path to the plan backlog directory for the current repository. Useful for scripting or finding where to place plan files.
+Prints the absolute path to the plan backlog directory for the current repository.
 
 ```bash
 ralphai backlog-dir
@@ -199,20 +215,11 @@ ralphai backlog-dir
 Lists all known repos with pipeline summaries showing backlog, in-progress, and completed plan counts.
 
 ```bash
-ralphai repos              # list all repos
-ralphai repos --clean      # remove stale entries, then list
+ralphai repos
+ralphai repos --clean
 ```
 
-A repo entry is considered stale when its stored `repoPath` no longer exists on disk AND its pipeline is completely empty (no backlog, in-progress, or completed plans). Repos with plans are always preserved, even if the path is gone.
-
-## Backlog Dir
-
-Prints the absolute path to the plan backlog directory for the current repository. Useful for scripting or finding where to place plan files.
-
-```bash
-ralphai backlog-dir
-# ~/.ralphai/repos/<repo-id>/pipeline/backlog
-```
+A repo entry is stale when its stored `repoPath` no longer exists on disk and its pipeline is empty.
 
 ## Configuration
 
@@ -225,12 +232,10 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_AGENT_COMMAND`           | `agentCommand`         |
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
-| `RALPHAI_MODE`                    | `mode`                 |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
-| `RALPHAI_ITERATION_TIMEOUT`            | `iterationTimeout`          |
-| `RALPHAI_PROMPT_MODE`             | `promptMode`           |
+| `RALPHAI_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPHAI_MAX_LEARNINGS`           | `maxLearnings`         |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
@@ -239,26 +244,9 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 
-### Prompt Modes
+### Workspaces
 
-The `promptMode` setting controls how file references are formatted in the
-prompt sent to the agent. Set it via `--prompt-mode`, `RALPHAI_PROMPT_MODE`, or
-`promptMode` in `config.json`.
-
-| Value         | Behavior                                                                                                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`auto`**    | (Default) Resolves to a concrete mode based on the detected agent type. Currently all agents map to `at-path`.                                                              |
-| **`at-path`** | References files as `@filepath`. Lightweight and low-token — works when the agent can resolve file paths natively (e.g. Claude Code, OpenCode).                             |
-| **`inline`**  | Embeds file contents directly as `<file path="...">contents</file>` XML blocks. Uses more tokens but works with any agent. Falls back to `@path` if the file doesn't exist. |
-
-**When to change:** If your agent doesn't support `@path` file references, set
-`promptMode` to `"inline"`. Otherwise, leave it at `"auto"`.
-
-### Workspaces (Monorepo)
-
-The `workspaces` key in `config.json` provides per-package feedback command
-overrides for monorepo projects. Each key is a relative path matching a plan's
-`scope` frontmatter value.
+The `workspaces` key in `config.json` provides per-package feedback command overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value.
 
 ```json
 {
@@ -274,15 +262,8 @@ overrides for monorepo projects. Each key is a relative path matching a plan's
 }
 ```
 
-When a plan declares `scope: packages/web`, the runner checks for a matching
-`workspaces` entry. If found, those feedback commands replace the top-level
-ones. If no entry matches, the runner derives scoped commands automatically:
+When a plan declares `scope: packages/web`, Ralphai first checks for a matching `workspaces` entry. If none exists, it derives scoped commands automatically.
 
-- **Node.js** — uses the package manager's workspace filter (detected from lockfiles).
-- **C# / .NET** — appends the scope path to dotnet commands (e.g., `dotnet build src/Api`).
-- **Other ecosystems** — commands pass through unchanged.
-
-Workspaces are discovered from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files (which list `.csproj` projects). When multiple ecosystems coexist, Ralphai detects all of them and merges their feedback commands.
-
-The `workspaces` key is optional. Without it, scoped plans still get
-automatically derived feedback commands.
+- **Node.js** -> uses the package manager's workspace filter
+- **C# / .NET** -> appends the scope path to dotnet commands
+- **Other ecosystems** -> passes commands through unchanged

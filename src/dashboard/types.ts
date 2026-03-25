@@ -65,7 +65,7 @@ export interface PlanInfo {
   tasksCompleted?: number;
   totalTasks?: number;
   outcome?: string;
-  receiptSource?: "main" | "worktree";
+  receiptSource?: "worktree";
   /** Extra receipt fields for the summary tab. */
   startedAt?: string;
   branch?: string;

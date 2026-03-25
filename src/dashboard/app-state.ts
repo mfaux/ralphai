@@ -31,7 +31,6 @@ import { defaultTabForState } from "./DetailOverlay.tsx";
 import { buildMenuItems } from "./ActionMenu.tsx";
 import {
   spawnRunner,
-  spawnWorktreeRunner,
   resetPlan,
   purgePlan,
   removeWorktree,
@@ -289,30 +288,17 @@ export function useAppState(termRows: number, termCols: number) {
           }
           break;
         }
-        case "run":
-        case "run-worktree": {
+        case "run": {
           if (!selectedPlan || !selectedRepo?.repoPath) {
             showToast("No plan or repo selected");
             break;
           }
-          if (action === "run") {
-            const pid = spawnRunner(selectedRepo.repoPath, selectedPlan.slug);
-            showToast(
-              pid
-                ? `Started runner for ${selectedPlan.slug} (pid ${pid})`
-                : `Failed to start runner for ${selectedPlan.slug}`,
-            );
-          } else {
-            const pid = spawnWorktreeRunner(
-              selectedRepo.repoPath,
-              selectedPlan.slug,
-            );
-            showToast(
-              pid
-                ? `Started worktree runner for ${selectedPlan.slug} (pid ${pid})`
-                : `Failed to start worktree runner for ${selectedPlan.slug}`,
-            );
-          }
+          const pid = spawnRunner(selectedRepo.repoPath, selectedPlan.slug);
+          showToast(
+            pid
+              ? `Started Ralphai run for ${selectedPlan.slug} (pid ${pid})`
+              : `Failed to start Ralphai run for ${selectedPlan.slug}`,
+          );
           break;
         }
         case "reset":

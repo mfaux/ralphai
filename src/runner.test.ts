@@ -181,7 +181,7 @@ describe("spawnAgent", () => {
 
 function createTmpGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "runner-test-"));
-  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync("git init -b main", { cwd: dir, stdio: "pipe" });
   execSync('git config user.email "test@test.com"', {
     cwd: dir,
     stdio: "pipe",
@@ -190,6 +190,15 @@ function createTmpGitRepo(): string {
   writeFileSync(join(dir, "README.md"), "# test\n");
   execSync('git add -A && git commit -m "init"', { cwd: dir, stdio: "pipe" });
   return dir;
+}
+
+function createManagedWorktree(mainDir: string, slug: string): string {
+  const worktreeDir = join(tmpdir(), `runner-wt-${slug}-${Date.now()}`);
+  execSync(`git worktree add "${worktreeDir}" -b "ralphai/${slug}" HEAD`, {
+    cwd: mainDir,
+    stdio: "pipe",
+  });
+  return worktreeDir;
 }
 
 /**
@@ -217,7 +226,6 @@ function makeResolvedConfig(
     feedbackCommands: "",
     baseBranch: "main",
     maxStuck: 3,
-    mode: "branch",
     issueSource: "none",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
@@ -319,6 +327,7 @@ describe("runRunner — completion", () => {
 
   test("detects COMPLETE marker and archives plan", async () => {
     const { backlogDir, wipDir, archiveDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "simple");
 
     writeFileSync(
       join(backlogDir, "simple.md"),
@@ -333,9 +342,9 @@ describe("runRunner — completion", () => {
         agentCommand: agentScript,
         autoCommit: "true",
       }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
       dryRun: false,
       resume: false,
       allowDirty: false,
@@ -350,6 +359,7 @@ describe("runRunner — completion", () => {
 
   test("persists agent-output.log and archives it with the plan", async () => {
     const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "logtest");
 
     writeFileSync(
       join(backlogDir, "logtest.md"),
@@ -363,9 +373,9 @@ describe("runRunner — completion", () => {
         agentCommand: agentScript,
         autoCommit: "true",
       }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
       dryRun: false,
       resume: false,
       allowDirty: false,
@@ -383,6 +393,7 @@ describe("runRunner — completion", () => {
 
   test("stuck detection triggers after maxStuck tasks with no progress", async () => {
     const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "stuck");
 
     writeFileSync(
       join(backlogDir, "stuck.md"),
@@ -398,9 +409,9 @@ describe("runRunner — completion", () => {
         maxStuck: 2,
         autoCommit: "false",
       }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
       dryRun: false,
       resume: false,
       allowDirty: false,
@@ -428,102 +439,6 @@ describe("runRunner — completion", () => {
 });
 
 // ---------------------------------------------------------------------------
-// runRunner — patch mode guard
-// ---------------------------------------------------------------------------
-
-describe("runRunner — patch mode", () => {
-  let savedHome: string | undefined;
-
-  beforeEach(() => {
-    savedHome = process.env.RALPHAI_HOME;
-  });
-
-  afterEach(() => {
-    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
-    else process.env.RALPHAI_HOME = savedHome;
-  });
-
-  test("patch mode on main branch exits with error", async () => {
-    const dir = createTmpGitRepo();
-    setupGlobalPipeline(dir);
-
-    const opts: RunnerOptions = {
-      config: makeResolvedConfig({ mode: "patch" }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
-      dryRun: false,
-      resume: false,
-      allowDirty: false,
-    };
-
-    const originalExit = process.exit;
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-      throw new Error(`process.exit(${code})`);
-    }) as never;
-
-    try {
-      await runRunner(opts);
-    } catch {
-      // Expected
-    } finally {
-      process.exit = originalExit;
-    }
-
-    expect(exitCode).toBe(1);
-  });
-
-  test("patch mode stuck detection uses diff hash", async () => {
-    const dir = createTmpGitRepo();
-    const { backlogDir } = setupGlobalPipeline(dir);
-
-    // Create a feature branch (patch mode can't run on main)
-    execSync("git checkout -b feature/test", { cwd: dir, stdio: "pipe" });
-
-    writeFileSync(
-      join(backlogDir, "patch-test.md"),
-      "# Plan: Patch Test\n\n### Task 1: Test\n",
-    );
-
-    // Agent that does nothing
-    const agentScript = `bash -c 'echo "no changes"; echo "<learnings><entry>status: none</entry></learnings>"'`;
-
-    const opts: RunnerOptions = {
-      config: makeResolvedConfig({
-        agentCommand: agentScript,
-        mode: "patch",
-        maxStuck: 2,
-      }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
-      dryRun: false,
-      resume: false,
-      allowDirty: false,
-    };
-
-    const originalExit = process.exit;
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-      throw new Error(`process.exit(${code})`);
-    }) as never;
-
-    try {
-      await runRunner(opts);
-    } catch {
-      // Expected — stuck detection exits
-    } finally {
-      process.exit = originalExit;
-    }
-
-    expect(exitCode).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // runRunner — empty backlog
 // ---------------------------------------------------------------------------
 
@@ -542,12 +457,13 @@ describe("runRunner — no work", () => {
   test("exits cleanly when backlog is empty", async () => {
     const dir = createTmpGitRepo();
     setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "empty");
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig(),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
       dryRun: false,
       resume: false,
       allowDirty: false,
@@ -577,11 +493,12 @@ describe("runRunner — auto-commit", () => {
   test("auto-commits dirty state when autoCommit is true", async () => {
     const dir = createTmpGitRepo();
     const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "auto");
 
     // Create a tracked file for the agent to modify
-    writeFileSync(join(dir, "target.txt"), "original\n");
+    writeFileSync(join(worktreeDir, "target.txt"), "original\n");
     execSync('git add -A && git commit -m "add target"', {
-      cwd: dir,
+      cwd: worktreeDir,
       stdio: "pipe",
     });
 
@@ -598,9 +515,9 @@ describe("runRunner — auto-commit", () => {
         agentCommand: agentScript,
         autoCommit: "true",
       }),
-      cwd: dir,
-      isWorktree: false,
-      mainWorktree: "",
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
       dryRun: false,
       resume: false,
       allowDirty: false,
@@ -610,7 +527,7 @@ describe("runRunner — auto-commit", () => {
 
     // Check that an auto-commit was created
     const log = execSync("git log --oneline", {
-      cwd: dir,
+      cwd: worktreeDir,
       encoding: "utf-8",
     });
     expect(log).toContain("auto-commit");

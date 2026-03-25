@@ -20,7 +20,6 @@ export interface RalphaiConfig {
   feedbackCommands: string;
   baseBranch: string;
   maxStuck: number;
-  mode: "branch" | "pr" | "patch";
   issueSource: "none" | "github";
   issueLabel: string;
   issueInProgressLabel: string;
@@ -61,7 +60,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   feedbackCommands: "",
   baseBranch: "main",
   maxStuck: 3,
-  mode: "branch",
   issueSource: "none",
   issueLabel: "ralphai",
   issueInProgressLabel: "ralphai:in-progress",
@@ -169,7 +167,6 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "feedbackCommands",
   "baseBranch",
   "maxStuck",
-  "mode",
   "issueSource",
   "issueLabel",
   "issueInProgressLabel",
@@ -275,14 +272,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.maxStuck = v as number;
   }
 
-  // mode (enum)
-  if ("mode" in obj) {
-    const v = String(obj.mode || "");
-    if (!["branch", "pr", "patch"].includes(v))
-      err(`'mode' must be 'branch', 'pr', or 'patch', got '${v}'`);
-    values.mode = v as RalphaiConfig["mode"];
-  }
-
   // issueSource (enum)
   if ("issueSource" in obj) {
     const v = String(obj.issueSource || "");
@@ -322,7 +311,9 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
   if ("iterationTimeout" in obj) {
     const v = obj.iterationTimeout;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(`'iterationTimeout' must be a non-negative integer (seconds), got '${v}'`);
+      err(
+        `'iterationTimeout' must be a non-negative integer (seconds), got '${v}'`,
+      );
     values.iterationTimeout = v as number;
   }
 
@@ -430,7 +421,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_FEEDBACK_COMMANDS", "feedbackCommands"],
   ["RALPHAI_BASE_BRANCH", "baseBranch"],
   ["RALPHAI_MAX_STUCK", "maxStuck"],
-  ["RALPHAI_MODE", "mode"],
   ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
   ["RALPHAI_ISSUE_SOURCE", "issueSource"],
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
@@ -480,13 +470,6 @@ export function applyEnvOverrides(
   if (maxStuck !== undefined) {
     validatePositiveInt(maxStuck, "RALPHAI_MAX_STUCK");
     overrides.maxStuck = parseInt(maxStuck, 10);
-  }
-
-  // mode (enum)
-  const mode = get("RALPHAI_MODE");
-  if (mode !== undefined) {
-    validateEnum(mode, "RALPHAI_MODE", ["branch", "pr", "patch"]);
-    overrides.mode = mode as RalphaiConfig["mode"];
   }
 
   // iterationTimeout (non-negative integer)
@@ -605,15 +588,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validateNonNegInt(v, "--iteration-timeout", "seconds");
       overrides.iterationTimeout = parseInt(v, 10);
       rawFlags.iterationTimeout = arg;
-    } else if (arg === "--branch") {
-      overrides.mode = "branch";
-      rawFlags.mode = "--branch";
-    } else if (arg === "--pr") {
-      overrides.mode = "pr";
-      rawFlags.mode = "--pr";
-    } else if (arg === "--patch") {
-      overrides.mode = "patch";
-      rawFlags.mode = "--patch";
     } else if (arg === "--continuous") {
       overrides.continuous = "true";
       rawFlags.continuous = "--continuous";

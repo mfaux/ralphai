@@ -87,26 +87,6 @@ export function spawnRunner(cwd: string, slug: string): number | null {
 }
 
 /**
- * Spawn a ralphai worktree runner as a detached background process.
- *
- * @returns The spawned child's PID, or null on failure.
- */
-export function spawnWorktreeRunner(cwd: string, slug: string): number | null {
-  try {
-    const { command, args } = resolveCliBin();
-    const child = spawn(command, [...args, "worktree", `--plan=${slug}`], {
-      cwd,
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-    return child.pid ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Reset a single in-progress plan back to the backlog.
  * Moves the plan .md file back and deletes progress.md + receipt.txt.
  *

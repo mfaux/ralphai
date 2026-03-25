@@ -161,7 +161,7 @@ export function archiveRun(options: ArchiveRunOptions): {
 // Standard PR (single-plan mode)
 // ---------------------------------------------------------------------------
 
-/** Push branch and create a PR. */
+/** Push branch and create a draft PR. */
 export function createPr(options: CreatePrOptions): CreatePrResult {
   const { branch, baseBranch, planDescription, cwd } = options;
   const push = pushBranch(branch, cwd, true);
@@ -172,14 +172,14 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
 
   const prUrl = execQuiet(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(planDescription)}" --body "${esc(prBody)}"`,
+      `--title "${esc(planDescription)}" --body "${esc(prBody)}" --draft`,
     cwd,
   );
   if (!prUrl) {
     return {
       ok: false,
       prUrl: "",
-      message: `Failed to create PR. Branch '${branch}' pushed. Create PR manually.`,
+      message: `Failed to create draft PR. Branch '${branch}' pushed. Create PR manually.`,
     };
   }
 
@@ -198,7 +198,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     }
   }
 
-  return { ok: true, prUrl, message: `PR created: ${prUrl}` };
+  return { ok: true, prUrl, message: `Draft PR created: ${prUrl}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +289,7 @@ export function updateContinuousPr(
   return { ok: true, message: `PR updated: ${prUrl}` };
 }
 
-/** Update body and mark PR ready for review. Matches `finalize_continuous_pr()`. */
+/** Refresh final draft PR body when continuous mode finishes. */
 export function finalizeContinuousPr(
   options: ContinuousPrOptions & { prUrl: string },
 ): PushResult {
@@ -307,9 +307,10 @@ export function finalizeContinuousPr(
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
-  execQuiet(`gh pr edit "${prUrl}" --body "${esc(prBody)}"`, cwd);
-  if (execQuiet(`gh pr ready "${prUrl}"`, cwd) === null) {
-    return { ok: false, message: "Failed to mark PR as ready" };
+  if (
+    execQuiet(`gh pr edit "${prUrl}" --body "${esc(prBody)}"`, cwd) === null
+  ) {
+    return { ok: false, message: "Failed to refresh final draft PR body" };
   }
-  return { ok: true, message: `PR ready for review: ${prUrl}` };
+  return { ok: true, message: `Draft PR updated: ${prUrl}` };
 }
