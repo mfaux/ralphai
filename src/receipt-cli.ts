@@ -2,7 +2,7 @@
  * Receipt CLI — thin wrapper around src/receipt.ts for shell callers.
  *
  * Usage:
- *   node receipt-cli.mjs init          <receipt-path> <source> <branch> <slug> <plan-file> [worktree-path]
+ *   node receipt-cli.mjs init          <receipt-path> <branch> <slug> <plan-file> [worktree-path]
  *   node receipt-cli.mjs update-tasks  <receipt-path> <progress-path>
  *   node receipt-cli.mjs check-source  <wip-dir> <is-worktree>
  *
@@ -30,15 +30,14 @@ if (!command) {
 
 switch (command) {
   case "init": {
-    const [, receiptPath, source, branch, slug, planFile, worktreePath] = args;
-    if (!receiptPath || !source || !branch || !slug || !planFile) {
+    const [, receiptPath, branch, slug, planFile, worktreePath] = args;
+    if (!receiptPath || !branch || !slug || !planFile) {
       process.stderr.write(
-        "Usage: receipt-cli init <receipt-path> <source> <branch> <slug> <plan-file> [worktree-path]\n",
+        "Usage: receipt-cli init <receipt-path> <branch> <slug> <plan-file> [worktree-path]\n",
       );
       process.exit(2);
     }
     initReceipt(receiptPath, {
-      source: source as "main" | "worktree",
       branch,
       slug,
       plan_file: planFile,

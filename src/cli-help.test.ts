@@ -99,7 +99,8 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("ralphai <command> --help");
     expect(result.stdout).toContain("ralphai init");
     expect(result.stdout).toContain("ralphai run");
-    expect(result.stdout).toContain("ralphai run --pr");
+    expect(result.stdout).toContain("ralphai worktree list");
+    expect(result.stdout).toContain("ralphai worktree clean");
   });
 
   it("--help does not show subcommand-specific flags", () => {

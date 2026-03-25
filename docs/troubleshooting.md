@@ -69,17 +69,16 @@ The agent CLI is configured via `agentCommand` with this precedence:
 3. Verify the agent CLI is installed and working: run your `agentCommand` manually (e.g., `claude --version` or `opencode --version`).
 4. Run `ralphai doctor` for a full health check of your setup.
 
-## "ralphai refuses to run on main"
+## "ralphai run says a plan is already running in a worktree"
 
-This is by design. Ralphai creates feature branches (`ralphai/<slug>`) to isolate changes from your main branch.
+This is expected. `ralphai run` starts from the main repo, then hands work off to a managed worktree. If a plan is already active, Ralphai blocks conflicting starts from the main checkout and tells you which worktree owns the run.
 
 **Options:**
 
-- Switch to a feature branch: `git checkout -b my-feature`
-- Let ralphai create one: `ralphai run` (in `branch` or `pr` mode, it auto-creates `ralphai/<slug>`)
-- Use a worktree for parallel runs: `ralphai worktree`
-
-The `--resume` flag also refuses to run on the base branch. Switch to the `ralphai/*` branch first.
+- Run `ralphai status` to see the active plan and worktree state
+- Resume from the main repo with `ralphai run` or `ralphai run --plan=<file>`
+- Clean up abandoned finished worktrees with `ralphai worktree clean`
+- Inspect `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt` for the exact worktree path and branch
 
 ## "Working tree is dirty" after init
 
@@ -93,7 +92,7 @@ Running `ralphai run` immediately after `ralphai init` may report a dirty workin
 
 ## "Not inside a git repository"
 
-Commands that modify the working tree (`run`, `worktree`, `init`) require a git repository. If you run them outside one, Ralphai exits with:
+Commands that operate on repo state, such as `run`, `worktree`, and `init`, require a git repository. If you run them outside one, Ralphai exits with:
 
 ```
 ERROR: <command> must be run inside a git repository.

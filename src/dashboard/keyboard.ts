@@ -332,10 +332,6 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       handleAction("run");
       return;
     }
-    if (input === "w" && selectedPlan?.state === "backlog") {
-      handleAction("run-worktree");
-      return;
-    }
     if (input === "R" && selectedPlan?.state === "in-progress") {
       handleAction("reset");
       return;

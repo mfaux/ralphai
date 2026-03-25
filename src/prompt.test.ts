@@ -33,7 +33,7 @@ describe("formatFileRef", () => {
 });
 
 // ---------------------------------------------------------------------------
-// assemblePrompt — branch mode
+// assemblePrompt
 // ---------------------------------------------------------------------------
 
 describe("assemblePrompt", () => {
@@ -47,7 +47,6 @@ describe("assemblePrompt", () => {
       progressFile: "progress.md",
       feedbackCommands: "",
       scopeHint: "",
-      mode: "branch",
       learningsFile: join(ctx.dir, "LEARNINGS.md"),
       learningCandidatesFile: join(ctx.dir, "LEARNING_CANDIDATES.md"),
       ...overrides,
@@ -81,30 +80,17 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Run all feedback loops: bun run build, bun test");
   });
 
-  it("includes commit instruction in branch mode", () => {
-    const prompt = assemblePrompt(baseOptions({ mode: "branch" }));
+  it("includes commit instruction", () => {
+    const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Stage and commit ALL changes");
     expect(prompt).toContain("conventional commit message");
   });
 
-  it("includes no-commit instruction in patch mode", () => {
-    const prompt = assemblePrompt(baseOptions({ mode: "patch" }));
-    expect(prompt).toContain(
-      "Leave all changes uncommitted in the working tree",
-    );
-    expect(prompt).toContain("Do NOT run git add or git commit");
-  });
-
-  it("includes commit-aware COMPLETE instruction in branch mode", () => {
-    const prompt = assemblePrompt(baseOptions({ mode: "branch" }));
+  it("includes commit-aware COMPLETE instruction", () => {
+    const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain(
       "but ONLY after committing. Never output COMPLETE with uncommitted changes",
     );
-  });
-
-  it("includes patch-mode COMPLETE instruction in patch mode", () => {
-    const prompt = assemblePrompt(baseOptions({ mode: "patch" }));
-    expect(prompt).toContain("no commit is needed in patch mode");
   });
 
   it("includes learnings block template", () => {
@@ -171,13 +157,6 @@ describe("assemblePrompt", () => {
     // Labels are used, not absolute paths
     expect(prompt).not.toContain(candidatesPath);
     expect(prompt).not.toContain(learningsPath);
-  });
-
-  // --- PR mode ---
-
-  it("uses commit instruction in PR mode (same as branch)", () => {
-    const prompt = assemblePrompt(baseOptions({ mode: "pr" }));
-    expect(prompt).toContain("Stage and commit ALL changes");
   });
 
   // --- Inline file references ---

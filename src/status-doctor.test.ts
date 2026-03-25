@@ -258,7 +258,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=worktree",
         "worktree_path=/tmp/wt-dark-mode",
         "branch=ralphai/dark-mode",
         "slug=dark-mode",
@@ -295,7 +294,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/legacy",
         "slug=legacy",
       ].join("\n"),
@@ -332,7 +330,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/feature",
         "slug=feature",
         "tasks_completed=3",
@@ -359,7 +356,6 @@ describe("status subcommand", () => {
       join(orphanDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/orphan",
         "slug=orphan",
       ].join("\n"),
@@ -415,7 +411,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/remove-fallback-agents",
         "slug=remove-fallback-agents",
         "plan_file=remove-fallback-agents.md",
@@ -453,7 +448,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=worktree",
         "worktree_path=/tmp/wt-gh-42-search",
         "branch=ralphai/gh-42-search",
         "slug=gh-42-search",
@@ -520,7 +514,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/stuck-plan",
         "slug=stuck-plan",
         "tasks_completed=1",
@@ -553,7 +546,6 @@ describe("status subcommand", () => {
       join(planDir, "receipt.txt"),
       [
         "started_at=2026-03-07T12:00:00Z",
-        "source=main",
         "branch=ralphai/active",
         "slug=active",
         "tasks_completed=0",

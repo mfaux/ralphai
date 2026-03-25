@@ -7,19 +7,18 @@ Back to the [README](../README.md) for setup and quickstart. See the [CLI Refere
 ## Drain the backlog onto one branch
 
 ```bash
-ralphai run --continuous --pr
+ralphai run --continuous
 ```
 
-Processes all dependency-ready plans sequentially on a single `ralphai/<first-plan-slug>` branch. A draft PR is created after the first plan completes and updated after each subsequent plan. When the backlog is empty, the PR is marked ready for review.
+Processes all dependency-ready plans sequentially on a single `ralphai/<first-plan-slug>` branch. A draft PR is created after the first plan completes and updated after each subsequent plan. When the backlog is empty, Ralphai refreshes the draft PR body and leaves it in draft.
 
-## One PR per plan (parallel)
+## Parallel runs
 
 ```bash
-ralphai worktree                    # run in separate terminals
-ralphai worktree --plan=auth.md     # or target specific plans
+ralphai run                         # run in separate terminals
 ```
 
-Each invocation creates an isolated [worktree](worktrees.md) with its own branch and PR. Run multiple instances in separate terminals to work on plans in parallel. Use `ralphai worktree list` to see active runs and `ralphai worktree clean` to remove completed ones.
+Each invocation creates an isolated [worktree](worktrees.md) with its own branch and draft PR. Run multiple instances in separate terminals to work on plans in parallel. Use `ralphai worktree list` to see active runs and `ralphai worktree clean` to remove completed ones.
 
 ## Test a plan without changing anything
 
@@ -27,7 +26,7 @@ Each invocation creates an isolated [worktree](worktrees.md) with its own branch
 ralphai run --dry-run
 ```
 
-Previews which plan would be selected, what branch would be created, and which mode would be used. No files are moved, no branches created, no agent invoked.
+Previews which plan would be selected, which worktree and branch Ralphai would use, and whether it would open a draft PR. No files are moved, no branches created, no agent invoked.
 
 ## Resume after editing a stuck plan
 
@@ -51,27 +50,18 @@ ralphai run --allow-dirty
 ## Run overnight unattended
 
 ```bash
-ralphai run --continuous --pr
+ralphai run --continuous
 ```
 
-Processes the entire backlog (`--continuous`), opens/updates a PR (`--pr`). Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) still stops runaway plans.
+Processes the entire backlog (`--continuous`) on one worktree branch and opens/updates a draft PR. Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) still stops runaway plans.
 
 ## Work on a specific plan
 
 ```bash
-ralphai worktree --plan=dark-mode.md
+ralphai run --plan=dark-mode.md
 ```
 
 Targets a specific backlog plan instead of letting Ralphai pick. Creates an isolated worktree with a `ralphai/dark-mode` branch.
-
-## Leave changes uncommitted (patch mode)
-
-```bash
-git checkout -b my-feature
-ralphai run --patch
-```
-
-The agent makes changes but doesn't commit. Useful for reviewing diffs before committing manually. Patch mode requires a feature branch — it refuses to run on `main`/`master`.
 
 ## Manage multiple repos
 

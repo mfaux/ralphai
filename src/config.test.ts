@@ -260,21 +260,6 @@ describe("parseConfigFile", () => {
     );
   });
 
-  it("parses mode enum", () => {
-    const file = join(ctx.dir, "mode.json");
-    writeFileSync(file, JSON.stringify({ mode: "pr" }));
-    const result = parseConfigFile(file)!;
-    expect(result.values.mode).toBe("pr");
-  });
-
-  it("rejects invalid mode", () => {
-    const file = join(ctx.dir, "bad-mode.json");
-    writeFileSync(file, JSON.stringify({ mode: "invalid" }));
-    expect(() => parseConfigFile(file)).toThrow(
-      "'mode' must be 'branch', 'pr', or 'patch'",
-    );
-  });
-
   it("parses boolean fields as booleans in JSON, stored as strings", () => {
     const file = join(ctx.dir, "bools.json");
     writeFileSync(
@@ -364,12 +349,6 @@ describe("applyEnvOverrides", () => {
     expect(result.maxStuck).toBe(5);
   });
 
-  it("validates mode enum", () => {
-    expect(() => applyEnvOverrides({ RALPHAI_MODE: "invalid" })).toThrow(
-      "must be 'branch', 'pr', or 'patch'",
-    );
-  });
-
   it("validates boolean fields", () => {
     expect(() => applyEnvOverrides({ RALPHAI_CONTINUOUS: "yes" })).toThrow(
       "must be 'true' or 'false'",
@@ -412,24 +391,6 @@ describe("parseCLIArgs", () => {
     expect(result.overrides.baseBranch).toBe("develop");
   });
 
-  it("parses --branch", () => {
-    const result = parseCLIArgs(["--branch"]);
-    expect(result.overrides.mode).toBe("branch");
-    expect(result.rawFlags.mode).toBe("--branch");
-  });
-
-  it("parses --pr", () => {
-    const result = parseCLIArgs(["--pr"]);
-    expect(result.overrides.mode).toBe("pr");
-    expect(result.rawFlags.mode).toBe("--pr");
-  });
-
-  it("parses --patch", () => {
-    const result = parseCLIArgs(["--patch"]);
-    expect(result.overrides.mode).toBe("patch");
-    expect(result.rawFlags.mode).toBe("--patch");
-  });
-
   it("parses --continuous", () => {
     const result = parseCLIArgs(["--continuous"]);
     expect(result.overrides.continuous).toBe("true");
@@ -464,13 +425,8 @@ describe("parseCLIArgs", () => {
   });
 
   it("parses multiple flags together", () => {
-    const result = parseCLIArgs([
-      "--agent-command=claude -p",
-      "--pr",
-      "--continuous",
-    ]);
+    const result = parseCLIArgs(["--agent-command=claude -p", "--continuous"]);
     expect(result.overrides.agentCommand).toBe("claude -p");
-    expect(result.overrides.mode).toBe("pr");
     expect(result.overrides.continuous).toBe("true");
   });
 });
@@ -503,8 +459,6 @@ describe("resolveConfig", () => {
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
     expect(config.baseBranch.value).toBe("main");
     expect(config.baseBranch.source).toBe("default");
-    expect(config.mode.value).toBe("branch");
-    expect(config.mode.source).toBe("default");
     expect(config.maxStuck.value).toBe(3);
     expect(config.maxStuck.source).toBe("default");
   });
@@ -518,9 +472,6 @@ describe("resolveConfig", () => {
     expect(config.baseBranch.source).toBe("config");
     expect(config.maxStuck.value).toBe(5);
     expect(config.maxStuck.source).toBe("config");
-    // Unset fields remain default
-    expect(config.mode.value).toBe("branch");
-    expect(config.mode.source).toBe("default");
   });
 
   it("env vars override config file", () => {
@@ -553,23 +504,18 @@ describe("resolveConfig", () => {
     mkdirSync(cwd, { recursive: true });
     writeGlobalConfig(cwd, {
       baseBranch: "from-config",
-      mode: "pr",
       maxStuck: 7,
     });
     const { config } = resolveConfig({
       cwd,
       envVars: env({
         RALPHAI_BASE_BRANCH: "from-env",
-        RALPHAI_MODE: "patch",
       }),
       cliArgs: ["--base-branch=from-cli"],
     });
     // baseBranch: CLI wins
     expect(config.baseBranch.value).toBe("from-cli");
     expect(config.baseBranch.source).toBe("cli");
-    // mode: env wins (no CLI override)
-    expect(config.mode.value).toBe("patch");
-    expect(config.mode.source).toBe("env");
     // maxStuck: config wins (no env or CLI override)
     expect(config.maxStuck.value).toBe(7);
     expect(config.maxStuck.source).toBe("config");
@@ -594,9 +540,9 @@ describe("resolveConfig", () => {
   it("throws on config file validation error", () => {
     const cwd = join(ctx.dir, "repo-bad");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { mode: "invalid" });
+    writeGlobalConfig(cwd, { maxStuck: 0 });
     expect(() => resolveConfig({ cwd, envVars: env(), cliArgs: [] })).toThrow(
-      "'mode' must be 'branch', 'pr', or 'patch'",
+      "'maxStuck' must be a positive integer",
     );
   });
 
@@ -606,10 +552,10 @@ describe("resolveConfig", () => {
     expect(() =>
       resolveConfig({
         cwd,
-        envVars: env({ RALPHAI_MODE: "invalid" }),
+        envVars: env({ RALPHAI_MAX_STUCK: "0" }),
         cliArgs: [],
       }),
-    ).toThrow("must be 'branch', 'pr', or 'patch'");
+    ).toThrow("must be a positive integer");
   });
 
   it("throws on CLI arg validation error", () => {

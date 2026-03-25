@@ -47,7 +47,6 @@ const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
   ["feedbackCommands", "FEEDBACK_COMMANDS"],
   ["baseBranch", "BASE_BRANCH"],
   ["maxStuck", "MAX_STUCK"],
-  ["mode", "MODE"],
   ["issueSource", "ISSUE_SOURCE"],
   ["issueLabel", "ISSUE_LABEL"],
   ["issueInProgressLabel", "ISSUE_IN_PROGRESS_LABEL"],

@@ -110,12 +110,10 @@ describe("worktree", () => {
       expect(result.stdout).toContain("worktree");
     });
 
-    it("run shows 'not set up' when .ralphai/ is missing from both worktree and main repo", () => {
-      // Do NOT init — .ralphai/ doesn't exist anywhere
+    it("run rejects execution from inside a worktree when not initialized", () => {
       const result = runCli(["run"], worktreeDir, env());
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("not set up");
-      expect(result.stderr).toContain("ralphai init");
+      expect(result.stderr).toContain("must be run from the main repository");
     });
   });
 
@@ -154,9 +152,7 @@ describe("worktree", () => {
       expect(output).toContain("ralphai worktree");
       expect(output).toContain("list");
       expect(output).toContain("clean");
-      expect(output).toContain("--plan=");
-      expect(output).toContain("--dir=");
-      expect(output).not.toContain("--turns=<n>");
+      expect(output).toContain("Use ralphai run");
     });
 
     it("worktree refuses inside a worktree", () => {
@@ -175,7 +171,7 @@ describe("worktree", () => {
 
       const result = runCli(["worktree"], worktreeDir, testEnv());
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("must be run from the main repository");
+      expect(result.stderr).toContain("no longer starts runs");
 
       // Clean up worktree
       execSync(`git worktree remove "${worktreeDir}"`, {
@@ -184,39 +180,11 @@ describe("worktree", () => {
       });
     });
 
-    it("worktree errors when .ralphai is not set up", () => {
+    it("worktree without subcommand is rejected", () => {
       gitInitialCommit(ctx.dir);
       const result = runCli(["worktree"], ctx.dir, testEnv());
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("not set up");
-    });
-
-    it("worktree errors with no backlog plans", () => {
-      gitInitialCommit(ctx.dir);
-      // Initialize config in global state with empty backlog
-      runCli(["init", "--yes"], ctx.dir, testEnv());
-
-      // Remove sample plan so the backlog is empty for this test
-      const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-      const samplePlan = join(backlogDir, "hello-ralphai.md");
-      if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
-
-      const result = runCli(["worktree"], ctx.dir, testEnv());
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("No plans in backlog");
-    });
-
-    it("worktree --plan=nonexistent.md errors", () => {
-      gitInitialCommit(ctx.dir);
-      runCli(["init", "--yes"], ctx.dir, testEnv());
-
-      const result = runCli(
-        ["worktree", "--plan=nonexistent.md"],
-        ctx.dir,
-        testEnv(),
-      );
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("not found in backlog");
+      expect(result.stderr).toContain("no longer starts runs");
     });
 
     it("worktree list shows no worktrees initially", () => {
@@ -295,7 +263,7 @@ describe("worktree", () => {
       });
     });
 
-    it("worktree --plan selects a specific plan", () => {
+    it("run --plan selects a specific plan", () => {
       gitInitialCommit(ctx.dir);
 
       // Initialize config and create two plans in global backlog
@@ -306,7 +274,7 @@ describe("worktree", () => {
 
       // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly (1 task)
       const result = runCli(
-        ["worktree", "--plan=prd-second.md"],
+        ["run", "--plan=prd-second.md"],
         ctx.dir,
         { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
@@ -317,7 +285,7 @@ describe("worktree", () => {
       expect(combined).toContain("ralphai/prd-second");
     });
 
-    it("worktree reuses an existing in-progress worktree and auto-resumes", () => {
+    it("run reuses an existing in-progress worktree and auto-resumes", () => {
       gitInitialCommit(ctx.dir);
 
       // Initialize config in global state
@@ -342,7 +310,7 @@ describe("worktree", () => {
 
       // Use RALPHAI_AGENT_COMMAND=true so the runner exits quickly
       const result = runCli(
-        ["worktree"],
+        ["run"],
         ctx.dir,
         { ...testEnv(), RALPHAI_AGENT_COMMAND: "true" },
         30000,
@@ -358,12 +326,12 @@ describe("worktree", () => {
       expect(output).toContain("No ralphai worktrees to clean");
     });
 
-    it("run is blocked when receipt says source=worktree", () => {
+    it("run reuses the worktree referenced by receipt state", () => {
       gitInitialCommit(ctx.dir);
 
       // Set up initialized ralphai config in global state
       const env = testEnv();
-      writeConfigFile(ctx.dir, { agentCommand: "claude -p" }, env);
+      writeConfigFile(ctx.dir, { agentCommand: "true" }, env);
 
       // Write receipt to global state wip directory
       const { wipDir } = getRepoPipelineDirs(ctx.dir, env);
@@ -374,48 +342,36 @@ describe("worktree", () => {
         join(planDir, "receipt.txt"),
         [
           "started_at=2026-03-07T12:00:00Z",
-          "source=worktree",
-          "worktree_path=/tmp/wt-dark-mode",
+          `worktree_path=${join(ctx.dir, "wt-dark-mode")}`,
           "branch=ralphai/dark-mode",
           "slug=dark-mode",
         ].join("\n"),
       );
 
+      execSync(
+        `git worktree add "${join(ctx.dir, "wt-dark-mode")}" -b ralphai/dark-mode HEAD`,
+        { cwd: ctx.dir, stdio: "ignore" },
+      );
+
       const result = runCli(["run"], ctx.dir, env);
       const combined = result.stdout + result.stderr;
 
-      expect(result.exitCode).toBe(1);
-      expect(combined).toContain('Plan "dark-mode" is running in a worktree');
-      expect(combined).toContain("To resume:  ralphai worktree");
+      expect(combined).toContain(
+        `Reusing existing worktree: ${join(ctx.dir, "wt-dark-mode")}`,
+      );
     });
 
-    it("worktree is blocked when receipt says source=main", () => {
+    it("worktree run entrypoint is rejected", () => {
       gitInitialCommit(ctx.dir);
 
       const env = testEnv();
       writeConfigFile(ctx.dir, { agentCommand: "claude -p" }, env);
-      const { wipDir } = getRepoPipelineDirs(ctx.dir, env);
-      const planDir = join(wipDir, "prd-search");
-      mkdirSync(planDir, { recursive: true });
-      writeFileSync(join(planDir, "prd-search.md"), "# Search\n");
-      writeFileSync(
-        join(planDir, "receipt.txt"),
-        [
-          "started_at=2026-03-07T12:00:00Z",
-          "source=main",
-          "branch=ralphai/prd-search",
-          "slug=prd-search",
-          "plan_file=prd-search.md",
-        ].join("\n"),
-      );
 
       const result = runCli(["worktree"], ctx.dir, env);
       const combined = result.stdout + result.stderr;
 
       expect(result.exitCode).toBe(1);
-      expect(combined).toContain(
-        'Plan "prd-search" is already running in the main repository',
-      );
+      expect(combined).toContain("no longer starts runs");
     });
 
     it("worktree clean archives receipt file", () => {
@@ -438,7 +394,6 @@ describe("worktree", () => {
         join(planDir, "receipt.txt"),
         [
           "started_at=2026-03-07T12:00:00Z",
-          "source=worktree",
           "worktree_path=" + worktreeDir,
           "branch=ralphai/done",
           "slug=done",

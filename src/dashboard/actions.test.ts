@@ -40,7 +40,6 @@ import { execSync, spawn } from "child_process";
 import { existsSync, mkdirSync, renameSync, rmSync } from "fs";
 import {
   spawnRunner,
-  spawnWorktreeRunner,
   resetPlan,
   purgePlan,
   removeWorktree,
@@ -214,30 +213,5 @@ describe("spawnRunner", () => {
     });
 
     expect(spawnRunner(REPO, "bad")).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// spawnWorktreeRunner
-// ---------------------------------------------------------------------------
-
-describe("spawnWorktreeRunner", () => {
-  it("spawns with worktree subcommand", () => {
-    const pid = spawnWorktreeRunner(REPO, "wt-plan");
-
-    expect(pid).toBe(12345);
-
-    const [, args] = mockSpawn.mock.calls[0]!;
-    expect(args).toEqual(
-      expect.arrayContaining(["worktree", "--plan=wt-plan"]),
-    );
-  });
-
-  it("returns null on failure", () => {
-    mockSpawn.mockImplementation(() => {
-      throw new Error("nope");
-    });
-
-    expect(spawnWorktreeRunner(REPO, "bad")).toBeNull();
   });
 });

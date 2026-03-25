@@ -1,32 +1,24 @@
 # How Ralphai Works
 
-Ralphai is a loop that drives your AI coding agent one plan at a time, with
-real build/test/lint feedback every cycle.
+Ralphai is a loop that drives your AI coding agent one plan at a time, with real build, test, and lint feedback every cycle.
 
 Back to the [README](../README.md) for setup and quickstart.
 
 ## Context Rot
 
-Long AI coding sessions degrade. The model's context window fills up, older
-messages get compressed or dropped, and the agent forgets what it already
-tried — repeating mistakes and drifting from the goal.
+Long AI coding sessions degrade. The model's context window fills up, older messages get compressed or dropped, and the agent forgets what it already tried, repeating mistakes and drifting from the goal.
 
-Ralphai avoids this by starting each iteration with a **fresh agent session**
-containing only what matters:
+Ralphai avoids this by starting each iteration with a **fresh agent session** containing only what matters:
 
-- The plan file (what to build)
-- A progress log (what was already done)
-- Learnings from past mistakes (if any)
+- the plan file
+- a progress log
+- learnings from past mistakes
 
-Iteration 10 gets exactly the same quality of context as iteration 1.
+Iteration 10 gets the same quality of context as iteration 1.
 
 ## Feedback Loop
 
-Each iteration, the agent runs your project's real build, test, and lint
-commands — not cached results, not model-generated guesses. The retry
-loop is agent-internal: the runner provides the feedback commands in the
-prompt, and the agent runs them, fixes errors, and iterates within a
-single session.
+Each iteration, the agent runs your project's real build, test, and lint commands. The retry loop is agent-internal: Ralphai provides the feedback commands in the prompt, and the agent runs them, fixes errors, and iterates within a single session.
 
 ```
     ┌─────────────────────────────────────┐
@@ -51,17 +43,14 @@ single session.
                        │ no
                        ▼
                  ┌────────────┐
-                 │  Commit *  │
+                 │   Commit   │
                  └─────┬──────┘
                        ▼
                     Next iteration
                  (fresh session)
-
-* In patch mode (--patch), changes are left uncommitted.
 ```
 
-Feedback commands are auto-detected during `ralphai init` or configured
-via `feedbackCommands` in `config.json`.
+Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` in `config.json`.
 
 ## Plan Structure
 
@@ -73,7 +62,9 @@ A plan file uses Markdown headings to define tasks and optional subtasks:
 ## Implementation Tasks
 
 ### Task 1: Set up database schema
+
 #### 1.1: Create users table migration
+
 #### 1.2: Add indexes and constraints
 
 ### Task 2: Implement login endpoint
@@ -81,119 +72,61 @@ A plan file uses Markdown headings to define tasks and optional subtasks:
 ### Task 3: Add session middleware
 ```
 
-**Tasks** (`### Task N:`) are the top-level work items. Each iteration, the
-agent picks the highest-priority incomplete task and works on it.
+**Tasks** (`### Task N:`) are the top-level work items. Each iteration, the agent picks the highest-priority incomplete task and works on it.
 
-**Subtasks** (`#### N.M:`) are optional breakdowns within a task. They help
-the agent stay focused on smaller steps. The agent completes all subtasks of
-a task before moving on.
+**Subtasks** (`#### N.M:`) are optional breakdowns within a task. They help the agent stay focused on smaller steps. The agent completes all subtasks of a task before moving on.
 
-**One iteration, one task.** Each runner iteration starts a fresh agent
-session that works on exactly one task (including its subtasks). This keeps
-the context window focused and prevents the agent from context-switching
-across unrelated work.
+**One iteration, one task.** Each runner iteration starts a fresh agent session that works on exactly one task, including its subtasks.
+
+## Worktree Execution Model
+
+`ralphai run` is the only execution entrypoint. It always runs work inside a managed git worktree.
+
+For a normal run, Ralphai:
+
+1. Picks the next plan from `backlog/` or resumes one from `in-progress/`
+2. Creates or reuses a worktree on branch `ralphai/<slug>`
+3. Runs the agent inside that worktree
+4. Commits the results there
+5. Pushes the branch
+6. Opens or updates a **draft PR** when `gh` is available
+
+This keeps your main checkout clean and lets multiple plans run in parallel in separate directories.
 
 ## Stuck Detection
 
-If **N consecutive iterations** produce no new commits, Ralphai aborts. Default
-threshold is 3. Configurable via `maxStuck` in `config.json`,
-`RALPHAI_MAX_STUCK`, or `--max-stuck`.
+If **N consecutive iterations** produce no new commits, Ralphai aborts. The default threshold is 3. Configure it with `maxStuck` in `config.json`, `RALPHAI_MAX_STUCK`, or `--max-stuck`.
 
-The plan stays in `in-progress/<slug>/` so you can inspect and resume.
-
-In **patch mode** (`--patch`), where no commits are created, stuck detection
-instead checks whether the working tree changed between iterations. Ralphai
-computes a hash of `git diff HEAD` after each iteration. If the diff is identical
-across N consecutive iterations, Ralphai aborts. Branch and PR modes continue to
-use commit-based detection.
+The plan stays in `in-progress/<slug>/` so you can inspect and resume it.
 
 ## Continuous Mode
 
-By default, Ralphai stops after one plan. With `--continuous` (or
-`continuous: true` in `config.json`), it keeps draining the backlog —
-picking the next dependency-ready plan after each completion. All plans
-run sequentially on a single branch.
+By default, Ralphai stops after one plan. With `--continuous`, it keeps draining the backlog, picking the next dependency-ready plan after each completion.
 
-### Without `--pr`
+In continuous mode, Ralphai uses one long-lived worktree branch:
 
-Plans are processed one after another on the current branch. Each plan
-gets a fresh progress file. When the backlog is empty,
-Ralphai exits. No PR is created — commits stay on the local branch.
+1. **First completed plan** -> pushes the branch and creates a draft PR
+2. **Each later plan** -> keeps working on the same branch and updates the same draft PR
+3. **Backlog drained** -> refreshes the draft PR body and leaves it in draft
 
-### With `--pr` (continuous+PR)
-
-This is the most automated workflow. Ralphai creates a branch, processes
-the backlog, and manages a single PR throughout:
-
-1. **First plan completes** — the branch is pushed and a **draft PR** is
-   created via `gh`. The PR body lists completed and remaining plans as
-   checkboxes, plus a commit log.
-2. **Each subsequent plan** — the branch is pushed again and the PR body
-   is updated (new checkboxes, updated commit log).
-3. **Backlog drained** — the PR body gets a final update and the PR is
-   marked **ready for review** via `gh pr ready`.
-
-The PR body looks like:
-
-```markdown
-## Completed Plans
-
-- [x] plan-a.md
-- [x] plan-b.md
-
-## Remaining Plans
-
-- [ ] plan-c.md
-
-## Commits
-```
-
-### Failure handling
-
-- **Stuck** (N iterations with no commits): Ralphai pushes partial work to the
-  continuous branch and exits. The plan stays in `in-progress/<slug>/` for
-  inspection and resumption.
-- **Branch collision** (branch or PR already exists): the plan is rolled
-  back to `backlog/` and skipped.
+If the run is interrupted or gets stuck, Ralphai still pushes partial work so the branch and PR reflect the latest progress.
 
 ## Iteration Timeout
 
-Optional per-invocation timeout (`iterationTimeout` in seconds, or
-`--iteration-timeout`). If the agent exceeds the limit, it's killed via SIGTERM
-and the iteration counts toward the stuck budget. Default: 0 (no timeout).
-
-## Branch Isolation
-
-Three modes:
-
-- **Branch mode** (default, `--branch`): creates a `ralphai/<plan-slug>` branch
-  from the base branch, commits all work there. No push, no PR.
-- **PR mode** (`--pr`): creates a `ralphai/<plan-slug>` branch from the base
-  branch, does all work there, and opens a PR on completion via `gh`. The PR
-  body contains the plan's description and a commit log.
-- **Patch mode** (`--patch`): works on the current branch, leaves changes
-  uncommitted. Refuses to run on `main`/`master`.
-
-PR mode checks for branch collisions (local, remote, open PR) before
-starting — collisions skip to the next plan.
+Use `--iteration-timeout=<seconds>` or `iterationTimeout` in `config.json` to set a per-invocation timeout. If the agent exceeds the limit, Ralphai kills it and the iteration counts toward the stuck budget. The default is `0`, which means no timeout.
 
 ## Plan Lifecycle
 
 ```
 parked/    (ignored by Ralphai)
-backlog/  →  in-progress/  →  out/
+backlog/  ->  in-progress/  ->  out/
 ```
 
-- **`backlog/`** — the queue. Plans are flat `.md` files (e.g., `backlog/my-plan.md`).
-  Ralphai picks dependency-ready plans
-  (oldest first when multiple are ready).
-- **`in-progress/`** — active work. The plan folder contains the plan file,
-  `progress.md`, `receipt.txt`, and `agent-output.log` (raw agent stdout/stderr
-  with iteration headers). Files stay on interruption for resumption.
-- **`out/`** — archive. Plan folders move here when the agent signals completion.
+- **`backlog/`** -> queue of flat `.md` plans such as `backlog/my-plan.md`
+- **`in-progress/`** -> active plan folders containing the plan, `progress.md`, `receipt.txt`, and `agent-output.log`
+- **`out/`** -> archived plan folders after completion
 
-Plans can declare `depends-on` in YAML frontmatter. A plan runs only when
-all dependencies are in `out/`.
+Plans can declare `depends-on` in YAML frontmatter. A plan runs only when all dependencies are already archived in `out/`.
 
 ```md
 ---
@@ -205,35 +138,22 @@ depends-on: [foundation.md, wiring.md]
 
 When Ralphai looks for work, it follows this priority:
 
-1. **In-progress plans first** — if `in-progress/` contains any plan folder,
-   Ralphai resumes it (no selection needed).
-2. **Backlog selection** — otherwise, Ralphai scans `backlog/` for
-   dependency-ready plans (all `depends-on` entries archived in `out/`).
-   Plans with unsatisfied dependencies are skipped with a diagnostic
-   message showing which dependencies are blocking.
-3. **Single ready plan** — auto-selected.
-4. **Multiple ready plans** — the first plan in alphabetical order is
-   picked. (Ralphai logs how many plans were ready and which one it
-   chose.)
+1. **In-progress plans first** -> if `in-progress/` contains a resumable plan, Ralphai resumes it
+2. **Backlog selection** -> otherwise, Ralphai scans `backlog/` for dependency-ready plans
+3. **Single ready plan** -> auto-selected
+4. **Multiple ready plans** -> the first plan in alphabetical order is picked
 
-Plans are also skipped if their branch or PR already exists (branch
-collision) — this prevents conflicts when multiple worktrees or
-continuous-mode sessions overlap.
-
-Use `depends-on` frontmatter to control execution order. Without it, plans
-run in alphabetical order.
+Plans are also skipped if their branch or PR already exists. That avoids collisions when multiple worktrees or continuous sessions overlap.
 
 ## Receipt Files
 
-When a run starts, Ralphai creates a **receipt file** inside the plan
-folder in `pipeline/in-progress/<slug>/`. The receipt is updated after each iteration
-and used by `ralphai status` to show progress and diagnostics.
+When a run starts, Ralphai creates a **receipt file** inside `pipeline/in-progress/<slug>/receipt.txt`. The receipt is updated after each iteration and used by `ralphai status` to show progress and diagnostics.
 
 Receipt files are plain text, one `key=value` per line:
 
 ```
 started_at=2026-03-08T14:22:00Z
-source=main
+worktree_path=/home/user/.ralphai-worktrees/dark-mode
 branch=ralphai/dark-mode
 slug=dark-mode
 plan_file=dark-mode.md
@@ -242,24 +162,19 @@ tasks_completed=2
 
 ### Field Reference
 
-| Field             | Example                   | Meaning                                                          |
-| ----------------- | ------------------------- | ---------------------------------------------------------------- |
-| `started_at`      | `2026-03-08T14:22:00Z`    | ISO 8601 UTC timestamp of when the run started                   |
-| `source`          | `main` / `worktree`       | Whether the run started in the main repo or a worktree           |
-| `worktree_path`   | `/home/user/wt/dark-mode` | Absolute path to worktree (only present when `source=worktree`)  |
-| `branch`          | `ralphai/dark-mode`       | Git branch the run is on                                         |
-| `slug`            | `dark-mode`               | Plan slug (filename minus `.md`)                                 |
-| `plan_file`       | `dark-mode.md`            | Source plan filename                                             |
-| `tasks_completed` | `2`                       | Number of plan tasks marked complete (parsed from progress file) |
+| Field             | Example                                   | Meaning                                                         |
+| ----------------- | ----------------------------------------- | --------------------------------------------------------------- |
+| `started_at`      | `2026-03-08T14:22:00Z`                    | ISO 8601 UTC timestamp of when the run started                  |
+| `worktree_path`   | `/home/user/.ralphai-worktrees/dark-mode` | Absolute path to the managed worktree                           |
+| `branch`          | `ralphai/dark-mode`                       | Git branch the run is on                                        |
+| `slug`            | `dark-mode`                               | Plan slug, filename minus `.md`                                 |
+| `plan_file`       | `dark-mode.md`                            | Source plan filename                                            |
+| `tasks_completed` | `2`                                       | Number of plan tasks marked complete, parsed from `progress.md` |
 
 ### When to Check Receipts
 
-- **Cross-source conflict** — if `ralphai run` refuses to start because a
-  plan is running in a worktree (or vice versa), the receipt shows where
-  the run originated (`source`, `worktree_path`, `branch`).
-- **Status diagnostics** — `ralphai status` reads receipt files
-  automatically. If you need more detail, inspect the receipt directly at
-  `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt`.
+- **Worktree ownership** -> if `ralphai run` tells you a plan is already running in a worktree, the receipt shows which worktree owns it
+- **Status diagnostics** -> `ralphai status` reads receipts automatically, but you can inspect them directly in `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt`
 
 After a plan is archived to `out/`, the receipt moves with it.
 
@@ -275,45 +190,43 @@ scope: packages/web
 
 ### Workspace Detection
 
-`ralphai init` detects workspace packages from three sources: `pnpm-workspace.yaml` globs, the `workspaces` field in `package.json`, and `.sln` files (which list `.csproj` projects for .NET monorepos). In mixed repos, workspaces from all sources are merged (deduplicated by path). Both `--yes` and interactive modes display the detected workspaces and rely on automatic scope filtering at runtime. The `workspaces` config key is an escape hatch for custom per-package overrides; `init` does not generate it.
+`ralphai init` detects workspace packages from `pnpm-workspace.yaml`, the `workspaces` field in `package.json`, and `.sln` files for .NET monorepos. In mixed repos, workspaces from all sources are merged.
 
 ### Multi-Ecosystem Detection
 
-When a repository contains markers for multiple ecosystems (e.g., a `.sln` file alongside a `package.json`), Ralphai detects all of them and merges their feedback commands into a single list. The primary ecosystem is the first detected with sufficient substance; secondary ecosystems contribute additional feedback commands.
-
-A bare `package.json` with no lock file, no `scripts`, and no `workspaces` field is treated as a tooling artifact (e.g., used only for `npm install <tool>`) and does not claim Node.js as the primary ecosystem. This prevents stub `package.json` files from masking the real project type in .NET-primary or other non-Node repos.
+When a repository contains markers for multiple ecosystems, Ralphai detects all of them and merges their feedback commands into one list. A bare `package.json` with no lock file, scripts, or workspaces is treated as a tooling artifact and does not claim Node.js as the primary ecosystem.
 
 ### Scoped Feedback
 
-When a plan has a scope, the runner rewrites feedback commands to target the scoped package. The mechanism varies by ecosystem:
+When a plan has a scope, the runner rewrites feedback commands to target that scoped package.
 
-**Node.js:**
+**Node.js**
 
-1. **Reads the package name** from `<scope>/package.json`.
-2. **Detects the root package manager** by checking for lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb` / `bun.lock`, `package-lock.json`).
-3. **Rewrites feedback commands** using the PM's workspace filter: `pnpm --filter <name>`, `yarn workspace <name>`, `npm -w <name>`, or `bun --filter <name>`.
+1. Reads the package name from `<scope>/package.json`
+2. Detects the root package manager from lockfiles
+3. Rewrites feedback commands using the package manager's workspace filter
 
-**C# / .NET:**
+**C# / .NET**
 
-1. **Appends the scope path** to dotnet commands: `dotnet build` becomes `dotnet build <scope>`, `dotnet test` becomes `dotnet test <scope>`.
+1. Appends the scope path to dotnet commands
 
-**Other ecosystems:** Commands pass through unchanged.
+**Other ecosystems**
 
-**Mixed repos (e.g., Node.js + .NET):** Dotnet commands are scoped regardless of the primary ecosystem. If the scope directory contains a `package.json`, Node.js PM commands are also rewritten. This means a plan scoping to a .NET sub-project in a mixed repo gets `dotnet build <scope>` even when Node.js is the primary ecosystem.
+Commands pass through unchanged.
 
-In all cases, the runner **adds a scope hint** to the agent prompt so the agent focuses on files within the scoped directory. Commands that don't match the detected ecosystem (e.g., `make test`) also pass through unchanged.
+In all cases, Ralphai adds a scope hint to the prompt so the agent focuses on files within the scoped directory.
 
 ### Doctor Validation
 
-`ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Each workspace command runs from the repo root. Failures produce warnings (not hard errors), since the workspace may not be installed yet.
+`ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Failures produce warnings, not hard errors.
 
 ### Status Display
 
-`ralphai status` shows the scope of each plan when declared. Scoped plans display a `scope: <path>` annotation next to the plan name.
+`ralphai status` shows the scope of each plan when declared.
 
 ### Workspace Overrides
 
-When automatic derivation is insufficient, use the `workspaces` config key in `config.json` to provide explicit per-package feedback commands:
+When automatic derivation is insufficient, use the `workspaces` key in `config.json` to provide explicit per-package feedback commands:
 
 ```json
 {
@@ -330,9 +243,7 @@ Workspace overrides take precedence over automatic derivation. Plans without a s
 
 ### Independent Sub-Projects
 
-Some repos contain Node.js (or other) sub-projects that are not connected to the root by any workspace configuration. Each sub-project has its own lock file and dependency tree. Common examples: an Nx frontend app inside a .NET monorepo, standalone documentation sites, or Playwright E2E test suites.
-
-Automatic scope rewriting uses workspace filters (`npm -w`, `pnpm --filter`), which require the root package manager to know about the sub-project. Independent sub-projects are not discoverable this way, so plans that target them need manual `workspaces` overrides with commands that run from the repo root:
+Some repos contain sub-projects that are not connected to the root by workspace configuration. Those plans need manual `workspaces` overrides with commands that run from the repo root:
 
 ```json
 {
@@ -356,16 +267,14 @@ scope: ui
 ---
 ```
 
-The runner will use the overridden feedback commands for that scope instead of the root-level ones.
-
 ## Learnings System
 
-Ralphai maintains two files in global state (`~/.ralphai/repos/<id>/`) for learning from mistakes:
+Ralphai maintains two files in global state at `~/.ralphai/repos/<id>/`:
 
-- **`LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each iteration and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
-- **`LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
+- **`LEARNINGS.md`** -> rolling anti-repeat memory read before each iteration
+- **`LEARNING_CANDIDATES.md`** -> review queue for lessons that may belong in `AGENTS.md` or skill docs
 
-**After runs:** review candidates, promote useful ones, and prune stale learnings entries.
+Ralphai automatically prunes `LEARNINGS.md` to the most recent 20 entries by default. Configure that with `maxLearnings`, or set it to `0` for unlimited.
 
 ## Progress Extraction
 
@@ -379,8 +288,4 @@ Implemented input validation (2.1) and error messages (2.2).
 </progress>
 ```
 
-If found, the content is appended to `progress.md` in the plan's
-`in-progress/<slug>/` folder with an iteration header (`### Iteration N`). This
-keeps the progress log up to date even when the agent forgets to edit
-`progress.md` directly. The prompt instructs the agent to include a
-`<progress>` block in every response.
+If found, the content is appended to `progress.md` in `in-progress/<slug>/` with an iteration header. This keeps the progress log updated even when the agent forgets to edit `progress.md` directly.
