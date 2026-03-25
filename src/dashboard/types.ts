@@ -3,7 +3,20 @@
  */
 
 /** Which component currently owns keyboard input. */
-export type FocusTarget = "list" | "detail" | "menu" | "filter" | "help";
+export type FocusTarget =
+  | "repo"
+  | "list"
+  | "detail"
+  | "menu"
+  | "filter"
+  | "help";
+
+/**
+ * Focusable panes navigable via number keys (1/2/3) and Tab.
+ * "detail" is only reachable when the split pane is open; the keyboard
+ * handler skips it when `showDetail` is false.
+ */
+export const PANE_ORDER: FocusTarget[] = ["repo", "list", "detail"];
 
 /** Tabs available in the detail overlay. */
 export type DetailTab = "summary" | "plan" | "progress" | "output";

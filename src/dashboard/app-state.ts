@@ -7,7 +7,8 @@
  * Option B layout: single full-width plan list with detail overlay.
  */
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { resolve } from "node:path";
 import type { RepoSummary } from "../global-state.ts";
 import type {
   FocusTarget,
@@ -40,20 +41,22 @@ const REFRESH_MS = 3000;
 
 /**
  * Height reserved for non-plan-list chrome.
- * 1 RepoBar + 1 WorktreeStrip + 1 StatusBar + 2 PanelBox border rows = 5.
- * WorktreeStrip may be 0 rows when empty but we reserve the space anyway
- * so the plan list height stays stable.
+ * 3 RepoBar (1 content + 2 border) + 1 StatusBar + 2 PanelBox border rows = 6.
  */
-export const CHROME_ROWS = 5;
+export const CHROME_ROWS = 6;
+
+/** Minimum terminal width for side-by-side split pane layout. */
+export const SPLIT_MIN_COLS = 80;
 
 /** Overlay types for the modal stack. */
 export type Overlay =
   | { kind: "none" }
   | { kind: "menu"; items: ActionMenuItem[]; cursor: number; title: string }
   | { kind: "confirm"; action: string; slug: string }
-  | { kind: "help" };
+  | { kind: "help" }
+  | { kind: "repoSelect"; cursor: number };
 
-export function useAppState(termRows: number) {
+export function useAppState(termRows: number, termCols: number) {
   // --- List cursor (single plan list) ---
   const listCursor = useListCursor();
   const { cursor: planCursor, moveCursor, setCursor } = listCursor;
@@ -98,21 +101,47 @@ export function useAppState(termRows: number) {
   const selectedRepo: RepoSummary | null =
     repos[selectedRepoIdx] ?? repos[0] ?? null;
 
-  // Repo switching via [ / ]
-  const switchRepo = useCallback(
+  // Repo selector overlay
+  const openRepoSelect = useCallback(() => {
+    if (repos.length === 0) return;
+    setOverlay({ kind: "repoSelect", cursor: selectedRepoIdx });
+    setFocus("menu");
+  }, [repos.length, selectedRepoIdx]);
+
+  const selectRepo = useCallback(
+    (index: number) => {
+      setSelectedRepoIdx(index);
+      setCursor(0);
+      setOverlay({ kind: "none" });
+      setFocus("list");
+    },
+    [setCursor],
+  );
+
+  /** Cycle the selected repo by delta (±1) with clamping. Resets plan cursor. */
+  const cycleRepo = useCallback(
     (delta: number) => {
       if (repos.length === 0) return;
       setSelectedRepoIdx((prev) => {
         const next = prev + delta;
-        if (next < 0) return repos.length - 1;
-        if (next >= repos.length) return 0;
-        return next;
+        return Math.max(0, Math.min(repos.length - 1, next));
       });
-      // Reset plan cursor when switching repos
       setCursor(0);
     },
     [repos.length, setCursor],
   );
+
+  // cwd-based initial repo selection (one-shot)
+  const cwdMatchDone = useRef(false);
+  useEffect(() => {
+    if (cwdMatchDone.current || repos.length === 0) return;
+    cwdMatchDone.current = true;
+    const cwd = resolve(process.cwd());
+    const idx = repos.findIndex(
+      (r) => r.repoPath !== null && resolve(r.repoPath) === cwd,
+    );
+    if (idx >= 0) setSelectedRepoIdx(idx);
+  }, [repos]);
 
   const planLoader = useCallback(
     () => (selectedRepo?.repoPath ? loadPlans(selectedRepo.repoPath) : []),
@@ -180,6 +209,14 @@ export function useAppState(termRows: number) {
   // title row (1), tab bar (1), content margin (1).
   const contentHeight = Math.max(5, termRows - 6);
 
+  // --- Split pane layout ---
+  const isSplitMode = showDetail && termCols >= SPLIT_MIN_COLS;
+  const splitListWidth = Math.max(20, Math.floor(termCols * 0.3));
+  const splitDetailWidth = termCols - splitListWidth;
+  // In split mode, detail is inline (same vertical space as plan list).
+  // Detail chrome: 2 border rows + 1 title + 1 tab bar + 1 margin = 5.
+  const splitContentHeight = Math.max(5, termRows - CHROME_ROWS - 5);
+
   // --- Auto-set default tab when plan selection changes ---
   useEffect(() => {
     if (selectedPlan) {
@@ -197,14 +234,16 @@ export function useAppState(termRows: number) {
     }
   }, [followTail, activeTab, outputData?.content, contentHeight]);
 
-  // --- Open detail overlay ---
+  // --- Open detail (split or overlay) ---
   const openDetail = useCallback(() => {
     if (!selectedPlan) return;
     setShowDetail(true);
-    setFocus("detail");
-  }, [selectedPlan]);
+    // In split mode, keep focus on list so up/down navigates plans and
+    // the detail pane updates reactively. In overlay mode, focus detail.
+    setFocus(termCols >= SPLIT_MIN_COLS ? "list" : "detail");
+  }, [selectedPlan, termCols]);
 
-  // --- Close detail overlay ---
+  // --- Close detail ---
   const closeDetail = useCallback(() => {
     setShowDetail(false);
     setFocus("list");
@@ -374,7 +413,9 @@ export function useAppState(termRows: number) {
     repos,
     selectedRepo,
     selectedRepoIdx,
-    switchRepo,
+    openRepoSelect,
+    selectRepo,
+    cycleRepo,
     // Plans
     plans,
     displayPlans,
@@ -395,6 +436,11 @@ export function useAppState(termRows: number) {
     progressContent,
     outputData,
     contentHeight,
+    // Split pane
+    isSplitMode,
+    splitListWidth,
+    splitDetailWidth,
+    splitContentHeight,
     // Overlay
     overlay,
     setOverlay,
