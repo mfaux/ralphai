@@ -327,6 +327,24 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
+    // Direct action hotkeys (state-gated)
+    if (input === "r" && selectedPlan?.state === "backlog") {
+      handleAction("run");
+      return;
+    }
+    if (input === "w" && selectedPlan?.state === "backlog") {
+      handleAction("run-worktree");
+      return;
+    }
+    if (input === "R" && selectedPlan?.state === "in-progress") {
+      handleAction("reset");
+      return;
+    }
+    if (input === "P" && selectedPlan?.state === "completed") {
+      handleAction("purge");
+      return;
+    }
+
     if (input === "/") {
       setFocus("filter");
       return;
