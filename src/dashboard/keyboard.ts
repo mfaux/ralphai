@@ -265,7 +265,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
         setScrollOffset(0);
         return;
       }
-      if (input === "f") {
+      if (input === "l") {
         setFollowTail((prev) => !prev);
         return;
       }

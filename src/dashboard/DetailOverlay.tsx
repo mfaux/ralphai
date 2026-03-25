@@ -4,7 +4,7 @@
  *
  * Four tabs: Summary, Plan, Progress, Output.
  * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
- * Output tab shows green LIVE indicator and supports follow-tail mode.
+ * Output tab shows green LIVE indicator and supports live-scroll mode.
  *
  * In overlay mode: opened by pressing Enter, dismissed with Esc.
  * In split mode: sits beside the plan list, border highlights when focused.
@@ -263,7 +263,7 @@ export function DetailOverlay({
     "3 " +
     plan.slug +
     (isLive ? `  ${liveSpinner} LIVE` : "") +
-    (tab === "output" && followTail ? " [follow]" : "") +
+    (tab === "output" && followTail ? " [live-scroll]" : "") +
     (plan.state === "completed" ? "  \u2713 done" : "");
 
   return (

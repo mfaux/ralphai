@@ -24,7 +24,7 @@ Key routing uses a **single `useInput` handler** (`keyboard.ts`) that dispatches
 
 - **repo** — arrow keys cycle repos, Enter opens dropdown, number keys / Tab switch panes
 - **list** — arrow keys navigate plans, Enter opens detail, `a` opens action menu
-- **detail** — arrow keys scroll, left/right switch tabs, `f` toggles follow-tail
+- **detail** — arrow keys scroll, left/right switch tabs, `l` toggles live-scroll
 - **menu** — arrow keys select, Enter triggers, Esc dismisses
 - **filter** — typing appends to query, Esc closes
 

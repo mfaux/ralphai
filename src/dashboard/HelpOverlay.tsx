@@ -25,7 +25,7 @@ const SHORTCUTS: Array<{ key: string; desc: string }> = [
   { key: "\u2191/\u2193", desc: "Scroll content (detail overlay)" },
   { key: "\u2190/\u2192", desc: "Switch detail tabs" },
   { key: "s/p/g/o", desc: "Jump to Summary/Plan/proGress/Output tab" },
-  { key: "f", desc: "Toggle follow-tail mode (Output tab)" },
+  { key: "l", desc: "Toggle live-scroll mode (Output tab)" },
   { key: "", desc: "" },
   { key: "r", desc: "Run selected plan (from action menu)" },
   { key: "w", desc: "Run in worktree (from action menu)" },

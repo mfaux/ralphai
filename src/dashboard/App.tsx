@@ -137,6 +137,7 @@ export function App() {
         selectedPlan={selectedPlan}
         hasActiveRunners={plans.some((p) => p.state === "in-progress")}
         splitOpen={isSplitMode}
+        activeTab={activeTab}
       />
 
       {/* --- Overlays --- */}
