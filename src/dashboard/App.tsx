@@ -2,10 +2,10 @@
  * App — master layout for the dashboard (Option B: list + overlay).
  *
  * Single-column layout:
- *   RepoBar (1 row) -> FilterBar (conditional) -> PlanList (fills space)
+ *   FilterBar (conditional) -> PlanList (fills space)
  *   -> WorktreeStrip (1 row) -> StatusBar (1 row)
  *
- * Overlays: DetailOverlay, ActionMenu, ConfirmDialog, HelpOverlay.
+ * Overlays: DetailOverlay, ActionMenu, ConfirmDialog, HelpOverlay, RepoSelector.
  *
  * State management lives in app-state.ts, keyboard routing in keyboard.ts.
  * This file is responsible only for layout and rendering.
@@ -15,7 +15,7 @@ import React from "react";
 import { Box, Text, useApp, useStdout } from "ink";
 import { useAppState, CHROME_ROWS } from "./app-state.ts";
 import { useKeyboardRouting } from "./keyboard.ts";
-import { RepoBar } from "./RepoBar.tsx";
+import { RepoSelector } from "./RepoSelector.tsx";
 import { PlanList } from "./PlanList.tsx";
 import { WorktreeStrip } from "./WorktreeStrip.tsx";
 import { DetailOverlay } from "./DetailOverlay.tsx";
@@ -64,9 +64,6 @@ export function App() {
 
   return (
     <Box flexDirection="column" height={termRows}>
-      {/* Repo tab bar */}
-      <RepoBar repos={repos} selectedIndex={selectedRepoIdx} width={termCols} />
-
       {/* Filter bar (conditional) */}
       {(filterActive || filterQuery) && (
         <FilterBar query={filterQuery} resultCount={displayPlans.length} />
@@ -191,6 +188,22 @@ export function App() {
           justifyContent="center"
         >
           <HelpOverlay />
+        </Box>
+      )}
+
+      {overlay.kind === "repoSelect" && (
+        <Box
+          position="absolute"
+          width={termCols}
+          height={termRows}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <RepoSelector
+            repos={repos}
+            cursor={overlay.cursor}
+            selectedIndex={selectedRepoIdx}
+          />
         </Box>
       )}
     </Box>

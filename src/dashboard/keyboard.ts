@@ -15,10 +15,12 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
   const {
     focus,
     setFocus,
+    repos,
     displayPlans,
     selectedPlan,
     moveCursor,
-    switchRepo,
+    openRepoSelect,
+    selectRepo,
     activeTab,
     setActiveTab,
     scrollOffset,
@@ -87,6 +89,37 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
           const selected = overlay.items[overlay.cursor];
           if (selected) handleAction(selected.action);
         }
+        return;
+      }
+      return;
+    }
+
+    // --- Repo selector overlay ---
+    if (overlay.kind === "repoSelect") {
+      if (key.escape) {
+        setOverlay({ kind: "none" });
+        setFocus(showDetail ? "detail" : "list");
+        return;
+      }
+      if (key.upArrow) {
+        setOverlay((prev) => {
+          if (prev.kind !== "repoSelect") return prev;
+          return { ...prev, cursor: Math.max(0, prev.cursor - 1) };
+        });
+        return;
+      }
+      if (key.downArrow) {
+        setOverlay((prev) => {
+          if (prev.kind !== "repoSelect") return prev;
+          return {
+            ...prev,
+            cursor: Math.min(repos.length - 1, prev.cursor + 1),
+          };
+        });
+        return;
+      }
+      if (key.return) {
+        selectRepo(overlay.cursor);
         return;
       }
       return;
@@ -207,13 +240,9 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       return;
     }
 
-    // [ / ] switch repos
-    if (input === "[") {
-      switchRepo(-1);
-      return;
-    }
-    if (input === "]") {
-      switchRepo(1);
+    // Space opens repo selector
+    if (input === " ") {
+      openRepoSelect();
       return;
     }
 

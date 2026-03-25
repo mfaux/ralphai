@@ -7,7 +7,8 @@
  * Option B layout: single full-width plan list with detail overlay.
  */
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { resolve } from "node:path";
 import type { RepoSummary } from "../global-state.ts";
 import type {
   FocusTarget,
@@ -40,18 +41,19 @@ const REFRESH_MS = 3000;
 
 /**
  * Height reserved for non-plan-list chrome.
- * 1 RepoBar + 1 WorktreeStrip + 1 StatusBar + 2 PanelBox border rows = 5.
+ * 1 WorktreeStrip + 1 StatusBar + 2 PanelBox border rows = 4.
  * WorktreeStrip may be 0 rows when empty but we reserve the space anyway
  * so the plan list height stays stable.
  */
-export const CHROME_ROWS = 5;
+export const CHROME_ROWS = 4;
 
 /** Overlay types for the modal stack. */
 export type Overlay =
   | { kind: "none" }
   | { kind: "menu"; items: ActionMenuItem[]; cursor: number; title: string }
   | { kind: "confirm"; action: string; slug: string }
-  | { kind: "help" };
+  | { kind: "help" }
+  | { kind: "repoSelect"; cursor: number };
 
 export function useAppState(termRows: number) {
   // --- List cursor (single plan list) ---
@@ -98,21 +100,34 @@ export function useAppState(termRows: number) {
   const selectedRepo: RepoSummary | null =
     repos[selectedRepoIdx] ?? repos[0] ?? null;
 
-  // Repo switching via [ / ]
-  const switchRepo = useCallback(
-    (delta: number) => {
-      if (repos.length === 0) return;
-      setSelectedRepoIdx((prev) => {
-        const next = prev + delta;
-        if (next < 0) return repos.length - 1;
-        if (next >= repos.length) return 0;
-        return next;
-      });
-      // Reset plan cursor when switching repos
+  // Repo selector overlay
+  const openRepoSelect = useCallback(() => {
+    if (repos.length === 0) return;
+    setOverlay({ kind: "repoSelect", cursor: selectedRepoIdx });
+    setFocus("menu");
+  }, [repos.length, selectedRepoIdx]);
+
+  const selectRepo = useCallback(
+    (index: number) => {
+      setSelectedRepoIdx(index);
       setCursor(0);
+      setOverlay({ kind: "none" });
+      setFocus("list");
     },
-    [repos.length, setCursor],
+    [setCursor],
   );
+
+  // cwd-based initial repo selection (one-shot)
+  const cwdMatchDone = useRef(false);
+  useEffect(() => {
+    if (cwdMatchDone.current || repos.length === 0) return;
+    cwdMatchDone.current = true;
+    const cwd = resolve(process.cwd());
+    const idx = repos.findIndex(
+      (r) => r.repoPath !== null && resolve(r.repoPath) === cwd,
+    );
+    if (idx >= 0) setSelectedRepoIdx(idx);
+  }, [repos]);
 
   const planLoader = useCallback(
     () => (selectedRepo?.repoPath ? loadPlans(selectedRepo.repoPath) : []),
@@ -374,7 +389,8 @@ export function useAppState(termRows: number) {
     repos,
     selectedRepo,
     selectedRepoIdx,
-    switchRepo,
+    openRepoSelect,
+    selectRepo,
     // Plans
     plans,
     displayPlans,

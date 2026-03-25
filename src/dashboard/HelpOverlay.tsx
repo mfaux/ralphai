@@ -11,7 +11,7 @@ const SHORTCUTS: Array<{ key: string; desc: string }> = [
   { key: "\u2191/\u2193", desc: "Navigate plans in the list" },
   { key: "Enter", desc: "Open detail overlay for selected plan" },
   { key: "a", desc: "Open action menu for selected plan" },
-  { key: "[/]", desc: "Switch repos (previous / next)" },
+  { key: "Space", desc: "Open repo selector" },
   { key: "/", desc: "Open filter bar" },
   { key: "?", desc: "Toggle this help overlay" },
   { key: "q", desc: "Quit the dashboard" },

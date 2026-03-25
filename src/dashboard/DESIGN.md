@@ -14,7 +14,7 @@ The dashboard uses a **three-panel left column** (Repos, Pipeline, Worktrees) wi
 
 The multi-panel layout keeps all context visible at once and allows drill-down without screen transitions.
 
-The Pipeline panel header includes the selected repo name (e.g., `2 Pipeline (ralphai) ───`) so users always know which repo's plans they're viewing, even when the Repos panel is collapsed.
+The Pipeline panel header includes the selected repo name (e.g., `2 Pipeline (ralphai) ───`) so users always know which repo's plans they're viewing. The StatusBar also shows the repo name on the right side. Pressing Space opens a `RepoSelector` overlay for switching repos directly, replacing the old `[`/`]` linear cycling and the always-visible `RepoBar`.
 
 ## Keyboard-Only Input
 
