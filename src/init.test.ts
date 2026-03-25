@@ -73,10 +73,9 @@ describe("init command", () => {
     // feedbackCommands should be an empty array when not detected
     expect(parsed.feedbackCommands).toEqual([]);
     // New config keys from wizard expansion
-    expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
-    expect(parsed.turnTimeout).toBe(0);
+    expect(parsed.taskTimeout).toBe(0);
   });
 
   it("init --yes writes all config keys with defaults", () => {
@@ -85,8 +84,8 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 14 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(14);
+    // Verify exactly 13 keys are present (includes repoPath)
+    expect(Object.keys(parsed)).toHaveLength(13);
 
     // Core settings from wizard
     expect(typeof parsed.agentCommand).toBe("string");
@@ -95,12 +94,11 @@ describe("init command", () => {
     expect(parsed.feedbackCommands).toEqual([]);
 
     // New wizard settings
-    expect(parsed.turns).toBe(5);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
 
     // Runtime defaults
-    expect(parsed.turnTimeout).toBe(0);
+    expect(parsed.taskTimeout).toBe(0);
     expect(parsed.continuous).toBe(false);
 
     // Issue tracking defaults
@@ -118,8 +116,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(14);
-    expect(parsed.turns).toBe(5);
+    expect(Object.keys(parsed)).toHaveLength(13);
     expect(parsed.mode).toBe("branch");
     expect(parsed.autoCommit).toBe(false);
   });

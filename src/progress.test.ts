@@ -72,7 +72,7 @@ describe("extractProgressBlock", () => {
 describe("appendProgressBlock", () => {
   const ctx = useTempDir();
 
-  it("appends to existing progress file with turn header", () => {
+  it("appends to existing progress file with task header", () => {
     const file = join(ctx.dir, "progress.md");
     writeFileSync(file, "## Progress Log\n\n");
 
@@ -80,7 +80,7 @@ describe("appendProgressBlock", () => {
 
     const content = readFileSync(file, "utf-8");
     expect(content).toContain("## Progress Log");
-    expect(content).toContain("### Turn 1");
+    expect(content).toContain("### Task 1");
     expect(content).toContain("### Task 1: Done");
     expect(content).toContain("**Status:** Complete");
   });
@@ -92,21 +92,21 @@ describe("appendProgressBlock", () => {
 
     const content = readFileSync(file, "utf-8");
     expect(content).toContain("## Progress Log");
-    expect(content).toContain("### Turn 3");
+    expect(content).toContain("### Task 3");
     expect(content).toContain("Some progress content");
   });
 
-  it("appends multiple turns sequentially", () => {
+  it("appends multiple tasks sequentially", () => {
     const file = join(ctx.dir, "multi.md");
     writeFileSync(file, "## Progress Log\n\n");
 
-    appendProgressBlock(file, 1, "First turn work");
-    appendProgressBlock(file, 2, "Second turn work");
+    appendProgressBlock(file, 1, "First task work");
+    appendProgressBlock(file, 2, "Second task work");
 
     const content = readFileSync(file, "utf-8");
-    expect(content).toContain("### Turn 1");
-    expect(content).toContain("First turn work");
-    expect(content).toContain("### Turn 2");
-    expect(content).toContain("Second turn work");
+    expect(content).toContain("### Task 1");
+    expect(content).toContain("First task work");
+    expect(content).toContain("### Task 2");
+    expect(content).toContain("Second task work");
   });
 });

@@ -11,22 +11,22 @@ Long AI coding sessions degrade. The model's context window fills up, older
 messages get compressed or dropped, and the agent forgets what it already
 tried — repeating mistakes and drifting from the goal.
 
-Ralphai avoids this by starting each turn with a **fresh agent session**
+Ralphai avoids this by starting each task with a **fresh agent session**
 containing only what matters:
 
 - The plan file (what to build)
 - A progress log (what was already done)
 - Learnings from past mistakes (if any)
 
-Turn 50 gets exactly the same quality of context as turn 1.
+Task 50 gets exactly the same quality of context as task 1.
 
 ## Feedback Loop
 
-Each turn, the agent runs your project's real build, test, and lint
+Each task, the agent runs your project's real build, test, and lint
 commands — not cached results, not model-generated guesses. The retry
 loop is agent-internal: the runner provides the feedback commands in the
 prompt, and the agent runs them, fixes errors, and iterates within a
-single turn.
+single session.
 
 ```
     ┌─────────────────────────────────────┐
@@ -54,8 +54,8 @@ single turn.
                  │  Commit *  │
                  └─────┬──────┘
                        ▼
-                   Next turn
-                (fresh session)
+                    Next task
+                 (fresh session)
 
 * In patch mode (--patch), changes are left uncommitted.
 ```
@@ -65,16 +65,16 @@ via `feedbackCommands` in `config.json`.
 
 ## Stuck Detection
 
-If **N consecutive turns** produce no new commits, Ralphai aborts. Default
+If **N consecutive tasks** produce no new commits, Ralphai aborts. Default
 threshold is 3. Configurable via `maxStuck` in `config.json`,
 `RALPHAI_MAX_STUCK`, or `--max-stuck`.
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume.
 
 In **patch mode** (`--patch`), where no commits are created, stuck detection
-instead checks whether the working tree changed between turns. Ralphai
-computes a hash of `git diff HEAD` after each turn. If the diff is identical
-across N consecutive turns, Ralphai aborts. Branch and PR modes continue to
+instead checks whether the working tree changed between tasks. Ralphai
+computes a hash of `git diff HEAD` after each task. If the diff is identical
+across N consecutive tasks, Ralphai aborts. Branch and PR modes continue to
 use commit-based detection.
 
 ## Continuous Mode
@@ -87,7 +87,7 @@ run sequentially on a single branch.
 ### Without `--pr`
 
 Plans are processed one after another on the current branch. Each plan
-gets a fresh progress file and turn budget. When the backlog is empty,
+gets a fresh progress file. When the backlog is empty,
 Ralphai exits. No PR is created — commits stay on the local branch.
 
 ### With `--pr` (continuous+PR)
@@ -120,20 +120,17 @@ The PR body looks like:
 
 ### Failure handling
 
-- **Stuck** (N turns with no commits): Ralphai pushes partial work to the
+- **Stuck** (N tasks with no commits): Ralphai pushes partial work to the
   continuous branch and exits. The plan stays in `in-progress/<slug>/` for
   inspection and resumption.
-- **Turn budget exhausted** (completed all turns without the agent
-  signaling completion): same behavior — partial work is pushed and
-  Ralphai exits.
 - **Branch collision** (branch or PR already exists): the plan is rolled
   back to `backlog/` and skipped.
 
-## Turn Timeout
+## Task Timeout
 
-Optional per-invocation timeout (`turnTimeout` in seconds, or
-`--turn-timeout`). If the agent exceeds the limit, it's killed via SIGTERM
-and the turn counts toward the stuck budget. Default: 0 (no timeout).
+Optional per-invocation timeout (`taskTimeout` in seconds, or
+`--task-timeout`). If the agent exceeds the limit, it's killed via SIGTERM
+and the task counts toward the stuck budget. Default: 0 (no timeout).
 
 ## Branch Isolation
 
@@ -162,7 +159,7 @@ backlog/  →  in-progress/  →  out/
   (oldest first when multiple are ready).
 - **`in-progress/`** — active work. The plan folder contains the plan file,
   `progress.md`, `receipt.txt`, and `agent-output.log` (raw agent stdout/stderr
-  with turn headers). Files stay on interruption for resumption.
+  with task headers). Files stay on interruption for resumption.
 - **`out/`** — archive. Plan folders move here when the agent signals completion.
 
 Plans can declare `depends-on` in YAML frontmatter. A plan runs only when
@@ -199,7 +196,7 @@ run in alphabetical order.
 ## Receipt Files
 
 When a run starts, Ralphai creates a **receipt file** inside the plan
-folder in `pipeline/in-progress/<slug>/`. The receipt is updated after each turn
+folder in `pipeline/in-progress/<slug>/`. The receipt is updated after each task
 and used by `ralphai status` to show progress and diagnostics.
 
 Receipt files are plain text, one `key=value` per line:
@@ -210,8 +207,6 @@ source=main
 branch=ralphai/dark-mode
 slug=dark-mode
 plan_file=dark-mode.md
-turns_budget=5
-turns_completed=3
 tasks_completed=2
 ```
 
@@ -225,14 +220,10 @@ tasks_completed=2
 | `branch`          | `ralphai/dark-mode`       | Git branch the run is on                                         |
 | `slug`            | `dark-mode`               | Plan slug (filename minus `.md`)                                 |
 | `plan_file`       | `dark-mode.md`            | Source plan filename                                             |
-| `turns_budget`    | `5`                       | Max turns configured for the run (0 = unlimited)                 |
-| `turns_completed` | `3`                       | Number of agent turns executed so far                            |
 | `tasks_completed` | `2`                       | Number of plan tasks marked complete (parsed from progress file) |
 
 ### When to Check Receipts
 
-- **Run stopped unexpectedly** — check `turns_completed` vs `turns_budget`
-  to see if the turn budget was exhausted.
 - **Cross-source conflict** — if `ralphai run` refuses to start because a
   plan is running in a worktree (or vice versa), the receipt shows where
   the run originated (`source`, `worktree_path`, `branch`).
@@ -341,14 +332,14 @@ The runner will use the overridden feedback commands for that scope instead of t
 
 Ralphai maintains two files in global state (`~/.ralphai/repos/<id>/`) for learning from mistakes:
 
-- **`LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each turn and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
+- **`LEARNINGS.md`** — rolling anti-repeat memory. The agent reads it before each task and applies durable lessons, preferring general rules over narrow anecdotes. Ralphai automatically prunes old entries to keep the most recent 20 (configurable via `maxLearnings` in `config.json` or `RALPHAI_MAX_LEARNINGS`; set to `0` for unlimited).
 - **`LEARNING_CANDIDATES.md`** — review queue for lessons that may belong in `AGENTS.md` or skill docs. The agent appends candidates here but never edits `AGENTS.md` automatically.
 
 **After runs:** review candidates, promote useful ones, and prune stale learnings entries.
 
 ## Progress Extraction
 
-After each turn, Ralphai scans the agent's output for a `<progress>` block:
+After each task, Ralphai scans the agent's output for a `<progress>` block:
 
 ```
 <progress>
@@ -357,7 +348,7 @@ Completed Task 2. Tests pass. Moving to Task 3.
 ```
 
 If found, the content is appended to `progress.md` in the plan's
-`in-progress/<slug>/` folder with a turn header (`### Turn N`). This
+`in-progress/<slug>/` folder with a task header (`### Task N`). This
 keeps the progress log up to date even when the agent forgets to edit
 `progress.md` directly. The prompt instructs the agent to include a
 `<progress>` block in every response.

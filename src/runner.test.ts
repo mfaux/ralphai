@@ -223,10 +223,9 @@ function makeResolvedConfig(
     issueInProgressLabel: "ralphai:in-progress",
     issueRepo: "",
     issueCommentProgress: "true",
-    turnTimeout: 0,
+    taskTimeout: 0,
     continuous: "false",
     autoCommit: "false",
-    turns: 1,
     maxLearnings: 20,
     workspaces: null,
     ...overrides,
@@ -332,7 +331,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        turns: 1,
         autoCommit: "true",
       }),
       cwd: dir,
@@ -363,7 +361,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        turns: 1,
         autoCommit: "true",
       }),
       cwd: dir,
@@ -380,11 +377,11 @@ describe("runRunner — completion", () => {
     const logFile = join(archiveDir, "logtest", "agent-output.log");
     expect(existsSync(logFile)).toBe(true);
     const content = readFileSync(logFile, "utf-8");
-    expect(content).toContain("--- Turn 1 ---");
+    expect(content).toContain("--- Task 1 ---");
     expect(content).toContain("agent-says-hello");
   });
 
-  test("stuck detection triggers after maxStuck turns with no progress", async () => {
+  test("stuck detection triggers after maxStuck tasks with no progress", async () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 
     writeFileSync(
@@ -398,7 +395,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        turns: 5,
         maxStuck: 2,
         autoCommit: "false",
       }),
@@ -498,7 +494,6 @@ describe("runRunner — patch mode", () => {
       config: makeResolvedConfig({
         agentCommand: agentScript,
         mode: "patch",
-        turns: 5,
         maxStuck: 2,
       }),
       cwd: dir,
@@ -601,7 +596,6 @@ describe("runRunner — auto-commit", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        turns: 1,
         autoCommit: "true",
       }),
       cwd: dir,

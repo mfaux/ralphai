@@ -68,7 +68,7 @@ renamed, what gets extracted.>
 
 Refactor tasks should be scoped to preserve a green build at each step.
 
-**Too cautious:**
+**Too cautious** (these are subtasks, not separate tasks):
 
 ```
 Task 1: Create new file
@@ -78,11 +78,14 @@ Task 4: Update imports
 Task 5: Delete old file
 ```
 
-**Right-sized:**
+**Right-sized** (one task, with subtasks as guidance):
 
 ```
-Task 1: Extract functions A and B into new module, update imports,
-         delete old code
+Task 1: Extract functions A and B into new module
+  - Move functions to new file
+  - Update all import paths
+  - Delete old code
+  - Run tests to verify
 ```
 
 **Too aggressive:**

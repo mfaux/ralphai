@@ -53,6 +53,11 @@ numbers.>
 
 **Docs:** <What docs to update, if any.>
 
+**Subtasks** (optional, for multi-step tasks):
+
+- **Step description:** what to do
+- **Another step:** what to do
+
 ### Task 2: <Title>
 
 ...
@@ -67,7 +72,7 @@ numbers.>
 
 A feature task should be a meaningful vertical slice: code + tests + docs.
 
-**Too small** (wastes turns on overhead):
+**Too small** (adds unnecessary overhead):
 
 ```
 Task 1: Add ConfigType union member
@@ -75,7 +80,7 @@ Task 2: Wire ConfigType into parseConfig
 Task 3: Test parseConfig with new type
 ```
 
-**Right-sized** (one slice, one turn):
+**Right-sized** (one slice, one session):
 
 ```
 Task 1: Add config type support — add union member, wire into parseConfig,

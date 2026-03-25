@@ -7,9 +7,9 @@ description: >-
 
 # Writing Ralphai Plan Files
 
-Plans are markdown files that Ralphai executes autonomously, one task per turn.
-Each turn starts with a fresh agent session containing only the plan and a
-progress log, so plans must be self-contained and specific.
+Plans are markdown files that Ralphai executes autonomously. Each task gets a
+fresh agent session containing only the plan and a progress log, so plans must
+be self-contained and specific.
 
 ## Steps
 
@@ -34,7 +34,7 @@ progress log, so plans must be self-contained and specific.
 2. **Right-sized tasks.** Each task is a vertical slice: implementation +
    tests + doc updates in one commit. Don't split "add feature" / "test
    feature" / "document feature" into separate tasks. Don't make tasks so
-   small that the per-turn overhead dwarfs the work.
+   small that the per-task overhead dwarfs the work.
 3. **Vertical slices first.** The first task should deliver a minimal but
    working end-to-end path. Subsequent tasks widen the slice.
 4. **Risky work first.** Architectural decisions, integration points, and
@@ -86,6 +86,25 @@ Task 1: Add parser with tests and doc updates
 1. Thin vertical slice first — types + function + wiring + test for one path
 2. Widen — additional cases, inputs, error handling
 3. Harden — edge cases, validation
+
+### Subtasks
+
+When a task has multiple logical steps, list them as subtasks inside the task.
+The agent handles all subtasks in a single session. Subtasks are guidance, not
+separate iterations.
+
+```
+Task 1: Extract parser into its own module
+  - **Move functions:** relocate `parse()` and `validate()` from `src/main.ts`
+    to `src/parser.ts`
+  - **Update imports:** fix all import paths in files that reference the moved
+    functions
+  - **Verify:** run existing tests to confirm no regressions
+```
+
+Use subtasks when the steps within a task have a natural order or when listing
+them helps the agent stay organized. Don't use subtasks for trivial tasks where
+the steps are obvious.
 
 ## Advanced Options
 

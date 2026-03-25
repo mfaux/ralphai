@@ -71,7 +71,7 @@ interface WorktreeOptions {
   subcommand: WorktreeSubcommand;
   plan?: string; // --plan=<file>
   dir?: string; // --dir=<path>
-  runArgs: string[]; // passthrough args for the runner (--turns, --agent-command, etc.)
+  runArgs: string[]; // passthrough args for the runner (--agent-command, etc.)
 }
 
 interface RalphaiOptions {
@@ -91,7 +91,6 @@ interface WizardAnswers {
   agentCommand: string;
   baseBranch: string;
   feedbackCommands: string;
-  turns?: number;
   mode?: "branch" | "pr" | "patch";
   autoCommit?: boolean;
   issueSource: "none" | "github";
@@ -407,24 +406,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
-  // 4. Turns per plan
-  const turnsInput = await clack.text({
-    message: "Turns per plan (0 = unlimited):",
-    initialValue: "5",
-    validate: (value) => {
-      if (!/^[0-9]+$/.test(value.trim()))
-        return "Must be a non-negative integer (0 = unlimited)";
-    },
-  });
-
-  if (clack.isCancel(turnsInput)) {
-    clack.cancel("Setup cancelled.");
-    return null;
-  }
-
-  const turns = parseInt(turnsInput, 10);
-
-  // 5. Workflow mode
+  // 4. Workflow mode
   const modeSelection = await clack.select({
     message: "Workflow mode:",
     options: [
@@ -513,7 +495,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     agentCommand,
     baseBranch,
     feedbackCommands: feedbackCommands || "",
-    turns,
     mode,
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
@@ -644,10 +625,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     agentCommand: answers.agentCommand,
     feedbackCommands,
     baseBranch: answers.baseBranch,
-    turns: answers.turns ?? 5,
     mode: answers.mode ?? "branch",
     autoCommit: answers.autoCommit ?? false,
-    turnTimeout: 0,
+    taskTimeout: 0,
     continuous: false,
     issueSource: answers.issueSource ?? "none",
     issueLabel: "ralphai",
@@ -1431,7 +1411,6 @@ async function runRalphaiInit(
       agentCommand,
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
-      turns: 5,
       mode: "branch",
       autoCommit: false,
       issueSource: "none",
@@ -1516,7 +1495,7 @@ async function runRalphaiInit(
   // Warn if no feedback commands were detected — the agent won't get feedback
   if (!answers.feedbackCommands.trim()) {
     const msg =
-      "No build/test/lint scripts detected. Your agent won't get feedback between turns. Add feedbackCommands to config.json.";
+      "No build/test/lint scripts detected. Your agent won't get feedback between tasks. Add feedbackCommands to config.json.";
     if (options.yes) {
       console.log(`${TEXT}Warning:${RESET} ${DIM}${msg}${RESET}`);
     } else {
@@ -1821,7 +1800,7 @@ function showWorktreeHelp(): void {
   );
   console.log();
   console.log(
-    `${DIM}All other options are forwarded to the task runner (for example, --turns=<n>, --resume, --feedback-commands=...).${RESET}`,
+    `${DIM}All other options are forwarded to the task runner (for example, --resume, --feedback-commands=...).${RESET}`,
   );
 }
 
@@ -2346,17 +2325,6 @@ function runRalphaiStatus(cwd: string): void {
       parts.push(`${completed} of ${totalTasks} tasks`);
     }
 
-    // Turns used / budget
-    if (receipt) {
-      if (receipt.turns_budget > 0) {
-        parts.push(
-          `turn ${receipt.turns_completed} of ${receipt.turns_budget}`,
-        );
-      } else if (receipt.turns_budget === 0) {
-        parts.push("unlimited turns");
-      }
-    }
-
     // Worktree info from receipt
     if (receipt?.source === "worktree") {
       parts.push(`worktree: ${slug}`);
@@ -2671,12 +2639,11 @@ const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/];
 
 /** Patterns for config flags that are parsed by the TS config resolver. */
 const CONFIG_FLAG_PATTERNS = [
-  /^--turns=/,
   /^--agent-command=/,
   /^--feedback-commands=/,
   /^--base-branch=/,
   /^--max-stuck=/,
-  /^--turn-timeout=/,
+  /^--task-timeout=/,
   /^--branch$/,
   /^--pr$/,
   /^--patch$/,
@@ -2702,12 +2669,9 @@ function showRunHelp(): void {
     "Usage: ralphai run [options]",
     "",
     "  Auto-detects work: resumes in-progress plans, or picks from backlog.",
-    "  Turn budget resets for each new plan (normal mode).",
-    "  Pass 0 for unlimited turns (runs until complete or stuck).",
-    "  Default: 5 turns per plan.",
+    "  Runs until all tasks are complete, or stuck detection stops the run.",
     "",
     "Options:",
-    "  --turns=<n>                      Turns per plan (default: 5, 0 = unlimited)",
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
     "  --resume, -r                     Auto-commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
@@ -2720,8 +2684,8 @@ function showRunHelp(): void {
     "  --patch                          Patch mode: leave changes uncommitted in working tree",
     "  --continuous                     Keep processing backlog plans after the first completes",
     "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
-    "  --turn-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)",
-    "  --auto-commit                    Enable auto-commit of agent changes (per-turn and resume recovery)",
+    "  --task-timeout=<seconds>         Timeout per agent invocation (default: 0 = no timeout)",
+    "  --auto-commit                    Enable auto-commit of agent changes (per-task and resume recovery)",
     "  --no-auto-commit                 Disable auto-commit (default; only meaningful in patch mode)",
     "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
     "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)",
@@ -2734,7 +2698,7 @@ function showRunHelp(): void {
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,",
-    "                  mode, continuous, autoCommit, turns, turnTimeout, promptMode,",
+    "                  mode, continuous, autoCommit, taskTimeout, promptMode,",
     "                  issueSource, issueLabel,",
     "                  issueInProgressLabel, issueRepo,",
     "                  issueCommentProgress",
@@ -2742,8 +2706,8 @@ function showRunHelp(): void {
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
     "                   RALPHAI_MODE, RALPHAI_CONTINUOUS,",
-    "                   RALPHAI_AUTO_COMMIT, RALPHAI_TURNS,",
-    "                   RALPHAI_TURN_TIMEOUT,",
+    "                   RALPHAI_AUTO_COMMIT,",
+    "                   RALPHAI_TASK_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
     "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,",
@@ -2753,19 +2717,17 @@ function showRunHelp(): void {
     "Precedence: CLI flags > env vars > config file > built-in defaults",
     "",
     "Examples:",
-    "  ralphai run --turns=10                                # 10 turns per plan (default: 5)",
-    "  ralphai run --turns=0                                 # unlimited turns per plan",
-    "  ralphai run --dry-run                                 # preview only",
-    "  ralphai run --turns=10 --dry-run                      # preview with explicit turns",
-    "  ralphai run --turns=10 --resume                       # recover dirty state and continue",
-    "  ralphai run --turns=10 --agent-command='claude -p'     # use Claude Code",
-    "  ralphai run --turns=10 --agent-command='opencode run --agent build'  # use OpenCode",
-    "  ralphai run --turns=10 --branch                       # create isolated branch, commit (no PR)",
-    "  ralphai run --turns=10 --branch --continuous          # keep draining backlog on isolated branches",
-    "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run --turns=10  # override via env var",
+    "  ralphai run                                             # run until all tasks complete",
+    "  ralphai run --dry-run                                   # preview only",
+    "  ralphai run --resume                                    # recover dirty state and continue",
+    "  ralphai run --agent-command='claude -p'                 # use Claude Code",
+    "  ralphai run --agent-command='opencode run --agent build'  # use OpenCode",
+    "  ralphai run --branch                                    # create isolated branch, commit (no PR)",
+    "  ralphai run --branch --continuous                       # keep draining backlog on isolated branches",
+    "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run          # override via env var",
     "",
     "Feature branch workflow:",
-    "  ralphai run --turns=10 --patch --base-branch=feature/big-thing  # leave changes uncommitted on a feature branch",
+    "  ralphai run --patch --base-branch=feature/big-thing     # leave changes uncommitted on a feature branch",
   ];
   console.log(lines.join("\n"));
 }

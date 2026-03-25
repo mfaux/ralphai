@@ -262,7 +262,6 @@ describe("status subcommand", () => {
         "worktree_path=/tmp/wt-dark-mode",
         "branch=ralphai/dark-mode",
         "slug=dark-mode",
-        "turns_completed=2",
         "tasks_completed=1",
       ].join("\n"),
     );
@@ -299,7 +298,6 @@ describe("status subcommand", () => {
         "source=main",
         "branch=ralphai/legacy",
         "slug=legacy",
-        "turns_completed=1",
       ].join("\n"),
     );
 
@@ -337,7 +335,6 @@ describe("status subcommand", () => {
         "source=main",
         "branch=ralphai/feature",
         "slug=feature",
-        "turns_completed=3",
         "tasks_completed=3",
       ].join("\n"),
     );
@@ -348,107 +345,6 @@ describe("status subcommand", () => {
     expect(result.exitCode).toBe(0);
     // Should show 3 (from receipt), not 2 (from progress.md parsing)
     expect(output).toContain("3 of 4 tasks");
-  });
-
-  it("status shows turn progress when receipt has turns_budget", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
-
-    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-    const planDir = join(ipDir, "prd-search");
-    mkdirSync(planDir, { recursive: true });
-
-    // Plan with 2 tasks
-    writeFileSync(
-      join(planDir, "prd-search.md"),
-      "# Search\n\n### Task 1: Index\n### Task 2: Query\n",
-    );
-
-    // Receipt with turns_budget=5, turns_completed=2
-    writeFileSync(
-      join(planDir, "receipt.txt"),
-      [
-        "started_at=2026-03-07T12:00:00Z",
-        "source=main",
-        "branch=ralphai/search",
-        "slug=search",
-        "turns_budget=5",
-        "turns_completed=2",
-        "tasks_completed=1",
-      ].join("\n"),
-    );
-
-    const result = runCli(["status"], ctx.dir, testEnv());
-    const output = result.stdout + result.stderr;
-
-    expect(result.exitCode).toBe(0);
-    expect(output).toContain("turn 2 of 5");
-  });
-
-  it("status shows unlimited turns when turns_budget is 0", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
-
-    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-    const planDir = join(ipDir, "prd-refactor");
-    mkdirSync(planDir, { recursive: true });
-
-    // Plan with 1 task
-    writeFileSync(
-      join(planDir, "prd-refactor.md"),
-      "# Refactor\n\n### Task 1: Cleanup\n",
-    );
-
-    // Receipt with turns_budget=0 (unlimited)
-    writeFileSync(
-      join(planDir, "receipt.txt"),
-      [
-        "started_at=2026-03-07T12:00:00Z",
-        "source=main",
-        "branch=ralphai/refactor",
-        "slug=refactor",
-        "turns_budget=0",
-        "turns_completed=4",
-        "tasks_completed=0",
-      ].join("\n"),
-    );
-
-    const result = runCli(["status"], ctx.dir, testEnv());
-    const output = result.stdout + result.stderr;
-
-    expect(result.exitCode).toBe(0);
-    expect(output).toContain("unlimited turns");
-  });
-
-  it("status shows no turns info for old receipt without turns_budget", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
-
-    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-    const planDir = join(ipDir, "prd-old-plan");
-    mkdirSync(planDir, { recursive: true });
-
-    writeFileSync(
-      join(planDir, "prd-old-plan.md"),
-      "# Old Plan\n\n### Task 1: Stuff\n",
-    );
-
-    // Old receipt without turns_budget field — defaults to 0 in parseReceipt
-    writeFileSync(
-      join(planDir, "receipt.txt"),
-      [
-        "started_at=2026-03-07T12:00:00Z",
-        "source=main",
-        "branch=ralphai/old-plan",
-        "slug=old-plan",
-        "turns_completed=1",
-        "tasks_completed=0",
-      ].join("\n"),
-    );
-
-    const result = runCli(["status"], ctx.dir, testEnv());
-    const output = result.stdout + result.stderr;
-
-    expect(result.exitCode).toBe(0);
-    // Old receipts without turns_budget default to 0, which shows "unlimited turns"
-    expect(output).toContain("unlimited turns");
   });
 
   it("status shows orphaned receipt as a problem", () => {
@@ -466,7 +362,6 @@ describe("status subcommand", () => {
         "source=main",
         "branch=ralphai/orphan",
         "slug=orphan",
-        "turns_completed=0",
       ].join("\n"),
     );
 
@@ -524,7 +419,6 @@ describe("status subcommand", () => {
         "branch=ralphai/remove-fallback-agents",
         "slug=remove-fallback-agents",
         "plan_file=remove-fallback-agents.md",
-        "turns_completed=2",
         "tasks_completed=2",
       ].join("\n"),
     );
@@ -564,7 +458,6 @@ describe("status subcommand", () => {
         "branch=ralphai/gh-42-search",
         "slug=gh-42-search",
         "plan_file=gh-42-search.md",
-        "turns_completed=1",
         "tasks_completed=1",
       ].join("\n"),
     );
@@ -630,8 +523,6 @@ describe("status subcommand", () => {
         "source=main",
         "branch=ralphai/stuck-plan",
         "slug=stuck-plan",
-        "turns_budget=5",
-        "turns_completed=5",
         "tasks_completed=1",
         "outcome=stuck",
       ].join("\n"),
@@ -665,8 +556,6 @@ describe("status subcommand", () => {
         "source=main",
         "branch=ralphai/active",
         "slug=active",
-        "turns_budget=5",
-        "turns_completed=2",
         "tasks_completed=0",
       ].join("\n"),
     );
@@ -676,7 +565,6 @@ describe("status subcommand", () => {
 
     expect(result.exitCode).toBe(0);
     expect(output).toContain("[in progress]");
-    expect(output).toContain("turn 2 of 5");
   });
 });
 

@@ -299,28 +299,6 @@ describe("parseConfigFile", () => {
     );
   });
 
-  it("parses turns", () => {
-    const file = join(ctx.dir, "turns.json");
-    writeFileSync(file, JSON.stringify({ turns: 10 }));
-    const result = parseConfigFile(file)!;
-    expect(result.values.turns).toBe(10);
-  });
-
-  it("accepts turns of 0 (unlimited)", () => {
-    const file = join(ctx.dir, "turns0.json");
-    writeFileSync(file, JSON.stringify({ turns: 0 }));
-    const result = parseConfigFile(file)!;
-    expect(result.values.turns).toBe(0);
-  });
-
-  it("rejects negative turns", () => {
-    const file = join(ctx.dir, "neg-turns.json");
-    writeFileSync(file, JSON.stringify({ turns: -1 }));
-    expect(() => parseConfigFile(file)).toThrow(
-      "'turns' must be a non-negative integer",
-    );
-  });
-
   it("parses workspaces", () => {
     const file = join(ctx.dir, "ws.json");
     writeFileSync(
@@ -397,11 +375,6 @@ describe("applyEnvOverrides", () => {
       "must be 'true' or 'false'",
     );
   });
-
-  it("extracts turns as number", () => {
-    const result = applyEnvOverrides({ RALPHAI_TURNS: "10" });
-    expect(result.turns).toBe(10);
-  });
 });
 
 // ---- CLI arg parsing ----
@@ -411,22 +384,6 @@ describe("parseCLIArgs", () => {
     const result = parseCLIArgs([]);
     expect(result.overrides).toEqual({});
     expect(result.rawFlags).toEqual({});
-  });
-
-  it("parses --turns=N", () => {
-    const result = parseCLIArgs(["--turns=10"]);
-    expect(result.overrides.turns).toBe(10);
-  });
-
-  it("parses --turns=0 (unlimited)", () => {
-    const result = parseCLIArgs(["--turns=0"]);
-    expect(result.overrides.turns).toBe(0);
-  });
-
-  it("rejects non-numeric --turns", () => {
-    expect(() => parseCLIArgs(["--turns=abc"])).toThrow(
-      "must be a non-negative integer",
-    );
   });
 
   it("parses --agent-command=value", () => {
@@ -508,12 +465,10 @@ describe("parseCLIArgs", () => {
 
   it("parses multiple flags together", () => {
     const result = parseCLIArgs([
-      "--turns=10",
       "--agent-command=claude -p",
       "--pr",
       "--continuous",
     ]);
-    expect(result.overrides.turns).toBe(10);
     expect(result.overrides.agentCommand).toBe("claude -p");
     expect(result.overrides.mode).toBe("pr");
     expect(result.overrides.continuous).toBe("true");
@@ -550,8 +505,6 @@ describe("resolveConfig", () => {
     expect(config.baseBranch.source).toBe("default");
     expect(config.mode.value).toBe("branch");
     expect(config.mode.source).toBe("default");
-    expect(config.turns.value).toBe(5);
-    expect(config.turns.source).toBe("default");
     expect(config.maxStuck.value).toBe(3);
     expect(config.maxStuck.source).toBe("default");
   });
@@ -602,7 +555,6 @@ describe("resolveConfig", () => {
       baseBranch: "from-config",
       mode: "pr",
       maxStuck: 7,
-      turns: 20,
     });
     const { config } = resolveConfig({
       cwd,
@@ -621,9 +573,6 @@ describe("resolveConfig", () => {
     // maxStuck: config wins (no env or CLI override)
     expect(config.maxStuck.value).toBe(7);
     expect(config.maxStuck.source).toBe("config");
-    // turns: config wins (no env or CLI override)
-    expect(config.turns.value).toBe(20);
-    expect(config.turns.source).toBe("config");
     // continuous: default (nothing overrides)
     expect(config.continuous.value).toBe("false");
     expect(config.continuous.source).toBe("default");
@@ -667,8 +616,8 @@ describe("resolveConfig", () => {
     const cwd = join(ctx.dir, "repo-cli-bad");
     mkdirSync(cwd, { recursive: true });
     expect(() =>
-      resolveConfig({ cwd, envVars: env(), cliArgs: ["--turns=abc"] }),
-    ).toThrow("must be a non-negative integer");
+      resolveConfig({ cwd, envVars: env(), cliArgs: ["--max-stuck=abc"] }),
+    ).toThrow("must be a positive integer");
   });
 
   it("returns the resolved config file path", () => {

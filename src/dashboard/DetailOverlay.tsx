@@ -137,17 +137,6 @@ function SummaryView({ plan }: { plan: PlanInfo }) {
         </Box>
       )}
 
-      {(plan.turnsBudget !== undefined ||
-        plan.turnsCompleted !== undefined) && (
-        <Box marginTop={1}>
-          <Text dimColor>{"Turns       "}</Text>
-          <ProgressBar
-            current={plan.turnsCompleted ?? 0}
-            total={plan.turnsBudget ?? 0}
-          />
-        </Box>
-      )}
-
       {(plan.totalTasks !== undefined || plan.tasksCompleted !== undefined) && (
         <Box>
           <Text dimColor>{"Tasks       "}</Text>

@@ -2,8 +2,7 @@
  * Receipt CLI — thin wrapper around src/receipt.ts for shell callers.
  *
  * Usage:
- *   node receipt-cli.mjs init          <receipt-path> <source> <branch> <slug> <plan-file> <turns-budget> [worktree-path]
- *   node receipt-cli.mjs update-turn   <receipt-path>
+ *   node receipt-cli.mjs init          <receipt-path> <source> <branch> <slug> <plan-file> [worktree-path]
  *   node receipt-cli.mjs update-tasks  <receipt-path> <progress-path>
  *   node receipt-cli.mjs check-source  <wip-dir> <is-worktree>
  *
@@ -15,7 +14,6 @@
 
 import {
   initReceipt,
-  updateReceiptTurn,
   updateReceiptTasks,
   checkReceiptSource,
 } from "./receipt.ts";
@@ -25,33 +23,17 @@ const command = args[0];
 
 if (!command) {
   process.stderr.write(
-    "Usage: receipt-cli <init|update-turn|update-tasks|check-source> ...\n",
+    "Usage: receipt-cli <init|update-tasks|check-source> ...\n",
   );
   process.exit(2);
 }
 
 switch (command) {
   case "init": {
-    const [
-      ,
-      receiptPath,
-      source,
-      branch,
-      slug,
-      planFile,
-      turnsBudgetStr,
-      worktreePath,
-    ] = args;
-    if (
-      !receiptPath ||
-      !source ||
-      !branch ||
-      !slug ||
-      !planFile ||
-      !turnsBudgetStr
-    ) {
+    const [, receiptPath, source, branch, slug, planFile, worktreePath] = args;
+    if (!receiptPath || !source || !branch || !slug || !planFile) {
       process.stderr.write(
-        "Usage: receipt-cli init <receipt-path> <source> <branch> <slug> <plan-file> <turns-budget> [worktree-path]\n",
+        "Usage: receipt-cli init <receipt-path> <source> <branch> <slug> <plan-file> [worktree-path]\n",
       );
       process.exit(2);
     }
@@ -60,19 +42,8 @@ switch (command) {
       branch,
       slug,
       plan_file: planFile,
-      turns_budget: parseInt(turnsBudgetStr, 10),
       worktree_path: worktreePath || undefined,
     });
-    break;
-  }
-
-  case "update-turn": {
-    const [, receiptPath] = args;
-    if (!receiptPath) {
-      process.stderr.write("Usage: receipt-cli update-turn <receipt-path>\n");
-      process.exit(2);
-    }
-    updateReceiptTurn(receiptPath);
     break;
   }
 

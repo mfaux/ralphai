@@ -4,7 +4,7 @@ Common issues and how to resolve them.
 
 ## "My plan is stuck"
 
-Ralphai aborts when it detects 3 consecutive turns with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
+Ralphai aborts when it detects 3 consecutive tasks with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
 
 **Steps:**
 
@@ -17,7 +17,7 @@ The `--resume` flag auto-commits any dirty working tree state and continues from
 
 ## "Agent keeps making the same mistake"
 
-Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it on the next turn.
+Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it in the next session.
 
 ```markdown
 ### 2025-01-15 — Describe the mistake briefly
@@ -31,7 +31,7 @@ Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear des
 
 ## "Build/test didn't run"
 
-The agent is instructed to run feedback commands each turn, but the commands themselves come from your configuration.
+The agent is instructed to run feedback commands each task, but the commands themselves come from your configuration.
 
 **Check:**
 
@@ -60,7 +60,7 @@ The agent CLI is configured via `agentCommand` with this precedence:
 - Verify the first token of the command is in your `PATH` — `ralphai doctor` checks this.
 - If unset, ralphai exits with: `ERROR: agentCommand is required.`
 
-## "Plan failed on first turn"
+## "Plan failed on first task"
 
 **Check:**
 

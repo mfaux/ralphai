@@ -1,6 +1,6 @@
 /**
  * Prompt assembly: formats file references and builds the full agent
- * prompt string for each turn of the runner loop.
+ * prompt string for each task of the runner loop.
  *
  * All file references are inlined (file content embedded in `<file>` XML
  * tags). Progress is reported via structured `<progress>` output blocks
@@ -61,7 +61,7 @@ export function formatFileRef(filepath: string, label?: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Build the full agent prompt for a single turn.
+ * Build the full agent prompt for a single task.
  *
  * Mode-aware conditionals handle patch vs. branch/PR mode differences.
  */
@@ -119,7 +119,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const commitInstruction =
     mode === "patch"
       ? "Leave all changes uncommitted in the working tree. Do NOT run git add or git commit."
-      : "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a turn with uncommitted changes.";
+      : "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish a task with uncommitted changes.";
 
   const completeInstruction =
     mode === "patch"
@@ -141,9 +141,9 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${learningsStep}
 ${commitStepNum}. ${commitInstruction}
-Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one turn and one commit. Do not combine tasks if you expect the total work to fill your context window.
+Work on the next incomplete task. If it is small and closely related to the following task(s), you may combine them into one task session and one commit. Do not combine tasks if you expect the total work to fill your context window.
 If all tasks are complete, output <promise>COMPLETE</promise> — ${completeInstruction}
-REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this turn, use:
+REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this task, use:
 <learnings>
 <entry>
 status: logged
@@ -154,19 +154,19 @@ root_cause: Why it happened
 prevention: How to avoid it
 </entry>
 </learnings>
-If no learnings this turn, use:
+If no learnings this task, use:
 <learnings>
 <entry>
 status: none
 </entry>
 </learnings>
 The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
-REQUIRED: Also include a <progress> block at the very end of your response (after learnings). For each task you completed this turn, use this exact format inside the block:
+REQUIRED: Also include a <progress> block at the very end of your response (after learnings). For each task you completed this session, use this exact format inside the block:
 ### Task N: <title>
 **Status:** Complete
 <summary of what was done>
 This format is required — ralphai parses it to track task completion.
-If no tasks were fully completed this turn, include a brief summary of partial progress.
+If no tasks were fully completed this session, include a brief summary of partial progress.
 Example:
 <progress>
 ### Task 3: Add validation

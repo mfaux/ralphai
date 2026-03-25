@@ -9,7 +9,7 @@
  * - help:   ? or Esc to close
  *
  * When a plan is in-progress the right side shows an animated spinner,
- * plan slug, mini progress summary (tasks/turns), and elapsed time.
+ * plan slug, mini progress summary (tasks), and elapsed time.
  * Toast messages still override the right-side content when present.
  */
 
@@ -37,14 +37,11 @@ const HINTS: Record<FocusTarget, string> = {
   help: "? or Esc to close",
 };
 
-/** Build the mini progress string (e.g. "tasks 3/7 · turns 4/6"). */
+/** Build the mini progress string (e.g. "tasks 3/7"). */
 function buildProgressSummary(plan: PlanInfo): string {
   const parts: string[] = [];
   if (plan.tasksCompleted != null && plan.totalTasks != null) {
     parts.push(`tasks ${plan.tasksCompleted}/${plan.totalTasks}`);
-  }
-  if (plan.turnsCompleted != null && plan.turnsBudget != null) {
-    parts.push(`turns ${plan.turnsCompleted}/${plan.turnsBudget}`);
   }
   return parts.join(" \u00B7 ");
 }
