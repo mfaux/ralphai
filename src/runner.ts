@@ -13,6 +13,7 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  rmSync,
   writeFileSync,
   renameSync,
 } from "fs";
@@ -465,6 +466,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   let continuousBranch = "";
   let continuousPrUrl = "";
   const skippedSlugs = new Set<string>();
+  let activePidFile: string | null = null;
 
   while (!interrupted) {
     console.log();
@@ -673,6 +675,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       process.exit(1);
     }
 
+    // --- Write PID file so the TUI can discover and stop this runner ---
+    const pidFile = join(wipDir, "runner.pid");
+    writeFileSync(pidFile, String(process.pid), "utf8");
+    activePidFile = pidFile;
+
     // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
@@ -812,6 +819,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         );
         completedPlans.push(basename(planFile));
 
+        // Remove PID file before archiving so it doesn't end up in out/
+        try {
+          rmSync(pidFile, { force: true });
+        } catch {
+          // Best-effort cleanup
+        }
+        activePidFile = null;
+
         archiveRun({
           wipFiles: [planFile],
           archiveDir: dirs.archiveDir,
@@ -900,6 +915,15 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       prUrl: continuousPrUrl,
     });
     console.log(finalize.message);
+  }
+
+  // --- Clean up PID file on exit (interrupted or drained backlog) ---
+  if (activePidFile) {
+    try {
+      rmSync(activePidFile, { force: true });
+    } catch {
+      // Best-effort cleanup
+    }
   }
 
   // Clean up signal handlers

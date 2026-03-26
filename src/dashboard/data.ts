@@ -77,6 +77,15 @@ export function loadPlans(cwd: string): PlanInfo[] {
     const receiptPath = join(inProgressDir, slug, "receipt.txt");
     const receipt = parseReceipt(receiptPath);
 
+    // Read runner PID if present
+    let runnerPid: number | undefined;
+    const pidPath = join(inProgressDir, slug, "runner.pid");
+    if (existsSync(pidPath)) {
+      const raw = readFileSync(pidPath, "utf8").trim();
+      const parsed = parseInt(raw, 10);
+      if (!isNaN(parsed)) runnerPid = parsed;
+    }
+
     plans.push({
       filename: file,
       slug,
@@ -89,6 +98,7 @@ export function loadPlans(cwd: string): PlanInfo[] {
       startedAt: receipt?.started_at ?? undefined,
       branch: receipt?.branch ?? undefined,
       worktreePath: receipt?.worktree_path ?? undefined,
+      runnerPid,
     });
   }
 

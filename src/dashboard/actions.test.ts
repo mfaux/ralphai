@@ -1,5 +1,5 @@
 import { join } from "path";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be set up before importing the module under test
@@ -43,6 +43,7 @@ import {
   resetPlan,
   purgePlan,
   removeWorktree,
+  stopRunner,
 } from "./actions.ts";
 
 // Cast mocked imports for type-safe access to mock methods
@@ -130,6 +131,9 @@ describe("resetPlan", () => {
     expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "receipt.txt"), {
       force: true,
     });
+    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "runner.pid"), {
+      force: true,
+    });
     // Renames plan file
     expect(renameSync).toHaveBeenCalledWith(
       join(WIP, "add-auth", "add-auth.md"),
@@ -213,5 +217,67 @@ describe("spawnRunner", () => {
     });
 
     expect(spawnRunner(REPO, "bad")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stopRunner
+// ---------------------------------------------------------------------------
+
+describe("stopRunner", () => {
+  let killSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    killSpy.mockRestore();
+  });
+
+  it("returns 'stopped' when process exists and SIGTERM succeeds", () => {
+    const slugDir = join(WIP, "my-plan");
+    const result = stopRunner(42, slugDir);
+
+    expect(result).toBe("stopped");
+    // Signal-0 check
+    expect(killSpy).toHaveBeenCalledWith(42, 0);
+    // SIGTERM
+    expect(killSpy).toHaveBeenCalledWith(42, "SIGTERM");
+    // PID file should NOT be deleted (runner cleans up on exit)
+    expect(rmSync).not.toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
+      force: true,
+    });
+  });
+
+  it("returns 'already-exited' and removes PID file when process is gone", () => {
+    killSpy.mockImplementation((pid, signal) => {
+      if (signal === 0) {
+        const err = new Error("ESRCH") as NodeJS.ErrnoException;
+        err.code = "ESRCH";
+        throw err;
+      }
+      return true;
+    });
+
+    const slugDir = join(WIP, "stale-plan");
+    const result = stopRunner(99, slugDir);
+
+    expect(result).toBe("already-exited");
+    expect(rmSync).toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
+      force: true,
+    });
+  });
+
+  it("returns 'failed' when SIGTERM throws", () => {
+    killSpy.mockImplementation((pid, signal) => {
+      if (signal === 0) return true;
+      throw new Error("EPERM");
+    });
+
+    const slugDir = join(WIP, "perm-plan");
+    const result = stopRunner(42, slugDir);
+
+    expect(result).toBe("failed");
   });
 });
