@@ -10,7 +10,7 @@ Requires Node.js 18+ (or Bun/Deno) and a [supported CLI agent](#supported-agents
 
 ```bash
 npx ralphai init --yes           # configure agent and feedback commands
-npx ralphai run                  # start running plans from the backlog
+npx ralphai                      # open the TUI and run a plan from the backlog
 ```
 
 `init --yes` auto-detects installed agents, checking **Claude Code** and **OpenCode** first, then other supported agents. Falls back to OpenCode if none are found. Use `--agent-command=<cmd>` to override (e.g. `--agent-command='claude -p'`).
@@ -58,7 +58,19 @@ Ask your coding agent to create plan files in the Ralphai backlog. If you instal
 Create a Ralphai plan for adding dark mode support.
 ```
 
-### 2. Run
+### 2. Use the TUI
+
+For day-to-day use, start with the interactive dashboard:
+
+```bash
+ralphai
+```
+
+The left pane lists plans grouped by state (active, queued, done). The right pane shows summary, plan content, progress log, and live agent output for the selected plan. Press **Tab** to switch panes, **s/p/g/o** to change tabs, and **r/R/P** to run, reset, or purge plans.
+
+`ralphai` is the primary workflow for humans. Use it to browse the backlog, inspect progress, and launch runs without remembering subcommands.
+
+### 3. Run headlessly
 
 Ralphai always creates or reuses a managed worktree on **`ralphai/<plan-slug>`**, so there is no need to create a feature branch yourself.
 
@@ -82,7 +94,9 @@ ralphai worktree list               # show active worktrees
 ralphai worktree clean              # remove completed worktrees
 ```
 
-### 3. Steer
+Use `ralphai run` when you want a non-interactive command, such as automation, quick terminal execution, or resuming work directly.
+
+### 4. Steer
 
 Plans flow through the pipeline:
 
@@ -93,7 +107,7 @@ parked/    backlog/  →  in-progress/  →  out/
 Park unready plans in `parked/`. Ralphai ignores that folder.
 Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The runner creates a slug folder automatically when moving a plan to `in-progress/`.
 
-### 4. Pause and resume
+### 5. Pause and resume
 
 Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
 
@@ -104,7 +118,7 @@ ralphai reset            # move in-progress plans back to backlog
 ralphai purge            # delete archived artifacts from pipeline/out/
 ```
 
-### 5. Close the learnings loop
+### 6. Close the learnings loop
 
 Ralphai logs mistakes to `LEARNINGS.md` (in global state) and flags durable lessons in `LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
 
@@ -142,7 +156,7 @@ ralphai                  # launches the dashboard (TTY only)
 
 Press **Tab** to toggle focus between panes, **s/p/g/o** to switch detail tabs, and **r/R/P** to run, reset, or purge plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
 
-This is a convenience layer. The headless `ralphai run`, `ralphai worktree list`, and `ralphai worktree clean` commands remain the primary workflow.
+For most people, this is the main way to use Ralphai. Reach for `ralphai run` when you want headless execution, and use `ralphai worktree list` or `ralphai worktree clean` for maintenance.
 
 ## Manage Your Installation
 

@@ -718,18 +718,23 @@ Create a file called \`hello-ralphai.txt\` in the repository root with:
   console.log();
   console.log(`${DIM}Next steps:${RESET}`);
   if (samplePlanCreated) {
-    console.log(`  A sample plan is ready. Run it:`);
+    console.log(`  A sample plan is ready.`);
+    console.log(`  Run it:`);
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
+    console.log(
+      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
+    );
+    console.log(`       ${TEXT}$ ralphai${RESET}`);
   } else {
     console.log(
       `  1. Write a plan in the backlog (run ${TEXT}ralphai backlog-dir${RESET} to find it)`,
     );
     console.log(`  2. Run it:`);
-    console.log(`       ${TEXT}$ ralphai worktree${RESET}`);
-    console.log(
-      `     ${DIM}Or: run directly (Ralphai will prompt if there are uncommitted changes):${RESET}`,
-    );
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
+    console.log(
+      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
+    );
+    console.log(`       ${TEXT}$ ralphai${RESET}`);
   }
   if (answers.issueSource === "github") {
     console.log();

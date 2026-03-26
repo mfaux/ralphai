@@ -48,6 +48,8 @@ Blocked for: `run`, `worktree`, `init`.
 
 Running `ralphai` with no subcommand in a TTY launches the interactive dashboard.
 
+For most people, this is the main way to use Ralphai. Browse plans here, inspect progress, and launch runs without leaving the TUI.
+
 Navigation:
 
 - `1`, `2`, `3` focus the repo bar, pipeline, or detail pane
@@ -89,6 +91,8 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 ## Run
 
 `ralphai run` is the only execution entrypoint. It always works through a managed git worktree.
+
+Use it for headless execution, automation, or when you want to kick off work directly from the terminal without opening the dashboard.
 
 What it does:
 

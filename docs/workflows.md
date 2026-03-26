@@ -4,6 +4,16 @@ Common patterns for working with Ralphai. Each recipe shows the command and what
 
 Back to the [README](../README.md) for setup and quickstart. See the [CLI Reference](cli-reference.md) for all flags.
 
+## Browse plans with the dashboard
+
+```bash
+ralphai
+```
+
+Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. Use **r** to run the selected backlog plan.
+
+This is the primary workflow for humans. Use it to browse the backlog, inspect in-progress work, and launch runs without switching commands.
+
 ## Drain the backlog onto one branch
 
 ```bash
@@ -79,10 +89,6 @@ To clean up stale entries (from deleted temp dirs or old projects):
 ralphai repos --clean
 ```
 
-## Browse plans with the dashboard
+## Run headlessly
 
-```bash
-ralphai
-```
-
-Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. The dashboard auto-refreshes every 3 seconds.
+Use `ralphai run` when you want headless execution, such as automation, scripts, or quick terminal-driven runs.

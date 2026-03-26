@@ -171,6 +171,7 @@ describe("init command", () => {
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("ralphai run");
+    expect(output).toContain("$ ralphai");
     expect(output).toContain("config.json");
     expect(output).toContain("hello-ralphai.md");
   });

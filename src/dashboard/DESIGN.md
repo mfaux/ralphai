@@ -77,7 +77,7 @@ The split follows the principle of **one responsibility per file**: rendering, s
 
 ## Detached Process Spawning
 
-`actions.ts` spawns runners as **detached, unref'd child processes** so the dashboard stays responsive and can exit without killing active runs. This matches how ralphai's CLI already works, where `ralphai worktree` spawns an agent in a worktree and returns immediately.
+`actions.ts` spawns runners as **detached, unref'd child processes** so the dashboard stays responsive and can exit without killing active runs. This matches how ralphai's CLI already works, where `ralphai run` creates or reuses a worktree, starts the agent there, and returns immediately.
 
 `resolveCliBin()` finds the CLI entry point in priority order: built dist (`dist/cli.mjs`), source (`src/cli.ts` with `--experimental-strip-types`), then `ralphai` in PATH.
 
