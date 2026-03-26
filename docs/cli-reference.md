@@ -46,7 +46,7 @@ Blocked for: `run`, `worktree`, `init`.
 
 ## Interactive Dashboard
 
-Running `ralphai` with no subcommand in a TTY launches the interactive dashboard.
+Running `ralphai` with no subcommand in a TTY launches the interactive dashboard. Browse plans here, inspect progress, and launch runs without leaving the TUI.
 
 Navigation:
 
@@ -89,6 +89,8 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 ## Run
 
 `ralphai run` is the only execution entrypoint. It always works through a managed git worktree.
+
+Use it for headless execution, automation, or when you want to kick off work directly from the terminal without opening the dashboard.
 
 What it does:
 

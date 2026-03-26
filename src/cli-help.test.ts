@@ -97,6 +97,9 @@ describe("CLI help and flags", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ralphai <command> --help");
+    expect(result.stdout).toContain(
+      "ralphai               # open the interactive dashboard",
+    );
     expect(result.stdout).toContain("ralphai init");
     expect(result.stdout).toContain("ralphai run");
     expect(result.stdout).toContain("ralphai worktree list");

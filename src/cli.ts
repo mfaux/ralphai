@@ -59,8 +59,9 @@ ${BOLD}Options:${RESET}
 Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 
 ${BOLD}Examples:${RESET}
+  ${DIM}$${RESET} ralphai               ${DIM}# open the interactive dashboard${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
-  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan${RESET}
+  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}
   ${DIM}$${RESET} ralphai worktree list ${DIM}# show active worktrees${RESET}
   ${DIM}$${RESET} ralphai worktree clean ${DIM}# remove completed worktrees${RESET}`);
 }

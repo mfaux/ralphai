@@ -80,7 +80,9 @@ A plan file uses Markdown headings to define tasks and optional subtasks:
 
 ## Worktree Execution Model
 
-`ralphai run` is the only execution entrypoint. It always runs work inside a managed git worktree.
+For most people, `ralphai` is the main entrypoint. The TUI lets you browse plans, inspect progress, and launch runs interactively.
+
+Under the hood, `ralphai run` is the headless execution command. It always runs work inside a managed git worktree, whether you invoke it directly or trigger a run from the TUI.
 
 For a normal run, Ralphai:
 
@@ -92,6 +94,8 @@ For a normal run, Ralphai:
 6. Opens or updates a **draft PR** when `gh` is available
 
 This keeps your main checkout clean and lets multiple plans run in parallel in separate directories.
+
+Use `ralphai run` directly when you want automation, scripting, or a non-interactive terminal flow.
 
 ## Stuck Detection
 

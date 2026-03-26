@@ -4,6 +4,16 @@ Common patterns for working with Ralphai. Each recipe shows the command and what
 
 Back to the [README](../README.md) for setup and quickstart. See the [CLI Reference](cli-reference.md) for all flags.
 
+## Browse plans with the dashboard
+
+```bash
+ralphai
+```
+
+Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. Use **r** to run the selected backlog plan.
+
+This is the primary workflow for humans. Use it to browse the backlog, inspect in-progress work, and launch runs without switching commands.
+
 ## Drain the backlog onto one branch
 
 ```bash
@@ -28,6 +38,12 @@ ralphai run --dry-run
 
 Previews which plan would be selected, which worktree and branch Ralphai would use, and whether it would open a draft PR. No files are moved, no branches created, no agent invoked.
 
+## Stop a running agent
+
+**Headless (`ralphai run`):** Press Ctrl-C in the terminal. The runner finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`.
+
+**TUI-launched:** Closing the TUI does **not** stop a running agent. Runners are detached background processes. See [Troubleshooting: How do I stop a running agent?](troubleshooting.md#how-do-i-stop-a-running-agent) for how to stop one outside the TUI. A built-in "Stop run" action is planned.
+
 ## Resume after editing a stuck plan
 
 ```bash
@@ -35,7 +51,9 @@ Previews which plan would be selected, which worktree and branch Ralphai would u
 ralphai run
 ```
 
-Ralphai auto-detects in-progress work and picks up where it left off. If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
+Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the TUI (`ralphai`) to see current progress and launch a new run from there.
+
+If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
 
 ```bash
 ralphai run --resume
@@ -79,10 +97,6 @@ To clean up stale entries (from deleted temp dirs or old projects):
 ralphai repos --clean
 ```
 
-## Browse plans with the dashboard
+## Run headlessly
 
-```bash
-ralphai
-```
-
-Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. The dashboard auto-refreshes every 3 seconds.
+Use `ralphai run` when you want headless execution, such as automation, scripts, or quick terminal-driven runs.

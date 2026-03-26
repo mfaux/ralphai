@@ -80,6 +80,28 @@ This is expected. `ralphai run` starts from the main repo, then hands work off t
 - Clean up abandoned finished worktrees with `ralphai worktree clean`
 - Inspect `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt` for the exact worktree path and branch
 
+## "How do I stop a running agent?"
+
+**Headless (`ralphai run`):** Press Ctrl-C in the terminal where the runner is active. The runner catches SIGINT/SIGTERM, finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`, so you can resume later.
+
+**TUI-launched (`ralphai`):** Closing the TUI does **not** stop a running agent. When you launch a run from the dashboard, the runner is spawned as a detached background process that continues independently.
+
+To stop a TUI-launched runner, find and terminate the process:
+
+```bash
+# Linux / macOS
+ps aux | grep 'ralphai.*run' | grep -v grep
+kill <pid>
+
+# Windows (PowerShell)
+Get-Process | Where-Object { $_.CommandLine -like '*ralphai*run*' }
+Stop-Process -Id <pid>
+```
+
+The runner handles SIGTERM gracefully, the same way it handles Ctrl-C: it finishes the current iteration, preserves all work in `in-progress/<slug>/`, and exits cleanly. No work is lost.
+
+A built-in "Stop run" action in the TUI is planned, which will remove the need for manual process management.
+
 ## "Working tree is dirty" after init
 
 Running `ralphai run` immediately after `ralphai init` may report a dirty working tree because init modifies `.gitignore` and optionally creates `AGENTS.md`. In an interactive terminal, Ralphai will prompt you to continue anyway.
