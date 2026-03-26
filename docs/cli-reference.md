@@ -46,9 +46,7 @@ Blocked for: `run`, `worktree`, `init`.
 
 ## Interactive Dashboard
 
-Running `ralphai` with no subcommand in a TTY launches the interactive dashboard.
-
-For most people, this is the main way to use Ralphai. Browse plans here, inspect progress, and launch runs without leaving the TUI.
+Running `ralphai` with no subcommand in a TTY launches the interactive dashboard. Browse plans here, inspect progress, and launch runs without leaving the TUI.
 
 Navigation:
 

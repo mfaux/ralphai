@@ -38,6 +38,12 @@ ralphai run --dry-run
 
 Previews which plan would be selected, which worktree and branch Ralphai would use, and whether it would open a draft PR. No files are moved, no branches created, no agent invoked.
 
+## Stop a running agent
+
+**Headless (`ralphai run`):** Press Ctrl-C in the terminal. The runner finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`.
+
+**TUI-launched:** Closing the TUI does **not** stop a running agent. Runners are detached background processes. See [Troubleshooting: How do I stop a running agent?](troubleshooting.md#how-do-i-stop-a-running-agent) for how to stop one outside the TUI. A built-in "Stop run" action is planned.
+
 ## Resume after editing a stuck plan
 
 ```bash
@@ -45,7 +51,9 @@ Previews which plan would be selected, which worktree and branch Ralphai would u
 ralphai run
 ```
 
-Ralphai auto-detects in-progress work and picks up where it left off. If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
+Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the TUI (`ralphai`) to see current progress and launch a new run from there.
+
+If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
 
 ```bash
 ralphai run --resume

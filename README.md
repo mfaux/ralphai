@@ -107,9 +107,13 @@ parked/    backlog/  →  in-progress/  →  out/
 Park unready plans in `parked/`. Ralphai ignores that folder.
 Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The runner creates a slug folder automatically when moving a plan to `in-progress/`.
 
-### 5. Pause and resume
+### 5. Pause, stop, and resume
 
-Stop mid-run any time. Work stays in `in-progress/<slug>/`. Resume with `ralphai run`, which auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
+**Headless (`ralphai run`):** Press Ctrl-C to stop the runner. It finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`.
+
+**TUI (`ralphai`):** Closing the TUI does **not** stop a running agent. Runners are detached background processes that continue in the background. See [Troubleshooting: How do I stop a running agent?](docs/troubleshooting.md#how-do-i-stop-a-running-agent) for how to stop one. A built-in "Stop run" action in the TUI is planned.
+
+**Resuming:** Reopen `ralphai` or run `ralphai run` to pick up where the agent left off. Ralphai auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
 
 ```bash
 ralphai status           # see what's queued, in progress, and any problems
