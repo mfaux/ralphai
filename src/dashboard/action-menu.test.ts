@@ -52,7 +52,37 @@ describe("buildMenuItems — plan context", () => {
     expect(actions).toContain("view-progress");
     expect(actions).toContain("view-output");
     expect(actions).toContain("reset");
+    expect(actions).not.toContain("stop-run");
     expect(items).toHaveLength(3);
+  });
+
+  it("includes 'Stop run' for in-progress plans with a runnerPid", () => {
+    const plan = makePlan({
+      slug: "active-task",
+      state: "in-progress",
+      runnerPid: 12345,
+    });
+    const items = buildMenuItems("plan", plan, null);
+
+    const actions = items.map((i) => i.action);
+    expect(actions).toContain("stop-run");
+    expect(actions).toContain("view-progress");
+    expect(actions).toContain("view-output");
+    expect(actions).toContain("reset");
+    expect(items).toHaveLength(4);
+  });
+
+  it("places 'Stop run' before 'Reset plan' for in-progress plans", () => {
+    const plan = makePlan({
+      slug: "active-task",
+      state: "in-progress",
+      runnerPid: 42,
+    });
+    const items = buildMenuItems("plan", plan, null);
+
+    const stopIdx = items.findIndex((i) => i.action === "stop-run");
+    const resetIdx = items.findIndex((i) => i.action === "reset");
+    expect(stopIdx).toBeLessThan(resetIdx);
   });
 
   it("returns archive actions for completed plans", () => {

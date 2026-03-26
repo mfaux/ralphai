@@ -105,8 +105,11 @@ export function buildMenuItems(
         items.push(
           { label: "View progress", action: "view-progress" },
           { label: "View output", action: "view-output" },
-          { label: "Reset plan", action: "reset", shortcut: "R" },
         );
+        if (plan.runnerPid) {
+          items.push({ label: "Stop run", action: "stop-run" });
+        }
+        items.push({ label: "Reset plan", action: "reset", shortcut: "R" });
         break;
       case "completed":
         items.push(

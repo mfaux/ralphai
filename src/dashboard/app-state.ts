@@ -8,8 +8,8 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { resolve } from "node:path";
-import type { RepoSummary } from "../global-state.ts";
+import { join, resolve } from "node:path";
+import { getRepoPipelineDirs, type RepoSummary } from "../global-state.ts";
 import type {
   FocusTarget,
   DetailTab,
@@ -34,6 +34,7 @@ import {
   resetPlan,
   purgePlan,
   removeWorktree,
+  stopRunner,
 } from "./actions.ts";
 
 const REFRESH_MS = 3000;
@@ -301,6 +302,18 @@ export function useAppState(termRows: number, termCols: number) {
           );
           break;
         }
+        case "stop-run":
+          if (!selectedPlan?.runnerPid || !selectedRepo?.repoPath) {
+            showToast("No running agent to stop");
+            break;
+          }
+          setOverlay({
+            kind: "confirm",
+            action: "stop-run",
+            slug: selectedPlan.slug,
+          });
+          setFocus("menu");
+          break;
         case "reset":
         case "purge":
         case "remove-worktree":
@@ -339,6 +352,28 @@ export function useAppState(termRows: number, termCols: number) {
         const { action, slug } = overlay;
         let success = false;
         switch (action) {
+          case "stop-run": {
+            const plan = displayPlans.find((p) => p.slug === slug);
+            if (!plan?.runnerPid) {
+              showToast("No running agent to stop");
+              break;
+            }
+            const dirs = getRepoPipelineDirs(selectedRepo.repoPath);
+            const slugDir = join(dirs.wipDir, slug);
+            const result = stopRunner(plan.runnerPid, slugDir);
+            switch (result) {
+              case "stopped":
+                showToast(`Stopped agent for ${slug}`);
+                break;
+              case "already-exited":
+                showToast(`Agent for ${slug} already exited`);
+                break;
+              case "failed":
+                showToast(`Failed to stop agent for ${slug}`);
+                break;
+            }
+            break;
+          }
           case "reset":
             success = resetPlan(selectedRepo.repoPath, slug);
             showToast(
@@ -372,7 +407,7 @@ export function useAppState(termRows: number, termCols: number) {
       setOverlay({ kind: "none" });
       setFocus("list");
     },
-    [overlay, selectedRepo?.repoPath, worktrees, showToast],
+    [overlay, selectedRepo?.repoPath, worktrees, displayPlans, showToast],
   );
 
   // --- Open action menu for the selected plan ---

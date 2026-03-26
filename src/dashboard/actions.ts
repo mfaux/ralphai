@@ -105,6 +105,7 @@ export function resetPlan(cwd: string, slug: string): boolean {
     mkdirSync(backlogDir, { recursive: true });
     rmSync(join(slugDir, "progress.md"), { force: true });
     rmSync(join(slugDir, "receipt.txt"), { force: true });
+    rmSync(join(slugDir, "runner.pid"), { force: true });
 
     if (existsSync(planFile)) {
       renameSync(planFile, dest);
@@ -114,6 +115,36 @@ export function resetPlan(cwd: string, slug: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Stop a running agent by PID. Uses signal-0 to verify the process
+ * exists before sending SIGTERM. Cleans up the PID file on success
+ * or if the process is already gone.
+ *
+ * @returns "stopped" | "already-exited" | "failed"
+ */
+export function stopRunner(
+  pid: number,
+  slugDir: string,
+): "stopped" | "already-exited" | "failed" {
+  const pidFile = join(slugDir, "runner.pid");
+  try {
+    // Signal 0: check if process exists (throws ESRCH if not)
+    process.kill(pid, 0);
+  } catch {
+    // Process is gone — clean up stale PID file
+    rmSync(pidFile, { force: true });
+    return "already-exited";
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+    // Don't delete PID file here — the runner will delete it on exit
+    return "stopped";
+  } catch {
+    return "failed";
   }
 }
 

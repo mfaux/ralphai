@@ -70,4 +70,6 @@ export interface PlanInfo {
   startedAt?: string;
   branch?: string;
   worktreePath?: string;
+  /** PID of the runner process, if a runner.pid file exists. */
+  runnerPid?: number;
 }
