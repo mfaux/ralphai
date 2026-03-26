@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from "child_process";
-import { existsSync, mkdtempSync, rmSync } from "fs";
+import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "vitest";
@@ -10,21 +10,36 @@ function sleepMs(ms: number): void {
 
 function cleanupTempDir(testDir: string): void {
   const isWindows = process.platform === "win32";
-  const maxAttempts = isWindows ? 6 : 1;
+  const maxAttempts = isWindows ? 12 : 1;
+  let dirToRemove = testDir;
+
+  if (isWindows && existsSync(testDir)) {
+    const renamedDir = `${testDir}-cleanup-${process.pid}-${Date.now()}`;
+    try {
+      renameSync(testDir, renamedDir);
+      dirToRemove = renamedDir;
+    } catch {
+      dirToRemove = testDir;
+    }
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    if (!existsSync(testDir)) {
+    if (!existsSync(dirToRemove)) {
       return;
     }
 
     try {
-      rmSync(testDir, { recursive: true, force: true, maxRetries: 5 });
+      rmSync(dirToRemove, {
+        recursive: true,
+        force: true,
+        maxRetries: isWindows ? 10 : 5,
+      });
       return;
     } catch (error) {
       if (!isWindows || attempt === maxAttempts) {
         throw error;
       }
-      sleepMs(50 * attempt);
+      sleepMs(100 * attempt);
     }
   }
 }

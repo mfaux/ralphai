@@ -251,14 +251,16 @@ describe("stopRunner", () => {
   });
 
   it("returns 'already-exited' and removes PID file when process is gone", () => {
-    killSpy.mockImplementation((pid, signal) => {
-      if (signal === 0) {
-        const err = new Error("ESRCH") as NodeJS.ErrnoException;
-        err.code = "ESRCH";
-        throw err;
-      }
-      return true;
-    });
+    killSpy.mockImplementation(
+      (pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0) {
+          const err = new Error("ESRCH") as NodeJS.ErrnoException;
+          err.code = "ESRCH";
+          throw err;
+        }
+        return true;
+      },
+    );
 
     const slugDir = join(WIP, "stale-plan");
     const result = stopRunner(99, slugDir);
@@ -270,10 +272,12 @@ describe("stopRunner", () => {
   });
 
   it("returns 'failed' when SIGTERM throws", () => {
-    killSpy.mockImplementation((pid, signal) => {
-      if (signal === 0) return true;
-      throw new Error("EPERM");
-    });
+    killSpy.mockImplementation(
+      (pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0) return true;
+        throw new Error("EPERM");
+      },
+    );
 
     const slugDir = join(WIP, "perm-plan");
     const result = stopRunner(42, slugDir);
