@@ -25,7 +25,6 @@ export type DetailTab = "summary" | "plan" | "progress" | "output";
 export interface ActionMenuItem {
   label: string;
   action: string;
-  shortcut?: string;
 }
 
 /**

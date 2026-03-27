@@ -234,8 +234,8 @@ export function useAppState(termRows: number, termCols: number) {
   const splitListWidth = Math.max(20, Math.floor(termCols * 0.3));
   const splitDetailWidth = termCols - splitListWidth;
   // In split mode, detail is inline (same vertical space as plan list).
-  // Detail chrome: 2 border rows + 1 title + 1 tab bar + 1 margin = 5.
-  const splitContentHeight = Math.max(5, termRows - CHROME_ROWS - 5);
+  // Detail chrome: 2 border rows + 1 title + 1 tab bar = 4.
+  const splitContentHeight = Math.max(5, termRows - CHROME_ROWS - 4);
 
   // --- Auto-set default tab when plan selection changes ---
   useEffect(() => {
@@ -249,10 +249,14 @@ export function useAppState(termRows: number, termCols: number) {
   const openDetail = useCallback(() => {
     if (!selectedPlan) return;
     setShowDetail(true);
-    // In split mode, keep focus on list so up/down navigates plans and
-    // the detail pane updates reactively. In overlay mode, focus detail.
     setFocus(termCols >= SPLIT_MIN_COLS ? "list" : "detail");
   }, [selectedPlan, termCols]);
+
+  const focusDetail = useCallback(() => {
+    if (!selectedPlan) return;
+    setShowDetail(true);
+    setFocus("detail");
+  }, [selectedPlan]);
 
   // --- Close detail ---
   const closeDetail = useCallback(() => {
@@ -463,6 +467,7 @@ export function useAppState(termRows: number, termCols: number) {
     // Detail
     showDetail,
     openDetail,
+    focusDetail,
     closeDetail,
     activeTab,
     setActiveTab,

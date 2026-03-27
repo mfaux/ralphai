@@ -55,7 +55,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     setScrollOffset,
     contentHeight,
     showDetail,
-    openDetail,
+    focusDetail,
     closeDetail,
     isSplitMode,
     overlay,
@@ -189,10 +189,9 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     // when the split pane is open; otherwise it is skipped.
     if (input && PANE_BY_NUMBER[input]) {
       const target = PANE_BY_NUMBER[input]!;
-      // "3" (detail) is only valid when split is open
-      if (target === "detail" && !showDetail) {
-        // Pressing 3 with no detail open: open detail in split mode
-        openDetail();
+      if (target === "detail") {
+        // Always open + focus detail in one press
+        focusDetail();
         return;
       }
       setFocus(target);
@@ -306,13 +305,7 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     }
 
     if (key.return) {
-      // If split is already open, Enter opens action menu (plan is visible).
-      // If split is closed, Enter opens detail.
-      if (showDetail) {
-        openActionMenu();
-      } else {
-        openDetail();
-      }
+      focusDetail();
       return;
     }
 

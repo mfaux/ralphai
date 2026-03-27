@@ -1,7 +1,7 @@
 /**
  * PlanList — full-width plan list, the primary view of the dashboard.
  *
- * Plans are grouped by state (ACTIVE, QUEUED, DONE) with headers.
+ * Plans are grouped by state (In progress, Backlog, Completed) with headers.
  * Each row shows cursor, state badge, slug, scope, worktree badge,
  * progress bar, and elapsed time. Gets all available vertical space.
  */
@@ -28,9 +28,9 @@ const STATE_ORDER: PlanInfo["state"][] = [
 ];
 
 const STATE_LABELS: Record<PlanInfo["state"], string> = {
-  "in-progress": "ACTIVE",
-  backlog: "QUEUED",
-  completed: "DONE",
+  "in-progress": "In progress",
+  backlog: "Backlog",
+  completed: "Completed",
 };
 
 /** State badge character for non-active states. */

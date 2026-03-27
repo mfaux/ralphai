@@ -96,11 +96,11 @@ describe("buildMenuItems — plan context", () => {
     expect(items).toHaveLength(3);
   });
 
-  it("includes keyboard shortcut hints", () => {
+  it("does not expose keyboard shortcut hints in menu items", () => {
     const plan = makePlan({ slug: "my-plan", state: "backlog" });
     const items = buildMenuItems("plan", plan, null);
     const runItem = items.find((i) => i.action === "run");
-    expect(runItem?.shortcut).toBe("r");
+    expect(runItem).toEqual({ label: "Run plan", action: "run" });
   });
 });
 

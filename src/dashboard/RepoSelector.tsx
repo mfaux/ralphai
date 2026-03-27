@@ -19,9 +19,10 @@ interface RepoSelectorProps {
 
 export function formatCounts(repo: RepoSummary): string {
   const parts: string[] = [];
-  if (repo.inProgressCount > 0) parts.push(`${repo.inProgressCount} active`);
-  if (repo.backlogCount > 0) parts.push(`${repo.backlogCount} queued`);
-  if (repo.completedCount > 0) parts.push(`${repo.completedCount} done`);
+  if (repo.inProgressCount > 0)
+    parts.push(`${repo.inProgressCount} in progress`);
+  if (repo.backlogCount > 0) parts.push(`${repo.backlogCount} backlog`);
+  if (repo.completedCount > 0) parts.push(`${repo.completedCount} completed`);
   return parts.length > 0 ? parts.join(" \u00B7 ") : "empty";
 }
 

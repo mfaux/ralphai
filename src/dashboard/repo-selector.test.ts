@@ -19,16 +19,18 @@ describe("formatCounts", () => {
     expect(formatCounts(makeRepo())).toBe("empty");
   });
 
-  it("shows active count only", () => {
-    expect(formatCounts(makeRepo({ inProgressCount: 2 }))).toBe("2 active");
+  it("shows in progress count only", () => {
+    expect(formatCounts(makeRepo({ inProgressCount: 2 }))).toBe(
+      "2 in progress",
+    );
   });
 
-  it("shows queued count only", () => {
-    expect(formatCounts(makeRepo({ backlogCount: 3 }))).toBe("3 queued");
+  it("shows backlog count only", () => {
+    expect(formatCounts(makeRepo({ backlogCount: 3 }))).toBe("3 backlog");
   });
 
-  it("shows done count only", () => {
-    expect(formatCounts(makeRepo({ completedCount: 1 }))).toBe("1 done");
+  it("shows completed count only", () => {
+    expect(formatCounts(makeRepo({ completedCount: 1 }))).toBe("1 completed");
   });
 
   it("joins multiple counts with middle dot", () => {
@@ -37,11 +39,13 @@ describe("formatCounts", () => {
       backlogCount: 3,
       completedCount: 1,
     });
-    expect(formatCounts(repo)).toBe("2 active \u00B7 3 queued \u00B7 1 done");
+    expect(formatCounts(repo)).toBe(
+      "2 in progress \u00B7 3 backlog \u00B7 1 completed",
+    );
   });
 
   it("omits zero counts from output", () => {
     const repo = makeRepo({ inProgressCount: 1, completedCount: 5 });
-    expect(formatCounts(repo)).toBe("1 active \u00B7 5 done");
+    expect(formatCounts(repo)).toBe("1 in progress \u00B7 5 completed");
   });
 });

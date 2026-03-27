@@ -52,12 +52,6 @@ export function ActionMenu({ items, cursor, title }: ActionMenuProps) {
               <Text color={selected ? "cyan" : undefined} bold={selected}>
                 {pointer} {item.label}
               </Text>
-              {item.shortcut && (
-                <Text dimColor>
-                  {"  "}
-                  {item.shortcut}
-                </Text>
-              )}
             </Box>
           );
         })}
@@ -97,7 +91,7 @@ export function buildMenuItems(
     switch (plan.state) {
       case "backlog":
         items.push(
-          { label: "Run plan", action: "run", shortcut: "r" },
+          { label: "Run plan", action: "run" },
           { label: "View plan file", action: "view-plan" },
         );
         break;
@@ -109,13 +103,13 @@ export function buildMenuItems(
         if (plan.runnerPid) {
           items.push({ label: "Stop run", action: "stop-run" });
         }
-        items.push({ label: "Reset plan", action: "reset", shortcut: "R" });
+        items.push({ label: "Reset plan", action: "reset" });
         break;
       case "completed":
         items.push(
           { label: "View summary", action: "view-summary" },
           { label: "View output", action: "view-output" },
-          { label: "Purge plan", action: "purge", shortcut: "P" },
+          { label: "Purge plan", action: "purge" },
         );
         break;
     }
