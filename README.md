@@ -66,7 +66,7 @@ For day-to-day use, start with the interactive dashboard:
 ralphai
 ```
 
-The left pane lists plans grouped by state (active, queued, done). The right pane shows summary, plan content, progress log, and live agent output for the selected plan. Press **Tab** to switch panes, **s/p/g/o** to change tabs, and **r/R/P** to run, reset, or purge plans.
+The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**). The right pane shows summary, plan content, progress log, and live agent output for the selected plan. Press **Tab** to switch panes, **Enter** to open or focus the detail pane, **s/p/g/o** to change tabs, and **r/R/P** to run, reset, or purge plans.
 
 `ralphai` is the primary workflow for humans. Use it to browse the backlog, inspect progress, and launch runs without remembering subcommands.
 
@@ -152,13 +152,13 @@ The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-di
 
 ## Interactive Dashboard
 
-Running bare `ralphai` in a terminal launches an interactive two-pane dashboard. The left pane lists plans grouped by state (active, queued, done); the right pane shows detail tabs for the selected plan: summary, plan content, progress log, and live agent output.
+Running bare `ralphai` in a terminal launches an interactive two-pane dashboard. The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**); the right pane shows detail tabs for the selected plan: summary, plan content, progress log, and live agent output.
 
 ```bash
 ralphai                  # launches the dashboard (TTY only)
 ```
 
-Press **Tab** to toggle focus between panes, **s/p/g/o** to switch detail tabs, and **r/R/P** to run, reset, or purge plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
+Press **Tab** to toggle focus between panes, **Enter** to open or focus the detail pane, **c** to copy the selected repo path, **s/p/g/o** to switch detail tabs, and **r/R/P** to run, reset, or purge plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
 
 For most people, this is the main way to use Ralphai. Reach for `ralphai run` when you want headless execution, and use `ralphai worktree list` or `ralphai worktree clean` for maintenance.
 

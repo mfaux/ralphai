@@ -55,7 +55,7 @@
 - **Runner config fallback for manual worktrees** — the runner resolves `ralphai.json` from the main repo when running in a manually-created worktree without the symlink.
 - **`ralphai purge`** — deletes all archived pipeline artifacts in `pipeline/out/`. Supports `--yes`/`-y` to skip confirmation, consistent with reset and teardown. (#75)
 - **`ralphai doctor`** — validates your setup in one shot with 9 diagnostic checks: `.ralphai/` exists, `ralphai.json` valid, git repo detected, working tree clean, base branch exists, agent command in PATH, feedback commands run, backlog has plans, and no orphaned receipts. (#71)
-- **Sample plan in init wizard** — `ralphai init` now offers to create a `hello-ralphai.md` sample plan in the backlog, reducing friction for first-time users. Included by default with `--yes`. (#70)
+- **Sample plan in init wizard** — `ralphai init` now offers to create a `hello-world.md` sample plan in the backlog, reducing friction for first-time users. Included by default with `--yes`. (#70)
 - **AGENTS.md setup in init wizard** — `ralphai init` now offers to create or update `AGENTS.md` with a Ralphai section, so coding agents discover Ralphai outside of autonomous runs. Skips the prompt if the section already exists. Included by default with `--yes`. (#78)
 - **Deterministic plan selection** — replaced LLM-based plan selection with oldest-first ordering, eliminating token cost and non-deterministic behavior. (#71)
 

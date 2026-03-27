@@ -22,9 +22,9 @@ Ink 6.x has no mouse support (no `useMouse`, no mouse event parsing, no plugins)
 
 Key routing uses a **single `useInput` handler** (`keyboard.ts`) that dispatches based on `FocusTarget`:
 
-- **repo** — arrow keys cycle repos, Enter opens dropdown, number keys / Tab switch panes
-- **list** — arrow keys navigate plans, Enter opens detail, `a` opens action menu
-- **detail** — arrow keys scroll, left/right switch tabs, `l` toggles live-scroll
+- **repo** — arrow keys cycle repos, Enter opens dropdown, `c` copies the repo path, number keys / Tab switch panes
+- **list** — arrow keys navigate plans, Enter opens detail or focuses the detail pane, `a` opens action menu
+- **detail** — arrow keys scroll, left/right switch tabs
 - **menu** — arrow keys select, Enter triggers, Esc dismisses
 - **filter** — typing appends to query, Esc closes
 
@@ -42,9 +42,9 @@ The dashboard uses a **lazygit-style pane model** where number keys and Tab prov
 
 The `PANE_ORDER` array in `types.ts` defines the canonical order: `["repo", "list", "detail"]`. Number keys map directly to array indices. Tab/Shift+Tab wrap around using modular arithmetic. When the detail pane is not open, `cyclePane` filters it out so Tab skips directly between repo and list.
 
-When **RepoBar is focused**, `↑`/`↓` directly cycle through registered repos without opening the dropdown, providing fast switching. `Enter` opens the full dropdown for an overview of all repos with plan counts.
+When **RepoBar is focused**, `↑`/`↓` directly cycle through registered repos without opening the dropdown, providing fast switching. `Enter` opens the full dropdown for an overview of all repos with plan counts, and `c` copies the selected repo's full path to the clipboard.
 
-When **Pipeline is focused**, `↑`/`↓` navigate the plan list and `Enter` opens the detail split (or action menu if detail is already open).
+When **Pipeline is focused**, `↑`/`↓` navigate the plan list and `Enter` opens the detail split. If the split is already open, `Enter` moves focus to the detail pane.
 
 When **Detail is focused**, `↑`/`↓` scroll content, `←`/`→` switch tabs, and letter shortcuts (`s`/`p`/`g`/`o`) jump directly to a tab.
 
@@ -117,9 +117,10 @@ The dashboard separates pure logic from React rendering. Tests focus on the **pu
 
 - **`hooks.test.ts`** — `filterPlans` (15 tests covering text, state, scope, and combined filters)
 - **`format.test.ts`** — `truncateSlug` (7 tests for edge cases)
-- **`actions.test.ts`** — `removeWorktree`, `resetPlan`, `purgePlan`, `spawnRunner`, `spawnWorktreeRunner` (mocked filesystem and child_process)
+- **`actions.test.ts`** — `removeWorktree`, `resetPlan`, `purgePlan`, `spawnRunner`, and clipboard helpers (mocked filesystem and child_process)
 - **`action-menu.test.ts`** — `buildMenuItems` (context-sensitive menu construction for all panel/state combinations)
 - **`detail-pane.test.ts`** — `defaultTabForState` (tab selection per plan state)
+- **`state-labels.test.ts`** — visible pipeline labels for repo counts and detail state
 
 No component render tests. The presentational components (`ReposPanel`, `PipelinePanel`, etc.) are thin wrappers that map data to styled text. Testing them would mean testing Ink's rendering, which is both fragile and low-value. `ink-testing-library` is intentionally not installed.
 
@@ -134,21 +135,21 @@ When the user presses Enter on a plan (or `3` from any pane) and the terminal is
 ```
 ┌─────────────── RepoBar (full width) ───────────────┐
 ├── 2 PlanList (~30%) ──┬── 3 Detail (~70%) ─────────┤
-│ ACTIVE (2)            │ 3 feat/auth-flow  ✓ done   │
+│ In progress (2)       │ 3 feat/auth-flow  ✓ Completed │
 │ ➤ ◌ feat/auth-flow   │ Summary | Plan | ...       │
 │   ◌ fix/null-check    │                            │
-│ QUEUED (1)            │ State       ✓ done         │
+│ Backlog (1)           │ State       ✓ Completed    │
 │   ○ refactor/types    │ Scope       backend        │
-│ DONE (3)              │ Branch      ralphai/...    │
+│ Completed (3)         │ Branch      ralphai/...    │
 │   ✓ feat/export       │                            │
 ├───────────────────────┴────────────────────────────┤
-│ ↑↓ navigate · 3 detail · a actions · Esc close     │
+│ ↑↓ navigate · Enter focus detail · a actions · Esc close │
 └────────────────────────────────────────────────────┘
 ```
 
 **Width allocation.** The plan list gets `Math.max(20, floor(termCols * 0.3))`, the detail pane gets the remainder. The plan list's `maxSlugLen` recalculates automatically from its narrower width, truncating slugs as needed. Scope and worktree badges hide below 40 columns (existing responsive guards).
 
-**Focus model.** The detail pane is pane `3` in the `PANE_ORDER`, navigable via the `3` key, Tab, and Shift+Tab, just like the other panes. When the split opens (via Enter or `3`), focus stays on the plan list. Navigating plans with `↑`/`↓` updates the detail pane reactively. Pressing `3` or Tab moves focus to the detail pane for scrolling and tab switching. `2` or Shift+Tab returns focus to the list. `Esc` from the detail pane returns to the list; `Esc` from the list closes the split entirely. When the split is closed, Tab and `cyclePane` skip the detail pane automatically.
+**Focus model.** The detail pane is pane `3` in the `PANE_ORDER`, navigable via the `3` key, Tab, and Shift+Tab, just like the other panes. When the split opens (via Enter or `3`), focus stays on the plan list. Navigating plans with `↑`/`↓` updates the detail pane reactively. Pressing `Enter`, `3`, or Tab moves focus to the detail pane for scrolling and tab switching. `2` or Shift+Tab returns focus to the list. `Esc` from the detail pane returns to the list; `Esc` from the list closes the split entirely. When the split is closed, Tab and `cyclePane` skip the detail pane automatically.
 
 **Border highlighting.** Both panels use rounded borders. The focused panel gets a cyan border; the unfocused panel gets a dim gray border. This provides a clear visual indicator of which panel owns keyboard input.
 

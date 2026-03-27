@@ -117,7 +117,7 @@ describe("uninstall command", () => {
 
     // Remove sample plan so the backlog is truly empty
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-    const samplePlan = join(backlogDir, "hello-ralphai.md");
+    const samplePlan = join(backlogDir, "hello-world.md");
     if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
 
     const output = stripLogo(

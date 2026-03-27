@@ -3,7 +3,7 @@
  * (narrow terminals) and as an inline split pane (wide terminals).
  *
  * Four tabs: Summary, Plan, Progress, Output.
- * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
+ * Smart default tab per state: In progress -> Progress, Backlog -> Plan, Completed -> Summary.
  * Output tab shows the tail of agent-output.log.
  *
  * In overlay mode: opened by pressing Enter, dismissed with Esc.
@@ -15,6 +15,7 @@ import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
 import { useSpinner } from "./hooks.ts";
+import { getPlanStateLabel } from "./state-labels.ts";
 
 interface DetailOverlayProps {
   plan: PlanInfo;
@@ -38,7 +39,6 @@ function TabBar({ active }: { active: DetailTab }) {
       {TABS.map((tab, i) => {
         const isActive = tab === active;
         const label = tab.charAt(0).toUpperCase() + tab.slice(1);
-        const shortcut = tab.charAt(0);
         return (
           <Box key={tab}>
             {i > 0 && <Text dimColor>{" \u2502 "}</Text>}
@@ -47,10 +47,7 @@ function TabBar({ active }: { active: DetailTab }) {
                 {label}
               </Text>
             ) : (
-              <Text dimColor>
-                <Text>{shortcut}</Text>
-                {tab.slice(1)}
-              </Text>
+              <Text dimColor>{label}</Text>
             )}
           </Box>
         );
@@ -97,12 +94,7 @@ function SummaryView({ plan }: { plan: PlanInfo }) {
       : plan.state === "backlog"
         ? "\u25CB"
         : "\u2713";
-  const stateLabel =
-    plan.state === "in-progress"
-      ? "active"
-      : plan.state === "backlog"
-        ? "queued"
-        : "done";
+  const stateLabel = getPlanStateLabel(plan.state);
 
   return (
     <Box flexDirection="column">
@@ -269,7 +261,7 @@ export function DetailOverlay({
   );
 
   const planTitle =
-    "3 " + plan.slug + (plan.state === "completed" ? "  \u2713 done" : "");
+    "3 " + plan.slug + (plan.state === "completed" ? "  \u2713 Completed" : "");
 
   return (
     <Box
@@ -296,7 +288,7 @@ export function DetailOverlay({
       </Box>
 
       {/* Content area */}
-      <Box marginTop={1} flexDirection="column">
+      <Box flexDirection="column">
         {tab === "summary" && <SummaryView plan={plan} />}
 
         {tab === "plan" &&

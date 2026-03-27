@@ -4,8 +4,8 @@
  * Hints change based on the current FocusTarget and split-pane state:
  * - repo:       ↑↓ cycle repos · Enter dropdown · Tab next · ? help · q quit
  * - list:       ↑↓ navigate · Enter detail · a actions · / filter · ? help · q quit
- * - list+split: ↑↓ navigate · a actions · Esc close · ? help
- * - detail:     ↑↓ scroll · ←→ tabs · a actions · Esc back (+ l live-scroll on output tab)
+ * - list+split: ↑↓ navigate · Enter focus detail · a actions · Esc close · ? help
+ * - detail:     ↑↓ scroll · ←→ tabs · a actions · Esc back
  * - menu:       ↑↓ select · Enter confirm · Esc cancel
  * - filter:     type to filter · Enter apply · Esc clear
  * - help:       ? or Esc to close
@@ -42,7 +42,7 @@ const HINTS: Record<FocusTarget, string> = {
 
 /** Hints when the split pane is open and focus is on the plan list. */
 const SPLIT_LIST_HINT =
-  "\u2191\u2193 navigate \u00B7 a actions \u00B7 Esc close \u00B7 ? help";
+  "\u2191\u2193 navigate \u00B7 Enter focus detail \u00B7 a actions \u00B7 Esc close \u00B7 ? help";
 
 /** Build the mini progress string (e.g. "tasks 3/7"). */
 function buildProgressSummary(plan: PlanInfo): string {

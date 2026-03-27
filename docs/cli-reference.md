@@ -53,7 +53,7 @@ Navigation:
 - `1`, `2`, `3` focus the repo bar, pipeline, or detail pane
 - `Tab` and `Shift+Tab` cycle between panes
 - `Up` and `Down` move within the focused pane
-- `Enter` opens detail or selects the current dropdown item
+- `Enter` opens detail, focuses the detail pane, or selects the current dropdown item
 - `Esc` closes overlays or returns to the previous view
 - `q` quits the dashboard from repo or pipeline focus
 
@@ -63,7 +63,7 @@ Detail tabs:
 - `p` plan
 - `g` progress
 - `o` output
-- `l` toggles live-scroll in the output tab
+- `c` copies the selected repo path
 
 Actions:
 

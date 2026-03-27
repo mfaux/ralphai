@@ -293,7 +293,7 @@ describe("worktree", () => {
 
       // Remove sample plan so only the in-progress plan is available
       const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-      const samplePlan = join(backlogDir, "hello-ralphai.md");
+      const samplePlan = join(backlogDir, "hello-world.md");
       if (existsSync(samplePlan)) rmSync(samplePlan, { force: true });
 
       // Create in-progress plan in global state

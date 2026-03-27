@@ -10,7 +10,7 @@ Back to the [README](../README.md) for setup and quickstart. See the [CLI Refere
 ralphai
 ```
 
-Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (active, queued, done). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, and **s/p/g/o** to switch detail tabs. Use **r** to run the selected backlog plan.
+Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, **Enter** to open or focus the detail pane, **c** to copy the selected repo path, and **s/p/g/o** to switch detail tabs. Use **r** to run the selected backlog plan.
 
 This is the primary workflow for humans. Use it to browse the backlog, inspect in-progress work, and launch runs without switching commands.
 

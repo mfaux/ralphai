@@ -488,7 +488,7 @@ echo "$AUTO_COMMIT"
 
       // Remove sample plan so the backlog is empty for this test
       const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
-      const samplePlanFile = join(backlogDir, "hello-ralphai.md");
+      const samplePlanFile = join(backlogDir, "hello-world.md");
       if (existsSync(samplePlanFile)) rmSync(samplePlanFile, { force: true });
 
       const output = execFileSync("node", [distCli, "run", "--dry-run"], {

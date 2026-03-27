@@ -64,9 +64,9 @@ describe("flat backlog plan discovery", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
     // Sample plan should be created as a flat file in the global backlog
-    expect(existsSync(join(bd, "hello-ralphai.md"))).toBe(true);
+    expect(existsSync(join(bd, "hello-world.md"))).toBe(true);
     // Slug-folder should NOT exist (it's a flat backlog file)
-    expect(existsSync(join(bd, "hello-ralphai", "hello-ralphai.md"))).toBe(
+    expect(existsSync(join(bd, "hello-world", "hello-world.md"))).toBe(
       false,
     );
   });
@@ -74,7 +74,7 @@ describe("flat backlog plan discovery", () => {
   it("doctor detects flat backlog plans", () => {
     initProject(ctx.dir);
     const bd = backlogDir(ctx.dir);
-    // Add a flat plan (hello-ralphai.md already exists from init)
+    // Add a flat plan (hello-world.md already exists from init)
     writeFileSync(join(bd, "doc-plan.md"), "# Plan: Doc Plan\n");
 
     const output = runCliOutput(["doctor"], ctx.dir, testEnv());
@@ -150,7 +150,7 @@ describe.skipIf(process.platform === "win32")(
       // Write the plan to the global state backlog directory
       const { backlogDir } = getRepoPipelineDirs(testDir, env);
       // Remove the sample plan so test-flat.md is the first detected plan
-      const samplePlan = join(backlogDir, "hello-ralphai.md");
+      const samplePlan = join(backlogDir, "hello-world.md");
       if (existsSync(samplePlan)) rmSync(samplePlan);
       writeFileSync(join(backlogDir, "test-flat.md"), "# Plan: Test Flat\n");
 
