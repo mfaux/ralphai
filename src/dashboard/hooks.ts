@@ -186,7 +186,7 @@ export function useSpinner(active: boolean): string {
     if (!active) return;
     const id = setInterval(() => {
       setFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, 100);
+    }, 160);
     return () => clearInterval(id);
   }, [active]);
 

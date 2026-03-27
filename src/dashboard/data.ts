@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync, statSync } from "fs";
-import { readFile, stat, access, readdir } from "node:fs/promises";
+import { readFile, stat, access } from "node:fs/promises";
 import { exec } from "node:child_process";
 import { execSync } from "child_process";
 import { join } from "path";
@@ -60,6 +60,95 @@ function execAsync(cmd: string, cwd: string): Promise<string> {
  */
 const yieldToEventLoop = (): Promise<void> =>
   new Promise((resolve) => setImmediate(resolve));
+
+function extractFrontmatterBlock(content: string): string {
+  if (!content.startsWith("---\n")) return "";
+  const endIdx = content.indexOf("\n---", 4);
+  if (endIdx === -1) return "";
+  return content.slice(4, endIdx);
+}
+
+function parseScopeFromContent(content: string): string | undefined {
+  const fm = extractFrontmatterBlock(content);
+  if (!fm) return undefined;
+  const match = fm.match(/^\s*scope:\s*(.+)$/m);
+  const scope = match?.[1]?.trim();
+  return scope && scope.length > 0 ? scope : undefined;
+}
+
+function parseDependsOnFromContent(content: string): string[] | undefined {
+  const fm = extractFrontmatterBlock(content);
+  if (!fm) return undefined;
+
+  const inlineMatch = fm.match(/^\s*depends-on:\s*\[([^\]]*)\]/m);
+  if (inlineMatch) {
+    const deps = inlineMatch[1]!
+      .split(",")
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+    return deps.length > 0 ? deps : undefined;
+  }
+
+  const lines = fm.split("\n");
+  const deps: string[] = [];
+  let collecting = false;
+
+  for (const line of lines) {
+    if (/^\s*depends-on:\s*$/.test(line)) {
+      collecting = true;
+      continue;
+    }
+
+    if (collecting) {
+      const itemMatch = line.match(/^\s*-\s+(.+)$/);
+      if (itemMatch) {
+        const val = itemMatch[1]!.trim().replace(/^["']|["']$/g, "");
+        if (val) deps.push(val);
+        continue;
+      }
+
+      if (/^\s*\S/.test(line)) {
+        collecting = false;
+      }
+    }
+  }
+
+  return deps.length > 0 ? deps : undefined;
+}
+
+function countPlanTasksFromContent(content: string): number | undefined {
+  const matches = content.match(/^### Task \d+/gm);
+  const totalTasks = matches ? matches.length : 0;
+  return totalTasks > 0 ? totalTasks : undefined;
+}
+
+function parseReceiptFromContent(content: string): {
+  tasksCompleted?: number;
+  outcome?: string;
+  receiptSource?: "worktree";
+  startedAt?: string;
+  branch?: string;
+  worktreePath?: string;
+} {
+  const fields: Record<string, string> = {};
+  for (const line of content.split("\n")) {
+    const eq = line.indexOf("=");
+    if (eq > 0) {
+      fields[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+  }
+
+  const parsedTasks = parseInt(fields.tasks_completed ?? "", 10);
+
+  return {
+    tasksCompleted: Number.isNaN(parsedTasks) ? undefined : parsedTasks,
+    outcome: fields.outcome || undefined,
+    receiptSource: fields.worktree_path ? "worktree" : undefined,
+    startedAt: fields.started_at || undefined,
+    branch: fields.branch || undefined,
+    worktreePath: fields.worktree_path || undefined,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Sync loaders (kept for tests / backward compat)
@@ -420,16 +509,28 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
   for (const file of listPlanFiles(backlogDir, true)) {
     const slug = file.replace(/\.md$/, "");
     const planPath = resolvePlanPath(backlogDir, slug);
-    const scope = planPath ? extractScope(planPath) : undefined;
-    const deps = planPath ? extractDependsOn(planPath) : undefined;
+    let scope: string | undefined;
+    let deps: string[] | undefined;
+    if (planPath) {
+      try {
+        const planContent = await readFile(planPath, "utf-8");
+        scope = parseScopeFromContent(planContent);
+        deps = parseDependsOnFromContent(planContent);
+      } catch {
+        scope = undefined;
+        deps = undefined;
+      }
+    }
 
     plans.push({
       filename: file,
       slug,
       state: "backlog",
-      scope: scope || undefined,
-      deps: deps && deps.length > 0 ? deps : undefined,
+      scope,
+      deps,
     });
+
+    await yieldToEventLoop();
   }
 
   // Yield between groups so the event loop can breathe
@@ -439,34 +540,65 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
   for (const file of listPlanFiles(inProgressDir)) {
     const slug = file.replace(/\.md$/, "");
     const planFilePath = join(inProgressDir, slug, file);
-    const scope = extractScope(planFilePath);
-    const totalTasks = countPlanTasks(planFilePath);
+    let scope: string | undefined;
+    let totalTasks: number | undefined;
+    try {
+      const planContent = await readFile(planFilePath, "utf-8");
+      scope = parseScopeFromContent(planContent);
+      totalTasks = countPlanTasksFromContent(planContent);
+    } catch {
+      scope = undefined;
+      totalTasks = undefined;
+    }
 
     const receiptPath = join(inProgressDir, slug, "receipt.txt");
-    const receipt = parseReceipt(receiptPath);
+    let receipt:
+      | {
+          tasksCompleted?: number;
+          outcome?: string;
+          receiptSource?: "worktree";
+          startedAt?: string;
+          branch?: string;
+          worktreePath?: string;
+        }
+      | undefined;
+    if (await fileExists(receiptPath)) {
+      try {
+        const receiptContent = await readFile(receiptPath, "utf-8");
+        receipt = parseReceiptFromContent(receiptContent);
+      } catch {
+        receipt = undefined;
+      }
+    }
 
     let runnerPid: number | undefined;
     const pidPath = join(inProgressDir, slug, "runner.pid");
-    if (existsSync(pidPath)) {
-      const raw = readFileSync(pidPath, "utf8").trim();
-      const parsed = parseInt(raw, 10);
-      if (!isNaN(parsed)) runnerPid = parsed;
+    if (await fileExists(pidPath)) {
+      try {
+        const raw = (await readFile(pidPath, "utf8")).trim();
+        const parsed = parseInt(raw, 10);
+        if (!isNaN(parsed)) runnerPid = parsed;
+      } catch {
+        runnerPid = undefined;
+      }
     }
 
     plans.push({
       filename: file,
       slug,
       state: "in-progress",
-      scope: scope || undefined,
-      tasksCompleted: receipt?.tasks_completed,
-      totalTasks: totalTasks > 0 ? totalTasks : undefined,
-      outcome: receipt?.outcome ?? undefined,
-      receiptSource: receipt?.worktree_path ? "worktree" : undefined,
-      startedAt: receipt?.started_at ?? undefined,
-      branch: receipt?.branch ?? undefined,
-      worktreePath: receipt?.worktree_path ?? undefined,
+      scope,
+      tasksCompleted: receipt?.tasksCompleted,
+      totalTasks,
+      outcome: receipt?.outcome,
+      receiptSource: receipt?.receiptSource,
+      startedAt: receipt?.startedAt,
+      branch: receipt?.branch,
+      worktreePath: receipt?.worktreePath,
       runnerPid,
     });
+
+    await yieldToEventLoop();
   }
 
   await yieldToEventLoop();
@@ -474,22 +606,48 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
   // Completed plans
   for (const slug of listPlanFolders(archiveDir)) {
     const planFilePath = join(archiveDir, slug, `${slug}.md`);
+    let totalTasks: number | undefined;
+    try {
+      const planContent = await readFile(planFilePath, "utf-8");
+      totalTasks = countPlanTasksFromContent(planContent);
+    } catch {
+      totalTasks = undefined;
+    }
+
     const receiptPath = join(archiveDir, slug, "receipt.txt");
-    const receipt = parseReceipt(receiptPath);
-    const totalTasks = countPlanTasks(planFilePath);
+    let receipt:
+      | {
+          tasksCompleted?: number;
+          outcome?: string;
+          receiptSource?: "worktree";
+          startedAt?: string;
+          branch?: string;
+          worktreePath?: string;
+        }
+      | undefined;
+    if (await fileExists(receiptPath)) {
+      try {
+        const receiptContent = await readFile(receiptPath, "utf-8");
+        receipt = parseReceiptFromContent(receiptContent);
+      } catch {
+        receipt = undefined;
+      }
+    }
 
     plans.push({
       filename: `${slug}.md`,
       slug,
       state: "completed",
-      tasksCompleted: receipt?.tasks_completed,
-      totalTasks: totalTasks > 0 ? totalTasks : undefined,
-      outcome: receipt?.outcome ?? undefined,
-      receiptSource: receipt?.worktree_path ? "worktree" : undefined,
-      startedAt: receipt?.started_at ?? undefined,
-      branch: receipt?.branch ?? undefined,
-      worktreePath: receipt?.worktree_path ?? undefined,
+      tasksCompleted: receipt?.tasksCompleted,
+      totalTasks,
+      outcome: receipt?.outcome,
+      receiptSource: receipt?.receiptSource,
+      startedAt: receipt?.startedAt,
+      branch: receipt?.branch,
+      worktreePath: receipt?.worktreePath,
     });
+
+    await yieldToEventLoop();
   }
 
   return plans;

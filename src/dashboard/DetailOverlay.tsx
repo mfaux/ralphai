@@ -10,7 +10,7 @@
  * In split mode: sits beside the plan list, border highlights when focused.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
@@ -259,6 +259,19 @@ export function DetailOverlay({
   const isLive = tab === "output" && (outputData?.isLive ?? false);
   const liveSpinner = useSpinner(isLive);
 
+  const planLines = useMemo(
+    () => (planContent ? wrapText(planContent, contentWidth) : null),
+    [planContent, contentWidth],
+  );
+  const progressLines = useMemo(
+    () => (progressContent ? wrapText(progressContent, contentWidth) : null),
+    [progressContent, contentWidth],
+  );
+  const outputLines = useMemo(
+    () => (outputData ? wrapText(outputData.content, contentWidth) : null),
+    [outputData?.content, contentWidth],
+  );
+
   const planTitle =
     "3 " +
     plan.slug +
@@ -295,9 +308,9 @@ export function DetailOverlay({
         {tab === "summary" && <SummaryView plan={plan} />}
 
         {tab === "plan" &&
-          (planContent ? (
+          (planLines ? (
             <ContentView
-              lines={wrapText(planContent, contentWidth)}
+              lines={planLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -306,9 +319,9 @@ export function DetailOverlay({
           ))}
 
         {tab === "progress" &&
-          (progressContent ? (
+          (progressLines ? (
             <ContentView
-              lines={wrapText(progressContent, contentWidth)}
+              lines={progressLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -317,9 +330,9 @@ export function DetailOverlay({
           ))}
 
         {tab === "output" &&
-          (outputData ? (
+          (outputData && outputLines ? (
             <ContentView
-              lines={wrapText(outputData.content, contentWidth)}
+              lines={outputLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
               footer={
