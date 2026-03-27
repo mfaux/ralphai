@@ -2,7 +2,14 @@
  * Custom hooks for the dashboard.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useContext,
+  createContext,
+} from "react";
 import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -157,7 +164,7 @@ export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
 }
 
 // ---------------------------------------------------------------------------
-// useSpinner
+// Shared spinner (single interval via React context)
 // ---------------------------------------------------------------------------
 
 /** Braille dot animation frames. */
@@ -174,22 +181,45 @@ export const SPINNER_FRAMES = [
   "\u280F",
 ] as const;
 
+/** Spinner interval in milliseconds. */
+const SPINNER_INTERVAL_MS = 160;
+
 /**
- * Animated braille-dot spinner hook. When `active` is true, cycles through
- * SPINNER_FRAMES at ~100ms. Returns the current frame character, or an
- * empty string when inactive.
+ * Context that carries the current spinner frame index. A single
+ * SpinnerProvider runs one setInterval for the entire component tree,
+ * replacing the per-component intervals that previously caused N+3
+ * independent timers and N+3 setState calls per tick.
  */
-export function useSpinner(active: boolean): string {
+export const SpinnerContext = createContext<number>(0);
+
+/**
+ * SpinnerProvider — mount once at the root of the Ink tree.
+ * Runs a single setInterval that increments the frame counter.
+ * All useSpinner() consumers read from this context instead of
+ * maintaining their own timer.
+ */
+export function useSpinnerProvider(): number {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    if (!active) return;
     const id = setInterval(() => {
       setFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, 160);
+    }, SPINNER_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [active]);
+  }, []);
 
+  return frame;
+}
+
+/**
+ * Animated braille-dot spinner hook. When `active` is true, returns the
+ * current frame character from the shared SpinnerContext. Returns an
+ * empty string when inactive.
+ *
+ * Requires SpinnerProvider to be mounted above this component in the tree.
+ */
+export function useSpinner(active: boolean): string {
+  const frame = useContext(SpinnerContext);
   if (!active) return "";
   return SPINNER_FRAMES[frame % SPINNER_FRAMES.length]!;
 }

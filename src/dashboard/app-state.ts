@@ -71,7 +71,6 @@ export function useAppState(termRows: number, termCols: number) {
   const [showDetail, setShowDetail] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>("summary");
   const [scrollOffset, setScrollOffset] = useState(0);
-  const [followTail, setFollowTail] = useState(false);
 
   // --- Overlay ---
   const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
@@ -224,7 +223,6 @@ export function useAppState(termRows: number, termCols: number) {
   const { data: outputData } = useAsyncAutoRefresh<{
     content: string;
     totalLines: number;
-    isLive: boolean;
   } | null>(outputLoader, REFRESH_MS, null);
 
   // Detail overlay content area: terminal height minus border chrome (2),
@@ -244,17 +242,8 @@ export function useAppState(termRows: number, termCols: number) {
     if (selectedPlan) {
       setActiveTab(defaultTabForState(selectedPlan.state));
       setScrollOffset(0);
-      setFollowTail(false);
     }
   }, [selectedPlan?.slug]);
-
-  // --- Follow-tail: auto-scroll output ---
-  useEffect(() => {
-    if (followTail && activeTab === "output" && outputData) {
-      const total = outputData.content.split("\n").length;
-      setScrollOffset(Math.max(0, total - contentHeight));
-    }
-  }, [followTail, activeTab, outputData?.content, contentHeight]);
 
   // --- Open detail (split or overlay) ---
   const openDetail = useCallback(() => {
@@ -479,8 +468,6 @@ export function useAppState(termRows: number, termCols: number) {
     setActiveTab,
     scrollOffset,
     setScrollOffset,
-    followTail,
-    setFollowTail,
     planContent,
     progressContent,
     outputData,

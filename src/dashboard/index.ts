@@ -11,9 +11,23 @@
 import React from "react";
 import { render } from "ink";
 import { App } from "./App.tsx";
+import { SpinnerContext, useSpinnerProvider } from "./hooks.ts";
+
+/**
+ * Root wrapper that provides the shared spinner context.
+ * Runs a single setInterval for all spinner consumers in the tree.
+ */
+function Root() {
+  const frame = useSpinnerProvider();
+  return React.createElement(
+    SpinnerContext.Provider,
+    { value: frame },
+    React.createElement(App),
+  );
+}
 
 export function launchDashboard(): void {
-  const instance = render(React.createElement(App), {
+  const instance = render(React.createElement(Root), {
     patchConsole: false,
   });
 

@@ -53,8 +53,6 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
     setActiveTab,
     scrollOffset,
     setScrollOffset,
-    followTail,
-    setFollowTail,
     contentHeight,
     showDetail,
     openDetail,
@@ -263,10 +261,6 @@ export function useKeyboardRouting(state: AppState, exit: () => void) {
       if (input === "o") {
         setActiveTab("output");
         setScrollOffset(0);
-        return;
-      }
-      if (input === "l") {
-        setFollowTail((prev) => !prev);
         return;
       }
       if (input === "a" || key.return) {

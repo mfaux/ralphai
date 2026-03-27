@@ -4,7 +4,7 @@
  *
  * Four tabs: Summary, Plan, Progress, Output.
  * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
- * Output tab shows green LIVE indicator and supports live-scroll mode.
+ * Output tab shows the tail of agent-output.log.
  *
  * In overlay mode: opened by pressing Enter, dismissed with Esc.
  * In split mode: sits beside the plan list, border highlights when focused.
@@ -22,9 +22,8 @@ interface DetailOverlayProps {
   scrollOffset: number;
   planContent: string | null;
   progressContent: string | null;
-  outputData: { content: string; totalLines: number; isLive: boolean } | null;
+  outputData: { content: string; totalLines: number } | null;
   contentHeight: number;
-  followTail: boolean;
   width: number;
   height: number;
   /** Whether this pane is focused (controls border color in split mode). */
@@ -69,7 +68,8 @@ function ProgressBar({
   total: number;
   width?: number;
 }) {
-  const filled = total > 0 ? Math.round((current / total) * width) : 0;
+  const rawFilled = total > 0 ? Math.round((current / total) * width) : 0;
+  const filled = Math.max(0, Math.min(width, rawFilled));
   const empty = width - filled;
   return (
     <Text>
@@ -246,7 +246,6 @@ export function DetailOverlay({
   progressContent,
   outputData,
   contentHeight,
-  followTail,
   width,
   height,
   active,
@@ -255,9 +254,6 @@ export function DetailOverlay({
   const contentWidth = Math.max(1, width - 4);
   // Default to active styling when prop is not provided (overlay mode)
   const isFocused = active ?? true;
-
-  const isLive = tab === "output" && (outputData?.isLive ?? false);
-  const liveSpinner = useSpinner(isLive);
 
   const planLines = useMemo(
     () => (planContent ? wrapText(planContent, contentWidth) : null),
@@ -273,11 +269,7 @@ export function DetailOverlay({
   );
 
   const planTitle =
-    "3 " +
-    plan.slug +
-    (isLive ? `  ${liveSpinner} LIVE` : "") +
-    (tab === "output" && followTail ? " [live-scroll]" : "") +
-    (plan.state === "completed" ? "  \u2713 done" : "");
+    "3 " + plan.slug + (plan.state === "completed" ? "  \u2713 done" : "");
 
   return (
     <Box
@@ -335,11 +327,7 @@ export function DetailOverlay({
               lines={outputLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
-              footer={
-                outputData.isLive
-                  ? "tailing agent-output.log"
-                  : `${outputData.totalLines} total lines`
-              }
+              footer={`${outputData.totalLines} total lines`}
             />
           ) : (
             <Text dimColor>No agent output available.</Text>

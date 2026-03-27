@@ -8,8 +8,8 @@
  *   main thread (which stalls spinner animations and keyboard input).
  */
 
-import { existsSync, readFileSync, statSync } from "fs";
-import { readFile, stat, access } from "node:fs/promises";
+import { existsSync, readFileSync } from "fs";
+import { readFile, access } from "node:fs/promises";
 import { exec } from "node:child_process";
 import { execSync } from "child_process";
 import { join } from "path";
@@ -60,6 +60,28 @@ function execAsync(cmd: string, cwd: string): Promise<string> {
  */
 const yieldToEventLoop = (): Promise<void> =>
   new Promise((resolve) => setImmediate(resolve));
+
+/**
+ * Cached pipeline dirs by cwd. The directory paths never change during a
+ * dashboard session, so we call getRepoPipelineDirs once per repo and
+ * reuse the result. This avoids repeated mkdirSync / existsSync calls
+ * on every 3-second poll cycle (5 loaders x 3 dir checks = 15 syscalls).
+ */
+const pipelineDirsCache = new Map<
+  string,
+  ReturnType<typeof getRepoPipelineDirs>
+>();
+
+function getCachedPipelineDirs(
+  cwd: string,
+): ReturnType<typeof getRepoPipelineDirs> {
+  let cached = pipelineDirsCache.get(cwd);
+  if (!cached) {
+    cached = getRepoPipelineDirs(cwd);
+    pipelineDirsCache.set(cwd, cached);
+  }
+  return cached;
+}
 
 function extractFrontmatterBlock(content: string): string {
   if (!content.startsWith("---\n")) return "";
@@ -329,7 +351,7 @@ export function loadOutputTail(
   cwd: string,
   plan: PlanInfo,
   maxLines = 200,
-): { content: string; totalLines: number; isLive: boolean } | null {
+): { content: string; totalLines: number } | null {
   let dirs: ReturnType<typeof getRepoPipelineDirs>;
   try {
     dirs = getRepoPipelineDirs(cwd);
@@ -353,14 +375,10 @@ export function loadOutputTail(
     const lines = raw.split("\n");
     const totalLines = lines.length;
 
-    // Check if file was modified in the last 30 seconds (likely live)
-    const st = statSync(outputPath);
-    const isLive = Date.now() - st.mtimeMs < 30_000;
-
     const tail =
       totalLines > maxLines ? lines.slice(-maxLines).join("\n") : raw;
 
-    return { content: tail, totalLines, isLive };
+    return { content: tail, totalLines };
   } catch {
     return null;
   }
@@ -498,7 +516,7 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
 
   let dirs: ReturnType<typeof getRepoPipelineDirs>;
   try {
-    dirs = getRepoPipelineDirs(cwd);
+    dirs = getCachedPipelineDirs(cwd);
   } catch {
     return plans;
   }
@@ -663,7 +681,7 @@ export async function loadProgressContentAsync(
 ): Promise<string | null> {
   let dirs: ReturnType<typeof getRepoPipelineDirs>;
   try {
-    dirs = getRepoPipelineDirs(cwd);
+    dirs = getCachedPipelineDirs(cwd);
   } catch {
     return null;
   }
@@ -694,10 +712,10 @@ export async function loadOutputTailAsync(
   cwd: string,
   plan: PlanInfo,
   maxLines = 200,
-): Promise<{ content: string; totalLines: number; isLive: boolean } | null> {
+): Promise<{ content: string; totalLines: number } | null> {
   let dirs: ReturnType<typeof getRepoPipelineDirs>;
   try {
-    dirs = getRepoPipelineDirs(cwd);
+    dirs = getCachedPipelineDirs(cwd);
   } catch {
     return null;
   }
@@ -718,13 +736,10 @@ export async function loadOutputTailAsync(
     const lines = raw.split("\n");
     const totalLines = lines.length;
 
-    const st = await stat(outputPath);
-    const isLive = Date.now() - st.mtimeMs < 30_000;
-
     const tail =
       totalLines > maxLines ? lines.slice(-maxLines).join("\n") : raw;
 
-    return { content: tail, totalLines, isLive };
+    return { content: tail, totalLines };
   } catch {
     return null;
   }

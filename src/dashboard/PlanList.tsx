@@ -56,7 +56,8 @@ function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
   if (total === 0) return null;
 
   const barWidth = 6;
-  const filled = Math.round((current / total) * barWidth);
+  const rawFilled = Math.round((current / total) * barWidth);
+  const filled = Math.max(0, Math.min(barWidth, rawFilled));
   const empty = barWidth - filled;
 
   return (

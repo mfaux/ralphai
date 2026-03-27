@@ -17,7 +17,7 @@
  * This file is responsible only for layout and rendering.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text, useApp, useStdout } from "ink";
 import { useAppState, CHROME_ROWS } from "./app-state.ts";
 import { useKeyboardRouting } from "./keyboard.ts";
@@ -30,6 +30,24 @@ import { ActionMenu } from "./ActionMenu.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { FilterBar } from "./FilterBar.tsx";
 import { HelpOverlay } from "./HelpOverlay.tsx";
+
+/**
+ * Opaque backdrop: a single pre-built string of spaces instead of
+ * termRows individual Text elements. Reduces Ink's virtual DOM
+ * reconciliation work from O(termRows) nodes to 1 node.
+ */
+function Backdrop({ cols, rows }: { cols: number; rows: number }) {
+  const text = useMemo(() => {
+    const row = " ".repeat(cols);
+    return Array.from({ length: rows }, () => row).join("\n");
+  }, [cols, rows]);
+
+  return (
+    <Box position="absolute" width={cols} height={rows} flexDirection="column">
+      <Text>{text}</Text>
+    </Box>
+  );
+}
 
 export function App() {
   const { exit } = useApp();
@@ -51,7 +69,6 @@ export function App() {
     showDetail,
     activeTab,
     scrollOffset,
-    followTail,
     planContent,
     progressContent,
     outputData,
@@ -107,7 +124,6 @@ export function App() {
             progressContent={progressContent}
             outputData={outputData}
             contentHeight={splitContentHeight}
-            followTail={followTail}
             width={splitDetailWidth}
             height={planListHeight}
             active={focus === "detail"}
@@ -137,24 +153,13 @@ export function App() {
         selectedPlan={selectedPlan}
         hasActiveRunners={plans.some((p) => p.state === "in-progress")}
         splitOpen={isSplitMode}
-        activeTab={activeTab}
       />
 
       {/* --- Overlays --- */}
 
       {/* Detail overlay (full-screen fallback for narrow terminals) */}
       {showDetail && !isSplitMode && selectedPlan && (
-        <Box
-          position="absolute"
-          width={termCols}
-          height={termRows}
-          flexDirection="column"
-        >
-          {/* Opaque backdrop */}
-          {Array.from({ length: termRows }, (_, i) => (
-            <Text key={i}>{" ".repeat(termCols)}</Text>
-          ))}
-        </Box>
+        <Backdrop cols={termCols} rows={termRows} />
       )}
       {showDetail && !isSplitMode && selectedPlan && (
         <Box
@@ -172,7 +177,6 @@ export function App() {
             progressContent={progressContent}
             outputData={outputData}
             contentHeight={contentHeight}
-            followTail={followTail}
             width={Math.min(termCols, termCols - 2)}
             height={termRows - 2}
           />
@@ -180,19 +184,7 @@ export function App() {
       )}
 
       {/* Repo selector dropdown (anchored below RepoBar) */}
-      {dropdownOpen && (
-        <Box
-          position="absolute"
-          width={termCols}
-          height={termRows}
-          flexDirection="column"
-        >
-          {/* Opaque backdrop to prevent bleed-through from content below */}
-          {Array.from({ length: termRows }, (_, i) => (
-            <Text key={i}>{" ".repeat(termCols)}</Text>
-          ))}
-        </Box>
-      )}
+      {dropdownOpen && <Backdrop cols={termCols} rows={termRows} />}
       {dropdownOpen && (
         <Box position="absolute" marginTop={3} marginLeft={1}>
           <RepoSelector
@@ -207,16 +199,7 @@ export function App() {
       {(overlay.kind === "menu" ||
         overlay.kind === "confirm" ||
         overlay.kind === "help") && (
-        <Box
-          position="absolute"
-          width={termCols}
-          height={termRows}
-          flexDirection="column"
-        >
-          {Array.from({ length: termRows }, (_, i) => (
-            <Text key={i}>{" ".repeat(termCols)}</Text>
-          ))}
-        </Box>
+        <Backdrop cols={termCols} rows={termRows} />
       )}
 
       {overlay.kind === "menu" && (
