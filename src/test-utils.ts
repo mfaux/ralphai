@@ -37,6 +37,17 @@ function cleanupTempDir(testDir: string): void {
       return;
     } catch (error) {
       if (!isWindows || attempt === maxAttempts) {
+        // On Windows, swallow EPERM/EBUSY errors from locked files (git
+        // processes or node child processes may still hold handles). The
+        // OS temp directory will be cleaned up eventually.
+        if (
+          isWindows &&
+          error instanceof Error &&
+          "code" in error &&
+          (error.code === "EPERM" || error.code === "EBUSY")
+        ) {
+          return;
+        }
         throw error;
       }
       sleepMs(100 * attempt);

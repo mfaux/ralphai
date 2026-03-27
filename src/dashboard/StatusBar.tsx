@@ -17,7 +17,7 @@
 
 import React from "react";
 import { Box, Text } from "ink";
-import type { FocusTarget, PlanInfo, DetailTab } from "./types.ts";
+import type { FocusTarget, PlanInfo } from "./types.ts";
 import { useSpinner } from "./hooks.ts";
 import { formatElapsed } from "./format.ts";
 
@@ -28,7 +28,6 @@ interface StatusBarProps {
   selectedPlan: PlanInfo | null;
   hasActiveRunners: boolean;
   splitOpen?: boolean;
-  activeTab?: DetailTab;
 }
 
 const HINTS: Record<FocusTarget, string> = {
@@ -40,10 +39,6 @@ const HINTS: Record<FocusTarget, string> = {
   filter: "type to filter \u00B7 Enter apply \u00B7 Esc clear",
   help: "? or Esc to close",
 };
-
-/** Detail hint with live-scroll toggle (shown only on output tab of in-progress plans). */
-const DETAIL_HINT_LIVE =
-  "\u2191\u2193 scroll \u00B7 \u2190\u2192 tabs \u00B7 a actions \u00B7 l live-scroll \u00B7 Esc back";
 
 /** Hints when the split pane is open and focus is on the plan list. */
 const SPLIT_LIST_HINT =
@@ -65,18 +60,8 @@ export function StatusBar({
   selectedPlan,
   hasActiveRunners,
   splitOpen,
-  activeTab,
 }: StatusBarProps) {
-  const showLiveScroll =
-    focus === "detail" &&
-    activeTab === "output" &&
-    selectedPlan?.state === "in-progress";
-  const hint =
-    focus === "list" && splitOpen
-      ? SPLIT_LIST_HINT
-      : showLiveScroll
-        ? DETAIL_HINT_LIVE
-        : HINTS[focus];
+  const hint = focus === "list" && splitOpen ? SPLIT_LIST_HINT : HINTS[focus];
   const isSelectedInProgress = selectedPlan?.state === "in-progress";
   const spinnerChar = useSpinner(hasActiveRunners);
 

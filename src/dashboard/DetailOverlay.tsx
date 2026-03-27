@@ -4,13 +4,13 @@
  *
  * Four tabs: Summary, Plan, Progress, Output.
  * Smart default tab per state: active -> Progress, queued -> Plan, done -> Summary.
- * Output tab shows green LIVE indicator and supports live-scroll mode.
+ * Output tab shows the tail of agent-output.log.
  *
  * In overlay mode: opened by pressing Enter, dismissed with Esc.
  * In split mode: sits beside the plan list, border highlights when focused.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
 import { wrapText } from "./format.ts";
@@ -22,9 +22,8 @@ interface DetailOverlayProps {
   scrollOffset: number;
   planContent: string | null;
   progressContent: string | null;
-  outputData: { content: string; totalLines: number; isLive: boolean } | null;
+  outputData: { content: string; totalLines: number } | null;
   contentHeight: number;
-  followTail: boolean;
   width: number;
   height: number;
   /** Whether this pane is focused (controls border color in split mode). */
@@ -69,7 +68,8 @@ function ProgressBar({
   total: number;
   width?: number;
 }) {
-  const filled = total > 0 ? Math.round((current / total) * width) : 0;
+  const rawFilled = total > 0 ? Math.round((current / total) * width) : 0;
+  const filled = Math.max(0, Math.min(width, rawFilled));
   const empty = width - filled;
   return (
     <Text>
@@ -246,7 +246,6 @@ export function DetailOverlay({
   progressContent,
   outputData,
   contentHeight,
-  followTail,
   width,
   height,
   active,
@@ -256,15 +255,21 @@ export function DetailOverlay({
   // Default to active styling when prop is not provided (overlay mode)
   const isFocused = active ?? true;
 
-  const isLive = tab === "output" && (outputData?.isLive ?? false);
-  const liveSpinner = useSpinner(isLive);
+  const planLines = useMemo(
+    () => (planContent ? wrapText(planContent, contentWidth) : null),
+    [planContent, contentWidth],
+  );
+  const progressLines = useMemo(
+    () => (progressContent ? wrapText(progressContent, contentWidth) : null),
+    [progressContent, contentWidth],
+  );
+  const outputLines = useMemo(
+    () => (outputData ? wrapText(outputData.content, contentWidth) : null),
+    [outputData?.content, contentWidth],
+  );
 
   const planTitle =
-    "3 " +
-    plan.slug +
-    (isLive ? `  ${liveSpinner} LIVE` : "") +
-    (tab === "output" && followTail ? " [live-scroll]" : "") +
-    (plan.state === "completed" ? "  \u2713 done" : "");
+    "3 " + plan.slug + (plan.state === "completed" ? "  \u2713 done" : "");
 
   return (
     <Box
@@ -295,9 +300,9 @@ export function DetailOverlay({
         {tab === "summary" && <SummaryView plan={plan} />}
 
         {tab === "plan" &&
-          (planContent ? (
+          (planLines ? (
             <ContentView
-              lines={wrapText(planContent, contentWidth)}
+              lines={planLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -306,9 +311,9 @@ export function DetailOverlay({
           ))}
 
         {tab === "progress" &&
-          (progressContent ? (
+          (progressLines ? (
             <ContentView
-              lines={wrapText(progressContent, contentWidth)}
+              lines={progressLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
             />
@@ -317,16 +322,12 @@ export function DetailOverlay({
           ))}
 
         {tab === "output" &&
-          (outputData ? (
+          (outputData && outputLines ? (
             <ContentView
-              lines={wrapText(outputData.content, contentWidth)}
+              lines={outputLines}
               scrollOffset={scrollOffset}
               contentHeight={contentHeight}
-              footer={
-                outputData.isLive
-                  ? "tailing agent-output.log"
-                  : `${outputData.totalLines} total lines`
-              }
+              footer={`${outputData.totalLines} total lines`}
             />
           ) : (
             <Text dimColor>No agent output available.</Text>
