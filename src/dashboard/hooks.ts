@@ -2,11 +2,11 @@
  * Custom hooks for the dashboard.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
-// useAutoRefresh
+// useAutoRefresh (sync — kept for backward-compat, prefer useAsyncAutoRefresh)
 // ---------------------------------------------------------------------------
 
 /**
@@ -30,6 +30,65 @@ export function useAutoRefresh<T>(
   useEffect(() => {
     setData(loader());
   }, [loader]);
+
+  useEffect(() => {
+    const id = setInterval(refresh, intervalMs);
+    return () => clearInterval(id);
+  }, [refresh, intervalMs]);
+
+  return { data, refresh };
+}
+
+// ---------------------------------------------------------------------------
+// useAsyncAutoRefresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Async auto-refresh hook: calls an async `loader` without blocking
+ * the main thread (no synchronous FS or child_process calls).
+ *
+ * - Runs the loader immediately on mount and when its identity changes.
+ * - Re-runs every `intervalMs` via setInterval.
+ * - Stale responses (from a previous loader identity) are discarded.
+ * - Overlapping in-flight loads are skipped to avoid piling up work.
+ *
+ * The `initialData` argument provides the value before the first load
+ * resolves, avoiding a flash of empty state.
+ */
+export function useAsyncAutoRefresh<T>(
+  loader: () => Promise<T>,
+  intervalMs: number,
+  initialData: T,
+): { data: T; refresh: () => void } {
+  const [data, setData] = useState<T>(initialData);
+  const loadingRef = useRef(false);
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
+
+  const refresh = useCallback(() => {
+    if (loadingRef.current) return; // skip if already in-flight
+    loadingRef.current = true;
+    const currentLoader = loaderRef.current;
+    currentLoader().then(
+      (result) => {
+        // Only apply if the loader identity hasn't changed
+        if (loaderRef.current === currentLoader) {
+          setData(result);
+        }
+        loadingRef.current = false;
+      },
+      () => {
+        loadingRef.current = false;
+      },
+    );
+  }, []);
+
+  // Run immediately when loader identity changes
+  useEffect(() => {
+    loaderRef.current = loader;
+    loadingRef.current = false; // reset so the new loader can fire
+    refresh();
+  }, [loader, refresh]);
 
   useEffect(() => {
     const id = setInterval(refresh, intervalMs);

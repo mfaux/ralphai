@@ -19,14 +19,14 @@ import type {
   WorktreeInfo,
 } from "./types.ts";
 import {
-  loadRepos,
-  loadPlans,
-  loadWorktrees,
+  loadReposAsync,
+  loadPlansAsync,
+  loadWorktreesAsync,
   loadPlanContent,
-  loadProgressContent,
-  loadOutputTail,
+  loadProgressContentAsync,
+  loadOutputTailAsync,
 } from "./data.ts";
-import { useAutoRefresh, filterPlans, useListCursor } from "./hooks.ts";
+import { useAsyncAutoRefresh, filterPlans, useListCursor } from "./hooks.ts";
 import { defaultTabForState } from "./DetailOverlay.tsx";
 import { buildMenuItems } from "./ActionMenu.tsx";
 import {
@@ -86,9 +86,13 @@ export function useAppState(termRows: number, termCols: number) {
   // --- Filter ---
   const [filterQuery, setFilterQuery] = useState("");
 
-  // --- Data loading ---
-  const repoLoader = useCallback(() => loadRepos(), []);
-  const { data: repos } = useAutoRefresh(repoLoader, REFRESH_MS);
+  // --- Data loading (async — avoids blocking the event loop) ---
+  const repoLoader = useCallback(() => loadReposAsync(), []);
+  const { data: repos } = useAsyncAutoRefresh<RepoSummary[]>(
+    repoLoader,
+    REFRESH_MS,
+    [],
+  );
 
   // Clamp selectedRepoIdx when repo list changes
   useEffect(() => {
@@ -144,19 +148,29 @@ export function useAppState(termRows: number, termCols: number) {
   }, [repos]);
 
   const planLoader = useCallback(
-    () => (selectedRepo?.repoPath ? loadPlans(selectedRepo.repoPath) : []),
+    () =>
+      selectedRepo?.repoPath
+        ? loadPlansAsync(selectedRepo.repoPath)
+        : Promise.resolve([]),
     [selectedRepo?.repoPath],
   );
-  const { data: plans } = useAutoRefresh<PlanInfo[]>(planLoader, REFRESH_MS);
+  const { data: plans } = useAsyncAutoRefresh<PlanInfo[]>(
+    planLoader,
+    REFRESH_MS,
+    [],
+  );
 
   const worktreeLoader = useCallback(
     () =>
-      selectedRepo?.repoPath ? loadWorktrees(selectedRepo.repoPath, plans) : [],
+      selectedRepo?.repoPath
+        ? loadWorktreesAsync(selectedRepo.repoPath, plans)
+        : Promise.resolve([]),
     [selectedRepo?.repoPath, plans],
   );
-  const { data: worktrees } = useAutoRefresh<WorktreeInfo[]>(
+  const { data: worktrees } = useAsyncAutoRefresh<WorktreeInfo[]>(
     worktreeLoader,
     REFRESH_MS,
+    [],
   );
 
   // --- Filter plans ---
@@ -190,20 +204,28 @@ export function useAppState(termRows: number, termCols: number) {
   const progressLoader = useCallback(
     () =>
       selectedPlan && selectedRepo?.repoPath
-        ? loadProgressContent(selectedRepo.repoPath, selectedPlan)
-        : null,
+        ? loadProgressContentAsync(selectedRepo.repoPath, selectedPlan)
+        : Promise.resolve(null),
     [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath],
   );
-  const { data: progressContent } = useAutoRefresh(progressLoader, REFRESH_MS);
+  const { data: progressContent } = useAsyncAutoRefresh<string | null>(
+    progressLoader,
+    REFRESH_MS,
+    null,
+  );
 
   const outputLoader = useCallback(
     () =>
       selectedPlan && selectedRepo?.repoPath
-        ? loadOutputTail(selectedRepo.repoPath, selectedPlan)
-        : null,
+        ? loadOutputTailAsync(selectedRepo.repoPath, selectedPlan)
+        : Promise.resolve(null),
     [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath],
   );
-  const { data: outputData } = useAutoRefresh(outputLoader, REFRESH_MS);
+  const { data: outputData } = useAsyncAutoRefresh<{
+    content: string;
+    totalLines: number;
+    isLive: boolean;
+  } | null>(outputLoader, REFRESH_MS, null);
 
   // Detail overlay content area: terminal height minus border chrome (2),
   // title row (1), tab bar (1), content margin (1).
@@ -253,6 +275,11 @@ export function useAppState(termRows: number, termCols: number) {
   const handleAction = useCallback(
     (action: string) => {
       setOverlay({ kind: "none" });
+
+      // Restore focus to the appropriate pane. When invoked from a menu
+      // overlay, focus is "menu"; without this it would stay on "menu"
+      // after the overlay is dismissed, leaving no panel with focus.
+      setFocus(showDetail ? "detail" : "list");
 
       switch (action) {
         case "view-plan":
@@ -341,6 +368,7 @@ export function useAppState(termRows: number, termCols: number) {
       setCursor,
       showToast,
       selectedRepo?.repoPath,
+      showDetail,
     ],
   );
 
