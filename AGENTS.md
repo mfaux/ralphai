@@ -40,3 +40,7 @@ Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Py
 This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous execution.
 Plan files go in the global pipeline backlog (run `ralphai backlog-dir` to find it).
 Install the planning skill for plan writing guidance: `npx skills add mfaux/ralphai -g`.
+
+## GH CLI
+
+ Use the `gh` CLI to interact with GitHub repositories, such as creating issues and managing pull requests.
