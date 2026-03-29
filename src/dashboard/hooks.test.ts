@@ -133,6 +133,67 @@ describe("filterPlans", () => {
 });
 
 // ---------------------------------------------------------------------------
+// source: filter
+// ---------------------------------------------------------------------------
+
+describe("filterPlans — source: filter", () => {
+  const sourcePlans: PlanInfo[] = [
+    makePlan({ slug: "local-plan", state: "backlog" }),
+    makePlan({
+      slug: "gh-42-pulled-issue",
+      state: "in-progress",
+      source: "github",
+      issueNumber: 42,
+    }),
+    makePlan({
+      slug: "gh-99-remote-issue",
+      state: "backlog",
+      source: "github-remote",
+      issueNumber: 99,
+    }),
+    makePlan({
+      slug: "gh-7-another-pulled",
+      state: "completed",
+      source: "github",
+      issueNumber: 7,
+    }),
+  ];
+
+  it("source:github matches both pulled and remote issues", () => {
+    const result = filterPlans(sourcePlans, "source:github");
+    expect(result).toHaveLength(3);
+    expect(result.every((p) => p.source?.startsWith("github"))).toBe(true);
+  });
+
+  it("source:remote matches only unpulled remote issues", () => {
+    const result = filterPlans(sourcePlans, "source:remote");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe("github-remote");
+  });
+
+  it("source:local matches only plans without a source field", () => {
+    const result = filterPlans(sourcePlans, "source:local");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.slug).toBe("local-plan");
+  });
+
+  it("source: filter combines with text query", () => {
+    const result = filterPlans(sourcePlans, "source:github pulled");
+    expect(result).toHaveLength(2);
+    expect(result.map((p) => p.slug)).toEqual([
+      "gh-42-pulled-issue",
+      "gh-7-another-pulled",
+    ]);
+  });
+
+  it("source: filter combines with state: filter", () => {
+    const result = filterPlans(sourcePlans, "source:github state:done");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.slug).toBe("gh-7-another-pulled");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // SPINNER_FRAMES
 // ---------------------------------------------------------------------------
 

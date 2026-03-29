@@ -7,9 +7,10 @@ import {
   checkGhAvailable,
   detectIssueRepo,
   slugify,
+  peekGithubIssues,
   pullGithubIssues,
 } from "./issues.ts";
-import type { PullIssueOptions } from "./issues.ts";
+import type { PullIssueOptions, PeekIssueOptions } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,5 +206,61 @@ describe("pullGithubIssues plan file creation", () => {
     const slug = slugify(title);
     const filename = `gh-42-${slug}.md`;
     expect(filename).toBe("gh-42-add-dark-mode-support.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// peekGithubIssues — read-only guard clause tests (no gh required)
+// ---------------------------------------------------------------------------
+
+/** Build default PeekIssueOptions for testing. */
+function defaultPeekOptions(dir: string): PeekIssueOptions {
+  return {
+    cwd: dir,
+    issueSource: "github",
+    issueLabel: "ralphai",
+    issueRepo: "",
+  };
+}
+
+describe("peekGithubIssues", () => {
+  const ctx = useTempDir();
+
+  it("returns found:false when issueSource is not github", () => {
+    const opts = { ...defaultPeekOptions(ctx.dir), issueSource: "none" };
+    const result = peekGithubIssues(opts);
+    expect(result.found).toBe(false);
+    expect(result.count).toBe(0);
+    expect(result.message).toContain("not 'github'");
+  });
+
+  it("returns found:false when gh is not available", () => {
+    // Works in environments where gh is not installed or not authenticated.
+    // If gh IS available, the call still returns found:false (no matching
+    // issues in a temp repo) so the assertion holds either way.
+    initRepo(ctx.dir);
+    const opts = defaultPeekOptions(ctx.dir);
+    const result = peekGithubIssues(opts);
+    expect(result.found).toBe(false);
+    expect(result.count).toBe(0);
+    expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  it("returns count 0 and found:false with a descriptive message", () => {
+    const opts = { ...defaultPeekOptions(ctx.dir), issueSource: "none" };
+    const result = peekGithubIssues(opts);
+    expect(result.found).toBe(false);
+    expect(result.count).toBe(0);
+    expect(result.oldest).toBeUndefined();
+    expect(result.repo).toBeUndefined();
+  });
+
+  it("never writes files (dry-run safe)", () => {
+    initRepo(ctx.dir);
+    const backlogDir = join(ctx.dir, ".ralphai", "pipeline", "backlog");
+    const opts = defaultPeekOptions(ctx.dir);
+    peekGithubIssues(opts);
+    // The backlog directory should not be created by peek
+    expect(existsSync(backlogDir)).toBe(false);
   });
 });

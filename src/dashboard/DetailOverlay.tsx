@@ -126,6 +126,33 @@ function SummaryView({ plan }: { plan: PlanInfo }) {
         </Box>
       )}
 
+      {plan.source && (
+        <Box>
+          <Text dimColor>{"Origin      "}</Text>
+          <Text color={plan.source === "github-remote" ? "magenta" : undefined}>
+            {plan.source === "github-remote"
+              ? "GitHub issue (not pulled)"
+              : plan.source === "github"
+                ? "GitHub issue"
+                : plan.source}
+          </Text>
+        </Box>
+      )}
+
+      {plan.issueNumber !== undefined && (
+        <Box>
+          <Text dimColor>{"Issue       "}</Text>
+          <Text color="magenta">#{plan.issueNumber}</Text>
+        </Box>
+      )}
+
+      {plan.issueUrl && (
+        <Box>
+          <Text dimColor>{"Issue URL   "}</Text>
+          <Text dimColor>{plan.issueUrl}</Text>
+        </Box>
+      )}
+
       {plan.worktreePath && (
         <Box>
           <Text dimColor>{"Worktree    "}</Text>
@@ -218,8 +245,13 @@ function ContentView({
   );
 }
 
-/** Pick the best default tab for a plan based on its state. */
-export function defaultTabForState(state: PlanInfo["state"]): DetailTab {
+/** Pick the best default tab for a plan based on its state and source. */
+export function defaultTabForState(
+  state: PlanInfo["state"],
+  source?: PlanInfo["source"],
+): DetailTab {
+  // Remote issues have no local plan file — show summary instead of plan tab.
+  if (source === "github-remote") return "summary";
   switch (state) {
     case "in-progress":
       return "progress";

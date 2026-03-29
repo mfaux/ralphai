@@ -90,10 +90,19 @@ export function buildMenuItems(
 
     switch (plan.state) {
       case "backlog":
-        items.push(
-          { label: "Run plan", action: "run" },
-          { label: "View plan file", action: "view-plan" },
-        );
+        if (plan.source === "github-remote") {
+          // Unpulled GitHub issue — pull + run actions only
+          items.push(
+            { label: "Pull & run this issue", action: "pull-run-issue" },
+            { label: "Pull & run oldest issue", action: "pull-run-oldest" },
+            { label: "View summary", action: "view-summary" },
+          );
+        } else {
+          items.push(
+            { label: "Run plan", action: "run" },
+            { label: "View plan file", action: "view-plan" },
+          );
+        }
         break;
       case "in-progress":
         items.push(

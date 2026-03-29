@@ -28,7 +28,7 @@ import {
 import { processLearnings } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
-import { pullGithubIssues } from "./issues.ts";
+import { peekGithubIssues, pullGithubIssues } from "./issues.ts";
 import {
   archiveRun,
   createPr,
@@ -334,7 +334,21 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
 
   const result = detectPlan({ dirs, dryRun: true });
   if (!result.detected) {
-    console.log("[dry-run] No runnable work found.");
+    // No local plans — check GitHub issues (read-only, no side effects).
+    const peek = peekGithubIssues({
+      cwd,
+      issueSource: config.issueSource.value,
+      issueLabel: config.issueLabel.value,
+      issueRepo: config.issueRepo.value,
+    });
+    if (peek.found) {
+      console.log(`[dry-run] No local plans found, but ${peek.message}`);
+      console.log(
+        "[dry-run] Run without --dry-run to pull the oldest issue into the backlog.",
+      );
+    } else {
+      console.log("[dry-run] No runnable work found.");
+    }
     return;
   }
 

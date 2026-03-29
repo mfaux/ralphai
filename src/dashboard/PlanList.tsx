@@ -109,16 +109,27 @@ function PlanRow({
   // Prefix: pointer(1) + " badge"(2) + " "(1) = 4, or pointer(1) + " "(1) = 2
   const prefixLen = badge ? 4 : 2;
 
+  // Issue badge: "#42 " prefix for unpulled remote issues
+  const isRemoteIssue = plan.source === "github-remote" && plan.issueNumber;
+  const issuePrefix = isRemoteIssue ? `#${plan.issueNumber} ` : "";
+
+  // Issue suffix: " [#42]" for pulled GitHub issues
+  const isPulledIssue = plan.source === "github" && plan.issueNumber;
+  const issueSuffix = isPulledIssue ? ` [#${plan.issueNumber}]` : "";
+
   // Calculate how many columns the trailing decorators will consume
   const showScope = innerWidth >= SCOPE_MIN_WIDTH && !!plan.scope;
   const showWorktree =
     innerWidth >= WORKTREE_MIN_WIDTH && plan.receiptSource === "worktree";
 
-  let trailingLen = 0;
+  let trailingLen = issueSuffix.length;
   if (showScope) trailingLen += 3 + (plan.scope?.length ?? 0); // " [scope]"
   if (showWorktree) trailingLen += 12; // " [worktree]"
 
-  const maxSlugLen = Math.max(6, innerWidth - prefixLen - trailingLen);
+  const maxSlugLen = Math.max(
+    6,
+    innerWidth - prefixLen - issuePrefix.length - trailingLen,
+  );
   const truncated = truncateSlug(plan.slug, maxSlugLen);
 
   return (
@@ -128,8 +139,11 @@ function PlanRow({
         bold={selected}
       >
         {pointer}
-        {badge ? ` ${badge}` : ""} {truncated}
+        {badge ? ` ${badge}` : ""}{" "}
+        {isRemoteIssue && <Text color="magenta">{issuePrefix}</Text>}
+        {truncated}
       </Text>
+      {isPulledIssue && <Text color="magenta">{issueSuffix}</Text>}
       {showScope && <Text dimColor> [{plan.scope}]</Text>}
       {showWorktree && <Text dimColor> [worktree]</Text>}
       <ProgressIndicator plan={plan} width={width} />
