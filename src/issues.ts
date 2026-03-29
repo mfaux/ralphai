@@ -41,6 +41,32 @@ export interface PullIssueResult {
   message: string;
 }
 
+/** Options for the read-only peekGithubIssues(). */
+export interface PeekIssueOptions {
+  /** Working directory (for git remote detection). */
+  cwd: string;
+  /** Configured issue source — must be "github" to proceed. */
+  issueSource: string;
+  /** Label to filter open issues by (e.g. "ralphai"). */
+  issueLabel: string;
+  /** Explicit owner/repo (empty = auto-detect from git remote). */
+  issueRepo: string;
+}
+
+/** Result of a peekGithubIssues() call. */
+export interface PeekIssueResult {
+  /** Whether matching issues were found. */
+  found: boolean;
+  /** Number of matching issues (0 when not found). */
+  count: number;
+  /** The oldest matching issue (picked first by the runner). */
+  oldest?: { number: number; title: string };
+  /** Detected repo (owner/repo). */
+  repo?: string;
+  /** Human-readable status message. */
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -122,6 +148,89 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+/**
+ * Read-only check for open GitHub issues matching the configured label.
+ *
+ * This is safe for dry-run mode: it queries the GitHub API but never writes
+ * files, edits labels, or posts comments.
+ */
+export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
+  const { cwd, issueSource, issueLabel, issueRepo } = options;
+
+  if (issueSource !== "github") {
+    return { found: false, count: 0, message: "Issue source is not 'github'" };
+  }
+
+  if (!checkGhAvailable()) {
+    return {
+      found: false,
+      count: 0,
+      message:
+        "gh CLI not available or not authenticated — skipping issue peek",
+    };
+  }
+
+  const repo = detectIssueRepo(cwd, issueRepo);
+  if (!repo) {
+    return {
+      found: false,
+      count: 0,
+      message: "Could not detect GitHub repo — skipping issue peek",
+    };
+  }
+
+  // Fetch up to 100 matching issues (number + title) — read-only.
+  const raw = execQuiet(
+    `gh issue list --repo "${repo}" --label "${issueLabel}" --state open ` +
+      `--limit 100 --json number,title`,
+    cwd,
+  );
+
+  if (!raw) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Could not list issues in ${repo}`,
+    };
+  }
+
+  let issues: Array<{ number: number; title: string }>;
+  try {
+    issues = JSON.parse(raw);
+  } catch {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Failed to parse issue list from ${repo}`,
+    };
+  }
+
+  if (issues.length === 0) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `No open issues with label '${issueLabel}' in ${repo}`,
+    };
+  }
+
+  // gh issue list returns newest first; last element is the oldest.
+  // Length is guaranteed > 0 by the guard above.
+  const oldest = issues[issues.length - 1]!;
+
+  return {
+    found: true,
+    count: issues.length,
+    oldest,
+    repo,
+    message:
+      `${issues.length} GitHub issue(s) with label '${issueLabel}' in ${repo}` +
+      ` (oldest: #${oldest.number} — ${oldest.title})`,
+  };
 }
 
 /**
