@@ -46,6 +46,10 @@ import {
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
+import {
+  AGENTS_MD_HEADER,
+  AGENTS_MD_RALPHAI_SECTION,
+} from "./agents-md-template.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -641,13 +645,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   const configPath = writeConfigFile(cwd, configObj);
 
   // Update or create AGENTS.md with a Ralphai section
-  const agentsMdSection = `## Ralphai
-
-This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous execution.
-Plan files go in the global pipeline backlog (run \`ralphai backlog-dir\` to find it).
-Install the planning skill for plan writing guidance: \`npx skills add mfaux/ralphai -g\`.
-`;
-
   let agentsMdAction: "created" | "updated" | null = null;
   if (answers.updateAgentsMd) {
     const agentsMdPath = join(cwd, "AGENTS.md");
@@ -656,17 +653,12 @@ Install the planning skill for plan writing guidance: \`npx skills add mfaux/ral
       if (!/^## Ralphai\b/m.test(content)) {
         writeFileSync(
           agentsMdPath,
-          content.trimEnd() + "\n\n" + agentsMdSection,
+          content.trimEnd() + "\n\n" + AGENTS_MD_RALPHAI_SECTION,
         );
         agentsMdAction = "updated";
       }
     } else {
-      const header = `# Agent Instructions
-
-Project-specific guidance for AI coding agents working in this codebase.
-
-`;
-      writeFileSync(agentsMdPath, header + agentsMdSection);
+      writeFileSync(agentsMdPath, AGENTS_MD_HEADER + AGENTS_MD_RALPHAI_SECTION);
       agentsMdAction = "created";
     }
   }
