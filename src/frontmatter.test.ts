@@ -163,6 +163,38 @@ describe("extractIssueFrontmatter", () => {
     expect(result.issue).toBe(7);
     expect(result.issueUrl).toBe("https://example.com");
   });
+
+  it("extracts prd field when present", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(
+      p,
+      "---\nsource: github\nissue: 42\nprd: 30\n---\n\n# Fix bug\n",
+    );
+    const result = extractIssueFrontmatter(p);
+    expect(result.prd).toBe(30);
+    expect(result.issue).toBe(42);
+  });
+
+  it("returns undefined prd when not present", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nsource: github\nissue: 42\n---\n\n# Fix bug\n");
+    const result = extractIssueFrontmatter(p);
+    expect(result.prd).toBeUndefined();
+  });
+
+  it("returns undefined prd for non-numeric value", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nprd: not-a-number\n---\n\n# Plan\n");
+    const result = extractIssueFrontmatter(p);
+    expect(result.prd).toBeUndefined();
+  });
+
+  it("handles prd with trailing whitespace", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nprd: 15   \n---\n\n# Plan\n");
+    const result = extractIssueFrontmatter(p);
+    expect(result.prd).toBe(15);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -183,6 +215,7 @@ describe("parseFrontmatter", () => {
         "issue-url: https://github.com/org/repo/issues/99",
         "scope: packages/api",
         "depends-on: [setup.md, infra.md]",
+        "prd: 50",
         "---",
         "",
         "# Full plan",
@@ -195,6 +228,7 @@ describe("parseFrontmatter", () => {
     expect(fm.issueUrl).toBe("https://github.com/org/repo/issues/99");
     expect(fm.scope).toBe("packages/api");
     expect(fm.dependsOn).toEqual(["setup.md", "infra.md"]);
+    expect(fm.prd).toBe(50);
   });
 
   it("parses with multiline depends-on", () => {
@@ -230,6 +264,7 @@ describe("parseFrontmatter", () => {
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();
     expect(fm.issueUrl).toBe("");
+    expect(fm.prd).toBeUndefined();
   });
 
   it("returns defaults for nonexistent file", () => {
@@ -239,6 +274,7 @@ describe("parseFrontmatter", () => {
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();
     expect(fm.issueUrl).toBe("");
+    expect(fm.prd).toBeUndefined();
   });
 
   it("returns defaults for empty frontmatter block", () => {
@@ -250,6 +286,7 @@ describe("parseFrontmatter", () => {
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();
     expect(fm.issueUrl).toBe("");
+    expect(fm.prd).toBeUndefined();
   });
 
   it("handles mixed fields with only some present", () => {

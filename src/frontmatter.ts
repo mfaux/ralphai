@@ -13,6 +13,7 @@ export interface PlanFrontmatter {
   source: string;
   issue: number | undefined;
   issueUrl: string;
+  prd: number | undefined;
 }
 
 /** Issue-specific subset of frontmatter. */
@@ -20,6 +21,7 @@ export interface IssueFrontmatter {
   source: string;
   issue: number | undefined;
   issueUrl: string;
+  prd: number | undefined;
 }
 
 /**
@@ -122,6 +124,7 @@ export function extractIssueFrontmatter(planPath: string): IssueFrontmatter {
     source: "",
     issue: undefined,
     issueUrl: "",
+    prd: undefined,
   };
 
   const content = readPlanContent(planPath);
@@ -132,14 +135,19 @@ export function extractIssueFrontmatter(planPath: string): IssueFrontmatter {
   const sourceMatch = fm.match(/^\s*source:\s*(.+)$/m);
   const issueMatch = fm.match(/^\s*issue:\s*(.+)$/m);
   const issueUrlMatch = fm.match(/^\s*issue-url:\s*(.+)$/m);
+  const prdMatch = fm.match(/^\s*prd:\s*(.+)$/m);
 
   const issueRaw = issueMatch?.[1]?.trim();
   const issueNum = issueRaw ? parseInt(issueRaw, 10) : undefined;
+
+  const prdRaw = prdMatch?.[1]?.trim();
+  const prdNum = prdRaw ? parseInt(prdRaw, 10) : undefined;
 
   return {
     source: sourceMatch?.[1]?.trim() ?? "",
     issue: issueNum !== undefined && !isNaN(issueNum) ? issueNum : undefined,
     issueUrl: issueUrlMatch?.[1]?.trim() ?? "",
+    prd: prdNum !== undefined && !isNaN(prdNum) ? prdNum : undefined,
   };
 }
 
@@ -156,6 +164,7 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
       source: "",
       issue: undefined,
       issueUrl: "",
+      prd: undefined,
     };
   }
 
@@ -164,7 +173,7 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
   // If performance ever matters, refactor to parse once.
   const scope = extractScope(planPath);
   const dependsOn = extractDependsOn(planPath);
-  const { source, issue, issueUrl } = extractIssueFrontmatter(planPath);
+  const { source, issue, issueUrl, prd } = extractIssueFrontmatter(planPath);
 
-  return { scope, dependsOn, source, issue, issueUrl };
+  return { scope, dependsOn, source, issue, issueUrl, prd };
 }

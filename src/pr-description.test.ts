@@ -266,6 +266,50 @@ describe("buildPrBody", () => {
     expect(body).toContain("### Other");
     expect(body).toContain("- random commit message");
   });
+
+  it("renders PRD line when prd and issueRepo are provided", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody(
+      "Fix widget validation",
+      "main",
+      "feature",
+      ctx.dir,
+      {
+        prd: 30,
+        issueRepo: "org/repo",
+      },
+    );
+    expect(body).toContain("## Summary");
+    expect(body).toContain("**PRD:** org/repo#30");
+    expect(body).toContain("Fix widget validation");
+    // PRD line should appear before the plan description
+    const prdIdx = body.indexOf("**PRD:**");
+    const descIdx = body.indexOf("Fix widget validation");
+    expect(prdIdx).toBeLessThan(descIdx);
+  });
+
+  it("omits PRD line when prd is not provided", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Test plan", "main", "feature", ctx.dir);
+    expect(body).not.toContain("**PRD:**");
+  });
+
+  it("omits PRD line when issueRepo is missing", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Test plan", "main", "feature", ctx.dir, {
+      prd: 30,
+    });
+    expect(body).not.toContain("**PRD:**");
+  });
 });
 
 // ---------------------------------------------------------------------------

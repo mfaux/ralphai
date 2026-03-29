@@ -157,7 +157,7 @@ export function formatCommitsByCategory(commits: CategorizedCommits): string {
  * Build a structured PR body for a single-plan PR.
  *
  * Sections:
- *   ## Summary         – plan description
+ *   ## Summary         – plan description (with optional PRD reference)
  *   ## Changes         – commits grouped by type
  *   ## Files Changed   – diffstat
  */
@@ -166,18 +166,20 @@ export function buildPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
+  options?: { prd?: number; issueRepo?: string },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
   const categorized = categorizeCommits(commitLog);
   const formattedCommits = formatCommitsByCategory(categorized);
   const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
 
-  const parts: string[] = [
-    `## Summary\n`,
-    `${planDescription}\n`,
-    `## Changes\n`,
-    formattedCommits,
-  ];
+  const parts: string[] = [`## Summary\n`];
+
+  if (options?.prd !== undefined && options.issueRepo) {
+    parts.push(`**PRD:** ${options.issueRepo}#${options.prd}\n`);
+  }
+
+  parts.push(`${planDescription}\n`, `## Changes\n`, formattedCommits);
 
   if (diffStat) {
     parts.push("", `## Files Changed\n`, "```", diffStat, "```");

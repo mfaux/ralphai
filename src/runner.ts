@@ -46,7 +46,7 @@ import {
   type PipelineDirs,
   type BlockedPlanInfo,
 } from "./plan-detection.ts";
-import { extractScope } from "./frontmatter.ts";
+import { extractScope, extractIssueFrontmatter } from "./frontmatter.ts";
 import { resolveScope } from "./scope.ts";
 import {
   initReceipt,
@@ -604,6 +604,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     const feedbackCommands = scopeResult.feedbackCommands;
     const scopeHint = scopeResult.scopeHint;
 
+    // --- Issue frontmatter (for PR creation and issue commenting) ---
+    const issueFm = extractIssueFrontmatter(planFile);
+
     // --- Receipt: resolve path and check for cross-source conflicts ---
     const wipDir = join(dirs.wipDir, planSlug);
     const receiptFile = join(wipDir, "receipt.txt");
@@ -879,6 +882,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             baseBranch,
             planDescription: planDesc,
             cwd,
+            issueSource: issueFm.source || issueSource,
+            issueNumber: issueFm.issue,
+            issueRepo,
+            issueCommentProgress,
+            prd: issueFm.prd,
           });
           console.log(prResult.message);
         }

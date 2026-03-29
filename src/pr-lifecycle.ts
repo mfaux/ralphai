@@ -40,6 +40,7 @@ export interface CreatePrOptions {
   issueNumber?: number;
   issueRepo?: string;
   issueCommentProgress?: boolean;
+  prd?: number;
 }
 
 export interface ContinuousPrOptions {
@@ -167,7 +168,10 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
 
-  const prBody = buildPrBody(planDescription, baseBranch, branch, cwd);
+  const prBody = buildPrBody(planDescription, baseBranch, branch, cwd, {
+    prd: options.prd,
+    issueRepo: options.issueRepo,
+  });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
   const prUrl = execQuiet(
