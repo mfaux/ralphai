@@ -143,3 +143,54 @@ describe("buildMenuItems — none context", () => {
     expect(buildMenuItems("none", null, null)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// GitHub remote issue context
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — github-remote backlog plan", () => {
+  it("shows pull-run actions instead of run/view-plan", () => {
+    const plan = makePlan({
+      slug: "gh-42-some-issue",
+      state: "backlog",
+      source: "github-remote",
+      issueNumber: 42,
+    });
+    const items = buildMenuItems("plan", plan, null);
+
+    const actions = items.map((i) => i.action);
+    expect(actions).toContain("pull-run-issue");
+    expect(actions).toContain("pull-run-oldest");
+    expect(actions).toContain("view-summary");
+    expect(actions).not.toContain("run");
+    expect(actions).not.toContain("view-plan");
+  });
+
+  it("places pull-run-issue first", () => {
+    const plan = makePlan({
+      slug: "gh-10-first",
+      state: "backlog",
+      source: "github-remote",
+      issueNumber: 10,
+    });
+    const items = buildMenuItems("plan", plan, null);
+    expect(items[0]!.action).toBe("pull-run-issue");
+  });
+});
+
+describe("buildMenuItems — pulled github plan", () => {
+  it("shows standard backlog actions for pulled github plans", () => {
+    const plan = makePlan({
+      slug: "gh-42-some-issue",
+      state: "backlog",
+      source: "github",
+      issueNumber: 42,
+    });
+    const items = buildMenuItems("plan", plan, null);
+
+    const actions = items.map((i) => i.action);
+    expect(actions).toContain("run");
+    expect(actions).toContain("view-plan");
+    expect(actions).not.toContain("pull-run-issue");
+  });
+});

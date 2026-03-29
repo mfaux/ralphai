@@ -35,9 +35,13 @@ import {
   purgePlan,
   removeWorktree,
   stopRunner,
+  pullAndRunIssue,
+  pullAndRunOldest,
 } from "./actions.ts";
+import { loadGithubIssuesAsync } from "./issue-loader.ts";
 
 const REFRESH_MS = 3000;
+const GITHUB_REFRESH_MS = 30_000;
 
 /**
  * Height reserved for non-plan-list chrome.
@@ -159,12 +163,32 @@ export function useAppState(termRows: number, termCols: number) {
     [],
   );
 
+  // --- GitHub issues (longer poll interval to avoid rate-limiting) ---
+  const githubIssueLoader = useCallback(
+    () =>
+      selectedRepo?.repoPath
+        ? loadGithubIssuesAsync(selectedRepo.repoPath, plans)
+        : Promise.resolve([]),
+    [selectedRepo?.repoPath, plans],
+  );
+  const { data: githubIssues } = useAsyncAutoRefresh<PlanInfo[]>(
+    githubIssueLoader,
+    GITHUB_REFRESH_MS,
+    [],
+  );
+
+  // Merge local plans with remote GitHub issues.
+  const allPlans = useMemo(
+    () => [...plans, ...githubIssues],
+    [plans, githubIssues],
+  );
+
   const worktreeLoader = useCallback(
     () =>
       selectedRepo?.repoPath
-        ? loadWorktreesAsync(selectedRepo.repoPath, plans)
+        ? loadWorktreesAsync(selectedRepo.repoPath, allPlans)
         : Promise.resolve([]),
-    [selectedRepo?.repoPath, plans],
+    [selectedRepo?.repoPath, allPlans],
   );
   const { data: worktrees } = useAsyncAutoRefresh<WorktreeInfo[]>(
     worktreeLoader,
@@ -175,8 +199,8 @@ export function useAppState(termRows: number, termCols: number) {
   // --- Filter plans ---
   const filterActive = filterQuery.trim().length > 0;
   const displayPlans = useMemo(
-    () => filterPlans(plans, filterQuery),
-    [plans, filterQuery],
+    () => filterPlans(allPlans, filterQuery),
+    [allPlans, filterQuery],
   );
 
   // Clamp plan cursor when display plans change
@@ -240,7 +264,7 @@ export function useAppState(termRows: number, termCols: number) {
   // --- Auto-set default tab when plan selection changes ---
   useEffect(() => {
     if (selectedPlan) {
-      setActiveTab(defaultTabForState(selectedPlan.state));
+      setActiveTab(defaultTabForState(selectedPlan.state, selectedPlan.source));
       setScrollOffset(0);
     }
   }, [selectedPlan?.slug]);
@@ -320,6 +344,27 @@ export function useAppState(termRows: number, termCols: number) {
               ? `Started Ralphai run for ${selectedPlan.slug} (pid ${pid})`
               : `Failed to start Ralphai run for ${selectedPlan.slug}`,
           );
+          break;
+        }
+        case "pull-run-issue": {
+          if (!selectedPlan?.issueNumber || !selectedRepo?.repoPath) {
+            showToast("No GitHub issue selected");
+            break;
+          }
+          const pullResult = pullAndRunIssue(
+            selectedRepo.repoPath,
+            selectedPlan.issueNumber,
+          );
+          showToast(pullResult.message);
+          break;
+        }
+        case "pull-run-oldest": {
+          if (!selectedRepo?.repoPath) {
+            showToast("No repo selected");
+            break;
+          }
+          const oldestResult = pullAndRunOldest(selectedRepo.repoPath);
+          showToast(oldestResult.message);
           break;
         }
         case "stop-run":
@@ -459,9 +504,11 @@ export function useAppState(termRows: number, termCols: number) {
     selectRepo,
     cycleRepo,
     // Plans
-    plans,
+    plans: allPlans,
     displayPlans,
     selectedPlan,
+    // GitHub issues
+    githubIssues,
     // Worktrees
     worktrees,
     // Detail

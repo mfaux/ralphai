@@ -8,9 +8,15 @@
 
 import { execSync, spawn } from "child_process";
 import { existsSync, mkdirSync, renameSync, rmSync } from "fs";
-import { dirname, join } from "path";
+import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { getRepoPipelineDirs } from "../global-state.ts";
+import { parseConfigFile, getConfigFilePath } from "../config.ts";
+import {
+  pullGithubIssues,
+  pullGithubIssueByNumber,
+  type PullIssueOptions,
+} from "../issues.ts";
 
 /**
  * Directory of this file at runtime. Uses `import.meta.url` which works
@@ -194,4 +200,91 @@ export function removeWorktree(
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pull & run GitHub issues
+// ---------------------------------------------------------------------------
+
+/** Load issue-related config values for a repo. Returns null on failure. */
+function loadPullIssueOptions(
+  cwd: string,
+): Omit<PullIssueOptions, "issueNumber"> | null {
+  try {
+    const configPath = getConfigFilePath(cwd);
+    const parsed = parseConfigFile(configPath);
+    if (!parsed) return null;
+    const v = parsed.values;
+    const { backlogDir } = getRepoPipelineDirs(cwd);
+    return {
+      backlogDir,
+      cwd,
+      issueSource: v.issueSource ?? "none",
+      issueLabel: v.issueLabel ?? "ralphai",
+      issueInProgressLabel: v.issueInProgressLabel ?? "ralphai:in-progress",
+      issueRepo: v.issueRepo ?? "",
+      issueCommentProgress: v.issueCommentProgress === "true",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Extract the plan slug from a plan file path (e.g. "gh-42-my-plan"). */
+function slugFromPlanPath(planPath: string): string {
+  return basename(planPath, ".md");
+}
+
+/**
+ * Pull a specific GitHub issue by number, then spawn a runner for it.
+ *
+ * @returns A result message for the toast.
+ */
+export function pullAndRunIssue(
+  cwd: string,
+  issueNumber: number,
+): { ok: boolean; message: string } {
+  const opts = loadPullIssueOptions(cwd);
+  if (!opts) return { ok: false, message: "Could not load issue config" };
+
+  const result = pullGithubIssueByNumber({ ...opts, issueNumber });
+  if (!result.pulled || !result.planPath) {
+    return { ok: false, message: result.message };
+  }
+
+  const slug = slugFromPlanPath(result.planPath);
+  const pid = spawnRunner(cwd, slug);
+  return pid
+    ? {
+        ok: true,
+        message: `Pulled #${issueNumber} and started run (pid ${pid})`,
+      }
+    : {
+        ok: false,
+        message: `Pulled #${issueNumber} but failed to start runner`,
+      };
+}
+
+/**
+ * Pull the oldest open GitHub issue, then spawn a runner for it.
+ *
+ * @returns A result message for the toast.
+ */
+export function pullAndRunOldest(cwd: string): {
+  ok: boolean;
+  message: string;
+} {
+  const opts = loadPullIssueOptions(cwd);
+  if (!opts) return { ok: false, message: "Could not load issue config" };
+
+  const result = pullGithubIssues(opts);
+  if (!result.pulled || !result.planPath) {
+    return { ok: false, message: result.message };
+  }
+
+  const slug = slugFromPlanPath(result.planPath);
+  const pid = spawnRunner(cwd, slug);
+  return pid
+    ? { ok: true, message: `${result.message} — started run (pid ${pid})` }
+    : { ok: false, message: `${result.message} — failed to start runner` };
 }

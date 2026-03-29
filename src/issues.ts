@@ -233,6 +233,93 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Internal: shared pull logic
+// ---------------------------------------------------------------------------
+
+interface FetchAndWriteOptions {
+  repo: string;
+  issueNumber: string;
+  backlogDir: string;
+  cwd: string;
+  issueInProgressLabel: string;
+  issueLabel: string;
+  issueCommentProgress: boolean;
+}
+
+/**
+ * Fetch a single issue by number, write a plan file, swap labels, and
+ * optionally post a progress comment. Shared by both pullGithubIssues()
+ * and pullGithubIssueByNumber().
+ */
+function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
+  const {
+    repo,
+    issueNumber,
+    backlogDir,
+    cwd,
+    issueInProgressLabel,
+    issueLabel,
+    issueCommentProgress,
+  } = opts;
+
+  const title = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title --jq '.title'`,
+    cwd,
+  );
+  const body = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json body --jq '.body'`,
+    cwd,
+  );
+  const url = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json url --jq '.url'`,
+    cwd,
+  );
+
+  if (!title) {
+    return {
+      pulled: false,
+      message: `Failed to fetch details for issue #${issueNumber}`,
+    };
+  }
+
+  const slug = slugify(title);
+  const filename = `gh-${issueNumber}-${slug}.md`;
+  const planPath = join(backlogDir, filename);
+
+  if (!existsSync(backlogDir)) {
+    mkdirSync(backlogDir, { recursive: true });
+  }
+
+  const planContent = `---\nsource: github\nissue: ${issueNumber}\nissue-url: ${url ?? ""}\n---\n\n# ${title}\n\n${body ?? ""}\n`;
+  writeFileSync(planPath, planContent, "utf-8");
+
+  // Update issue labels: add in-progress, remove intake label
+  execQuiet(
+    `gh issue edit ${issueNumber} --repo "${repo}" ` +
+      `--add-label "${issueInProgressLabel}" --remove-label "${issueLabel}"`,
+    cwd,
+  );
+
+  if (issueCommentProgress) {
+    execQuiet(
+      `gh issue comment ${issueNumber} --repo "${repo}" ` +
+        `--body "Ralphai picked up this issue and created a plan file. Working on it now."`,
+      cwd,
+    );
+  }
+
+  return {
+    pulled: true,
+    planPath,
+    message: `Pulled GitHub issue #${issueNumber}: ${title} → ${filename}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public pull functions
+// ---------------------------------------------------------------------------
+
 /**
  * Pull the oldest open GitHub issue matching the configured label and
  * convert it to a plan file in the backlog directory.
@@ -285,58 +372,64 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     };
   }
 
-  // Fetch full issue details
-  const title = execQuiet(
-    `gh issue view ${number} --repo "${repo}" --json title --jq '.title'`,
+  return fetchAndWriteIssuePlan({
+    repo,
+    issueNumber: number,
+    backlogDir,
     cwd,
-  );
-  const body = execQuiet(
-    `gh issue view ${number} --repo "${repo}" --json body --jq '.body'`,
-    cwd,
-  );
-  const url = execQuiet(
-    `gh issue view ${number} --repo "${repo}" --json url --jq '.url'`,
-    cwd,
-  );
+    issueInProgressLabel,
+    issueLabel,
+    issueCommentProgress,
+  });
+}
 
-  if (!title) {
+/**
+ * Pull a specific GitHub issue by number and convert it to a plan file.
+ *
+ * Same as pullGithubIssues() but targets a known issue instead of searching
+ * for the oldest one. Used by the dashboard "Pull & run" action.
+ */
+export function pullGithubIssueByNumber(
+  options: PullIssueOptions & { issueNumber: number },
+): PullIssueResult {
+  const {
+    backlogDir,
+    cwd,
+    issueSource,
+    issueLabel,
+    issueInProgressLabel,
+    issueRepo,
+    issueCommentProgress,
+    issueNumber,
+  } = options;
+
+  if (issueSource !== "github") {
+    return { pulled: false, message: "Issue source is not 'github'" };
+  }
+
+  if (!checkGhAvailable()) {
     return {
       pulled: false,
-      message: `Failed to fetch details for issue #${number}`,
+      message:
+        "gh CLI not available or not authenticated — skipping issue pull",
     };
   }
 
-  const slug = slugify(title);
-  const filename = `gh-${number}-${slug}.md`;
-  const planPath = join(backlogDir, filename);
-
-  // Write plan file with frontmatter
-  if (!existsSync(backlogDir)) {
-    mkdirSync(backlogDir, { recursive: true });
+  const repo = detectIssueRepo(cwd, issueRepo);
+  if (!repo) {
+    return {
+      pulled: false,
+      message: "Could not detect GitHub repo — skipping issue pull",
+    };
   }
 
-  const planContent = `---\nsource: github\nissue: ${number}\nissue-url: ${url ?? ""}\n---\n\n# ${title}\n\n${body ?? ""}\n`;
-  writeFileSync(planPath, planContent, "utf-8");
-
-  // Update issue labels: add in-progress, remove intake label
-  execQuiet(
-    `gh issue edit ${number} --repo "${repo}" ` +
-      `--add-label "${issueInProgressLabel}" --remove-label "${issueLabel}"`,
+  return fetchAndWriteIssuePlan({
+    repo,
+    issueNumber: String(issueNumber),
+    backlogDir,
     cwd,
-  );
-
-  // Optionally post a progress comment
-  if (issueCommentProgress) {
-    execQuiet(
-      `gh issue comment ${number} --repo "${repo}" ` +
-        `--body "Ralphai picked up this issue and created a plan file. Working on it now."`,
-      cwd,
-    );
-  }
-
-  return {
-    pulled: true,
-    planPath,
-    message: `Pulled GitHub issue #${number}: ${title} → ${filename}`,
-  };
+    issueInProgressLabel,
+    issueLabel,
+    issueCommentProgress,
+  });
 }

@@ -71,4 +71,10 @@ export interface PlanInfo {
   worktreePath?: string;
   /** PID of the runner process, if a runner.pid file exists. */
   runnerPid?: number;
+  /** Plan origin: "github" = pulled from issue, "github-remote" = unpulled preview. */
+  source?: "github" | "github-remote";
+  /** GitHub issue number (set for both pulled and remote issues). */
+  issueNumber?: number;
+  /** GitHub issue URL. */
+  issueUrl?: string;
 }

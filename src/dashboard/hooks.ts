@@ -126,6 +126,7 @@ const STATE_ALIASES: Record<string, PlanInfo["state"]> = {
  * - `state:<value>` — matches plan state (backlog, in-progress, completed,
  *   or aliases: active, queued, done)
  * - `scope:<value>` — matches plan scope
+ * - `source:<value>` — matches plan source (github, remote, local)
  * - Remaining text matches against plan slugs (case-insensitive)
  */
 export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
@@ -134,6 +135,7 @@ export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
   const tokens = query.trim().toLowerCase().split(/\s+/);
   let stateFilter: PlanInfo["state"] | null = null;
   let scopeFilter: string | null = null;
+  let sourceFilter: string | null = null;
   const textTokens: string[] = [];
 
   for (const token of tokens) {
@@ -142,6 +144,8 @@ export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
       stateFilter = STATE_ALIASES[val] ?? null;
     } else if (token.startsWith("scope:")) {
       scopeFilter = token.slice(6);
+    } else if (token.startsWith("source:")) {
+      sourceFilter = token.slice(7);
     } else {
       textTokens.push(token);
     }
@@ -154,6 +158,15 @@ export function filterPlans(plans: PlanInfo[], query: string): PlanInfo[] {
       (!plan.scope || !plan.scope.toLowerCase().includes(scopeFilter))
     ) {
       return false;
+    }
+    if (sourceFilter) {
+      if (sourceFilter === "github") {
+        if (!plan.source?.startsWith("github")) return false;
+      } else if (sourceFilter === "remote") {
+        if (plan.source !== "github-remote") return false;
+      } else if (sourceFilter === "local") {
+        if (plan.source !== undefined) return false;
+      }
     }
     if (textTokens.length > 0) {
       const slug = plan.slug.toLowerCase();
