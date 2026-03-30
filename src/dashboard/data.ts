@@ -251,6 +251,7 @@ export function loadPlans(cwd: string): PlanInfo[] {
     const slug = file.replace(/\.md$/, "");
     const planFilePath = join(inProgressDir, slug, file);
     const scope = extractScope(planFilePath);
+    const deps = extractDependsOn(planFilePath);
     const totalTasks = countPlanTasks(planFilePath);
 
     // Parse issue metadata
@@ -280,6 +281,7 @@ export function loadPlans(cwd: string): PlanInfo[] {
       slug,
       state: "in-progress",
       scope: scope || undefined,
+      deps: deps && deps.length > 0 ? deps : undefined,
       tasksCompleted: receipt?.tasks_completed,
       totalTasks,
       outcome: receipt?.outcome ?? undefined,
@@ -298,6 +300,8 @@ export function loadPlans(cwd: string): PlanInfo[] {
     const receiptPath = join(archiveDir, slug, "receipt.txt");
     const receipt = parseReceipt(receiptPath);
     const totalTasks = countPlanTasks(planFilePath);
+    const scope = extractScope(planFilePath);
+    const deps = extractDependsOn(planFilePath);
 
     // Parse issue metadata
     let issueFields: ReturnType<typeof parseIssueFromContent> = {};
@@ -312,6 +316,8 @@ export function loadPlans(cwd: string): PlanInfo[] {
       filename: `${slug}.md`,
       slug,
       state: "completed",
+      scope: scope || undefined,
+      deps: deps && deps.length > 0 ? deps : undefined,
       tasksCompleted: receipt?.tasks_completed,
       totalTasks,
       outcome: receipt?.outcome ?? undefined,
@@ -354,6 +360,46 @@ export function loadPlanContent(cwd: string, plan: PlanInfo): string | null {
 
   try {
     return readFileSync(planPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Async version of loadPlanContent. Uses fs/promises.readFile so large
+ * plan files don't block the event loop (avoids freezing the dashboard
+ * when opening the Plan tab).
+ */
+export async function loadPlanContentAsync(
+  cwd: string,
+  plan: PlanInfo,
+): Promise<string | null> {
+  let dirs: ReturnType<typeof getRepoPipelineDirs>;
+  try {
+    dirs = getCachedPipelineDirs(cwd);
+  } catch {
+    return null;
+  }
+
+  const { backlogDir, wipDir: inProgressDir, archiveDir } = dirs;
+
+  let planPath: string | null = null;
+  switch (plan.state) {
+    case "backlog":
+      planPath = resolvePlanPath(backlogDir, plan.slug);
+      break;
+    case "in-progress":
+      planPath = join(inProgressDir, plan.slug, plan.filename);
+      break;
+    case "completed":
+      planPath = join(archiveDir, plan.slug, plan.filename);
+      break;
+  }
+
+  if (!planPath || !(await fileExists(planPath))) return null;
+
+  try {
+    return await readFile(planPath, "utf-8");
   } catch {
     return null;
   }
@@ -623,15 +669,18 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
     const slug = file.replace(/\.md$/, "");
     const planFilePath = join(inProgressDir, slug, file);
     let scope: string | undefined;
+    let deps: string[] | undefined;
     let totalTasks: number | undefined;
     let issueFields: ReturnType<typeof parseIssueFromContent> = {};
     try {
       const planContent = await readFile(planFilePath, "utf-8");
       scope = parseScopeFromContent(planContent);
+      deps = parseDependsOnFromContent(planContent);
       totalTasks = countPlanTasksFromContent(planContent);
       issueFields = parseIssueFromContent(planContent);
     } catch {
       scope = undefined;
+      deps = undefined;
       totalTasks = undefined;
     }
 
@@ -672,6 +721,7 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
       slug,
       state: "in-progress",
       scope,
+      deps,
       tasksCompleted: receipt?.tasksCompleted,
       totalTasks,
       outcome: receipt?.outcome,
@@ -691,13 +741,19 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
   // Completed plans
   for (const slug of listPlanFolders(archiveDir)) {
     const planFilePath = join(archiveDir, slug, `${slug}.md`);
+    let scope: string | undefined;
+    let deps: string[] | undefined;
     let totalTasks: number | undefined;
     let issueFields: ReturnType<typeof parseIssueFromContent> = {};
     try {
       const planContent = await readFile(planFilePath, "utf-8");
+      scope = parseScopeFromContent(planContent);
+      deps = parseDependsOnFromContent(planContent);
       totalTasks = countPlanTasksFromContent(planContent);
       issueFields = parseIssueFromContent(planContent);
     } catch {
+      scope = undefined;
+      deps = undefined;
       totalTasks = undefined;
     }
 
@@ -725,6 +781,8 @@ export async function loadPlansAsync(cwd: string): Promise<PlanInfo[]> {
       filename: `${slug}.md`,
       slug,
       state: "completed",
+      scope,
+      deps,
       tasksCompleted: receipt?.tasksCompleted,
       totalTasks,
       outcome: receipt?.outcome,

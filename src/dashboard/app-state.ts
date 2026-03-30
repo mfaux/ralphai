@@ -22,7 +22,7 @@ import {
   loadReposAsync,
   loadPlansAsync,
   loadWorktreesAsync,
-  loadPlanContent,
+  loadPlanContentAsync,
   loadProgressContentAsync,
   loadOutputTailAsync,
 } from "./data.ts";
@@ -215,12 +215,17 @@ export function useAppState(termRows: number, termCols: number) {
   const selectedPlan: PlanInfo | null = displayPlans[planCursor] ?? null;
 
   // --- Detail content ---
-  const planContent = useMemo(
+  const planContentLoader = useCallback(
     () =>
       selectedPlan && selectedRepo?.repoPath
-        ? loadPlanContent(selectedRepo.repoPath, selectedPlan)
-        : null,
+        ? loadPlanContentAsync(selectedRepo.repoPath, selectedPlan)
+        : Promise.resolve(null),
     [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath],
+  );
+  const { data: planContent } = useAsyncAutoRefresh<string | null>(
+    planContentLoader,
+    REFRESH_MS,
+    null,
   );
 
   // Progress and output poll on the refresh interval so live updates appear.
