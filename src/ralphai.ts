@@ -70,6 +70,7 @@ type RalphaiSubcommand =
   | "init"
   | "update"
   | "run"
+  | "prd"
   | "teardown"
   | "uninstall"
   | "worktree"
@@ -100,6 +101,7 @@ interface RalphaiOptions {
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
+  prdNumber?: string; // positional arg for `prd` subcommand
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -166,6 +168,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
   "run",
+  "prd",
   "teardown",
   "uninstall",
   "worktree",
@@ -187,17 +190,25 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
+  let prdNumber: string | undefined;
   const capabilities: string[] = [];
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
 
   let collectingRunArgs = false;
+  let expectingPrdNumber = false;
 
   for (const arg of args) {
-    // After `run` subcommand or `--`, collect remaining args for the runner
+    // After `run`/`prd` subcommand or `--`, collect remaining args for the runner
     if (collectingRunArgs) {
       if (arg === "--") continue; // skip bare `--` separator (still supported)
+      // For `prd`, the first non-flag positional arg is the issue number
+      if (expectingPrdNumber && !arg.startsWith("-")) {
+        prdNumber = arg;
+        expectingPrdNumber = false;
+        continue;
+      }
       runArgs.push(arg);
       continue;
     }
@@ -231,6 +242,11 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
         if (subcommand === "run") {
           collectingRunArgs = true;
         }
+        // For `prd`, next positional is the issue number, rest are runArgs
+        if (subcommand === "prd") {
+          collectingRunArgs = true;
+          expectingPrdNumber = true;
+        }
         // For `worktree`, parse worktree-specific args from the rest
         if (subcommand === "worktree") {
           worktreeOptions = parseWorktreeArgs(
@@ -256,6 +272,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     targetDir,
     repo,
     capabilities,
+    prdNumber,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -1053,6 +1070,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}run${RESET}         ${DIM}Start the Ralphai runner${RESET}`,
   );
   console.log(
+    `  ${TEXT}prd${RESET}         ${DIM}Run a PRD issue in continuous mode (shorthand for run)${RESET}`,
+  );
+  console.log(
     `  ${TEXT}worktree${RESET}    ${DIM}Run in an isolated git worktree${RESET}`,
   );
   console.log(
@@ -1104,6 +1124,7 @@ export async function runRalphai(args: string[]): Promise<void> {
   if (options.repo) {
     const REPO_BLOCKED_COMMANDS = new Set<RalphaiSubcommand>([
       "run",
+      "prd",
       "worktree",
       "init",
     ]);
@@ -1180,6 +1201,7 @@ export async function runRalphai(args: string[]): Promise<void> {
   // --- Early git-repo guard for commands that require a working tree ---
   const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>([
     "run",
+    "prd",
     "worktree",
     "init",
   ]);
@@ -1234,6 +1256,13 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "run":
       await runRalphaiInManagedWorktree(options, cwd);
+      break;
+    case "prd":
+      if (helpRequested) {
+        showPrdHelp();
+        return;
+      }
+      await runRalphaiPrd(options, cwd);
       break;
     case "worktree":
       await runRalphaiWorktree(options, cwd);
@@ -2640,6 +2669,81 @@ function showRunHelp(): void {
     "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run          # override via env var",
   ];
   console.log(lines.join("\n"));
+}
+
+// ---------------------------------------------------------------------------
+// prd subcommand — sugar for `ralphai run --continuous --prd=<number>`
+// ---------------------------------------------------------------------------
+
+function showPrdHelp(): void {
+  const lines = [
+    "Usage: ralphai prd <issue-number> [options]",
+    "",
+    "  Shorthand for 'ralphai run --continuous --prd=<issue-number>'.",
+    "  Fetches the GitHub issue, derives a branch, and runs continuously.",
+    "",
+    "  All 'ralphai run' options are accepted and passed through.",
+    "",
+    "Options:",
+    "  All options from 'ralphai run' are supported (see 'ralphai run --help').",
+    "",
+    "Examples:",
+    "  ralphai prd 42                                # PRD-driven continuous run",
+    "  ralphai prd 42 --dry-run                      # preview only",
+    "  ralphai prd 42 --agent-command='claude -p'    # use Claude Code",
+  ];
+  console.log(lines.join("\n"));
+}
+
+async function runRalphaiPrd(
+  options: RalphaiOptions,
+  cwd: string,
+): Promise<void> {
+  const { prdNumber } = options;
+
+  // Missing issue number
+  if (!prdNumber) {
+    console.error("Usage: ralphai prd <issue-number>");
+    console.error(
+      `${DIM}Run ${TEXT}ralphai prd --help${RESET}${DIM} for details.${RESET}`,
+    );
+    process.exit(1);
+  }
+
+  // Non-numeric issue number
+  const num = parseInt(prdNumber, 10);
+  if (isNaN(num) || String(num) !== prdNumber) {
+    console.error(
+      `Invalid issue number: '${prdNumber}'. The issue number must be a positive integer.`,
+    );
+    console.error(`${DIM}Example: ${TEXT}ralphai prd 42${RESET}`);
+    process.exit(1);
+  }
+
+  // Reject if inside a worktree
+  if (isGitWorktree(cwd)) {
+    console.error("'ralphai prd' must be run from the main repository.");
+    console.error(
+      "You are inside a worktree. Run this command from the main repo.",
+    );
+    process.exit(1);
+  }
+
+  // Delegate to `runRalphaiInManagedWorktree` with --prd=<number> injected.
+  // Inject --continuous if not already present (PRD runs are always continuous).
+  const runArgs = [...options.runArgs];
+  if (!runArgs.includes("--continuous")) {
+    runArgs.push("--continuous");
+  }
+  runArgs.push(`--prd=${prdNumber}`);
+
+  const delegatedOptions: RalphaiOptions = {
+    ...options,
+    subcommand: "run",
+    runArgs,
+  };
+
+  await runRalphaiInManagedWorktree(delegatedOptions, cwd);
 }
 
 /**

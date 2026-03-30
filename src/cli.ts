@@ -40,6 +40,7 @@ function showHelp(): void {
 ${BOLD}Commands:${RESET}
   init         Set up Ralphai in your project (interactive wizard)
   run          Create or reuse a worktree and run a plan
+  prd          Run a PRD issue in continuous mode (shorthand for run)
   worktree     Manage ralphai git worktrees
   status       Show pipeline and worktree status
   reset        Move in-progress plans back to backlog and clean up
