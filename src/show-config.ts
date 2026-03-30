@@ -42,6 +42,7 @@ export function detectAgentType(agentCommand: string): string {
 /** Env var name for each config key. */
 const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   agentCommand: "RALPHAI_AGENT_COMMAND",
+  setupCommand: "RALPHAI_SETUP_COMMAND",
   feedbackCommands: "RALPHAI_FEEDBACK_COMMANDS",
   baseBranch: "RALPHAI_BASE_BRANCH",
   maxStuck: "RALPHAI_MAX_STUCK",
@@ -123,6 +124,16 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     "none",
   );
   lines.push(`  agentCommand       = ${agentCmdDisplay}  (${agentSrc})`);
+
+  const setupCmd = config.setupCommand.value;
+  const setupCmdDisplay = setupCmd || "<none>";
+  const setupSrc = sourceLabel(
+    "setupCommand",
+    config.setupCommand.source,
+    input,
+    "none",
+  );
+  lines.push(`  setupCommand       = ${setupCmdDisplay}  (${setupSrc})`);
 
   const feedbackCmd = config.feedbackCommands.value;
   const feedbackDisplay = feedbackCmd || "<none>";

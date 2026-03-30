@@ -105,6 +105,7 @@ describe("formatShowConfig", () => {
   it("shows all default values with default sources", () => {
     const output = formatShowConfig(defaultInput());
     expect(output).toContain("  agentCommand       = <none>  (default (none))");
+    expect(output).toContain("  setupCommand       = <none>  (default (none))");
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  continuous         = false  (default)");
@@ -113,6 +114,16 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
+  });
+
+  it("shows setupCommand when configured", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      setupCommand: { value: "bun install", source: "config" },
+    });
+    input.configFileExists = true;
+    const output = formatShowConfig(input);
+    expect(output).toContain("  setupCommand       = bun install  (config (");
   });
 
   it("shows <no agentCommand set> when agentCommand is empty", () => {

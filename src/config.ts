@@ -17,6 +17,7 @@ import { resolveRepoStateDir } from "./global-state.ts";
 /** All recognised config keys. */
 export interface RalphaiConfig {
   agentCommand: string;
+  setupCommand: string;
   feedbackCommands: string;
   baseBranch: string;
   maxStuck: number;
@@ -57,6 +58,7 @@ export type ResolvedConfig = {
 
 export const DEFAULTS: Readonly<RalphaiConfig> = {
   agentCommand: "",
+  setupCommand: "",
   feedbackCommands: "",
   baseBranch: "main",
   maxStuck: 3,
@@ -164,6 +166,7 @@ export function validateCommaList(value: string, label: string): void {
 /** Allowed keys in config.json. */
 const ALLOWED_CONFIG_KEYS = new Set([
   "agentCommand",
+  "setupCommand",
   "feedbackCommands",
   "baseBranch",
   "maxStuck",
@@ -237,6 +240,14 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     if (typeof v !== "string" || v === "")
       err("'agentCommand' must be a non-empty string");
     values.agentCommand = v;
+  }
+
+  // setupCommand (string, can be empty)
+  if ("setupCommand" in obj) {
+    const v = obj.setupCommand;
+    if (typeof v !== "string")
+      err(`'setupCommand' must be a string, got ${typeof v}`);
+    values.setupCommand = v;
   }
 
   // feedbackCommands (array of strings or comma-separated string)
@@ -418,6 +429,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   [envVar: string, configKey: keyof RalphaiConfig]
 > = [
   ["RALPHAI_AGENT_COMMAND", "agentCommand"],
+  ["RALPHAI_SETUP_COMMAND", "setupCommand"],
   ["RALPHAI_FEEDBACK_COMMANDS", "feedbackCommands"],
   ["RALPHAI_BASE_BRANCH", "baseBranch"],
   ["RALPHAI_MAX_STUCK", "maxStuck"],
@@ -449,6 +461,10 @@ export function applyEnvOverrides(
   // agentCommand
   const agentCmd = get("RALPHAI_AGENT_COMMAND");
   if (agentCmd !== undefined) overrides.agentCommand = agentCmd;
+
+  // setupCommand
+  const setupCmd = get("RALPHAI_SETUP_COMMAND");
+  if (setupCmd !== undefined) overrides.setupCommand = setupCmd;
 
   // feedbackCommands
   const feedbackCmds = get("RALPHAI_FEEDBACK_COMMANDS");
@@ -559,6 +575,10 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       }
       overrides.agentCommand = v;
       rawFlags.agentCommand = arg;
+    } else if (arg.startsWith("--setup-command=")) {
+      const v = arg.slice("--setup-command=".length);
+      overrides.setupCommand = v;
+      rawFlags.setupCommand = arg;
     } else if (arg.startsWith("--feedback-commands=")) {
       const v = arg.slice("--feedback-commands=".length);
       if (v !== "") validateCommaList(v, "--feedback-commands");
