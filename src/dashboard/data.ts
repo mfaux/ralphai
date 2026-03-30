@@ -488,6 +488,13 @@ function parseWorktreeList(output: string): RawWorktreeEntry[] {
 }
 
 /**
+ * Check whether a branch is managed by ralphai (ralphai/* or feat/*).
+ */
+function isRalphaiManagedBranch(branch: string): boolean {
+  return branch.startsWith("ralphai/") || branch.startsWith("feat/");
+}
+
+/**
  * Enrich raw worktree entries with status and linked plan data.
  */
 function enrichWorktrees(
@@ -499,10 +506,20 @@ function enrichWorktrees(
   );
 
   return raw.map((wt) => {
-    const shortBranch = wt.branch.replace(/^ralphai\//, "");
+    // For ralphai/ branches, strip the prefix to get the slug.
+    // For feat/ branches, keep the full branch name as shortBranch
+    // and rely on receipt-based plan matching.
+    const shortBranch = wt.branch.startsWith("ralphai/")
+      ? wt.branch.replace(/^ralphai\//, "")
+      : wt.branch;
     const linkedPlan = plans.find(
       (p) => p.branch === wt.branch || p.slug === shortBranch,
     );
+
+    // For feat/ branches, check if any in-progress plan references this branch
+    const isActive = wt.branch.startsWith("ralphai/")
+      ? activeSlugs.has(shortBranch)
+      : plans.some((p) => p.state === "in-progress" && p.branch === wt.branch);
 
     return {
       path: wt.path,
@@ -510,16 +527,14 @@ function enrichWorktrees(
       head: wt.head,
       bare: wt.bare,
       shortBranch,
-      status: activeSlugs.has(shortBranch)
-        ? ("active" as const)
-        : ("idle" as const),
+      status: isActive ? ("active" as const) : ("idle" as const),
       linkedPlan: linkedPlan?.slug,
     };
   });
 }
 
 /**
- * Load worktrees for a repo, filtered to `ralphai/` branches.
+ * Load worktrees for a repo, filtered to ralphai-managed branches.
  * Returns enriched WorktreeInfo with status and linked plan data.
  */
 export function loadWorktrees(cwd: string, plans?: PlanInfo[]): WorktreeInfo[] {
@@ -535,7 +550,7 @@ export function loadWorktrees(cwd: string, plans?: PlanInfo[]): WorktreeInfo[] {
   }
 
   const raw = parseWorktreeList(output).filter((wt) =>
-    wt.branch.startsWith("ralphai/"),
+    isRalphaiManagedBranch(wt.branch),
   );
 
   return enrichWorktrees(raw, plans ?? []);
@@ -821,7 +836,7 @@ export async function loadWorktreesAsync(
   }
 
   const raw = parseWorktreeList(output).filter((wt) =>
-    wt.branch.startsWith("ralphai/"),
+    isRalphaiManagedBranch(wt.branch),
   );
 
   return enrichWorktrees(raw, plans ?? []);

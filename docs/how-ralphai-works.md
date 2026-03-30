@@ -87,7 +87,7 @@ Under the hood, `ralphai run` is the headless execution command. It always runs 
 For a normal run, Ralphai:
 
 1. Picks the next plan from `backlog/` or resumes one from `in-progress/`
-2. Creates or reuses a worktree on branch `ralphai/<slug>`
+2. Creates or reuses a worktree on branch `ralphai/<slug>` (or `feat/<prd-slug>` for PRD-driven runs)
 3. Runs the agent inside that worktree
 4. Commits the results there
 5. Pushes the branch

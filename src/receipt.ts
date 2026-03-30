@@ -153,6 +153,39 @@ export function updateReceiptTasks(
 }
 
 // ---------------------------------------------------------------------------
+// Branch-based receipt lookup
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan all receipt files in the in-progress directory and return
+ * an array of plan slugs whose receipt has a matching `branch` field.
+ *
+ * This is used for `feat/` (and similar non-`ralphai/`) worktrees where
+ * the branch name doesn't directly correspond to a single plan slug.
+ */
+export function findPlansByBranch(
+  inProgressDir: string,
+  branch: string,
+): string[] {
+  if (!existsSync(inProgressDir)) return [];
+  const slugs: string[] = [];
+  try {
+    const entries = readdirSync(inProgressDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const receiptPath = join(inProgressDir, entry.name, "receipt.txt");
+      const receipt = parseReceipt(receiptPath);
+      if (receipt && receipt.branch === branch) {
+        slugs.push(entry.name);
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+  return slugs;
+}
+
+// ---------------------------------------------------------------------------
 // Cross-source conflict detection
 // ---------------------------------------------------------------------------
 

@@ -37,13 +37,13 @@ export type ActionContext = "plan" | "worktree" | "none";
 // Worktree data
 // ---------------------------------------------------------------------------
 
-/** A git worktree entry filtered to ralphai branches. */
+/** A git worktree entry filtered to ralphai-managed branches. */
 export interface WorktreeInfo {
   path: string;
   branch: string;
   head: string;
   bare: boolean;
-  /** Branch name with `ralphai/` prefix stripped. */
+  /** Branch name with `ralphai/` prefix stripped, or full branch for feat/ branches. */
   shortBranch: string;
   /** Whether a runner is currently active in this worktree. */
   status: "active" | "idle";

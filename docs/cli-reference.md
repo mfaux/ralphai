@@ -97,7 +97,7 @@ Use it for headless execution, automation, or when you want to kick off work dir
 What it does:
 
 1. Picks a plan from `backlog/` or resumes one from `in-progress/`
-2. Creates or reuses a worktree on `ralphai/<slug>`
+2. Creates or reuses a worktree on `ralphai/<slug>` (or `feat/<prd-slug>` for PRD-driven runs)
 3. Runs the agent inside that worktree
 4. Commits and pushes the branch
 5. Opens or updates a draft PR when `gh` is available
@@ -160,7 +160,7 @@ ralphai worktree list
 ralphai worktree clean
 ```
 
-- `list` shows active Ralphai-managed worktrees
+- `list` shows active Ralphai-managed worktrees (both `ralphai/` and `feat/` branches)
 - `clean` removes completed or orphaned worktrees and archives any leftover receipt
 
 Use `ralphai run` to start or resume work.

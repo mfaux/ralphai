@@ -23,7 +23,12 @@ import {
   countPlanTasks,
   countCompletedTasks,
 } from "./plan-detection.ts";
-import { parseReceipt, checkReceiptSource, type Receipt } from "./receipt.ts";
+import {
+  parseReceipt,
+  checkReceiptSource,
+  findPlansByBranch,
+  type Receipt,
+} from "./receipt.ts";
 import {
   getRepoPipelineDirs,
   resolveRepoStateDir,
@@ -1633,9 +1638,17 @@ function selectPlanForWorktree(
   const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
 
   // Build set of slugs that already have an active worktree
-  const activeSlugs = new Set(
-    activeWorktrees.map((wt) => wt.branch.replace("ralphai/", "")),
-  );
+  const activeSlugs = new Set<string>();
+  for (const wt of activeWorktrees) {
+    if (wt.branch.startsWith("ralphai/")) {
+      activeSlugs.add(wt.branch.replace("ralphai/", ""));
+    } else {
+      // feat/ or other managed branches: look up plans by receipt
+      for (const slug of findPlansByBranch(inProgressDir, wt.branch)) {
+        activeSlugs.add(slug);
+      }
+    }
+  }
 
   const resolvePlanInDir = (
     baseDir: string,
@@ -1723,6 +1736,10 @@ function selectPlanForWorktree(
   return null;
 }
 
+function isRalphaiManagedBranch(branch: string): boolean {
+  return branch.startsWith("ralphai/") || branch.startsWith("feat/");
+}
+
 function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
   const output = execSync("git worktree list --porcelain", {
     cwd,
@@ -1731,7 +1748,7 @@ function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
   });
 
   return parseWorktreeList(output).filter((wt) =>
-    wt.branch.startsWith("ralphai/"),
+    isRalphaiManagedBranch(wt.branch),
   );
 }
 
@@ -1931,10 +1948,16 @@ function listWorktrees(cwd: string): void {
   }
 
   console.log("Active ralphai worktrees:\n");
+  const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
   for (const wt of worktrees) {
-    const slug = wt.branch.replace("ralphai/", "");
-    const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
-    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
+    let hasActivePlan: boolean;
+    if (wt.branch.startsWith("ralphai/")) {
+      const slug = wt.branch.replace("ralphai/", "");
+      hasActivePlan = planExistsForSlug(inProgressDir, slug);
+    } else {
+      // feat/ or other managed branches: use receipt-based lookup
+      hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
+    }
     const status = hasActivePlan ? "in-progress" : "idle";
     console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
   }
@@ -1955,8 +1978,18 @@ function cleanWorktrees(cwd: string): void {
   let cleaned = 0;
 
   for (const wt of worktrees) {
-    const slug = wt.branch.replace("ralphai/", "");
-    const hasActivePlan = planExistsForSlug(inProgressDir, slug);
+    let hasActivePlan: boolean;
+    let matchedSlugs: string[];
+
+    if (wt.branch.startsWith("ralphai/")) {
+      const slug = wt.branch.replace("ralphai/", "");
+      hasActivePlan = planExistsForSlug(inProgressDir, slug);
+      matchedSlugs = hasActivePlan ? [slug] : [slug]; // always try archiving the slug
+    } else {
+      // feat/ or other managed branches: use receipt-based lookup
+      matchedSlugs = findPlansByBranch(inProgressDir, wt.branch);
+      hasActivePlan = matchedSlugs.length > 0;
+    }
 
     if (!hasActivePlan) {
       console.log(`Removing: ${wt.path} (${wt.branch})`);
@@ -1979,15 +2012,18 @@ function cleanWorktrees(cwd: string): void {
           // Branch deletion failure is not critical
         }
 
-        // Archive receipt if one exists for this slug
-        const planDir = join(inProgressDir, slug);
-        const receiptFile = join(planDir, "receipt.txt");
-        if (existsSync(receiptFile)) {
-          const destDir = join(archiveDir, slug);
-          mkdirSync(destDir, { recursive: true });
-          const dest = join(destDir, "receipt.txt");
-          renameSync(receiptFile, dest);
-          console.log(`  Archived receipt: ${slug}/receipt.txt`);
+        // Archive receipts for matched slugs (ralphai/ has one slug,
+        // feat/ may have multiple from receipt scan)
+        for (const slug of matchedSlugs) {
+          const planDir = join(inProgressDir, slug);
+          const receiptFile = join(planDir, "receipt.txt");
+          if (existsSync(receiptFile)) {
+            const destDir = join(archiveDir, slug);
+            mkdirSync(destDir, { recursive: true });
+            const dest = join(destDir, "receipt.txt");
+            renameSync(receiptFile, dest);
+            console.log(`  Archived receipt: ${slug}/receipt.txt`);
+          }
         }
 
         cleaned++;
@@ -2482,8 +2518,13 @@ function runRalphaiStatus(cwd: string): void {
     console.log(`${TEXT}Worktrees${RESET}`);
     console.log();
     for (const wt of worktrees) {
-      const slug = wt.branch.replace("ralphai/", "");
-      const hasActivePlan = planExistsForSlug(inProgressDir, slug);
+      let hasActivePlan: boolean;
+      if (wt.branch.startsWith("ralphai/")) {
+        const slug = wt.branch.replace("ralphai/", "");
+        hasActivePlan = planExistsForSlug(inProgressDir, slug);
+      } else {
+        hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
+      }
       const state = hasActivePlan ? "in-progress" : "idle";
       console.log(
         `  ${DIM}${wt.branch}${RESET}  ${DIM}${wt.path}${RESET}  ${DIM}[${state}]${RESET}`,

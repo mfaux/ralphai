@@ -8,6 +8,7 @@ import {
   updateReceiptTasks,
   resolveReceiptPath,
   checkReceiptSource,
+  findPlansByBranch,
   type Receipt,
 } from "./receipt.ts";
 
@@ -386,5 +387,119 @@ describe("checkReceiptSource", () => {
 
     // Running from main, receipt says main: no conflict
     expect(checkReceiptSource(wipDir, false)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findPlansByBranch
+// ---------------------------------------------------------------------------
+
+describe("findPlansByBranch", () => {
+  const ctx = useTempDir();
+
+  it("returns empty array when in-progress directory does not exist", () => {
+    const result = findPlansByBranch(
+      join(ctx.dir, "nonexistent"),
+      "feat/prd-x",
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when no receipts exist", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    mkdirSync(wipDir, { recursive: true });
+
+    const result = findPlansByBranch(wipDir, "feat/prd-x");
+    expect(result).toEqual([]);
+  });
+
+  it("returns matching slug for one matching receipt", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "plan-a");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(
+      join(slugDir, "receipt.txt"),
+      "slug=plan-a\nbranch=feat/prd-x\n",
+    );
+
+    const result = findPlansByBranch(wipDir, "feat/prd-x");
+    expect(result).toEqual(["plan-a"]);
+  });
+
+  it("returns multiple matching slugs for the same branch", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    const dirA = join(wipDir, "plan-a");
+    const dirB = join(wipDir, "plan-b");
+    mkdirSync(dirA, { recursive: true });
+    mkdirSync(dirB, { recursive: true });
+    writeFileSync(
+      join(dirA, "receipt.txt"),
+      "slug=plan-a\nbranch=feat/prd-shared\n",
+    );
+    writeFileSync(
+      join(dirB, "receipt.txt"),
+      "slug=plan-b\nbranch=feat/prd-shared\n",
+    );
+
+    const result = findPlansByBranch(wipDir, "feat/prd-shared");
+    expect(result).toHaveLength(2);
+    expect(result).toContain("plan-a");
+    expect(result).toContain("plan-b");
+  });
+
+  it("returns empty array when no receipts match the branch", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    const slugDir = join(wipDir, "plan-c");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(
+      join(slugDir, "receipt.txt"),
+      "slug=plan-c\nbranch=ralphai/plan-c\n",
+    );
+
+    const result = findPlansByBranch(wipDir, "feat/other-branch");
+    expect(result).toEqual([]);
+  });
+
+  it("filters correctly with mixed receipts", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    const dirA = join(wipDir, "plan-a");
+    const dirB = join(wipDir, "plan-b");
+    const dirC = join(wipDir, "plan-c");
+    mkdirSync(dirA, { recursive: true });
+    mkdirSync(dirB, { recursive: true });
+    mkdirSync(dirC, { recursive: true });
+    writeFileSync(
+      join(dirA, "receipt.txt"),
+      "slug=plan-a\nbranch=feat/prd-target\n",
+    );
+    writeFileSync(
+      join(dirB, "receipt.txt"),
+      "slug=plan-b\nbranch=ralphai/plan-b\n",
+    );
+    writeFileSync(
+      join(dirC, "receipt.txt"),
+      "slug=plan-c\nbranch=feat/prd-target\n",
+    );
+
+    const result = findPlansByBranch(wipDir, "feat/prd-target");
+    expect(result).toHaveLength(2);
+    expect(result).toContain("plan-a");
+    expect(result).toContain("plan-c");
+  });
+
+  it("skips directories without receipt files", () => {
+    const wipDir = join(ctx.dir, "in-progress");
+    const dirA = join(wipDir, "plan-a");
+    const dirB = join(wipDir, "plan-b");
+    mkdirSync(dirA, { recursive: true });
+    mkdirSync(dirB, { recursive: true });
+    writeFileSync(
+      join(dirA, "receipt.txt"),
+      "slug=plan-a\nbranch=feat/prd-x\n",
+    );
+    // plan-b has no receipt file
+
+    const result = findPlansByBranch(wipDir, "feat/prd-x");
+    expect(result).toEqual(["plan-a"]);
   });
 });

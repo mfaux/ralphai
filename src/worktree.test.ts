@@ -414,6 +414,125 @@ describe("worktree", () => {
       const archivedReceipt = join(archiveDir, "done", "receipt.txt");
       expect(existsSync(archivedReceipt)).toBe(true);
     });
+
+    // --- feat/ branch integration tests ---
+
+    it("worktree list shows feat/ worktrees", () => {
+      gitInitialCommit(ctx.dir);
+
+      // Create a worktree on a feat/* branch
+      const wtPath = join(ctx.dir, "wt-feat-list");
+      execSync(`git worktree add "${wtPath}" -b feat/prd-dark-mode HEAD`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+
+      const output = runCliOutput(["worktree", "list"], ctx.dir, testEnv());
+      expect(output).toContain("feat/prd-dark-mode");
+      expect(output).toContain(wtPath);
+
+      // Clean up
+      execSync(`git worktree remove "${wtPath}"`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+    });
+
+    it("worktree clean removes feat/ worktrees with no in-progress plans", () => {
+      gitInitialCommit(ctx.dir);
+
+      // Create a worktree on a feat/* branch
+      const wtPath = join(ctx.dir, "wt-feat-clean");
+      execSync(`git worktree add "${wtPath}" -b feat/prd-idle HEAD`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+
+      // No receipt exists for this branch, so it should be cleaned
+      const output = runCliOutput(["worktree", "clean"], ctx.dir, testEnv());
+      expect(output).toContain("Removing:");
+      expect(output).toContain("Cleaned 1 worktree(s)");
+      expect(existsSync(wtPath)).toBe(false);
+    });
+
+    it("worktree clean keeps feat/ worktrees with in-progress plans", () => {
+      gitInitialCommit(ctx.dir);
+
+      // Create a worktree on a feat/* branch
+      const wtPath = join(ctx.dir, "wt-feat-keep");
+      execSync(`git worktree add "${wtPath}" -b feat/prd-active HEAD`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+
+      // Create a receipt that links a plan slug to this feat/ branch
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const planDir = join(wipDir, "prd-active-task");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(join(planDir, "prd-active-task.md"), "# Active task\n");
+      writeFileSync(
+        join(planDir, "receipt.txt"),
+        [
+          "started_at=2026-03-07T12:00:00Z",
+          `worktree_path=${wtPath}`,
+          "branch=feat/prd-active",
+          "slug=prd-active-task",
+          "plan_file=prd-active-task.md",
+        ].join("\n") + "\n",
+      );
+
+      const output = runCliOutput(["worktree", "clean"], ctx.dir, testEnv());
+      expect(output).toContain("Keeping:");
+      expect(output).toContain("plan still in progress");
+      expect(existsSync(wtPath)).toBe(true);
+
+      // Clean up
+      execSync(`git worktree remove "${wtPath}"`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+    });
+
+    it("worktree list shows feat/ worktree with correct status", () => {
+      gitInitialCommit(ctx.dir);
+
+      // Create two worktrees: one idle, one with a receipt
+      const wtIdle = join(ctx.dir, "wt-feat-idle");
+      const wtActive = join(ctx.dir, "wt-feat-active");
+      execSync(`git worktree add "${wtIdle}" -b feat/prd-idle HEAD`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+      execSync(`git worktree add "${wtActive}" -b feat/prd-active HEAD`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+
+      // Create a receipt linking a plan to the active branch
+      const { wipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+      const planDir = join(wipDir, "active-plan");
+      mkdirSync(planDir, { recursive: true });
+      writeFileSync(
+        join(planDir, "receipt.txt"),
+        "slug=active-plan\nbranch=feat/prd-active\n",
+      );
+
+      const output = runCliOutput(["worktree", "list"], ctx.dir, testEnv());
+      expect(output).toContain("feat/prd-idle");
+      expect(output).toContain("[idle]");
+      expect(output).toContain("feat/prd-active");
+      expect(output).toContain("[in-progress]");
+
+      // Clean up
+      execSync(`git worktree remove "${wtIdle}"`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+      execSync(`git worktree remove "${wtActive}"`, {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      });
+    });
   });
 });
 

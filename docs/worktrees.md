@@ -26,6 +26,7 @@ Run `ralphai run` from the **main repository**, not from inside a worktree.
 ## How it works
 
 1. `ralphai run` creates a git worktree with a `ralphai/<plan-slug>` branch.
+   PRD-driven runs (`--prd=N`) use a `feat/<prd-slug>` branch instead.
    It reuses existing worktrees for in-progress plans.
 2. If a `setupCommand` is configured, it runs in the worktree directory
    immediately after creation (e.g. `bun install`). This ensures
