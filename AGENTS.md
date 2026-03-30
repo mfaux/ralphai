@@ -1,19 +1,25 @@
-# Agent Instructions
 
-Project-specific guidance for AI coding agents working in this codebase.
 
-## Guiding Principles
+Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drives any CLI-based AI coding agent to implement them autonomously, with branch isolation, feedback loops, and stuck detection.
 
-- **Great DX.** Every decision, from CLI design and defaults to error messages and docs, should minimize the time from install to "wow, that worked."
-- **Keep docs in sync.** When changing user-facing behavior (CLI output, config keys, supported ecosystems, monorepo handling), update the relevant docs (`README.md`, `docs/`, CLI help text) in the same change. Don't leave doc updates as a follow-up.
+## Great DX
 
-## Documentation Style
+- **Sensible defaults.** Auto-detect what you can (agent, base branch, project type, feedback commands). Require configuration only when there's no safe default.
+- **Errors guide recovery.** Every user-facing error should suggest what to do next. Don't just report what went wrong.
+- **Progressive disclosure.** Simple by default, powerful when needed. `ralphai` opens the dashboard; `ralphai run` uses defaults; flags unlock advanced behavior. Don't front-load complexity.
+- **Transparent config.** Users should always be able to answer "where did this value come from?" via `--show-config`. When adding new config options, include source tracking.
+- **Respect the terminal.** Honor `NO_COLOR` / `--no-color`. Use color for scannability (bold for headings, dim for hints), not decoration.
 
-- **User-first perspective.** Write for people using Ralphai, not maintainers of this repo.
-- **Active voice.** "Ralphai creates a branch" not "a branch is created by Ralphai."
-- **Keep it scannable.** Short paragraphs, bullet lists, code examples. Avoid walls of text.
-- **Bold for emphasis.** Use `**bold**` to highlight key terms and concepts.
-- **No em dashes in prose.** Use em dashes only in list item labels (e.g., `- **Key** — explanation`). In sentences, restructure or use commas instead.
+## Documentation
+
+- **Keep docs in sync.** When changing behavior, update the relevant docs in the same change. This includes both external docs and internal docs. Don't leave doc updates as a follow-up.
+
+## Git & GitHub
+
+- **Conventional commits.** Format: `<type>: <description>` (e.g., `feat: add --targets flag`, `fix: dry-run skip lock write`, `docs: update CLI reference`, `test: add list --help tests`, `refactor: extract help into per-command functions`, `chore: remove generated license file`).
+- **Branch naming.** Use `<type>/<description>` with the same type prefixes as commits (e.g., `feat/add-targets-flag`, `fix/dry-run-lock-write`, `docs/update-cli-reference`).
+- **Use the `gh` CLI** to create issues and pull requests. Link PRs to related issues when applicable.
+- **Squash-merge PRs.** The merge commit message should follow conventional commit format.
 
 ## File Size Limits
 
@@ -25,22 +31,6 @@ Project-specific guidance for AI coding agents working in this codebase.
 
 The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the runner loop starts (in `src/runner.ts` or the CLI layer in `src/ralphai.ts`), verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
 
-## Conventional Commits
+## Package Manager
 
-This repo follows [Conventional Commits](https://www.conventionalcommits.org/). Use the `type(scope): description` format for both **commit messages** and **branch names** (e.g., `feat/add-export`, `fix/null-check`). Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
-
-## Project Detection
-
-Ralphai detects the project ecosystem automatically. The detection logic lives in `src/project-detection.ts` (not `src/ralphai.ts`). Scope rewriting at runtime is in `src/scope.ts`.
-
-Supported ecosystems: Node.js/TypeScript (full support), C# / .NET, Go, Rust, Python, Java/Kotlin (basic detection). Node always takes priority when multiple ecosystem markers are present.
-
-## Ralphai
-
-This project uses [Ralphai](https://github.com/mfaux/ralphai) for autonomous execution.
-Plan files go in the global pipeline backlog (run `ralphai backlog-dir` to find it).
-Install the planning skill for plan writing guidance: `npx skills add mfaux/ralphai -g`.
-
-## GH CLI
-
- Use the `gh` CLI to interact with GitHub repositories, such as creating issues and managing pull requests.
+This project uses **bun**.
