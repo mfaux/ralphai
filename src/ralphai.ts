@@ -54,6 +54,7 @@ import {
 import {
   detectIssueRepo,
   ensurePrdLabel,
+  fetchPrdIssue,
   fetchPrdIssueByNumber,
   prdBranchName,
   slugify,
@@ -2835,6 +2836,184 @@ async function runRalphaiInManagedWorktree(
       }
       return;
     }
+  }
+
+  // --- Auto-detect single PRD issue when --continuous is set without --prd ---
+  const hasContinuous = runArgs.includes("--continuous");
+  if (hasContinuous && !prdFlag && !hasHelp && !hasShowConfig) {
+    // Attempt auto-detection (read-only: safe for dry-run)
+    const repo = detectIssueRepo(cwd);
+    if (repo) {
+      try {
+        const autoDetectedPrd = fetchPrdIssue(repo, cwd);
+        if (autoDetectedPrd) {
+          prdIssue = autoDetectedPrd;
+          const prdSlug = slugify(prdIssue.title);
+          const branch = prdBranchName(prdIssue.title);
+          console.log(
+            `Auto-detected PRD: #${prdIssue.number} — ${prdIssue.title}`,
+          );
+
+          if (isDryRun) {
+            console.log();
+            console.log("========================================");
+            console.log("  Ralphai dry-run — auto-detected PRD");
+            console.log("========================================");
+            console.log(
+              `[dry-run] PRD: #${prdIssue.number} — ${prdIssue.title}`,
+            );
+            console.log(`[dry-run] Branch: ${branch}`);
+            console.log(
+              `[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`,
+            );
+            console.log("[dry-run] Mode: continuous");
+            console.log(
+              "[dry-run] No files moved, no worktrees created, no agent run executed.",
+            );
+            return;
+          }
+
+          // Real run: validate and create worktree with PRD-derived branch
+          validateRunArgs(runArgs);
+
+          if (isGitWorktree(cwd)) {
+            console.error(
+              `'ralphai run' must be run from the main repository.`,
+            );
+            console.error(
+              "You are inside a worktree. Run this command from the main repo.",
+            );
+            process.exit(1);
+          }
+
+          if (!existsSync(getConfigFilePath(cwd))) {
+            console.error(
+              `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+            );
+            process.exit(1);
+          }
+
+          try {
+            ensurePrdLabel(cwd);
+          } catch (err: unknown) {
+            console.error(
+              `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            process.exit(1);
+          }
+
+          try {
+            execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
+          } catch {
+            console.error(
+              `This repository has no commits yet. Git worktrees require at least one commit.`,
+            );
+            console.error(
+              `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
+            );
+            console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
+            process.exit(1);
+          }
+
+          const baseBranch = detectBaseBranch(cwd);
+          const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
+          const desiredWorktreeDir = join(worktreeBase, prdSlug);
+          mkdirSync(worktreeBase, { recursive: true });
+
+          const activeWorktrees = listRalphaiWorktrees(cwd);
+          const activeWorktree = activeWorktrees.find(
+            (wt) => wt.branch === branch,
+          );
+
+          let resolvedWorktreeDir = desiredWorktreeDir;
+          if (activeWorktree) {
+            resolvedWorktreeDir = activeWorktree.path;
+            console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
+            console.log(`Branch: ${branch}`);
+          } else {
+            if (existsSync(resolvedWorktreeDir)) {
+              console.log(
+                `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
+              );
+              execSync("git worktree prune", { cwd, stdio: "ignore" });
+              rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+            }
+
+            let branchExists = false;
+            try {
+              execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
+                cwd,
+                stdio: "ignore",
+              });
+              branchExists = true;
+            } catch {
+              branchExists = false;
+            }
+
+            try {
+              if (branchExists) {
+                console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
+                console.log(`Branch: ${branch}`);
+                execSync(
+                  `git worktree add "${resolvedWorktreeDir}" "${branch}"`,
+                  {
+                    cwd,
+                    stdio: ["inherit", "pipe", "pipe"],
+                  },
+                );
+              } else {
+                console.log(`Creating worktree: ${resolvedWorktreeDir}`);
+                console.log(`Branch: ${branch} (from ${baseBranch})`);
+                execSync(
+                  `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
+                  { cwd, stdio: ["inherit", "pipe", "pipe"] },
+                );
+              }
+            } catch (err: unknown) {
+              const stderr = extractExecStderr(err);
+              console.error(
+                `${TEXT}Error:${RESET} Failed to prepare worktree.`,
+              );
+              if (stderr) console.error(`  git: ${stderr}`);
+              process.exit(1);
+            }
+          }
+
+          console.log("Running ralphai in worktree...");
+          const shouldResume = activeWorktree !== undefined;
+          const hasResumeFlag =
+            runArgs.includes("--resume") || runArgs.includes("-r");
+          const worktreeRunOptions: RalphaiOptions = {
+            ...options,
+            subcommand: "run",
+            runArgs: [
+              ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+              ...runArgs,
+            ],
+          };
+
+          try {
+            await runRalphaiRunner(
+              worktreeRunOptions,
+              resolvedWorktreeDir,
+              prdIssue,
+            );
+          } catch {
+            // runRalphaiRunner may call process.exit() on fatal errors
+          }
+          return;
+        }
+        // autoDetectedPrd is null — no PRD issues found, fall through
+        // to existing ralphai/<plan-slug> naming
+      } catch (err: unknown) {
+        // fetchPrdIssue throws on multiple PRD issues — surface to user
+        console.error(
+          `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        process.exit(1);
+      }
+    }
+    // If repo detection fails, fall through to existing behavior
   }
 
   if (hasHelp || hasShowConfig || isDryRun) {
