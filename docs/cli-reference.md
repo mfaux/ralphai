@@ -16,6 +16,7 @@ ralphai <command> [options]
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
+| `check`        | Verify whether Ralphai is configured for a repo                        |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update Ralphai to the latest (or specified) version                    |
 | `teardown`     | Remove Ralphai from your project                                       |
@@ -40,7 +41,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`.
+Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
 
 Blocked for: `run`, `worktree`, `init`.
 
@@ -186,6 +187,24 @@ Deletes all archived plan artifacts from `pipeline/out/`.
 9. No orphaned receipts in `in-progress/`
 
 When a `workspaces` config key exists, doctor also validates per-workspace feedback commands. Workspace failures produce warnings, not hard errors.
+
+## Check
+
+`ralphai check` verifies whether Ralphai is configured for the current repo. It prints a single line of plain text (no ANSI color codes) and exits 0 on success or 1 on failure.
+
+```
+--repo=<name>     Check config for a different repo
+```
+
+Output:
+
+| Condition            | stdout                              | Exit code |
+| -------------------- | ----------------------------------- | --------- |
+| Config is valid      | `configured`                        | 0         |
+| No config file       | `not configured — run ralphai init` | 1         |
+| Malformed or invalid | `invalid config — <detail>`         | 1         |
+
+Does not require a git repository. Useful for CI scripts and setup verification.
 
 ## Teardown
 

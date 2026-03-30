@@ -46,6 +46,7 @@ import {
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
+import { runCheck, showCheckHelp } from "./check.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -68,6 +69,7 @@ type RalphaiSubcommand =
   | "doctor"
   | "backlog-dir"
   | "repos"
+  | "check"
   | "seed";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
@@ -161,6 +163,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "doctor",
   "backlog-dir",
   "repos",
+  "check",
   "seed", // hidden — not listed in showRalphaiHelp()
 ]);
 
@@ -1035,6 +1038,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
   );
   console.log(
+    `  ${TEXT}check${RESET}       ${DIM}Verify whether ralphai is configured for a repo${RESET}`,
+  );
+  console.log(
     `  ${TEXT}backlog-dir${RESET} ${DIM}Print the path to the plan backlog directory${RESET}`,
   );
   console.log(
@@ -1117,6 +1123,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "doctor",
     "backlog-dir",
     "repos",
+    "check",
   ]);
   if (
     options.subcommand &&
@@ -1233,6 +1240,13 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       runRepos({ clean: options.clean });
+      break;
+    case "check":
+      if (helpRequested) {
+        showCheckHelp();
+        return;
+      }
+      runCheck(cwd);
       break;
     case "seed":
       runSeed(cwd);
