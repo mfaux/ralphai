@@ -89,6 +89,23 @@ describe("parseReceipt", () => {
     expect(receipt!.tasks_completed).toBe(0);
   });
 
+  it("returns tasks_completed: 0 for non-numeric values (NaN guard)", () => {
+    const receiptPath = join(ctx.dir, "receipt-nan.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-01-01T00:00:00Z",
+        "branch=main",
+        "slug=test",
+        "tasks_completed=abc",
+      ].join("\n") + "\n",
+    );
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.tasks_completed).toBe(0);
+  });
+
   it("handles receipt without optional fields", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     writeFileSync(

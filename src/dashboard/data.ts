@@ -159,8 +159,9 @@ function parseIssueFromContent(content: string): {
   };
 }
 
-function parseReceiptFromContent(content: string): {
-  tasksCompleted?: number;
+/** @internal Exported for testing. */
+export function parseReceiptFromContent(content: string): {
+  tasksCompleted: number;
   outcome?: string;
   receiptSource?: "worktree";
   startedAt?: string;
@@ -178,7 +179,7 @@ function parseReceiptFromContent(content: string): {
   const parsedTasks = parseInt(fields.tasks_completed ?? "", 10);
 
   return {
-    tasksCompleted: Number.isNaN(parsedTasks) ? undefined : parsedTasks,
+    tasksCompleted: Number.isNaN(parsedTasks) ? 0 : parsedTasks,
     outcome: fields.outcome || undefined,
     receiptSource: fields.worktree_path ? "worktree" : undefined,
     startedAt: fields.started_at || undefined,

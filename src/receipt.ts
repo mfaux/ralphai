@@ -62,13 +62,14 @@ export function parseReceipt(filePath: string): Receipt | null {
       fields[line.slice(0, eq)] = line.slice(eq + 1);
     }
   }
+  const parsedTasks = parseInt(fields.tasks_completed ?? "0", 10);
   return {
     started_at: fields.started_at ?? "",
     worktree_path: fields.worktree_path,
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
     plan_file: fields.plan_file,
-    tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
+    tasks_completed: Number.isNaN(parsedTasks) ? 0 : parsedTasks,
     outcome: fields.outcome,
   };
 }
