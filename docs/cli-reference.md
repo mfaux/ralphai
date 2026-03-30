@@ -106,6 +106,7 @@ What it does:
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
 --plan=<file>                     Target a specific backlog plan (default: auto-detect)
+--prd=<number>                    Run a PRD-driven session from a GitHub issue
 --agent-command=<command>         Override agent CLI command
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)

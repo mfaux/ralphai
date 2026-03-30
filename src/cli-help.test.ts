@@ -89,6 +89,13 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("--yes");
   });
 
+  it("run --help shows --prd flag", () => {
+    const result = runCli(["run", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--prd=<number>");
+    expect(result.stdout).toContain("PRD");
+  });
+
   // -------------------------------------------------------------------------
   // Top-level help surfaces run flags
   // -------------------------------------------------------------------------
