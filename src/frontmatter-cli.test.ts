@@ -6,11 +6,12 @@ import { useTempDir } from "./test-utils.ts";
 
 /**
  * Run the frontmatter CLI and return stdout.
- * Uses the compiled dist/frontmatter-cli.mjs (requires a prior build).
+ * Uses node --experimental-strip-types to run the TypeScript source directly,
+ * avoiding a dependency on dist/ which can be cleaned by concurrent tests.
  */
 function runCli(args: string[]): string {
-  const cli = join(__dirname, "..", "dist", "frontmatter-cli.mjs");
-  return execFileSync("node", [cli, ...args], {
+  const cli = join(__dirname, "frontmatter-cli.ts");
+  return execFileSync("node", ["--experimental-strip-types", cli, ...args], {
     encoding: "utf-8",
     timeout: 5000,
   }).trimEnd();
