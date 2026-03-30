@@ -564,9 +564,9 @@ interface LabelResult {
 }
 
 /**
- * Create the `ralphai` and `ralphai:in-progress` labels on the GitHub repo.
- * Uses `gh label create --force` so it is idempotent. Never throws —
- * label creation is best-effort.
+ * Create the `ralphai`, `ralphai:in-progress`, and `ralphai-prd` labels on the
+ * GitHub repo. Uses `gh label create --force` so it is idempotent. Never
+ * throws — label creation is best-effort.
  */
 function ensureGitHubLabels(cwd: string): LabelResult {
   try {
@@ -598,6 +598,10 @@ function ensureGitHubLabels(cwd: string): LabelResult {
       'gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force',
       { cwd, stdio: "pipe" },
     );
+    execSync(
+      'gh label create ralphai-prd --description "Ralphai PRD — names the continuous-mode branch" --color 1d76db --force',
+      { cwd, stdio: "pipe" },
+    );
     return { success: true };
   } catch {
     return {
@@ -605,7 +609,8 @@ function ensureGitHubLabels(cwd: string): LabelResult {
       error:
         "Could not create labels. Create them manually:\n" +
         '  gh label create ralphai --description "Ralphai picks up this issue" --color 7057ff --force\n' +
-        '  gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force',
+        '  gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force\n' +
+        '  gh label create ralphai-prd --description "Ralphai PRD — names the continuous-mode branch" --color 1d76db --force',
     };
   }
 }
@@ -699,7 +704,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (labelResult) {
     if (labelResult.success) {
       console.log(
-        `  GitHub labels              ${DIM}Created "ralphai" and "ralphai:in-progress" labels${RESET}`,
+        `  GitHub labels              ${DIM}Created "ralphai", "ralphai:in-progress", and "ralphai-prd" labels${RESET}`,
       );
     } else {
       console.log();
