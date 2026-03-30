@@ -205,6 +205,28 @@ describe("parseConfigFile", () => {
     );
   });
 
+  it("parses setupCommand", () => {
+    const file = join(ctx.dir, "setup.json");
+    writeFileSync(file, JSON.stringify({ setupCommand: "bun install" }));
+    const result = parseConfigFile(file)!;
+    expect(result.values.setupCommand).toBe("bun install");
+  });
+
+  it("allows empty setupCommand (disabled)", () => {
+    const file = join(ctx.dir, "setup-empty.json");
+    writeFileSync(file, JSON.stringify({ setupCommand: "" }));
+    const result = parseConfigFile(file)!;
+    expect(result.values.setupCommand).toBe("");
+  });
+
+  it("rejects non-string setupCommand", () => {
+    const file = join(ctx.dir, "setup-bad.json");
+    writeFileSync(file, JSON.stringify({ setupCommand: 42 }));
+    expect(() => parseConfigFile(file)).toThrow(
+      "'setupCommand' must be a string",
+    );
+  });
+
   it("parses feedbackCommands as array", () => {
     const file = join(ctx.dir, "fc-array.json");
     writeFileSync(
@@ -327,6 +349,21 @@ describe("applyEnvOverrides", () => {
     expect(result.agentCommand).toBe("claude -p");
   });
 
+  it("extracts setupCommand", () => {
+    const result = applyEnvOverrides({
+      RALPHAI_SETUP_COMMAND: "npm install",
+    });
+    expect(result.setupCommand).toBe("npm install");
+  });
+
+  it("extracts empty setupCommand (disables)", () => {
+    // Empty env vars are ignored by the generic guard, but an explicit
+    // non-empty value should come through. This test documents that
+    // RALPHAI_SETUP_COMMAND="" is treated as "not set" (same as other keys).
+    const result = applyEnvOverrides({ RALPHAI_SETUP_COMMAND: "" });
+    expect(result.setupCommand).toBeUndefined();
+  });
+
   it("extracts baseBranch", () => {
     const result = applyEnvOverrides({ RALPHAI_BASE_BRANCH: "develop" });
     expect(result.baseBranch).toBe("develop");
@@ -374,6 +411,17 @@ describe("parseCLIArgs", () => {
     expect(() => parseCLIArgs(["--agent-command="])).toThrow(
       "requires a non-empty value",
     );
+  });
+
+  it("parses --setup-command=value", () => {
+    const result = parseCLIArgs(["--setup-command=bun install"]);
+    expect(result.overrides.setupCommand).toBe("bun install");
+    expect(result.rawFlags.setupCommand).toBe("--setup-command=bun install");
+  });
+
+  it("parses empty --setup-command= (disables)", () => {
+    const result = parseCLIArgs(["--setup-command="]);
+    expect(result.overrides.setupCommand).toBe("");
   });
 
   it("parses --feedback-commands=value", () => {
@@ -461,6 +509,8 @@ describe("resolveConfig", () => {
     expect(config.baseBranch.source).toBe("default");
     expect(config.maxStuck.value).toBe(3);
     expect(config.maxStuck.source).toBe("default");
+    expect(config.setupCommand.value).toBe("");
+    expect(config.setupCommand.source).toBe("default");
   });
 
   it("config file overrides defaults", () => {
@@ -522,6 +572,35 @@ describe("resolveConfig", () => {
     // continuous: default (nothing overrides)
     expect(config.continuous.value).toBe("false");
     expect(config.continuous.source).toBe("default");
+  });
+
+  it("setupCommand: full precedence chain", () => {
+    const cwd = join(ctx.dir, "repo-setup-prec");
+    mkdirSync(cwd, { recursive: true });
+    writeGlobalConfig(cwd, { setupCommand: "npm install" });
+
+    // Config file wins over default
+    const r1 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
+    expect(r1.config.setupCommand.value).toBe("npm install");
+    expect(r1.config.setupCommand.source).toBe("config");
+
+    // Env wins over config
+    const r2 = resolveConfig({
+      cwd,
+      envVars: env({ RALPHAI_SETUP_COMMAND: "pnpm install" }),
+      cliArgs: [],
+    });
+    expect(r2.config.setupCommand.value).toBe("pnpm install");
+    expect(r2.config.setupCommand.source).toBe("env");
+
+    // CLI wins over env
+    const r3 = resolveConfig({
+      cwd,
+      envVars: env({ RALPHAI_SETUP_COMMAND: "pnpm install" }),
+      cliArgs: ["--setup-command=bun install"],
+    });
+    expect(r3.config.setupCommand.value).toBe("bun install");
+    expect(r3.config.setupCommand.source).toBe("cli");
   });
 
   it("propagates config file warnings", () => {

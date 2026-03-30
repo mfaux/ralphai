@@ -712,6 +712,48 @@ export function detectJavaProject(cwd: string): DetectedProject | null {
 }
 
 // ---------------------------------------------------------------------------
+// Setup command detection
+// ---------------------------------------------------------------------------
+
+/** Install command for each package manager. */
+const PM_INSTALL_COMMANDS: Readonly<Record<PackageManager, string>> = {
+  npm: "npm install",
+  pnpm: "pnpm install",
+  yarn: "yarn install",
+  bun: "bun install",
+  deno: "deno install",
+};
+
+/** Install/restore command for non-Node ecosystems. */
+const ECOSYSTEM_SETUP_COMMANDS: Readonly<Record<string, string>> = {
+  dotnet: "dotnet restore",
+  go: "go mod download",
+};
+
+/**
+ * Detect the appropriate setup command for a project.
+ *
+ * For Node.js projects, maps the detected package manager to its install
+ * command (e.g. `bun install`). For .NET and Go, returns the standard
+ * dependency restore command. Returns an empty string when no setup
+ * command can be inferred (Rust, Java, Python, or unknown projects).
+ */
+export function detectSetupCommand(cwd: string): string {
+  const pm = detectPackageManager(cwd);
+  if (pm) {
+    return PM_INSTALL_COMMANDS[pm.manager] ?? "";
+  }
+
+  // Check non-Node ecosystems
+  const project = detectProject(cwd);
+  if (project) {
+    return ECOSYSTEM_SETUP_COMMANDS[project.ecosystem] ?? "";
+  }
+
+  return "";
+}
+
+// ---------------------------------------------------------------------------
 // Top-level project detection
 // ---------------------------------------------------------------------------
 

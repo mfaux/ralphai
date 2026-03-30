@@ -108,6 +108,7 @@ What it does:
 --plan=<file>                     Target a specific backlog plan (default: auto-detect)
 --prd=<number>                    Run a PRD-driven session from a GitHub issue
 --agent-command=<command>         Override agent CLI command
+--setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)
 --continuous                      Keep processing backlog plans after the first completes

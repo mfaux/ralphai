@@ -33,6 +33,7 @@ import {
   detectFeedbackCommands,
   detectWorkspaces,
   detectProject,
+  detectSetupCommand,
 } from "./project-detection.ts";
 import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
 import { runRunner, type RunnerOptions } from "./runner.ts";
@@ -106,6 +107,7 @@ interface RalphaiOptions {
 
 interface WizardAnswers {
   agentCommand: string;
+  setupCommand: string;
   baseBranch: string;
   feedbackCommands: string;
   autoCommit?: boolean;
@@ -454,6 +456,22 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  // 4. Setup command (runs in worktree before agent starts)
+  const detectedSetup = detectSetupCommand(cwd);
+  const setupCommand = await clack.text({
+    message: detectedSetup
+      ? `Setup command (runs in worktree before agent starts, auto-detected for ${project?.label ?? "project"}):`
+      : "Setup command (runs in worktree before agent starts, or leave empty):",
+    initialValue: detectedSetup || undefined,
+    placeholder: detectedSetup ? undefined : "e.g. npm install",
+    defaultValue: detectedSetup || "",
+  });
+
+  if (clack.isCancel(setupCommand)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
   let autoCommit = false;
 
   // 6. GitHub Issues integration
@@ -512,6 +530,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   return {
     agentCommand,
+    setupCommand: setupCommand || "",
     baseBranch,
     feedbackCommands: feedbackCommands || "",
     autoCommit,
@@ -648,6 +667,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     agentCommand: answers.agentCommand,
     feedbackCommands,
     baseBranch: answers.baseBranch,
+    setupCommand: answers.setupCommand ?? "",
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     continuous: false,
@@ -1413,9 +1433,11 @@ async function runRalphaiInit(
     const detectedFeedbackStr = detectedProject
       ? detectedProject.feedbackCommands.join(",")
       : "";
+    const detectedSetupStr = detectSetupCommand(cwd);
 
     answers = {
       agentCommand,
+      setupCommand: detectedSetupStr,
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
       autoCommit: false,
@@ -1426,6 +1448,7 @@ async function runRalphaiInit(
 
     // Print detection summary so users can verify auto-detected values
     const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
+    const setupDisplay = answers.setupCommand.trim() || "(none)";
     console.log(`${DIM}Detected:${RESET}`);
     console.log(
       `  ${DIM}Agent:${RESET}     ${TEXT}${answers.agentCommand}${RESET}`,
@@ -1434,6 +1457,7 @@ async function runRalphaiInit(
       `  ${DIM}Branch:${RESET}    ${TEXT}${answers.baseBranch}${RESET}`,
     );
     console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
+    console.log(`  ${DIM}Setup:${RESET}     ${TEXT}${setupDisplay}${RESET}`);
     console.log(
       `  ${DIM}Project:${RESET}   ${TEXT}${detectedProject?.label ?? "(none)"}${RESET}`,
     );
@@ -2521,6 +2545,7 @@ const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/, /^--prd=/];
 /** Patterns for config flags that are parsed by the TS config resolver. */
 const CONFIG_FLAG_PATTERNS = [
   /^--agent-command=/,
+  /^--setup-command=/,
   /^--feedback-commands=/,
   /^--base-branch=/,
   /^--max-stuck=/,
@@ -2566,6 +2591,7 @@ function showRunHelp(): void {
     "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
     "  --prd=<number>                   Run a PRD-driven session: fetch the GitHub issue, derive a branch, and run continuously",
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
+    "  --setup-command=<command>        Command to run in worktree after creation (e.g. 'bun install')",
     "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
     "  --base-branch=<branch>           Override base branch (default: main)",
     "  --continuous                     Keep processing backlog plans after the first completes",
@@ -2583,13 +2609,14 @@ function showRunHelp(): void {
     "  --help, -h                       Show this help message",
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
-    "  Supported keys: agentCommand, feedbackCommands, baseBranch, maxStuck,",
+    "  Supported keys: agentCommand, setupCommand, feedbackCommands, baseBranch, maxStuck,",
     "                  continuous, autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, issueLabel,",
     "                  issueInProgressLabel, issueRepo,",
     "                  issueCommentProgress",
     "",
-    "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_FEEDBACK_COMMANDS,",
+    "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
+    "                   RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
     "                   RALPHAI_CONTINUOUS,",
     "                   RALPHAI_AUTO_COMMIT,",
@@ -2646,6 +2673,32 @@ function resolveWorktreeInfo(dir: string): {
   return { isWorktree: false, mainWorktree: "" };
 }
 
+/**
+ * Run a setup command inside a freshly-created worktree directory.
+ * Called only when a new worktree is created (not reused).
+ * On failure the process exits with code 1.
+ */
+function executeSetupCommand(setupCommand: string, worktreeDir: string): void {
+  if (!setupCommand) return;
+  console.log(`Running setup command: ${setupCommand}`);
+  try {
+    execSync(setupCommand, {
+      cwd: worktreeDir,
+      stdio: "inherit",
+    });
+  } catch (err: unknown) {
+    const stderr = extractExecStderr(err);
+    console.error(
+      `${TEXT}Error:${RESET} Setup command failed: ${setupCommand}`,
+    );
+    if (stderr) console.error(`  ${stderr}`);
+    console.error(
+      `\nFix the issue and re-run, or set ${TEXT}setupCommand${RESET} to "" in config to disable.`,
+    );
+    process.exit(1);
+  }
+}
+
 async function runRalphaiInManagedWorktree(
   options: RalphaiOptions,
   cwd: string,
@@ -2656,6 +2709,19 @@ async function runRalphaiInManagedWorktree(
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
+
+  // Resolve setupCommand from config/env/CLI (read-only, safe for dry-run)
+  let setupCommand = "";
+  try {
+    const cfgResult = resolveConfig({
+      cwd,
+      envVars: process.env as Record<string, string | undefined>,
+      cliArgs: runArgs,
+    });
+    setupCommand = cfgResult.config.setupCommand.value;
+  } catch {
+    // Config resolution may fail if not yet initialised; setup will be skipped
+  }
 
   // --- Parse --prd=<number> ---
   const prdFlag = runArgs.find((a) => a.startsWith("--prd="));
@@ -2810,6 +2876,11 @@ async function runRalphaiInManagedWorktree(
           if (stderr) console.error(`  git: ${stderr}`);
           process.exit(1);
         }
+      }
+
+      // Run setup command in freshly-created worktrees (not reused ones)
+      if (!activeWorktree) {
+        executeSetupCommand(setupCommand, resolvedWorktreeDir);
       }
 
       console.log("Running ralphai in worktree...");
@@ -2979,6 +3050,11 @@ async function runRalphaiInManagedWorktree(
             }
           }
 
+          // Run setup command in freshly-created worktrees (not reused ones)
+          if (!activeWorktree) {
+            executeSetupCommand(setupCommand, resolvedWorktreeDir);
+          }
+
           console.log("Running ralphai in worktree...");
           const shouldResume = activeWorktree !== undefined;
           const hasResumeFlag =
@@ -3113,6 +3189,11 @@ async function runRalphaiInManagedWorktree(
       if (stderr) console.error(`  git: ${stderr}`);
       process.exit(1);
     }
+  }
+
+  // Run setup command in freshly-created worktrees (not reused ones)
+  if (!activeWorktree) {
+    executeSetupCommand(setupCommand, resolvedWorktreeDir);
   }
 
   console.log("Running ralphai in worktree...");
