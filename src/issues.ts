@@ -450,6 +450,57 @@ export function fetchPrdIssueByNumber(
 }
 
 /**
+ * Auto-detect a single open PRD issue in the repo.
+ *
+ * Uses `gh issue list --label ralphai-prd --state open --limit 10 --json number,title`.
+ *
+ * - Returns `{ number, title }` if exactly one result.
+ * - Returns `null` if zero results (caller should fall back to default naming).
+ * - Throws with a descriptive error listing all matches if multiple results,
+ *   suggesting `--prd=<number>` or `ralphai prd <number>`.
+ */
+export function fetchPrdIssue(repo: string, cwd: string): PrdIssue | null {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open --limit 10 --json number,title`,
+    cwd,
+  );
+
+  if (!raw) {
+    return null;
+  }
+
+  let issues: Array<{ number: number; title: string }>;
+  try {
+    issues = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (issues.length === 0) {
+    return null;
+  }
+
+  if (issues.length === 1) {
+    return { number: issues[0]!.number, title: issues[0]!.title };
+  }
+
+  // Multiple PRD issues found — throw a descriptive error
+  const listing = issues.map((i) => `  #${i.number} — ${i.title}`).join("\n");
+  throw new Error(
+    `Multiple open PRD issues found with label '${PRD_LABEL}':\n${listing}\n\n` +
+      `Specify which PRD to use:\n` +
+      `  ralphai run --prd=<number>\n` +
+      `  ralphai prd <number>`,
+  );
+}
+
+/**
  * Derive a branch name from a PRD title: `feat/<slugify(title)>`.
  */
 export function prdBranchName(title: string): string {
