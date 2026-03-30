@@ -716,7 +716,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
     while (!interrupted) {
       iterationNumber++;
-      const completedTasks = countCompletedTasks(progressFile);
+      const completedTasks = countCompletedTasks(progressFile, planFormat);
       const currentTask = Math.min(completedTasks + 1, totalTasks);
 
       console.log();
@@ -835,7 +835,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
 
       // --- Update receipt tasks_completed from progress.md ---
-      updateReceiptTasks(receiptFile, progressFile);
+      updateReceiptTasks(receiptFile, progressFile, planFormat);
 
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {

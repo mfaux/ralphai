@@ -3,7 +3,7 @@
  *
  * Usage:
  *   node receipt-cli.mjs init          <receipt-path> <branch> <slug> <plan-file> [worktree-path]
- *   node receipt-cli.mjs update-tasks  <receipt-path> <progress-path>
+ *   node receipt-cli.mjs update-tasks  <receipt-path> <progress-path> [format]
  *   node receipt-cli.mjs check-source  <wip-dir> <is-worktree>
  *
  * Exit codes:
@@ -17,6 +17,7 @@ import {
   updateReceiptTasks,
   checkReceiptSource,
 } from "./receipt.ts";
+import type { PlanFormat } from "./plan-detection.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -47,14 +48,18 @@ switch (command) {
   }
 
   case "update-tasks": {
-    const [, receiptPath, progressPath] = args;
+    const [, receiptPath, progressPath, formatArg] = args;
     if (!receiptPath || !progressPath) {
       process.stderr.write(
-        "Usage: receipt-cli update-tasks <receipt-path> <progress-path>\n",
+        "Usage: receipt-cli update-tasks <receipt-path> <progress-path> [format]\n",
       );
       process.exit(2);
     }
-    updateReceiptTasks(receiptPath, progressPath);
+    const format =
+      formatArg === "checkboxes" || formatArg === "tasks"
+        ? (formatArg as PlanFormat)
+        : "tasks";
+    updateReceiptTasks(receiptPath, progressPath, format);
     break;
   }
 
