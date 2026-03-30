@@ -104,9 +104,19 @@ describe("detectIssueRepo", () => {
     expect(detectIssueRepo(ctx.dir)).toBeNull();
   });
 
-  it("returns null for non-GitHub remote", () => {
+  it("auto-detects from non-GitHub HTTPS remote", () => {
     initRepo(ctx.dir, "https://gitlab.com/user/repo.git");
-    expect(detectIssueRepo(ctx.dir)).toBeNull();
+    expect(detectIssueRepo(ctx.dir)).toBe("user/repo");
+  });
+
+  it("auto-detects from SSH remote with host alias", () => {
+    initRepo(ctx.dir, "git@github-work:mfaux/ralphai.git");
+    expect(detectIssueRepo(ctx.dir)).toBe("mfaux/ralphai");
+  });
+
+  it("auto-detects from SSH remote with host alias without .git suffix", () => {
+    initRepo(ctx.dir, "git@my-gh:org/project");
+    expect(detectIssueRepo(ctx.dir)).toBe("org/project");
   });
 
   it("ignores empty configRepo", () => {

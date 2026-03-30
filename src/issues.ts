@@ -125,10 +125,11 @@ export function detectIssueRepo(
   const url = execQuiet("git remote get-url origin", cwd);
   if (!url) return null;
 
-  // Handle SSH: git@github.com:owner/repo.git
-  // Handle HTTPS: https://github.com/owner/repo.git
+  // Handle SSH: git@<host>:owner/repo.git  (supports host aliases like github-work)
+  // Handle HTTPS: https://<host>/owner/repo.git
   const cleaned = url
-    .replace(/^(?:git@|https:\/\/)github\.com[:/]/, "")
+    .replace(/^git@[^:]+:/, "")
+    .replace(/^https?:\/\/[^/]+\//, "")
     .replace(/\.git$/, "");
 
   // Validate it looks like owner/repo
