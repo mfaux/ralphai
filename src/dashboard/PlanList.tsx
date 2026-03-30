@@ -9,7 +9,12 @@
 import React from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo } from "./types.ts";
-import { truncateSlug, formatElapsed } from "./format.ts";
+import {
+  truncateSlug,
+  formatElapsed,
+  hasProgressData,
+  clampCompleted,
+} from "./format.ts";
 import { PanelBox } from "./PanelBox.tsx";
 import { useSpinner } from "./hooks.ts";
 
@@ -47,13 +52,15 @@ function stateBadge(state: PlanInfo["state"]): string {
 
 function ProgressIndicator({ plan, width }: { plan: PlanInfo; width: number }) {
   if (width < 45) return null;
-  if (plan.state !== "in-progress") return null;
-  if (plan.tasksCompleted === undefined && plan.totalTasks === undefined)
-    return null;
 
-  const current = plan.tasksCompleted ?? 0;
+  // Show progress for in-progress plans, and for completed-stuck plans with partial progress.
+  const isStuck = plan.state === "completed" && plan.outcome === "stuck";
+  if (plan.state !== "in-progress" && !isStuck) return null;
+
+  if (!hasProgressData(plan.totalTasks, plan.tasksCompleted)) return null;
+
+  const current = clampCompleted(plan.tasksCompleted, plan.totalTasks);
   const total = plan.totalTasks ?? 0;
-  if (total === 0) return null;
 
   const barWidth = 6;
   const rawFilled = Math.round((current / total) * barWidth);

@@ -19,7 +19,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { FocusTarget, PlanInfo } from "./types.ts";
 import { useSpinner } from "./hooks.ts";
-import { formatElapsed } from "./format.ts";
+import { formatElapsed, hasProgressData, clampCompleted } from "./format.ts";
 
 interface StatusBarProps {
   focus: FocusTarget;
@@ -47,8 +47,9 @@ const SPLIT_LIST_HINT =
 /** Build the mini progress string (e.g. "tasks 3/7"). */
 function buildProgressSummary(plan: PlanInfo): string {
   const parts: string[] = [];
-  if (plan.tasksCompleted != null && plan.totalTasks != null) {
-    parts.push(`tasks ${plan.tasksCompleted}/${plan.totalTasks}`);
+  if (hasProgressData(plan.totalTasks, plan.tasksCompleted)) {
+    const clamped = clampCompleted(plan.tasksCompleted, plan.totalTasks);
+    parts.push(`tasks ${clamped}/${plan.totalTasks}`);
   }
   return parts.join(" \u00B7 ");
 }
