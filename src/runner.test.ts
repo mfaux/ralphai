@@ -281,6 +281,34 @@ describe("runRunner — dry-run", () => {
     await runRunner(opts);
   });
 
+  test("dry-run with no plans shows reason in output", async () => {
+    setupGlobalPipeline(dir);
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig(),
+      cwd: dir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: true,
+      resume: false,
+      allowDirty: false,
+    };
+
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    try {
+      await runRunner(opts);
+    } finally {
+      console.log = origLog;
+    }
+
+    const output = logs.join("\n");
+    // issueSource defaults to "none", so peek.message should appear
+    expect(output).toContain("No runnable work found.");
+    expect(output).toContain("not 'github'");
+  });
+
   test("dry-run with a backlog plan prints preview", async () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 

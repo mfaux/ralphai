@@ -347,7 +347,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
         "[dry-run] Run without --dry-run to pull the oldest issue into the backlog.",
       );
     } else {
-      console.log("[dry-run] No runnable work found.");
+      console.log(`[dry-run] No runnable work found. (${peek.message})`);
     }
     return;
   }
