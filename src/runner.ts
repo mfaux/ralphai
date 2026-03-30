@@ -439,7 +439,8 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
  * Run the Ralphai autonomous loop.
  */
 export async function runRunner(opts: RunnerOptions): Promise<void> {
-  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan } = opts;
+  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan, prd } =
+    opts;
 
   // Unpack config values
   const baseBranch = config.baseBranch.value;
@@ -532,6 +533,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               backlogDir: dirs.backlogDir,
               cwd,
               prUrl: continuousPrUrl,
+              prd,
             });
             console.log(finalize.message);
           }
@@ -566,6 +568,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               backlogDir: dirs.backlogDir,
               cwd,
               prUrl: continuousPrUrl,
+              prd,
             });
             console.log(finalize.message);
           }
@@ -862,6 +865,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               backlogDir: dirs.backlogDir,
               cwd,
               firstPlanDescription: planDesc,
+              prd,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -875,6 +879,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               backlogDir: dirs.backlogDir,
               cwd,
               prUrl: continuousPrUrl,
+              prd,
             });
             console.log(update.message);
           }
@@ -937,6 +942,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       backlogDir: dirs.backlogDir,
       cwd,
       prUrl: continuousPrUrl,
+      prd,
     });
     console.log(finalize.message);
   }

@@ -268,4 +268,32 @@ describe("buildContinuousPrBody", () => {
     );
     expect(body).toContain("add feature");
   });
+
+  it("prepends Closes #N when prdNumber option is provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBody(
+      ["plan-a"],
+      join(ctx.dir, "backlog"),
+      "main",
+      "main",
+      ctx.dir,
+      { prdNumber: 146 },
+    );
+    expect(body).toContain("Closes #146");
+    const closesIdx = body.indexOf("Closes #146");
+    const plansIdx = body.indexOf("## Completed Plans");
+    expect(closesIdx).toBeLessThan(plansIdx);
+  });
+
+  it("omits Closes line when prdNumber is not provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBody(
+      ["plan-a"],
+      join(ctx.dir, "backlog"),
+      "main",
+      "main",
+      ctx.dir,
+    );
+    expect(body).not.toContain("Closes #");
+  });
 });

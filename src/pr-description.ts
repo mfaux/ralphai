@@ -203,8 +203,15 @@ export function buildContinuousPrBodyStructured(
   baseBranch: string,
   headBranch: string,
   cwd: string,
+  options?: { prdNumber?: number },
 ): string {
-  const parts: string[] = ["## Completed Plans\n"];
+  const parts: string[] = [];
+
+  if (options?.prdNumber !== undefined) {
+    parts.push(`Closes #${options.prdNumber}\n`);
+  }
+
+  parts.push("## Completed Plans\n");
   if (completedPlans.length > 0) {
     parts.push(...completedPlans.map((p) => `- [x] ${p}`));
   } else {

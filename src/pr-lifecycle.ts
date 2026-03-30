@@ -49,6 +49,8 @@ export interface ContinuousPrOptions {
   completedPlans: string[];
   backlogDir: string;
   cwd: string;
+  /** PRD issue driving this continuous run. */
+  prd?: { number: number; title: string };
 }
 
 export interface ArchiveRunOptions {
@@ -216,6 +218,7 @@ export function buildContinuousPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
+  options?: { prdNumber?: number },
 ): string {
   const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
   return buildContinuousPrBodyStructured(
@@ -224,6 +227,7 @@ export function buildContinuousPrBody(
     baseBranch,
     headBranch,
     cwd,
+    options,
   );
 }
 
@@ -238,6 +242,7 @@ export function createContinuousPr(
     completedPlans,
     backlogDir,
     cwd,
+    prd,
   } = options;
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
@@ -248,9 +253,12 @@ export function createContinuousPr(
     baseBranch,
     branch,
     cwd,
+    { prdNumber: prd?.number },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const prTitle = `ralphai: ${firstPlanDescription}`;
+  const prTitle = prd
+    ? `feat: ${prd.title}`
+    : `ralphai: ${firstPlanDescription}`;
 
   const prUrl = execQuiet(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
@@ -271,7 +279,7 @@ export function createContinuousPr(
 export function updateContinuousPr(
   options: ContinuousPrOptions & { prUrl: string },
 ): PushResult {
-  const { branch, baseBranch, prUrl, completedPlans, backlogDir, cwd } =
+  const { branch, baseBranch, prUrl, completedPlans, backlogDir, cwd, prd } =
     options;
   const push = pushBranch(branch, cwd, false);
   if (!push.ok) return push;
@@ -283,6 +291,7 @@ export function updateContinuousPr(
     baseBranch,
     branch,
     cwd,
+    { prdNumber: prd?.number },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   if (
@@ -297,7 +306,7 @@ export function updateContinuousPr(
 export function finalizeContinuousPr(
   options: ContinuousPrOptions & { prUrl: string },
 ): PushResult {
-  const { baseBranch, prUrl, completedPlans, backlogDir, cwd } = options;
+  const { baseBranch, prUrl, completedPlans, backlogDir, cwd, prd } = options;
   if (!prUrl) return { ok: false, message: "No continuous PR to finalize" };
 
   const headBranch =
@@ -308,6 +317,7 @@ export function finalizeContinuousPr(
     baseBranch,
     headBranch,
     cwd,
+    { prdNumber: prd?.number },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
