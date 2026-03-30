@@ -353,4 +353,61 @@ describe("buildContinuousPrBodyStructured", () => {
     expect(body).toContain("_None yet._");
     expect(body).toContain("_Backlog empty");
   });
+
+  it("prepends Closes #N when prdNumber is provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBodyStructured(
+      ["plan-a"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+      { prdNumber: 146 },
+    );
+    expect(body).toContain("Closes #146");
+    // Closes line should appear before Completed Plans
+    const closesIdx = body.indexOf("Closes #146");
+    const plansIdx = body.indexOf("## Completed Plans");
+    expect(closesIdx).toBeLessThan(plansIdx);
+  });
+
+  it("omits Closes line when prdNumber is not provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBodyStructured(
+      ["plan-a"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+    );
+    expect(body).not.toContain("Closes #");
+  });
+
+  it("preserves Closes #N when body is rebuilt with new completed plans", () => {
+    initRepo(ctx.dir);
+    // Simulate first build
+    const body1 = buildContinuousPrBodyStructured(
+      ["plan-a"],
+      ["plan-b.md"],
+      "main",
+      "main",
+      ctx.dir,
+      { prdNumber: 146 },
+    );
+    expect(body1).toContain("Closes #146");
+    expect(body1).toContain("- [x] plan-a");
+
+    // Simulate rebuild after second plan completes
+    const body2 = buildContinuousPrBodyStructured(
+      ["plan-a", "plan-b"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+      { prdNumber: 146 },
+    );
+    expect(body2).toContain("Closes #146");
+    expect(body2).toContain("- [x] plan-a");
+    expect(body2).toContain("- [x] plan-b");
+  });
 });
