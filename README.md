@@ -84,6 +84,7 @@ Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>
 ralphai run              # create or reuse a worktree and open a draft PR
 ralphai run --continuous # keep processing backlog plans after the first
 ralphai run --prd=42     # PRD-driven run from GitHub issue #42
+ralphai prd 42           # shorthand for run --continuous --prd=42
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
@@ -149,7 +150,7 @@ ralphai status --repo=my-app            # check status of a different repo
 ralphai backlog-dir --repo=~/work/api   # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
 ## Interactive Dashboard
 

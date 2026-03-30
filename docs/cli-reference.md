@@ -10,6 +10,7 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
+| `prd`          | Run a PRD issue in continuous mode (shorthand for `run`)               |
 | `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
@@ -43,7 +44,7 @@ ralphai backlog-dir --repo=my-app
 
 Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
 
-Blocked for: `run`, `worktree`, `init`.
+Blocked for: `run`, `prd`, `worktree`, `init`.
 
 ## Interactive Dashboard
 
@@ -137,6 +138,18 @@ What it does:
 --issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
 --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 ```
+
+## Prd
+
+`ralphai prd <issue-number>` is shorthand for `ralphai run --continuous --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and runs continuously in a managed worktree.
+
+```bash
+ralphai prd 42                                # PRD-driven continuous run
+ralphai prd 42 --dry-run                      # preview only
+ralphai prd 42 --agent-command='claude -p'    # use Claude Code
+```
+
+All `ralphai run` flags are accepted and passed through. Must be run from the main repository (not a worktree).
 
 ## Worktree
 
