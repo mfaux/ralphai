@@ -9,6 +9,7 @@
  * progress file.
  */
 import { existsSync, readFileSync } from "fs";
+import type { PlanFormat } from "./plan-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +29,8 @@ export interface AssemblePromptOptions {
   learningsFile: string;
   /** Path to LEARNING_CANDIDATES.md (in global state). */
   learningCandidatesFile: string;
+  /** Detected plan format — drives prompt wording for step 2 and progress blocks. */
+  planFormat?: PlanFormat;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +74,10 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     scopeHint,
     learningsFile,
     learningCandidatesFile,
+    planFormat = "tasks",
   } = options;
+
+  const isCheckboxes = planFormat === "checkboxes";
 
   // Use short labels instead of absolute paths so sandboxed agents never
   // see external filesystem paths and don't try to re-read/write them.
@@ -119,10 +125,45 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const completeInstruction =
     "but ONLY after committing. Never output COMPLETE with uncommitted changes.";
 
+  // --- Format-aware step 2 and progress block ---
+  const step2 = isCheckboxes
+    ? "Pick the next group of unchecked items from the plan that form a coherent commit. You may satisfy multiple related items in one iteration (e.g., related error cases that share implementation)."
+    : "Find the highest-priority incomplete task (see prioritization rules in the plan).";
+
+  const completionRef = isCheckboxes
+    ? "all items checked"
+    : "all tasks complete";
+
+  const progressBlock = isCheckboxes
+    ? `REQUIRED: Also include a <progress> block at the very end of your response (after learnings). Use this exact format for the items you completed this iteration:
+- [x] <item description>
+- [x] <item description>
+This format is required — ralphai parses it to track task completion.
+If the task was not fully completed this iteration, include a brief summary of partial progress instead.
+Example:
+<progress>
+- [x] Validate input length is within bounds
+- [x] Return descriptive error for empty input
+</progress>
+Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`
+    : `REQUIRED: Also include a <progress> block at the very end of your response (after learnings). Use this exact format for the task you completed this iteration:
+### Task N: <title>
+**Status:** Complete
+<summary of what was done, including which subtasks were completed>
+This format is required — ralphai parses it to track task completion.
+If the task was not fully completed this iteration, include a brief summary of partial progress instead.
+Example:
+<progress>
+### Task 3: Add validation
+**Status:** Complete
+Implemented input validation (3.1), error messages (3.2), and updated tests (3.3).
+</progress>
+Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
+
   // --- Assemble the prompt ---
   return `${fileRefs}${scopeHint}
 1. Read the referenced files and the progress file.${learningsHint}
-2. Find the highest-priority incomplete task (see prioritization rules in the plan).
+2. ${step2}
 3. Implement it with small, focused changes. Testing strategy depends on task type:
    - Bug fix: Write a failing test FIRST that reproduces the bug, then fix the code to make it pass.
    - New feature: Implement the feature, then add tests that cover the new code.
@@ -135,7 +176,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${learningsStep}
 ${commitStepNum}. ${commitInstruction}
 Work on the next incomplete task. Complete it fully (including all its subtasks) before ending your response.
-If all tasks are complete, output <promise>COMPLETE</promise> — ${completeInstruction}
+If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this iteration, use:
 <learnings>
 <entry>
@@ -154,19 +195,7 @@ status: none
 </entry>
 </learnings>
 The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
-REQUIRED: Also include a <progress> block at the very end of your response (after learnings). Use this exact format for the task you completed this iteration:
-### Task N: <title>
-**Status:** Complete
-<summary of what was done, including which subtasks were completed>
-This format is required — ralphai parses it to track task completion.
-If the task was not fully completed this iteration, include a brief summary of partial progress instead.
-Example:
-<progress>
-### Task 3: Add validation
-**Status:** Complete
-Implemented input validation (3.1), error messages (3.2), and updated tests (3.3).
-</progress>
-Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
+${progressBlock}`;
 }
 
 // ---------------------------------------------------------------------------

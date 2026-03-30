@@ -738,6 +738,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         scopeHint,
         learningsFile,
         learningCandidatesFile,
+        planFormat,
       });
 
       // --- Spawn agent (with output log persistence) ---

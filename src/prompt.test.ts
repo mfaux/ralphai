@@ -223,4 +223,80 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).not.toContain("Update progress.md");
   });
+
+  // --- Format-aware prompt (tasks / default) ---
+
+  it("uses tasks-format step 2 by default", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("2. Find the highest-priority incomplete task");
+    expect(prompt).not.toContain("unchecked items");
+  });
+
+  it("uses tasks-format step 2 when planFormat is 'tasks'", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain("2. Find the highest-priority incomplete task");
+  });
+
+  it("uses tasks-format step 2 when planFormat is 'none'", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "none" }));
+    expect(prompt).toContain("2. Find the highest-priority incomplete task");
+  });
+
+  it("references 'all tasks complete' for tasks format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain("all tasks complete");
+    expect(prompt).not.toContain("all items checked");
+  });
+
+  // --- Format-aware prompt (checkboxes) ---
+
+  it("uses checkbox-format step 2 when planFormat is 'checkboxes'", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain(
+      "2. Pick the next group of unchecked items from the plan",
+    );
+    expect(prompt).not.toContain("Find the highest-priority incomplete task");
+  });
+
+  it("allows multiple items per iteration for checkboxes format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain(
+      "You may satisfy multiple related items in one iteration",
+    );
+  });
+
+  it("instructs checkbox progress blocks for checkboxes format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain("- [x] <item description>");
+    expect(prompt).not.toContain("### Task N: <title>");
+    expect(prompt).not.toContain("**Status:** Complete");
+  });
+
+  it("references 'all items checked' for checkboxes format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain("all items checked");
+    expect(prompt).not.toContain("all tasks complete");
+  });
+
+  it("preserves COMPLETE signal for checkboxes format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain("<promise>COMPLETE</promise>");
+    expect(prompt).toContain(
+      "but ONLY after committing. Never output COMPLETE with uncommitted changes",
+    );
+  });
+
+  it("preserves COMPLETE signal for tasks format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain("<promise>COMPLETE</promise>");
+    expect(prompt).toContain(
+      "but ONLY after committing. Never output COMPLETE with uncommitted changes",
+    );
+  });
+
+  it("includes checkbox progress example in checkboxes format", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).toContain("- [x] Validate input length is within bounds");
+    expect(prompt).toContain("Do NOT write progress.md directly");
+  });
 });
