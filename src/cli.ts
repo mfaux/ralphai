@@ -48,6 +48,7 @@ ${BOLD}Commands:${RESET}
   teardown     Remove Ralphai from your project
   uninstall    Remove all global state and uninstall the CLI
   doctor       Check your ralphai setup for problems
+  check        Verify whether ralphai is configured for a repo
   backlog-dir  Print the path to the plan backlog directory
   repos        List all known repos with pipeline summaries
 
