@@ -16,9 +16,13 @@ function initAndGetConfigFile(
   env: Record<string, string>,
 ): string {
   runCli(["init", "--yes"], ctxDir, env);
-  const reposDir = join(env.RALPHAI_HOME, "repos");
+  const home = env.RALPHAI_HOME;
+  if (!home) throw new Error("RALPHAI_HOME not set in env");
+  const reposDir = join(home, "repos");
   const repoDirs = readdirSync(reposDir);
-  return join(reposDir, repoDirs[0], "config.json");
+  const first = repoDirs[0];
+  if (!first) throw new Error("no repo directory found after init");
+  return join(reposDir, first, "config.json");
 }
 
 // =========================================================================
