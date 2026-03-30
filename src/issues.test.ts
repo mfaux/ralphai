@@ -9,6 +9,10 @@ import {
   slugify,
   peekGithubIssues,
   pullGithubIssues,
+  PRD_LABEL,
+  fetchPrdIssueByNumber,
+  prdBranchName,
+  ensurePrdLabel,
 } from "./issues.ts";
 import type { PullIssueOptions, PeekIssueOptions } from "./issues.ts";
 
@@ -272,5 +276,93 @@ describe("peekGithubIssues", () => {
     peekGithubIssues(opts);
     // The backlog directory should not be created by peek
     expect(existsSync(backlogDir)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// prdBranchName
+// ---------------------------------------------------------------------------
+
+describe("prdBranchName", () => {
+  it("returns feat/ prefix with slugified title", () => {
+    expect(prdBranchName("Add dark mode support")).toBe(
+      "feat/add-dark-mode-support",
+    );
+  });
+
+  it("handles special characters in title", () => {
+    expect(prdBranchName("feat: add new_feature!")).toBe(
+      "feat/feat-add-new-feature",
+    );
+  });
+
+  it("truncates long titles to fit slugify 60-char limit", () => {
+    const longTitle =
+      "this is a very long PRD title that should be truncated to sixty characters at most by slugify";
+    const result = prdBranchName(longTitle);
+    // "feat/" is 5 chars, slug is max 60 chars
+    expect(result.startsWith("feat/")).toBe(true);
+    expect(result.length).toBeLessThanOrEqual(65);
+  });
+
+  it("handles empty title", () => {
+    expect(prdBranchName("")).toBe("feat/");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRD_LABEL constant
+// ---------------------------------------------------------------------------
+
+describe("PRD_LABEL", () => {
+  it("is the expected label string", () => {
+    expect(PRD_LABEL).toBe("ralphai-prd");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchPrdIssueByNumber — guard clause tests (no gh required)
+// ---------------------------------------------------------------------------
+
+describe("fetchPrdIssueByNumber", () => {
+  const ctx = useTempDir();
+
+  it("throws when gh is not available", () => {
+    // In CI or environments without gh, this will throw.
+    // If gh IS available, we test with a non-existent repo/issue.
+    initRepo(ctx.dir);
+    const ghAvailable = checkGhAvailable();
+    if (!ghAvailable) {
+      expect(() =>
+        fetchPrdIssueByNumber("owner/repo", 999999, ctx.dir),
+      ).toThrow("gh CLI not available");
+    } else {
+      // gh is available but issue likely doesn't exist in a temp repo
+      expect(() =>
+        fetchPrdIssueByNumber(
+          "nonexistent-owner/nonexistent-repo",
+          999999,
+          ctx.dir,
+        ),
+      ).toThrow();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensurePrdLabel — guard clause tests (no gh required)
+// ---------------------------------------------------------------------------
+
+describe("ensurePrdLabel", () => {
+  const ctx = useTempDir();
+
+  it("throws when gh is not available", () => {
+    initRepo(ctx.dir);
+    const ghAvailable = checkGhAvailable();
+    if (!ghAvailable) {
+      expect(() => ensurePrdLabel(ctx.dir)).toThrow("gh CLI not available");
+    }
+    // When gh IS available, we can't easily test label creation without a real repo.
+    // The function is idempotent — safe to call, but we skip in that case.
   });
 });

@@ -384,6 +384,97 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
   });
 }
 
+// ---------------------------------------------------------------------------
+// PRD (Product Requirements Document) support
+// ---------------------------------------------------------------------------
+
+/** GitHub label that marks an issue as a PRD. */
+export const PRD_LABEL = "ralphai-prd";
+
+/** Minimal PRD data model threaded through the system. */
+export interface PrdIssue {
+  number: number;
+  title: string;
+}
+
+/**
+ * Fetch a specific GitHub issue by number and verify it has the `ralphai-prd`
+ * label. Returns `{ number, title }` on success.
+ *
+ * Throws a descriptive error if:
+ * - `gh` is not available or not authenticated
+ * - the issue is not found
+ * - the issue does not have the `ralphai-prd` label
+ */
+export function fetchPrdIssueByNumber(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): PrdIssue {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot fetch PRD issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title,labels`,
+    cwd,
+  );
+
+  if (!raw) {
+    throw new Error(
+      `Could not fetch issue #${issueNumber} from ${repo}. ` +
+        `Check that the issue exists and you have access.`,
+    );
+  }
+
+  let data: { title: string; labels: Array<{ name: string }> };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Failed to parse response for issue #${issueNumber} from ${repo}`,
+    );
+  }
+
+  const hasLabel = data.labels.some((l) => l.name === PRD_LABEL);
+  if (!hasLabel) {
+    throw new Error(
+      `Issue #${issueNumber} does not have the '${PRD_LABEL}' label. ` +
+        `Add the label to the issue and try again.`,
+    );
+  }
+
+  return { number: issueNumber, title: data.title };
+}
+
+/**
+ * Derive a branch name from a PRD title: `feat/<slugify(title)>`.
+ */
+export function prdBranchName(title: string): string {
+  return `feat/${slugify(title)}`;
+}
+
+/**
+ * Ensure the `ralphai-prd` label exists in the repo. Uses `--force` so
+ * the command is idempotent (creates or updates silently).
+ */
+export function ensurePrdLabel(cwd: string): void {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot ensure PRD label",
+    );
+  }
+
+  // gh label create with --force is idempotent: creates if missing,
+  // no-ops (updates) if already present.
+  execQuiet(
+    `gh label create "${PRD_LABEL}" --force --description "Ralphai PRD (Product Requirements Document)" --color 0052CC`,
+    cwd,
+  );
+}
+
 /**
  * Pull a specific GitHub issue by number and convert it to a plan file.
  *

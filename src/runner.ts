@@ -77,6 +77,8 @@ export interface RunnerOptions {
   allowDirty: boolean;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   plan?: string;
+  /** PRD issue driving this run (set by --prd=N). */
+  prd?: { number: number; title: string };
 }
 
 // ---------------------------------------------------------------------------

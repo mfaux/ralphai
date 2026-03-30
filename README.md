@@ -83,6 +83,7 @@ Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>
 ```bash
 ralphai run              # create or reuse a worktree and open a draft PR
 ralphai run --continuous # keep processing backlog plans after the first
+ralphai run --prd=42     # PRD-driven run from GitHub issue #42
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
