@@ -193,16 +193,34 @@ When a `workspaces` config key exists, doctor also validates per-workspace feedb
 `ralphai check` verifies whether Ralphai is configured for the current repo. It prints a single line of plain text (no ANSI color codes) and exits 0 on success or 1 on failure.
 
 ```
---repo=<name>     Check config for a different repo
+--capability=<name>   Check if a specific capability is enabled (repeatable)
+--repo=<name>         Check config for a different repo
 ```
 
-Output:
+Output (without `--capability`):
 
 | Condition            | stdout                              | Exit code |
 | -------------------- | ----------------------------------- | --------- |
 | Config is valid      | `configured`                        | 0         |
 | No config file       | `not configured — run ralphai init` | 1         |
 | Malformed or invalid | `invalid config — <detail>`         | 1         |
+
+Output (with `--capability`):
+
+| Condition               | stdout                                                               | Exit code |
+| ----------------------- | -------------------------------------------------------------------- | --------- |
+| All capabilities met    | `configured (issues: github)`                                        | 0         |
+| Capability not met      | `configured, but missing capability: issues (issueSource is "none")` | 1         |
+| Not configured          | `not configured — run ralphai init`                                  | 1         |
+| Unknown capability name | `unknown capability: "foo" (supported: issues)`                      | 1         |
+
+Supported capabilities:
+
+| Name     | Checks                                |
+| -------- | ------------------------------------- |
+| `issues` | `issueSource` is `"github"` in config |
+
+Multiple `--capability` flags can be combined; all must pass for exit 0.
 
 Does not require a git repository. Useful for CI scripts and setup verification.
 

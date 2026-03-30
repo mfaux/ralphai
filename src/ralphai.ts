@@ -89,6 +89,7 @@ interface RalphaiOptions {
   agentCommand?: string;
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
+  capabilities: string[]; // --capability=<name> (repeatable, for `check`)
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -175,6 +176,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
+  const capabilities: string[] = [];
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
@@ -208,6 +210,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       agentCommand = arg.slice("--agent-command=".length);
     } else if (arg.startsWith("--repo=")) {
       repo = arg.slice("--repo=".length);
+    } else if (arg.startsWith("--capability=")) {
+      capabilities.push(arg.slice("--capability=".length));
     } else if (!arg.startsWith("-")) {
       // First non-flag arg is the subcommand; second is targetDir
       if (!subcommand && SUBCOMMANDS.has(arg as RalphaiSubcommand)) {
@@ -240,6 +244,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     agentCommand,
     targetDir,
     repo,
+    capabilities,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -1246,7 +1251,7 @@ export async function runRalphai(args: string[]): Promise<void> {
         showCheckHelp();
         return;
       }
-      runCheck(cwd);
+      runCheck(cwd, options.capabilities);
       break;
     case "seed":
       runSeed(cwd);

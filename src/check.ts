@@ -6,14 +6,48 @@
  */
 
 import { existsSync } from "fs";
-import { getConfigFilePath, parseConfigFile, ConfigError } from "./config.ts";
+import {
+  getConfigFilePath,
+  parseConfigFile,
+  ConfigError,
+  DEFAULTS,
+} from "./config.ts";
+import type { RalphaiConfig } from "./config.ts";
 import { RESET, DIM, TEXT } from "./utils.ts";
+
+// ---------------------------------------------------------------------------
+// Capability map
+// ---------------------------------------------------------------------------
+
+/** Supported capability names. */
+export const SUPPORTED_CAPABILITIES = ["issues"] as const;
+export type CapabilityName = (typeof SUPPORTED_CAPABILITIES)[number];
+
+interface CapabilityResult {
+  pass: boolean;
+  message: string;
+}
+
+type CapabilityCheck = (values: Partial<RalphaiConfig>) => CapabilityResult;
+
+const CAPABILITY_MAP: Record<CapabilityName, CapabilityCheck> = {
+  issues(values) {
+    const issueSource = values.issueSource ?? DEFAULTS.issueSource;
+    if (issueSource === "github") {
+      return { pass: true, message: "issues: github" };
+    }
+    return {
+      pass: false,
+      message: `configured, but missing capability: issues (issueSource is "${issueSource}")`,
+    };
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-export function runCheck(cwd: string): void {
+export function runCheck(cwd: string, capabilities: string[] = []): void {
   const configPath = getConfigFilePath(cwd);
 
   // Case 1: no config file
@@ -23,6 +57,7 @@ export function runCheck(cwd: string): void {
   }
 
   // Case 2: config exists — validate it
+  let values: Partial<RalphaiConfig>;
   try {
     const parsed = parseConfigFile(configPath);
 
@@ -31,10 +66,10 @@ export function runCheck(cwd: string): void {
     if (!parsed) {
       console.log("not configured — run ralphai init");
       process.exit(1);
+      return; // unreachable but helps TypeScript narrow
     }
 
-    // Valid config
-    console.log("configured");
+    values = parsed.values;
   } catch (err) {
     // Case 3: malformed JSON or invalid values
     if (err instanceof ConfigError) {
@@ -44,7 +79,38 @@ export function runCheck(cwd: string): void {
       console.log(`invalid config — ${msg}`);
     }
     process.exit(1);
+    return; // unreachable but helps TypeScript narrow
   }
+
+  // No capabilities requested — simple config check
+  if (capabilities.length === 0) {
+    console.log("configured");
+    return;
+  }
+
+  // Validate all capability names first
+  for (const name of capabilities) {
+    if (!SUPPORTED_CAPABILITIES.includes(name as CapabilityName)) {
+      const supported = SUPPORTED_CAPABILITIES.join(", ");
+      console.log(`unknown capability: "${name}" (supported: ${supported})`);
+      process.exit(1);
+    }
+  }
+
+  // Check all capabilities — all must pass
+  const passMessages: string[] = [];
+  for (const name of capabilities) {
+    const check = CAPABILITY_MAP[name as CapabilityName];
+    const result = check(values);
+    if (!result.pass) {
+      console.log(result.message);
+      process.exit(1);
+    }
+    passMessages.push(result.message);
+  }
+
+  // All passed
+  console.log(`configured (${passMessages.join(", ")})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +137,14 @@ export function showCheckHelp(): void {
   console.log();
   console.log(`${TEXT}Options:${RESET}`);
   console.log(
-    `  ${TEXT}--repo=<name>${RESET}   ${DIM}Check config for a different repo${RESET}`,
+    `  ${TEXT}--capability=<name>${RESET}   ${DIM}Check if a specific capability is enabled (repeatable)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--repo=<name>${RESET}         ${DIM}Check config for a different repo${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Supported capabilities:${RESET}`);
+  console.log(
+    `  ${TEXT}issues${RESET}   ${DIM}issueSource is "github" in config${RESET}`,
   );
 }
