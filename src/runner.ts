@@ -13,6 +13,7 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
   renameSync,
@@ -40,7 +41,7 @@ import {
 import {
   detectPlan,
   collectBacklogPlans,
-  countPlanTasks,
+  detectPlanFormat,
   countCompletedTasks,
   getPlanDescription,
   type PipelineDirs,
@@ -707,7 +708,10 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     let lastHash = getCurrentCommitHash(cwd) ?? "";
     let completed = false;
 
-    const totalTasks = countPlanTasks(planFile);
+    // Detect plan format once per plan; the result flows into the
+    // iteration log header and future downstream consumers.
+    const planContent = readFileSync(planFile, "utf-8");
+    const { format: planFormat, totalTasks } = detectPlanFormat(planContent);
     let iterationNumber = 0;
 
     while (!interrupted) {

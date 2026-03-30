@@ -2474,7 +2474,7 @@ function runRalphaiStatus(cwd: string): void {
 
     // Task progress
     const totalTasks = countPlanTasks(planFilePath);
-    if (totalTasks > 0) {
+    if (totalTasks !== undefined && totalTasks > 0) {
       const completed = receipt?.tasks_completed ?? 0;
       parts.push(`${completed} of ${totalTasks} tasks`);
     }

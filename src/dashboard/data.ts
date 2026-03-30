@@ -23,6 +23,7 @@ import {
   listPlanFolders,
   resolvePlanPath,
   countPlanTasks,
+  countPlanTasksFromContent,
 } from "../plan-detection.ts";
 import { parseReceipt } from "../receipt.ts";
 import { extractScope, extractDependsOn } from "../frontmatter.ts";
@@ -158,12 +159,6 @@ function parseIssueFromContent(content: string): {
   };
 }
 
-function countPlanTasksFromContent(content: string): number | undefined {
-  const matches = content.match(/^### Task \d+/gm);
-  const totalTasks = matches ? matches.length : 0;
-  return totalTasks > 0 ? totalTasks : undefined;
-}
-
 function parseReceiptFromContent(content: string): {
   tasksCompleted?: number;
   outcome?: string;
@@ -285,7 +280,7 @@ export function loadPlans(cwd: string): PlanInfo[] {
       state: "in-progress",
       scope: scope || undefined,
       tasksCompleted: receipt?.tasks_completed,
-      totalTasks: totalTasks > 0 ? totalTasks : undefined,
+      totalTasks,
       outcome: receipt?.outcome ?? undefined,
       receiptSource: receipt?.worktree_path ? "worktree" : undefined,
       startedAt: receipt?.started_at ?? undefined,
@@ -317,7 +312,7 @@ export function loadPlans(cwd: string): PlanInfo[] {
       slug,
       state: "completed",
       tasksCompleted: receipt?.tasks_completed,
-      totalTasks: totalTasks > 0 ? totalTasks : undefined,
+      totalTasks,
       outcome: receipt?.outcome ?? undefined,
       receiptSource: receipt?.worktree_path ? "worktree" : undefined,
       startedAt: receipt?.started_at ?? undefined,

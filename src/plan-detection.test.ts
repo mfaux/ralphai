@@ -498,8 +498,23 @@ describe("countPlanTasks / countCompletedTasks", () => {
     expect(countPlanTasks(p)).toBe(3);
   });
 
-  it("returns 0 for nonexistent file", () => {
-    expect(countPlanTasks(join(tmpDir, "nope.md"))).toBe(0);
+  it("returns undefined for nonexistent file", () => {
+    expect(countPlanTasks(join(tmpDir, "nope.md"))).toBeUndefined();
+  });
+
+  it("returns undefined for plan with no tasks", () => {
+    const p = join(tmpDir, "plan.md");
+    writeFileSync(p, "# Plan\n\nJust some prose.\n");
+    expect(countPlanTasks(p)).toBeUndefined();
+  });
+
+  it("counts checkbox tasks in plan", () => {
+    const p = join(tmpDir, "plan.md");
+    writeFileSync(
+      p,
+      "# Plan\n\n- [ ] First task\n- [ ] Second task\n- [x] Third task (done)\n",
+    );
+    expect(countPlanTasks(p)).toBe(3);
   });
 
   it("counts completed tasks in progress file", () => {

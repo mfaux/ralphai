@@ -31,7 +31,10 @@ export interface DetectedPlan {
 }
 
 /** Reason why no plan was detected. */
-export type DetectFailReason = "empty-backlog" | "all-blocked" | "target-not-found";
+export type DetectFailReason =
+  | "empty-backlog"
+  | "all-blocked"
+  | "target-not-found";
 
 /** Blocked plan info returned when detection finds no runnable plans. */
 export interface BlockedPlanInfo {
@@ -62,6 +65,15 @@ export interface PipelineDirs {
   wipDir: string;
   backlogDir: string;
   archiveDir: string;
+}
+
+/** Format of a plan file: task headings, checkboxes, or neither. */
+export type PlanFormat = "tasks" | "checkboxes" | "none";
+
+/** Result of detecting the plan format and counting tasks. */
+export interface PlanFormatResult {
+  format: PlanFormat;
+  totalTasks: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,14 +167,75 @@ export function planExistsForSlug(dir: string, slug: string): boolean {
   return resolvePlanPath(dir, slug) !== null;
 }
 
+// ---------------------------------------------------------------------------
+// Plan format detection
+// ---------------------------------------------------------------------------
+
 /**
- * Count total tasks in a plan file by counting `### Task N:` headings.
+ * Strip YAML frontmatter from plan content.
+ * Returns the body after the closing `---` marker, or the full content
+ * if no valid frontmatter is found.
  */
-export function countPlanTasks(planPath: string): number {
-  if (!existsSync(planPath)) return 0;
+function stripFrontmatter(content: string): string {
+  if (!content.startsWith("---\n")) return content;
+  const endIdx = content.indexOf("\n---", 4);
+  if (endIdx === -1) return content;
+  return content.slice(endIdx + 4);
+}
+
+/**
+ * Detect the format of a plan and count its total tasks.
+ *
+ * Detection priority:
+ * 1. `### Task N:` headings → format "tasks"
+ * 2. `- [ ]` or `- [x]` checkboxes → format "checkboxes"
+ * 3. Neither → format "none" with totalTasks = 0
+ *
+ * Strips YAML frontmatter before scanning.
+ */
+export function detectPlanFormat(content: string): PlanFormatResult {
+  const body = stripFrontmatter(content);
+
+  // Priority 1: task headings
+  const taskMatches = body.match(/^### Task \d+/gm);
+  if (taskMatches && taskMatches.length > 0) {
+    return { format: "tasks", totalTasks: taskMatches.length };
+  }
+
+  // Priority 2: checkboxes (both unchecked and checked)
+  const checkboxMatches = body.match(/^- \[[ x]\]/gm);
+  if (checkboxMatches && checkboxMatches.length > 0) {
+    return { format: "checkboxes", totalTasks: checkboxMatches.length };
+  }
+
+  // Priority 3: neither
+  return { format: "none", totalTasks: 0 };
+}
+
+/**
+ * Count total tasks in plan content (string).
+ * Returns `undefined` when no tasks are found, consistent with the
+ * dashboard's `PlanInfo.totalTasks` type.
+ *
+ * This is the single source of truth for content-based task counting,
+ * replacing the private copy that lived in `dashboard/data.ts`.
+ */
+export function countPlanTasksFromContent(content: string): number | undefined {
+  const { totalTasks } = detectPlanFormat(content);
+  return totalTasks > 0 ? totalTasks : undefined;
+}
+
+/**
+ * Count total tasks in a plan file.
+ * Returns `undefined` when the file doesn't exist or contains no tasks.
+ *
+ * Uses `detectPlanFormat` internally so it recognizes both `### Task N:`
+ * headings and `- [ ]` / `- [x]` checkboxes.
+ */
+export function countPlanTasks(planPath: string): number | undefined {
+  if (!existsSync(planPath)) return undefined;
   const content = readFileSync(planPath, "utf-8");
-  const matches = content.match(/^### Task \d+/gm);
-  return matches ? matches.length : 0;
+  return countPlanTasksFromContent(content);
 }
 
 /**
@@ -321,7 +394,13 @@ export function detectPlan(opts: {
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   targetPlan?: string;
 }): DetectPlanResult {
-  const { dirs, worktreeBranch, dryRun = false, skippedSlugs, targetPlan } = opts;
+  const {
+    dirs,
+    worktreeBranch,
+    dryRun = false,
+    skippedSlugs,
+    targetPlan,
+  } = opts;
 
   // --- 1. Check for in-progress plans ---
   const inProgressPlans: string[] = [];
