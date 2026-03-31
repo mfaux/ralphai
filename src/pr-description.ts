@@ -1,12 +1,14 @@
 /**
  * PR description builders: structured, human-readable PR bodies.
  *
- * Parses conventional commits into categories, builds file-change
- * summaries, and assembles formatted PR descriptions for both
- * single-plan and continuous modes.
+ * Parses conventional commits into categories and assembles formatted
+ * PR descriptions for both single-plan and continuous modes.
+ *
+ * PR body structure leads with a plain-language description (from the
+ * agent's `<pr-summary>` block or the plan description as fallback),
+ * followed by issue references and a technical changes breakdown.
  */
 import { execSync } from "child_process";
-import { basename } from "path";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,13 +48,6 @@ export function buildCommitLog(
 ): string {
   return (
     execQuiet(`git log "${base}".."${head}" --oneline --no-decorate`, cwd) ?? ""
-  );
-}
-
-/** File-change diffstat between two refs. */
-export function buildDiffStat(base: string, head: string, cwd: string): string {
-  return (
-    execQuiet(`git diff "${base}".."${head}" --stat --stat-width=72`, cwd) ?? ""
   );
 }
 
@@ -212,10 +207,9 @@ export function formatCommitsByCategory(commits: CategorizedCommits): string {
 /**
  * Build a structured PR body for a single-plan PR.
  *
- * Sections:
- *   ## Summary         – plan description (with optional PRD reference)
- *   ## Changes         – commits grouped by type
- *   ## Files Changed   – diffstat
+ * Leads with a human-friendly description (agent-generated summary
+ * when available, falling back to plan description), followed by
+ * issue references and a technical changes breakdown.
  */
 export function buildPrBody(
   planDescription: string,
@@ -227,14 +221,21 @@ export function buildPrBody(
     issueRepo?: string;
     issueNumber?: number;
     prRepo?: string;
+    summary?: string;
   },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
   const categorized = categorizeCommits(commitLog);
   const formattedCommits = formatCommitsByCategory(categorized);
-  const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
 
   const parts: string[] = [];
+
+  // Lead with the human-friendly description
+  parts.push((options?.summary ?? planDescription) + "\n");
+
+  if (options?.prd !== undefined && options.issueRepo) {
+    parts.push(`**PRD:** ${options.issueRepo}#${options.prd}\n`);
+  }
 
   // Emit Closes #N when the plan is from a GitHub issue
   if (options?.issueNumber) {
@@ -248,17 +249,7 @@ export function buildPrBody(
     }
   }
 
-  parts.push(`## Summary\n`);
-
-  if (options?.prd !== undefined && options.issueRepo) {
-    parts.push(`**PRD:** ${options.issueRepo}#${options.prd}\n`);
-  }
-
-  parts.push(`${planDescription}\n`, `## Changes\n`, formattedCommits);
-
-  if (diffStat) {
-    parts.push("", `## Files Changed\n`, "```", diffStat, "```");
-  }
+  parts.push(`## Changes\n`, formattedCommits);
 
   return parts.join("\n");
 }
@@ -266,11 +257,9 @@ export function buildPrBody(
 /**
  * Build a structured PR body for continuous-mode PRs.
  *
- * Sections:
- *   ## Completed Plans  – checked items
- *   ## Remaining Plans  – unchecked items
- *   ## Changes          – commits grouped by type
- *   ## Files Changed    – diffstat
+ * Leads with an optional human-friendly summary (agent-generated on
+ * completion), followed by issue references, plan checklists, and a
+ * technical changes breakdown.
  */
 export function buildContinuousPrBodyStructured(
   completedPlans: string[],
@@ -278,9 +267,19 @@ export function buildContinuousPrBodyStructured(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prdNumber?: number; issueRepo?: string; prRepo?: string },
+  options?: {
+    prdNumber?: number;
+    issueRepo?: string;
+    prRepo?: string;
+    summary?: string;
+  },
 ): string {
   const parts: string[] = [];
+
+  // Lead with agent-generated summary when available
+  if (options?.summary) {
+    parts.push(options.summary + "\n");
+  }
 
   const childIssues = extractIssueNumbersFromPlans(completedPlans);
   const closesBlock = buildClosesBlock({
@@ -310,13 +309,8 @@ export function buildContinuousPrBodyStructured(
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
   const categorized = categorizeCommits(commitLog);
   const formattedCommits = formatCommitsByCategory(categorized);
-  const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
 
   parts.push("\n## Changes\n", formattedCommits);
-
-  if (diffStat) {
-    parts.push("", "## Files Changed\n", "```", diffStat, "```");
-  }
 
   return parts.join("\n");
 }

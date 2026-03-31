@@ -177,6 +177,10 @@ Ralphai extracts this block and appends it to the progress file automatically. D
 ${commitStepNum}. ${commitInstruction}
 Work on the next incomplete task. Complete it fully (including all its subtasks) before ending your response.
 If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
+When you output COMPLETE, also include a <pr-summary> block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
+<pr-summary>
+Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
+</pr-summary>
 REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this iteration, use:
 <learnings>
 <entry>
