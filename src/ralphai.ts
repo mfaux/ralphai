@@ -53,6 +53,7 @@ import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runCheck, showCheckHelp } from "./check.ts";
+import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -81,6 +82,7 @@ type RalphaiSubcommand =
   | "uninstall"
   | "worktree"
   | "status"
+  | "stop"
   | "reset"
   | "purge"
   | "doctor"
@@ -103,11 +105,13 @@ interface RalphaiOptions {
   yes: boolean;
   force: boolean;
   clean: boolean;
+  all: boolean;
   agentCommand?: string;
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
   prdNumber?: string; // positional arg for `prd` subcommand
+  stopSlug?: string; // positional arg for `stop` subcommand
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -179,6 +183,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "uninstall",
   "worktree",
   "status",
+  "stop",
   "reset",
   "purge",
   "doctor",
@@ -193,6 +198,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let yes = false;
   let force = false;
   let clean = false;
+  let all = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
@@ -204,6 +210,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
 
   let collectingRunArgs = false;
   let expectingPrdNumber = false;
+  let expectingStopSlug = false;
+  let stopSlug: string | undefined;
 
   for (const arg of args) {
     // After `run`/`prd` subcommand or `--`, collect remaining args for the runner
@@ -219,6 +227,13 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       continue;
     }
 
+    // For `stop`, the first non-flag positional after the subcommand is the slug
+    if (expectingStopSlug && !arg.startsWith("-")) {
+      stopSlug = arg;
+      expectingStopSlug = false;
+      continue;
+    }
+
     if (arg === "--") {
       collectingRunArgs = true;
       continue;
@@ -230,6 +245,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       force = true;
     } else if (arg === "--clean") {
       clean = true;
+    } else if (arg === "--all") {
+      all = true;
+    } else if (arg === "--dry-run" || arg === "-n") {
+      // Handled by specific subcommands (run, stop) — skip here
     } else if (arg === "--help" || arg === "-h") {
       // Handled by runRalphai() dispatcher — skip here
     } else if (arg === "--no-color") {
@@ -253,6 +272,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
           collectingRunArgs = true;
           expectingPrdNumber = true;
         }
+        // For `stop`, next positional is the plan slug
+        if (subcommand === "stop") {
+          expectingStopSlug = true;
+        }
         // For `worktree`, parse worktree-specific args from the rest
         if (subcommand === "worktree") {
           worktreeOptions = parseWorktreeArgs(
@@ -274,11 +297,13 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     yes,
     force,
     clean,
+    all,
     agentCommand,
     targetDir,
     repo,
     capabilities,
     prdNumber,
+    stopSlug,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -1132,6 +1157,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline and worktree status${RESET}`,
   );
   console.log(
+    `  ${TEXT}stop${RESET}        ${DIM}Stop running plan(s)${RESET}`,
+  );
+  console.log(
     `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
   );
   console.log(
@@ -1228,6 +1256,7 @@ export async function runRalphai(args: string[]): Promise<void> {
   const STRICT_SUBCOMMANDS = new Set([
     "init",
     "status",
+    "stop",
     "reset",
     "purge",
     "update",
@@ -1326,6 +1355,18 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       runRalphaiStatus(cwd);
+      break;
+    case "stop":
+      if (helpRequested) {
+        showStopHelp();
+        return;
+      }
+      runRalphaiStop({
+        cwd,
+        dryRun: args.includes("--dry-run") || args.includes("-n"),
+        slug: options.stopSlug,
+        all: options.all,
+      });
       break;
     case "reset":
       if (helpRequested) {

@@ -43,6 +43,7 @@ ${BOLD}Commands:${RESET}
   prd          Run a PRD issue in continuous mode (shorthand for run)
   worktree     Manage ralphai git worktrees
   status       Show pipeline and worktree status
+  stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
   purge        Delete archived artifacts from pipeline/out/
   update       Update ralphai to the latest (or specified) version

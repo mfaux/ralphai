@@ -13,6 +13,7 @@ ralphai <command> [options]
 | `prd`          | Run a PRD issue in continuous mode (shorthand for `run`)               |
 | `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
+| `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
 | `repos`        | List all known repos with pipeline summaries                           |
@@ -42,7 +43,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
+Works with: `status`, `stop`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
 
 Blocked for: `run`, `prd`, `worktree`, `init`.
 
@@ -165,6 +166,29 @@ ralphai worktree clean
 - `clean` removes completed or orphaned worktrees and archives any leftover receipt
 
 Use `ralphai run` to start or resume work.
+
+## Stop
+
+```
+ralphai stop [<slug>] [--all] [--dry-run]
+```
+
+Stops running plan runners by sending SIGTERM to their processes.
+
+```
+--all             Stop all running plan runners
+--dry-run, -n     Preview which processes would be stopped without sending signals
+```
+
+Behavior:
+
+- **No arguments, one runner active:** Auto-selects and stops it
+- **No arguments, multiple runners:** Prints an error listing active runners and asks you to specify a slug or use `--all`
+- **`<slug>`:** Stops the runner for the named plan
+- **`--all`:** Stops all running plan runners
+- **`--dry-run`:** Prints what would happen without sending any signals
+
+The runner handles SIGTERM gracefully: it finishes the current iteration, preserves work in `in-progress/<slug>/`, and exits cleanly.
 
 ## Reset
 

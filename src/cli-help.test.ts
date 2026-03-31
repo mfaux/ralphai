@@ -69,6 +69,20 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("status");
   });
 
+  it("stop --help shows stop usage", () => {
+    const result = runCli(["stop", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("stop");
+    expect(result.stdout).toContain("--all");
+    expect(result.stdout).toContain("--dry-run");
+  });
+
+  it("help text lists stop", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("stop");
+  });
+
   it("reset --help shows reset usage and flags", () => {
     const result = runCli(["reset", "--help"]);
     expect(result.exitCode).toBe(0);
