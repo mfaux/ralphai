@@ -551,6 +551,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prUrl: continuousPrUrl,
               prd,
               issueRepo,
+              learnings: accumulatedLearnings,
             });
             console.log(finalize.message);
           }
@@ -587,6 +588,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prUrl: continuousPrUrl,
               prd,
               issueRepo,
+              learnings: accumulatedLearnings,
             });
             console.log(finalize.message);
           }
@@ -954,6 +956,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prd,
               issueRepo,
               summary: prSummary,
+              learnings: accumulatedLearnings,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -970,6 +973,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prd,
               issueRepo,
               summary: prSummary,
+              learnings: accumulatedLearnings,
             });
             console.log(update.message);
           }
@@ -985,6 +989,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             issueCommentProgress,
             prd: issueFm.prd,
             summary: prSummary,
+            learnings: accumulatedLearnings,
           });
           console.log(prResult.message);
         }
@@ -1036,6 +1041,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       prd,
       issueRepo,
       summary: lastPrSummary,
+      learnings: accumulatedLearnings,
     });
     console.log(finalize.message);
   }
