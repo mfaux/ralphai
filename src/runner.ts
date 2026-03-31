@@ -32,7 +32,7 @@ import {
   getRepoLearningsPath,
   getRepoCandidatesPath,
 } from "./global-state.ts";
-import { processLearnings } from "./learnings.ts";
+import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
@@ -468,7 +468,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const agentCommand = config.agentCommand.value;
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
-  const maxLearnings = config.maxLearnings.value;
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
@@ -802,13 +801,19 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
 
       // --- Process learnings block (before completion check) ---
-      const learningsResult = processLearnings(
-        output,
-        learningsFile,
-        learningCandidatesFile,
-        maxLearnings,
-      );
-      console.log(learningsResult.message);
+      const learningsBlock = extractLearningsBlock(output);
+      if (learningsBlock === null) {
+        console.log("WARNING: No <learnings> block found in agent output.");
+      } else {
+        const learningContent = parseLearningContent(learningsBlock);
+        if (learningContent !== null) {
+          console.log(
+            `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
+          );
+        } else {
+          console.log("No learning logged this iteration.");
+        }
+      }
 
       // --- Extract and append progress block ---
       const progressContent = extractProgressBlock(output);
