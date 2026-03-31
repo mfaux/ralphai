@@ -55,7 +55,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   continuous: "RALPHAI_CONTINUOUS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
-  maxLearnings: "RALPHAI_MAX_LEARNINGS",
 };
 
 // ---------------------------------------------------------------------------
@@ -189,16 +188,6 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     input,
   );
   lines.push(`  iterationTimeout   = ${timeoutDisplay}  (${timeoutSrc})`);
-
-  // maxLearnings: 0 displays as "unlimited"
-  const maxLearnVal = config.maxLearnings.value;
-  const maxLearnDisplay = maxLearnVal > 0 ? String(maxLearnVal) : "unlimited";
-  const maxLearnSrc = sourceLabel(
-    "maxLearnings",
-    config.maxLearnings.source,
-    input,
-  );
-  lines.push(`  maxLearnings       = ${maxLearnDisplay}  (${maxLearnSrc})`);
 
   const issueSourceSrc = sourceLabel(
     "issueSource",

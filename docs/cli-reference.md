@@ -291,7 +291,6 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_ITERATION_TIMEOUT`       | `iterationTimeout`     |
-| `RALPHAI_MAX_LEARNINGS`           | `maxLearnings`         |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |

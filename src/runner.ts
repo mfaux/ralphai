@@ -27,12 +27,8 @@ import {
   type IpcMessage,
   type OutputMessage,
 } from "./ipc-protocol.ts";
-import {
-  getRepoPipelineDirs,
-  getRepoLearningsPath,
-  getRepoCandidatesPath,
-} from "./global-state.ts";
-import { processLearnings } from "./learnings.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
+import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
@@ -468,7 +464,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const agentCommand = config.agentCommand.value;
   const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
-  const maxLearnings = config.maxLearnings.value;
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
@@ -479,9 +474,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Pipeline directories (resolved from global state)
   const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
 
-  // Learnings file paths (resolved from global state)
-  const learningsFile = getRepoLearningsPath(cwd);
-  const learningCandidatesFile = getRepoCandidatesPath(cwd);
+  // Accumulated learnings across iterations (in-memory)
+  const accumulatedLearnings: string[] = [];
 
   // --- Dry-run mode ---
   if (dryRun) {
@@ -557,6 +551,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prUrl: continuousPrUrl,
               prd,
               issueRepo,
+              learnings: accumulatedLearnings,
             });
             console.log(finalize.message);
           }
@@ -593,6 +588,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prUrl: continuousPrUrl,
               prd,
               issueRepo,
+              learnings: accumulatedLearnings,
             });
             console.log(finalize.message);
           }
@@ -772,8 +768,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         progressFile,
         feedbackCommands,
         scopeHint,
-        learningsFile,
-        learningCandidatesFile,
+        learnings: accumulatedLearnings,
         planFormat,
       });
 
@@ -802,13 +797,20 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
 
       // --- Process learnings block (before completion check) ---
-      const learningsResult = processLearnings(
-        output,
-        learningsFile,
-        learningCandidatesFile,
-        maxLearnings,
-      );
-      console.log(learningsResult.message);
+      const learningsBlock = extractLearningsBlock(output);
+      if (learningsBlock === null) {
+        console.log("WARNING: No <learnings> block found in agent output.");
+      } else {
+        const learningContent = parseLearningContent(learningsBlock);
+        if (learningContent !== null) {
+          accumulatedLearnings.push(learningContent);
+          console.log(
+            `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
+          );
+        } else {
+          console.log("No learning logged this iteration.");
+        }
+      }
 
       // --- Extract and append progress block ---
       const progressContent = extractProgressBlock(output);
@@ -954,6 +956,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prd,
               issueRepo,
               summary: prSummary,
+              learnings: accumulatedLearnings,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -970,6 +973,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prd,
               issueRepo,
               summary: prSummary,
+              learnings: accumulatedLearnings,
             });
             console.log(update.message);
           }
@@ -985,6 +989,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             issueCommentProgress,
             prd: issueFm.prd,
             summary: prSummary,
+            learnings: accumulatedLearnings,
           });
           console.log(prResult.message);
         }
@@ -1036,6 +1041,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       prd,
       issueRepo,
       summary: lastPrSummary,
+      learnings: accumulatedLearnings,
     });
     console.log(finalize.message);
   }

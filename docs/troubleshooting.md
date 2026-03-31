@@ -8,7 +8,7 @@ Ralphai aborts when it detects 3 consecutive iterations with no new commits (con
 
 **Steps:**
 
-1. Check `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
+1. Check the **Learnings** section on the draft PR for repeated errors — if the agent logged the same mistake multiple times, the plan likely needs adjustment.
 2. Open the progress file in `pipeline/in-progress/<slug>/progress.md` to see what the agent attempted and where it got stuck.
 3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the current step, add hints, or break it into smaller subtasks.
 4. Resume: `ralphai run --resume`
@@ -17,17 +17,9 @@ The `--resume` flag auto-commits any dirty working tree state and continues from
 
 ## "Agent keeps making the same mistake"
 
-Add the mistake to `LEARNINGS.md` (in `~/.ralphai/repos/<id>/`) with a clear description of what went wrong, why, and how to avoid it. Ralphai includes this file in every prompt, so the agent will see it in the next iteration.
+Learnings are extracted from the agent's output automatically and surfaced in the **Learnings** section of the draft PR. Ralphai also injects them into subsequent iterations as anti-repeat memory, so the agent sees past mistakes without manual intervention.
 
-```markdown
-### 2025-01-15 — Describe the mistake briefly
-
-**What went wrong:** The agent used `console.warn` for messages that tests needed to capture.
-
-**Root cause:** `execFileSync` only returns stdout; stderr is discarded on success.
-
-**Fix / Prevention:** Use `console.log` with a styled prefix for messages that need to appear in test output.
-```
+If the agent still repeats an error, add a targeted hint directly to the plan file or to `AGENTS.md` so it appears in every prompt.
 
 ## "Build/test didn't run"
 

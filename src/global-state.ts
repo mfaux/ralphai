@@ -91,26 +91,6 @@ export function getRepoPipelineDirs(
   return { backlogDir, wipDir, archiveDir };
 }
 
-/**
- * Returns the path to the LEARNINGS.md file in the repo state dir.
- */
-export function getRepoLearningsPath(
-  cwd: string,
-  env?: Record<string, string | undefined>,
-): string {
-  return join(resolveRepoStateDir(cwd, env), "LEARNINGS.md");
-}
-
-/**
- * Returns the path to the LEARNING_CANDIDATES.md file in the repo state dir.
- */
-export function getRepoCandidatesPath(
-  cwd: string,
-  env?: Record<string, string | undefined>,
-): string {
-  return join(resolveRepoStateDir(cwd, env), "LEARNING_CANDIDATES.md");
-}
-
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

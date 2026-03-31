@@ -585,7 +585,7 @@ async function teardownRalphai(
     const confirmed = await clack.confirm({
       message:
         "This will permanently delete the global state for this repo. " +
-        "Any plans and learnings will be lost. Continue?",
+        "Any plans will be lost. Continue?",
     });
 
     if (clack.isCancel(confirmed) || !confirmed) {

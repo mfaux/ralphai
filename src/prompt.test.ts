@@ -47,8 +47,7 @@ describe("assemblePrompt", () => {
       progressFile: "progress.md",
       feedbackCommands: "",
       scopeHint: "",
-      learningsFile: join(ctx.dir, "LEARNINGS.md"),
-      learningCandidatesFile: join(ctx.dir, "LEARNING_CANDIDATES.md"),
+      learnings: [],
       ...overrides,
     };
   }
@@ -96,8 +95,7 @@ describe("assemblePrompt", () => {
   it("includes learnings block template", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("<learnings>");
-    expect(prompt).toContain("status: logged");
-    expect(prompt).toContain("status: none");
+    expect(prompt).toContain("<learnings>none</learnings>");
     expect(prompt).toContain(
       "The <learnings> block is mandatory in every response",
     );
@@ -116,47 +114,79 @@ describe("assemblePrompt", () => {
     expect(prompt).not.toContain("scoped to");
   });
 
-  // --- Learnings integration ---
+  // --- Learnings integration (in-memory) ---
 
-  it("omits learnings steps when LEARNINGS.md does not exist", () => {
-    const prompt = assemblePrompt(baseOptions());
-    // Step 6 should be commit, not learnings
-    expect(prompt).toContain("6. Stage and commit ALL changes");
-    expect(prompt).not.toContain("advisory memory");
-    expect(prompt).not.toContain("LEARNING_CANDIDATES");
+  it("omits learnings context when learnings array is empty", () => {
+    const prompt = assemblePrompt(baseOptions({ learnings: [] }));
+    expect(prompt).not.toContain("Learnings from previous iterations");
+    expect(prompt).not.toContain("Apply any relevant learnings");
   });
 
-  it("includes learnings steps when LEARNINGS.md exists", () => {
-    const learningsPath = join(ctx.dir, "LEARNINGS.md");
-    writeFileSync(learningsPath, "# Learnings\n");
-
-    const prompt = assemblePrompt(baseOptions());
-    // Learnings hint in step 1
-    expect(prompt).toContain("rolling anti-repeat memory");
-    // Learnings reference uses label, not absolute path
-    expect(prompt).toContain(`<file path="LEARNINGS.md">`);
-    expect(prompt).not.toContain(`<file path="${learningsPath}">`);
-    // Learnings steps 6-9
-    expect(prompt).toContain("6. Read");
-    expect(prompt).toContain("advisory memory");
-    expect(prompt).toContain("7. If you make a mistake");
-    expect(prompt).toContain("8. If a lesson appears durable");
-    expect(prompt).toContain("9. Never edit AGENTS.md");
-    // Commit step shifts to 10
-    expect(prompt).toContain("10. Stage and commit ALL changes");
-  });
-
-  it("does not expose absolute paths for learnings files", () => {
-    const learningsPath = join(ctx.dir, "LEARNINGS.md");
-    writeFileSync(learningsPath, "# Learnings\n");
-    const candidatesPath = join(ctx.dir, "LEARNING_CANDIDATES.md");
-
+  it("includes accumulated learnings with advisory framing when non-empty", () => {
     const prompt = assemblePrompt(
-      baseOptions({ learningCandidatesFile: candidatesPath }),
+      baseOptions({
+        learnings: [
+          "Always run type-check before committing.",
+          "Use path.join() for cross-platform paths.",
+        ],
+      }),
     );
-    // Labels are used, not absolute paths
-    expect(prompt).not.toContain(candidatesPath);
-    expect(prompt).not.toContain(learningsPath);
+    expect(prompt).toContain("Learnings from previous iterations");
+    expect(prompt).toContain("guidance, not ground truth");
+    expect(prompt).toContain("Always run type-check before committing.");
+    expect(prompt).toContain("Use path.join() for cross-platform paths.");
+    expect(prompt).toContain("Apply any relevant learnings");
+  });
+
+  it("does not reference LEARNINGS.md or LEARNING_CANDIDATES.md file paths", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        learnings: ["Some learning"],
+      }),
+    );
+    expect(prompt).not.toContain("LEARNINGS.md");
+    expect(prompt).not.toContain("LEARNING_CANDIDATES.md");
+  });
+
+  it("does not reference learnings file paths when learnings are empty", () => {
+    const prompt = assemblePrompt(baseOptions({ learnings: [] }));
+    expect(prompt).not.toContain("LEARNINGS.md");
+    expect(prompt).not.toContain("LEARNING_CANDIDATES.md");
+  });
+
+  it("instructs freeform prose in learnings block, not structured fields", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("freeform prose");
+    expect(prompt).toContain("durable, generalizable lesson");
+    // Should NOT contain the old structured field template
+    expect(prompt).not.toContain("status: logged");
+    expect(prompt).not.toContain("date: YYYY-MM-DD");
+    expect(prompt).not.toContain("title: Short description");
+    expect(prompt).not.toContain("root_cause:");
+    expect(prompt).not.toContain("prevention:");
+  });
+
+  it("instructs agent to write <learnings>none</learnings> when nothing to report", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("<learnings>none</learnings>");
+  });
+
+  it("instructs agent to only report durable generalizable lessons", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("durable, generalizable lesson");
+    expect(prompt).toContain("Do not log one-off typos or dead ends");
+  });
+
+  it("commit step is always step 6 regardless of learnings", () => {
+    const withoutLearnings = assemblePrompt(baseOptions({ learnings: [] }));
+    expect(withoutLearnings).toContain("6. Stage and commit ALL changes");
+    expect(withoutLearnings).not.toContain("10. Stage and commit ALL changes");
+
+    const withLearnings = assemblePrompt(
+      baseOptions({ learnings: ["some lesson"] }),
+    );
+    expect(withLearnings).toContain("6. Stage and commit ALL changes");
+    expect(withLearnings).not.toContain("10. Stage and commit ALL changes");
   });
 
   // --- Inline file references ---
@@ -213,13 +243,6 @@ describe("assemblePrompt", () => {
   });
 
   it("does not instruct agents to update progress.md directly", () => {
-    const prompt = assemblePrompt(baseOptions());
-    expect(prompt).not.toContain("Update progress.md");
-  });
-
-  it("does not instruct agents to update progress.md with learnings", () => {
-    const learningsPath = join(ctx.dir, "LEARNINGS.md");
-    writeFileSync(learningsPath, "# Learnings\n");
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).not.toContain("Update progress.md");
   });

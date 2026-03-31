@@ -10,8 +10,6 @@ import {
   resolveRepoStateDir,
   ensureRepoStateDir,
   getRepoPipelineDirs,
-  getRepoLearningsPath,
-  getRepoCandidatesPath,
 } from "./global-state.ts";
 
 describe("getRalphaiHome", () => {
@@ -185,27 +183,5 @@ describe("getRepoPipelineDirs", () => {
     expect(dirs.backlogDir).toContain(join("pipeline", "backlog"));
     expect(dirs.wipDir).toContain(join("pipeline", "in-progress"));
     expect(dirs.archiveDir).toContain(join("pipeline", "out"));
-  });
-});
-
-describe("getRepoLearningsPath", () => {
-  const ctx = useTempDir();
-
-  it("returns LEARNINGS.md inside the repo state dir", () => {
-    const home = join(ctx.dir, "ralphai-home");
-    const p = getRepoLearningsPath(ctx.dir, { RALPHAI_HOME: home });
-    expect(p).toMatch(/LEARNINGS\.md$/);
-    expect(p.startsWith(home)).toBe(true);
-  });
-});
-
-describe("getRepoCandidatesPath", () => {
-  const ctx = useTempDir();
-
-  it("returns LEARNING_CANDIDATES.md inside the repo state dir", () => {
-    const home = join(ctx.dir, "ralphai-home");
-    const p = getRepoCandidatesPath(ctx.dir, { RALPHAI_HOME: home });
-    expect(p).toMatch(/LEARNING_CANDIDATES\.md$/);
-    expect(p.startsWith(home)).toBe(true);
   });
 });
