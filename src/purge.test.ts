@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { existsSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
 import {

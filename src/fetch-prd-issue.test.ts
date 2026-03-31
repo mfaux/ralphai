@@ -1,24 +1,24 @@
 /**
  * Unit tests for fetchPrdIssue() — auto-detection of a single PRD issue.
  *
- * Uses vi.mock to control `child_process.execSync` so we can test the
+ * Uses mock.module to control `child_process.execSync` so we can test the
  * 0, 1, and multiple-result paths without requiring a real GitHub repo.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, mock, beforeEach } from "bun:test";
 
 // ---------------------------------------------------------------------------
 // Mock child_process.execSync
 // ---------------------------------------------------------------------------
 
-const mockExecSync = vi.fn();
+const mockExecSync = mock();
 
-vi.mock("child_process", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("child_process")>()),
+mock.module("child_process", () => ({
+  ...require("child_process"),
   execSync: (...args: unknown[]) => mockExecSync(...args),
 }));
 
 // Import AFTER mocking so the module picks up the mock
-import { fetchPrdIssue } from "./issues.ts";
+const { fetchPrdIssue } = await import("./issues.ts");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,7 +56,7 @@ function mockGhUnavailable(): void {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mockExecSync.mockReset();
 });
 
 describe("fetchPrdIssue", () => {

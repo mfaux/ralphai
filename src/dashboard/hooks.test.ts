@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { filterPlans, SPINNER_FRAMES } from "./hooks.ts";
 import type { PlanInfo } from "./types.ts";
 

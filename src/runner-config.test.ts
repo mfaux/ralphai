@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "bun:test";
 import { existsSync, rmSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -10,18 +10,16 @@ let mockPipelineDirs: {
   archiveDir: string;
 };
 
-vi.mock("../global-state.ts", () => ({
+import { mock } from "bun:test";
+
+mock.module("../global-state.ts", () => ({
   getRepoPipelineDirs: () => mockPipelineDirs,
   listAllRepos: () => [],
 }));
 
-// Now import the functions under test (after vi.mock is declared).
-import {
-  loadPlans,
-  loadPlansAsync,
-  loadPlanContent,
-  loadPlanContentAsync,
-} from "./data.ts";
+// Now import the functions under test (after mock.module is declared).
+const { loadPlans, loadPlansAsync, loadPlanContent, loadPlanContentAsync } =
+  await import("./data.ts");
 import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------

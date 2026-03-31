@@ -1,5 +1,13 @@
 import { join } from "path";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  mock,
+  spyOn,
+  beforeEach,
+  afterEach,
+} from "bun:test";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be set up before importing the module under test
@@ -13,52 +21,54 @@ const BACKLOG = join("/repo", ".ralphai", "pipeline", "backlog");
 const WIP = join("/repo", ".ralphai", "pipeline", "wip");
 const ARCHIVE = join("/repo", ".ralphai", "pipeline", "out");
 
-vi.mock("child_process", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("child_process")>()),
-  execSync: vi.fn(),
-  spawn: vi.fn(() => ({
-    pid: 12345,
-    unref: vi.fn(),
-  })),
+const mockExecSync = mock();
+const mockSpawn = mock(() => ({
+  pid: 12345,
+  unref: mock(),
+}));
+const mockExistsSync = mock(() => true);
+const mockMkdirSync = mock();
+const mockRenameSync = mock();
+const mockRmSync = mock();
+
+mock.module("child_process", () => ({
+  ...require("child_process"),
+  execSync: mockExecSync,
+  spawn: mockSpawn,
 }));
 
-vi.mock("fs", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("fs")>()),
-  existsSync: vi.fn(() => true),
-  mkdirSync: vi.fn(),
-  renameSync: vi.fn(),
-  rmSync: vi.fn(),
+mock.module("fs", () => ({
+  ...require("fs"),
+  existsSync: mockExistsSync,
+  mkdirSync: mockMkdirSync,
+  renameSync: mockRenameSync,
+  rmSync: mockRmSync,
 }));
 
-vi.mock("../global-state.ts", () => ({
-  getRepoPipelineDirs: vi.fn(() => ({
+const realGlobalState = require("../global-state.ts");
+
+mock.module("../global-state.ts", () => ({
+  ...realGlobalState,
+  getRepoPipelineDirs: mock(() => ({
     backlogDir: join("/repo", ".ralphai", "pipeline", "backlog"),
     wipDir: join("/repo", ".ralphai", "pipeline", "wip"),
     archiveDir: join("/repo", ".ralphai", "pipeline", "out"),
   })),
 }));
 
-import { execSync, spawn } from "child_process";
-import { existsSync, mkdirSync, renameSync, rmSync } from "fs";
-import {
-  spawnRunner,
-  resetPlan,
-  purgePlan,
-  removeWorktree,
-  stopRunner,
-} from "./actions.ts";
-
-// Cast mocked imports for type-safe access to mock methods
-const mockExecSync = execSync as unknown as ReturnType<typeof vi.fn>;
-const mockSpawn = spawn as unknown as ReturnType<typeof vi.fn>;
-const mockExistsSync = existsSync as unknown as ReturnType<typeof vi.fn>;
-const mockMkdirSync = mkdirSync as unknown as ReturnType<typeof vi.fn>;
+const { spawnRunner, resetPlan, purgePlan, removeWorktree, stopRunner } =
+  await import("./actions.ts");
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  // Restore defaults after clearAllMocks
+  mockExecSync.mockReset();
+  mockSpawn.mockReset();
+  mockExistsSync.mockReset();
+  mockMkdirSync.mockReset();
+  mockRenameSync.mockReset();
+  mockRmSync.mockReset();
+  // Restore defaults after reset
   mockExistsSync.mockReturnValue(true);
-  mockSpawn.mockReturnValue({ pid: 12345, unref: vi.fn() });
+  mockSpawn.mockReturnValue({ pid: 12345, unref: mock() });
 });
 
 // ---------------------------------------------------------------------------
@@ -123,26 +133,29 @@ describe("resetPlan", () => {
     const result = resetPlan(REPO, "add-auth");
 
     expect(result).toBe(true);
-    expect(mkdirSync).toHaveBeenCalledWith(BACKLOG, {
+    expect(mockMkdirSync).toHaveBeenCalledWith(BACKLOG, {
       recursive: true,
     });
     // Removes progress.md and receipt.txt
-    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "progress.md"), {
-      force: true,
-    });
-    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "receipt.txt"), {
-      force: true,
-    });
-    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth", "runner.pid"), {
-      force: true,
-    });
+    expect(mockRmSync).toHaveBeenCalledWith(
+      join(WIP, "add-auth", "progress.md"),
+      { force: true },
+    );
+    expect(mockRmSync).toHaveBeenCalledWith(
+      join(WIP, "add-auth", "receipt.txt"),
+      { force: true },
+    );
+    expect(mockRmSync).toHaveBeenCalledWith(
+      join(WIP, "add-auth", "runner.pid"),
+      { force: true },
+    );
     // Renames plan file
-    expect(renameSync).toHaveBeenCalledWith(
+    expect(mockRenameSync).toHaveBeenCalledWith(
       join(WIP, "add-auth", "add-auth.md"),
       join(BACKLOG, "add-auth.md"),
     );
     // Removes slug directory
-    expect(rmSync).toHaveBeenCalledWith(join(WIP, "add-auth"), {
+    expect(mockRmSync).toHaveBeenCalledWith(join(WIP, "add-auth"), {
       recursive: true,
       force: true,
     });
@@ -173,7 +186,7 @@ describe("purgePlan", () => {
     const result = purgePlan(REPO, "old-plan");
 
     expect(result).toBe(true);
-    expect(rmSync).toHaveBeenCalledWith(join(ARCHIVE, "old-plan"), {
+    expect(mockRmSync).toHaveBeenCalledWith(join(ARCHIVE, "old-plan"), {
       recursive: true,
       force: true,
     });
@@ -197,7 +210,7 @@ describe("spawnRunner", () => {
     expect(pid).toBe(12345);
     expect(mockSpawn).toHaveBeenCalledTimes(1);
 
-    const [cmd, args, opts] = mockSpawn.mock.calls[0]!;
+    const [cmd, args, opts] = (mockSpawn.mock.calls as unknown[][])[0]!;
     expect(args).toEqual(expect.arrayContaining(["run", "--plan=my-plan"]));
     expect(opts).toMatchObject({
       cwd: REPO,
@@ -209,7 +222,9 @@ describe("spawnRunner", () => {
   it("calls unref on the child process", () => {
     spawnRunner(REPO, "my-plan");
 
-    const child = mockSpawn.mock.results[0]!.value;
+    const child = (
+      mockSpawn.mock.results[0] as { value: { unref: ReturnType<typeof mock> } }
+    ).value;
     expect(child.unref).toHaveBeenCalled();
   });
 
@@ -227,10 +242,10 @@ describe("spawnRunner", () => {
 // ---------------------------------------------------------------------------
 
 describe("stopRunner", () => {
-  let killSpy: ReturnType<typeof vi.spyOn>;
+  let killSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+    killSpy = spyOn(process, "kill").mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -247,7 +262,7 @@ describe("stopRunner", () => {
     // SIGTERM
     expect(killSpy).toHaveBeenCalledWith(42, "SIGTERM");
     // PID file should NOT be deleted (runner cleans up on exit)
-    expect(rmSync).not.toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
+    expect(mockRmSync).not.toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
       force: true,
     });
   });
@@ -268,7 +283,7 @@ describe("stopRunner", () => {
     const result = stopRunner(99, slugDir);
 
     expect(result).toBe("already-exited");
-    expect(rmSync).toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
+    expect(mockRmSync).toHaveBeenCalledWith(join(slugDir, "runner.pid"), {
       force: true,
     });
   });

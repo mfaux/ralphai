@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";

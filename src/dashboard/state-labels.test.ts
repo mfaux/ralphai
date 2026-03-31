@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { formatCounts } from "./RepoSelector.tsx";
 import { getPlanStateLabel } from "./state-labels.ts";
 import type { RepoSummary } from "../global-state.ts";
