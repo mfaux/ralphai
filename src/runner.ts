@@ -27,11 +27,7 @@ import {
   type IpcMessage,
   type OutputMessage,
 } from "./ipc-protocol.ts";
-import {
-  getRepoPipelineDirs,
-  getRepoLearningsPath,
-  getRepoCandidatesPath,
-} from "./global-state.ts";
+import { getRepoPipelineDirs } from "./global-state.ts";
 import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
@@ -478,9 +474,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Pipeline directories (resolved from global state)
   const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
 
-  // Learnings file paths (resolved from global state)
-  const learningsFile = getRepoLearningsPath(cwd);
-  const learningCandidatesFile = getRepoCandidatesPath(cwd);
+  // Accumulated learnings across iterations (in-memory)
+  const accumulatedLearnings: string[] = [];
 
   // --- Dry-run mode ---
   if (dryRun) {
@@ -771,8 +766,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         progressFile,
         feedbackCommands,
         scopeHint,
-        learningsFile,
-        learningCandidatesFile,
+        learnings: accumulatedLearnings,
         planFormat,
       });
 
@@ -807,6 +801,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       } else {
         const learningContent = parseLearningContent(learningsBlock);
         if (learningContent !== null) {
+          accumulatedLearnings.push(learningContent);
           console.log(
             `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
           );

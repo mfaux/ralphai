@@ -10,6 +10,7 @@
  */
 import { existsSync, readFileSync } from "fs";
 import type { PlanFormat } from "./plan-detection.ts";
+import { formatLearningsForPrompt } from "./learnings.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,10 +26,8 @@ export interface AssemblePromptOptions {
   feedbackCommands: string;
   /** Monorepo scope hint (may be empty). */
   scopeHint: string;
-  /** Path to LEARNINGS.md (in global state; checked for existence). */
-  learningsFile: string;
-  /** Path to LEARNING_CANDIDATES.md (in global state). */
-  learningCandidatesFile: string;
+  /** Accumulated learnings from prior iterations (in-memory). */
+  learnings: string[];
   /** Detected plan format — drives prompt wording for step 2 and progress blocks. */
   planFormat?: PlanFormat;
 }
@@ -72,8 +71,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     progressFile,
     feedbackCommands,
     scopeHint,
-    learningsFile,
-    learningCandidatesFile,
+    learnings,
     planFormat = "tasks",
   } = options;
 
@@ -83,36 +81,24 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   // see external filesystem paths and don't try to re-read/write them.
   const planLabel = "plan.md";
   const progressLabel = "progress.md";
-  const learningsLabel = "LEARNINGS.md";
-  const learningCandidatesLabel = "LEARNING_CANDIDATES.md";
 
   const planRef = formatFileRef(planFile, planLabel);
   const progressRef = formatFileRef(progressFile, progressLabel);
-  const hasLearnings = existsSync(learningsFile);
 
   // --- File references header ---
-  let fileRefs = ` ${planRef} ${progressRef}`;
-  let learningsHint = "";
-  let learningsStep = "";
+  const fileRefs = ` ${planRef} ${progressRef}`;
 
-  if (hasLearnings) {
-    const learningsRef = formatFileRef(learningsFile, learningsLabel);
-    fileRefs += ` ${learningsRef}`;
-    learningsHint =
-      ` Also read ${learningsLabel} as a rolling anti-repeat memory.` +
-      ` Apply durable lessons, but do not overfit to stale or overly specific anecdotes.`;
-    learningsStep = buildLearningsStep(learningsLabel, learningCandidatesLabel);
-  }
+  // --- Learnings context (in-memory, not file-based) ---
+  const learningsContext = formatLearningsForPrompt(learnings);
+  const learningsHint =
+    learnings.length > 0
+      ? " Apply any relevant learnings from previous iterations included below."
+      : "";
 
   // --- Feedback commands text ---
   const feedbackText = feedbackCommands
     ? feedbackCommands.split(",").join(", ")
     : "";
-
-  // --- Step numbering (shifts when learnings steps are present) ---
-  // Without learnings: steps 1-5 (core) + 6 (commit)
-  // With learnings: steps 1-5 (core) + 6-9 (learnings) + 10 (commit)
-  const commitStepNum = hasLearnings ? "10" : "6";
 
   // --- Mode-aware instructions ---
   const feedbackStep = feedbackText
@@ -160,8 +146,12 @@ Implemented input validation (3.1), error messages (3.2), and updated tests (3.3
 </progress>
 Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
 
+  // --- Learnings context section (injected before instructions when non-empty) ---
+  const learningsSection =
+    learningsContext.length > 0 ? `\n${learningsContext}\n` : "";
+
   // --- Assemble the prompt ---
-  return `${fileRefs}${scopeHint}
+  return `${fileRefs}${scopeHint}${learningsSection}
 1. Read the referenced files and the progress file.${learningsHint}
 2. ${step2}
 3. Implement it with small, focused changes. Testing strategy depends on task type:
@@ -173,68 +163,20 @@ Ralphai extracts this block and appends it to the progress file automatically. D
    - README.md (commands, usage, feature descriptions)
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
-   Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.${learningsStep}
-${commitStepNum}. ${commitInstruction}
+   Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.
+6. ${commitInstruction}
 Work on the next incomplete task. Complete it fully (including all its subtasks) before ending your response.
 If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
 When you output COMPLETE, also include a <pr-summary> block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 <pr-summary>
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
 </pr-summary>
-REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this iteration, use:
+REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. Use:
 <learnings>
-<entry>
-status: logged
-date: YYYY-MM-DD
-title: Short description
-what: What went wrong
-root_cause: Why it happened
-prevention: How to avoid it
-</entry>
+Your freeform prose lesson here.
 </learnings>
 If no learnings this iteration, use:
-<learnings>
-<entry>
-status: none
-</entry>
-</learnings>
+<learnings>none</learnings>
 The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
 ${progressBlock}`;
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build the learnings instruction steps (steps 6-9 when learnings exist).
- */
-function buildLearningsStep(
-  learningsFile: string,
-  learningCandidatesFile: string,
-): string {
-  return `
-6. Read ${learningsFile} before making changes. Treat it as advisory memory, not as ground truth.
-   - Apply durable repo and workflow constraints immediately.
-   - Prefer general rules over narrow anecdotes.
-   - Be cautious with old, task-specific, or overly detailed entries.
-   - If multiple entries overlap, follow the shared rule rather than the most specific incident.
-
-7. If you make a mistake, log it via the <learnings> block at the end of your response (see below). Do NOT edit ${learningsFile} directly — ralphai persists logged entries automatically.
-   Each entry must include:
-   - Date
-   - What went wrong
-   - Root cause
-   - Fix / Prevention
-
-   When writing learnings:
-   - Generalize the incident into a reusable rule.
-   - Keep the entry concise.
-   - Do not log one-off typos, incidental dead ends, or highly specific details unless they reveal a reusable pattern.
-   - Do not create duplicate entries; merge or refine an existing entry when the lesson already exists.
-
-8. If a lesson appears durable, repo-specific, or useful beyond the current iteration, do not edit AGENTS.md.
-   Instead, note it as a candidate in your <learnings> block for later human review.
-
-9. Never edit AGENTS.md automatically based on learnings or candidates.`;
 }
