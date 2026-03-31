@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "bun:test";
+import { stripAnsi } from "./utils.ts";
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -56,10 +57,6 @@ function cleanupTempDir(testDir: string): void {
 }
 
 const CLI_PATH = join(import.meta.dirname, "cli.ts");
-
-function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
-}
 
 export function stripLogo(str: string): string {
   // ralphai has no fancy logo, but strip any leading blank lines
