@@ -111,6 +111,7 @@ interface RalphaiOptions {
   repo?: string; // --repo=<name-or-path>
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
   prdNumber?: string; // positional arg for `prd` subcommand
+  once: boolean; // --once (for status auto-watch)
   stopSlug?: string; // positional arg for `stop` subcommand
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
@@ -199,6 +200,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let force = false;
   let clean = false;
   let all = false;
+  let once = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
@@ -247,6 +249,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       clean = true;
     } else if (arg === "--all") {
       all = true;
+    } else if (arg === "--once") {
+      once = true;
     } else if (arg === "--dry-run" || arg === "-n") {
       // Handled by specific subcommands (run, stop) — skip here
     } else if (arg === "--help" || arg === "-h") {
@@ -298,6 +302,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     force,
     clean,
     all,
+    once,
     agentCommand,
     targetDir,
     repo,
@@ -1154,7 +1159,7 @@ function showRalphaiHelp(): void {
     `  ${TEXT}worktree${RESET}    ${DIM}Run in an isolated git worktree${RESET}`,
   );
   console.log(
-    `  ${TEXT}status${RESET}      ${DIM}Show pipeline and worktree status${RESET}`,
+    `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
   );
   console.log(
     `  ${TEXT}stop${RESET}        ${DIM}Stop running plan(s)${RESET}`,
@@ -1354,7 +1359,7 @@ export async function runRalphai(args: string[]): Promise<void> {
         showStatusHelp();
         return;
       }
-      runRalphaiStatus(cwd);
+      runRalphaiStatus({ cwd, once: options.once });
       break;
     case "stop":
       if (helpRequested) {
@@ -1857,9 +1862,19 @@ function showInitHelp(): void {
 }
 
 function showStatusHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai status`);
+  console.log(`${TEXT}Usage:${RESET} ralphai status [--once] [--no-color]`);
   console.log();
-  console.log(`${DIM}Show pipeline and worktree status.${RESET}`);
+  console.log(
+    `${DIM}Show pipeline status. Auto-refreshes every 3s in a terminal.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--once${RESET}      ${DIM}Print once and exit (default in non-TTY)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--no-color${RESET}  ${DIM}Disable color output${RESET}`,
+  );
 }
 
 function showResetHelp(): void {
@@ -2481,7 +2496,8 @@ function runRalphaiDoctor(cwd: string): void {
 // extractScope and extractDependsOn are imported from ./frontmatter.ts
 export { extractScope, extractDependsOn } from "./frontmatter.ts";
 
-function runRalphaiStatus(cwd: string): void {
+export function runRalphaiStatus(opts: { cwd: string; once?: boolean }): void {
+  const { cwd, once } = opts;
   // Verify config exists (global state)
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
@@ -2490,6 +2506,33 @@ function runRalphaiStatus(cwd: string): void {
     process.exit(1);
   }
 
+  const isTTY = process.stdout.isTTY === true;
+
+  // If non-TTY or --once, print once and return
+  if (!isTTY || once) {
+    printStatusOnce(cwd);
+    return;
+  }
+
+  // Auto-watch mode: clear screen and reprint every 3 seconds
+  const print = () => {
+    process.stdout.write("\x1b[2J\x1b[H"); // clear screen + move cursor to top
+    printStatusOnce(cwd);
+  };
+
+  print();
+  const interval = setInterval(print, 3000);
+
+  const cleanup = () => {
+    clearInterval(interval);
+    process.exit(0);
+  };
+
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+}
+
+function printStatusOnce(cwd: string): void {
   const {
     backlogDir,
     wipDir: inProgressDir,

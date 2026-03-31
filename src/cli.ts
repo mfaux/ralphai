@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "fs";
 import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { runRalphai } from "./ralphai.ts";
+import { runRalphai, runRalphaiStatus } from "./ralphai.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 import { getConfigFilePath } from "./config.ts";
@@ -42,7 +42,7 @@ ${BOLD}Commands:${RESET}
   run          Create or reuse a worktree and run a plan
   prd          Run a PRD issue in continuous mode (shorthand for run)
   worktree     Manage ralphai git worktrees
-  status       Show pipeline and worktree status
+  status       Show pipeline status (auto-refreshes in terminal)
   stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
   purge        Delete archived artifacts from pipeline/out/
@@ -62,7 +62,7 @@ ${BOLD}Options:${RESET}
 Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} ralphai               ${DIM}# open the interactive dashboard${RESET}
+  ${DIM}$${RESET} ralphai               ${DIM}# show pipeline status (auto-refreshes in terminal)${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
   ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}
   ${DIM}$${RESET} ralphai worktree list ${DIM}# show active worktrees${RESET}
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   }
 
   if (args.length === 0) {
-    // Launch interactive dashboard when running in a TTY
+    // Show pipeline status when no subcommand is given
     if (process.stdout.isTTY && process.stdin.isTTY) {
       // Nudge init if we're in an un-initialized git repo
       if (
@@ -110,11 +110,10 @@ async function main(): Promise<void> {
           await runRalphai(["init"]);
           return;
         }
-        // User declined — fall through to dashboard
+        // User declined — fall through to status
       }
 
-      const { launchDashboard } = await import("./dashboard/index.ts");
-      launchDashboard();
+      runRalphaiStatus({ cwd: process.cwd() });
       return;
     }
     // Non-interactive: show help text
