@@ -145,6 +145,7 @@ describe("formatShowConfig", () => {
     const output = formatShowConfig(defaultInput());
     expect(output).not.toContain("  issueLabel");
     expect(output).not.toContain("  issueInProgressLabel");
+    expect(output).not.toContain("  issueDoneLabel");
     expect(output).not.toContain("  issueRepo");
     expect(output).not.toContain("  issueCommentProgress");
   });
@@ -160,6 +161,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain(
       "  issueInProgressLabel = ralphai:in-progress  (default)",
     );
+    expect(output).toContain("  issueDoneLabel     = ralphai:done  (default)");
     expect(output).toContain(
       "  issueRepo          = <auto-detect>  (default (auto-detect))",
     );

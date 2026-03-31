@@ -135,6 +135,7 @@ What it does:
 --issue-source=<source>           Issue source: 'none' or 'github' (default: none)
 --issue-label=<label>             Label to filter issues (default: ralphai)
 --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)
+--issue-done-label=<label>       Label applied when issue is done (default: ralphai:done)
 --issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
 --issue-comment-progress=<bool>   Comment on issue during run (default: true)
 ```
@@ -295,6 +296,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_SOURCE`            | `issueSource`          |
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
+| `RALPHAI_ISSUE_DONE_LABEL`        | `issueDoneLabel`       |
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 

@@ -229,6 +229,7 @@ function makeResolvedConfig(
     issueSource: "none",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
+    issueDoneLabel: "ralphai:done",
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
