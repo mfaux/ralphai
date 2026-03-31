@@ -43,6 +43,8 @@ export interface CreatePrOptions {
   prd?: number;
   /** Agent-generated PR description from `<pr-summary>` block. */
   summary?: string;
+  /** Accumulated learnings from agent runs to include in PR body. */
+  learnings?: string[];
 }
 
 export interface ContinuousPrOptions {
@@ -57,6 +59,8 @@ export interface ContinuousPrOptions {
   issueRepo?: string;
   /** Agent-generated PR description from `<pr-summary>` block. */
   summary?: string;
+  /** Accumulated learnings from agent runs to include in PR body. */
+  learnings?: string[];
 }
 
 export interface ArchiveRunOptions {
@@ -186,6 +190,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     issueNumber: isGitHub ? options.issueNumber : undefined,
     prRepo,
     summary: options.summary,
+    learnings: options.learnings,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
@@ -236,6 +241,7 @@ export function buildContinuousPrBody(
     issueRepo?: string;
     prRepo?: string;
     summary?: string;
+    learnings?: string[];
   },
 ): string {
   const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
@@ -273,7 +279,7 @@ export function createContinuousPr(
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo },
+    { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
@@ -320,7 +326,13 @@ export function updateContinuousPr(
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo, summary: options.summary },
+    {
+      prdNumber: prd?.number,
+      issueRepo,
+      prRepo,
+      summary: options.summary,
+      learnings: options.learnings,
+    },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   if (
@@ -348,7 +360,13 @@ export function finalizeContinuousPr(
     baseBranch,
     headBranch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo, summary: options.summary },
+    {
+      prdNumber: prd?.number,
+      issueRepo,
+      prRepo,
+      summary: options.summary,
+      learnings: options.learnings,
+    },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
 

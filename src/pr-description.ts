@@ -9,6 +9,7 @@
  * followed by issue references and a technical changes breakdown.
  */
 import { execSync } from "child_process";
+import { formatLearningsForPr } from "./learnings.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -222,6 +223,7 @@ export function buildPrBody(
     issueNumber?: number;
     prRepo?: string;
     summary?: string;
+    learnings?: string[];
   },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
@@ -251,6 +253,12 @@ export function buildPrBody(
 
   parts.push(`## Changes\n`, formattedCommits);
 
+  // Append learnings section when non-empty
+  const learningsSection = formatLearningsForPr(options?.learnings ?? []);
+  if (learningsSection) {
+    parts.push("\n\n" + learningsSection);
+  }
+
   return parts.join("\n");
 }
 
@@ -272,6 +280,7 @@ export function buildContinuousPrBodyStructured(
     issueRepo?: string;
     prRepo?: string;
     summary?: string;
+    learnings?: string[];
   },
 ): string {
   const parts: string[] = [];
@@ -311,6 +320,12 @@ export function buildContinuousPrBodyStructured(
   const formattedCommits = formatCommitsByCategory(categorized);
 
   parts.push("\n## Changes\n", formattedCommits);
+
+  // Append learnings section when non-empty
+  const learningsSection = formatLearningsForPr(options?.learnings ?? []);
+  if (learningsSection) {
+    parts.push("\n\n" + learningsSection);
+  }
 
   return parts.join("\n");
 }
