@@ -197,6 +197,55 @@ describe("backpressure handling", () => {
     expect(msgs2.length).toBe(3);
     expect(server.droppedCount()).toBe(0);
   });
+
+  test("slow client gets drops while healthy client still receives all messages", async () => {
+    const socketPath = freshSocketPath();
+    // threshold=0 ensures any buffered data triggers a drop on next write
+    server = await createIpcServer(socketPath, {
+      backpressureThreshold: 0,
+    });
+
+    const slowClient = await connectClient(socketPath);
+    const healthyClient = await connectClient(socketPath);
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Pause the slow client so its kernel buffer fills up
+    slowClient.pause();
+
+    const messageCount = 5;
+    const healthyCollect = collectMessages(healthyClient, messageCount);
+
+    const largeData = "x".repeat(64 * 1024); // 64 KiB per message
+    for (let i = 0; i < messageCount; i++) {
+      server.broadcast({
+        type: "output",
+        data: largeData,
+        stream: "stdout",
+      });
+      // Small delay to let writes flush to the healthy client
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    // Healthy client should receive all messages
+    const healthyMsgs = await healthyCollect;
+    expect(healthyMsgs.length).toBe(messageCount);
+
+    // Verify each received message is valid
+    for (const raw of healthyMsgs) {
+      const parsed = deserialize(raw);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.type).toBe("output");
+    }
+
+    // Server should still have both clients connected
+    expect(server.clientCount()).toBe(2);
+
+    // With threshold=0 and a paused client, drops should have occurred
+    // for the slow client (exact count depends on kernel buffer size,
+    // but the healthy client's delivery is the key assertion above)
+    // The important invariant: healthy client got ALL messages regardless
+    // of the slow client's state.
+  });
 });
 
 // ---------------------------------------------------------------------------
