@@ -530,7 +530,7 @@ export function ensurePrdLabel(cwd: string): void {
  * Pull a specific GitHub issue by number and convert it to a plan file.
  *
  * Same as pullGithubIssues() but targets a known issue instead of searching
- * for the oldest one. Used by the dashboard "Pull & run" action.
+ * for the oldest one. Used by the "pull & run" action.
  */
 export function pullGithubIssueByNumber(
   options: PullIssueOptions & { issueNumber: number },

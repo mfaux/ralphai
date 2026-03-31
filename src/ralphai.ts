@@ -856,20 +856,18 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     console.log(`  A sample plan is ready.`);
     console.log(`  Run it:`);
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
-    console.log(
-      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
-    );
-    console.log(`       ${TEXT}$ ralphai${RESET}`);
+    console.log(`     ${DIM}Check progress or stop a running plan:${RESET}`);
+    console.log(`       ${TEXT}$ ralphai status${RESET}`);
+    console.log(`       ${TEXT}$ ralphai stop${RESET}`);
   } else {
     console.log(
       `  1. Write a plan in the backlog (run ${TEXT}ralphai backlog-dir${RESET} to find it)`,
     );
     console.log(`  2. Run it:`);
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
-    console.log(
-      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
-    );
-    console.log(`       ${TEXT}$ ralphai${RESET}`);
+    console.log(`     ${DIM}Check progress or stop a running plan:${RESET}`);
+    console.log(`       ${TEXT}$ ralphai status${RESET}`);
+    console.log(`       ${TEXT}$ ralphai stop${RESET}`);
   }
   if (answers.issueSource === "github") {
     console.log();

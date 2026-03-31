@@ -717,7 +717,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       process.exit(1);
     }
 
-    // --- Write PID file so the TUI can discover and stop this runner ---
+    // --- Write PID file so the CLI can discover and stop this runner ---
     const pidFile = join(wipDir, "runner.pid");
     writeFileSync(pidFile, String(process.pid), "utf8");
     activePidFile = pidFile;
@@ -819,7 +819,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         console.log(
           `Appended progress block from iteration ${iterationNumber}.`,
         );
-        // Broadcast progress to connected dashboard clients
+        // Broadcast progress to connected IPC clients
         if (ipcServer) {
           ipcServer.broadcast({
             type: "progress",
@@ -895,7 +895,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
       // --- Update receipt tasks_completed from progress.md ---
       updateReceiptTasks(receiptFile, progressFile, planFormat);
-      // Broadcast updated tasks-completed count to connected dashboard clients
+      // Broadcast updated tasks-completed count to connected IPC clients
       if (ipcServer) {
         const updatedTasksCompleted = countCompletedTasks(
           progressFile,
@@ -922,7 +922,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         // Remove PID file and close IPC server before archiving so they
         // don't end up in out/
         if (ipcServer) {
-          // Broadcast completion before closing so dashboard clients
+          // Broadcast completion before closing so IPC clients
           // know the plan finished
           ipcServer.broadcast({ type: "complete", planSlug });
           ipcServer.close();

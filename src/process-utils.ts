@@ -1,7 +1,7 @@
 /**
  * Shared process utilities for runner liveness checks.
  *
- * Extracted from dashboard code to be reusable by CLI commands like `status`.
+ * Used by CLI commands like `status` and `stop`.
  */
 
 import { readFileSync } from "fs";
