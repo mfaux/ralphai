@@ -273,12 +273,7 @@ scope: ui
 
 ## Learnings System
 
-Ralphai maintains two files in global state at `~/.ralphai/repos/<id>/`:
-
-- **`LEARNINGS.md`** -> rolling anti-repeat memory read before each iteration
-- **`LEARNING_CANDIDATES.md`** -> review queue for lessons that may belong in `AGENTS.md` or skill docs
-
-Ralphai automatically prunes `LEARNINGS.md` to the most recent 20 entries by default. Configure that with `maxLearnings`, or set it to `0` for unlimited.
+Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review. Learnings are also injected into subsequent iterations as anti-repeat memory.
 
 ## Progress Extraction
 

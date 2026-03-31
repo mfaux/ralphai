@@ -190,6 +190,15 @@ describe("parseConfigFile", () => {
     );
   });
 
+  it("silently ignores deprecated maxLearnings key (backward compat)", () => {
+    const file = join(ctx.dir, "max-learnings.json");
+    writeFileSync(file, JSON.stringify({ maxLearnings: 50 }));
+    const result = parseConfigFile(file)!;
+    expect(result.warnings).toEqual([]);
+    // maxLearnings should not appear in parsed values
+    expect("maxLearnings" in result.values).toBe(false);
+  });
+
   it("parses agentCommand", () => {
     const file = join(ctx.dir, "agent.json");
     writeFileSync(file, JSON.stringify({ agentCommand: "claude -p" }));
@@ -390,6 +399,11 @@ describe("applyEnvOverrides", () => {
     expect(() => applyEnvOverrides({ RALPHAI_CONTINUOUS: "yes" })).toThrow(
       "must be 'true' or 'false'",
     );
+  });
+
+  it("silently ignores RALPHAI_MAX_LEARNINGS (deprecated)", () => {
+    const result = applyEnvOverrides({ RALPHAI_MAX_LEARNINGS: "50" });
+    expect("maxLearnings" in result).toBe(false);
   });
 });
 

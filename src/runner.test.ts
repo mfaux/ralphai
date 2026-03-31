@@ -235,7 +235,6 @@ function makeResolvedConfig(
     iterationTimeout: 0,
     continuous: "false",
     autoCommit: "false",
-    maxLearnings: 20,
     workspaces: null,
     ...overrides,
   };

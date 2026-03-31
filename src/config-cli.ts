@@ -56,7 +56,6 @@ const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
   ["iterationTimeout", "ITERATION_TIMEOUT"],
   ["continuous", "CONTINUOUS"],
   ["autoCommit", "AUTO_COMMIT"],
-  ["maxLearnings", "MAX_LEARNINGS"],
 ];
 
 const args = process.argv.slice(2);

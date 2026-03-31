@@ -112,7 +112,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  autoCommit         = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
-    expect(output).toContain("  maxLearnings       = 20  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
   });
 
@@ -166,16 +165,6 @@ describe("formatShowConfig", () => {
       "  issueRepo          = <auto-detect>  (default (auto-detect))",
     );
     expect(output).toContain("  issueCommentProgress = true  (default)");
-  });
-
-  it("shows maxLearnings=0 as unlimited", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      maxLearnings: { value: 0, source: "config" },
-    });
-    input.configFileExists = true;
-    const output = formatShowConfig(input);
-    expect(output).toContain("  maxLearnings       = unlimited");
   });
 
   // --- Source label tests ---

@@ -30,7 +30,6 @@ export interface RalphaiConfig {
   iterationTimeout: number;
   continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
-  maxLearnings: number;
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -72,7 +71,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   iterationTimeout: 0,
   continuous: "false",
   autoCommit: "false",
-  maxLearnings: 20,
   workspaces: null,
 };
 
@@ -354,15 +352,8 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.autoCommit = String(v);
   }
 
-  // maxLearnings (non-negative integer, 0 = unlimited)
-  if ("maxLearnings" in obj) {
-    const v = obj.maxLearnings;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(
-        `'maxLearnings' must be a non-negative integer (0 = unlimited), got '${v}'`,
-      );
-    values.maxLearnings = v as number;
-  }
+  // maxLearnings — deprecated and ignored (kept in ALLOWED_CONFIG_KEYS for
+  // backward compatibility so existing config files don't produce warnings).
 
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
@@ -452,7 +443,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_CONTINUOUS", "continuous"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
-  ["RALPHAI_MAX_LEARNINGS", "maxLearnings"],
 ];
 
 /**
@@ -548,13 +538,6 @@ export function applyEnvOverrides(
   if (autoCommit !== undefined) {
     validateBoolean(autoCommit, "RALPHAI_AUTO_COMMIT");
     overrides.autoCommit = autoCommit;
-  }
-
-  // maxLearnings (non-negative integer)
-  const maxLearnings = get("RALPHAI_MAX_LEARNINGS");
-  if (maxLearnings !== undefined) {
-    validateNonNegInt(maxLearnings, "RALPHAI_MAX_LEARNINGS", "0 = unlimited");
-    overrides.maxLearnings = parseInt(maxLearnings, 10);
   }
 
   return overrides;
