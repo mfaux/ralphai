@@ -114,7 +114,11 @@ describe("IPC server", () => {
     const socketPath = freshSocketPath();
     server = await createIpcServer(socketPath);
 
-    expect(existsSync(socketPath)).toBe(true);
+    // On Windows, Unix domain sockets are emulated via named pipes and
+    // don't appear as regular files, so existsSync returns false.
+    if (process.platform !== "win32") {
+      expect(existsSync(socketPath)).toBe(true);
+    }
     expect(server.clientCount()).toBe(0);
 
     const client = await connectClient(socketPath);
@@ -231,12 +235,16 @@ describe("IPC server", () => {
   test("close removes the socket file", async () => {
     const socketPath = freshSocketPath();
     server = await createIpcServer(socketPath);
-    expect(existsSync(socketPath)).toBe(true);
+    if (process.platform !== "win32") {
+      expect(existsSync(socketPath)).toBe(true);
+    }
 
     server.close();
     server = null;
 
-    expect(existsSync(socketPath)).toBe(false);
+    if (process.platform !== "win32") {
+      expect(existsSync(socketPath)).toBe(false);
+    }
   });
 
   test("close disconnects all clients", async () => {
@@ -274,7 +282,9 @@ describe("IPC server", () => {
 
     // Server should start despite stale file
     server = await createIpcServer(socketPath);
-    expect(existsSync(socketPath)).toBe(true);
+    if (process.platform !== "win32") {
+      expect(existsSync(socketPath)).toBe(true);
+    }
 
     const client = await connectClient(socketPath);
     const collecting = collectMessages(client, 1);

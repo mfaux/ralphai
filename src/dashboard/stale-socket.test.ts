@@ -51,11 +51,14 @@ describe("isPidAlive", () => {
     expect(isPidAlive(99999999)).toBe(false);
   });
 
-  test("returns true for PID 1 (init/systemd — always running)", () => {
-    // PID 1 should be alive. On some CI environments with limited
-    // permissions, this may throw EPERM, which still counts as alive.
-    expect(isPidAlive(1)).toBe(true);
-  });
+  test.skipIf(process.platform === "win32")(
+    "returns true for PID 1 (init/systemd — always running)",
+    () => {
+      // PID 1 should be alive. On some CI environments with limited
+      // permissions, this may throw EPERM, which still counts as alive.
+      expect(isPidAlive(1)).toBe(true);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

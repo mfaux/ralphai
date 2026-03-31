@@ -3,6 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
+import { join } from "path";
 import {
   serialize,
   deserialize,
@@ -274,17 +275,16 @@ describe("multi-message chunk parsing", () => {
 
 describe("getSocketPath", () => {
   test("returns path under wipDir/slug", () => {
-    const result = getSocketPath(
+    const wipDir = join(
       "/home/user/.ralphai/repos/my-repo/pipeline/in-progress",
-      "my-plan",
     );
-    expect(result).toBe(
-      "/home/user/.ralphai/repos/my-repo/pipeline/in-progress/my-plan/runner.sock",
-    );
+    const result = getSocketPath(wipDir, "my-plan");
+    expect(result).toBe(join(wipDir, "my-plan", "runner.sock"));
   });
 
   test("handles slug with special characters", () => {
-    const result = getSocketPath("/tmp/wip", "feat-add-auth-flow");
-    expect(result).toBe("/tmp/wip/feat-add-auth-flow/runner.sock");
+    const wipDir = join("/tmp/wip");
+    const result = getSocketPath(wipDir, "feat-add-auth-flow");
+    expect(result).toBe(join(wipDir, "feat-add-auth-flow", "runner.sock"));
   });
 });
