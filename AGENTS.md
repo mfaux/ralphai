@@ -1,5 +1,3 @@
-
-
 Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drives any CLI-based AI coding agent to implement them autonomously, with branch isolation, feedback loops, and stuck detection.
 
 ## Great DX
@@ -30,6 +28,10 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 ## Dry-Run Safety
 
 The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the runner loop starts (in `src/runner.ts` or the CLI layer in `src/ralphai.ts`), verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
+
+## Cross-Platform Tests
+
+CI runs on both Ubuntu and Windows. Don't hardcode Unix paths or assume Linux-specific behavior in tests. Use `path.join()` for path assertions and `describe.skipIf(process.platform === "win32")` for inherently platform-specific tests.
 
 ## Package Manager
 

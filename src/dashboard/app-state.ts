@@ -9,7 +9,9 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { getRepoPipelineDirs, type RepoSummary } from "../global-state.ts";
+import { getSocketPath } from "../ipc-protocol.ts";
 import type {
   FocusTarget,
   DetailTab,
@@ -25,7 +27,7 @@ import {
   loadPlanContentAsync,
   loadProgressContentAsync,
   loadOutputTailAsync,
-} from "./data.ts";
+} from "./data/index.ts";
 import { useAsyncAutoRefresh, filterPlans, useListCursor } from "./hooks.ts";
 import { defaultTabForState } from "./DetailOverlay.tsx";
 import { buildMenuItems } from "./ActionMenu.tsx";
@@ -39,6 +41,8 @@ import {
   pullAndRunOldest,
 } from "./actions.ts";
 import { loadGithubIssuesAsync } from "./issue-loader.ts";
+import { useRunnerStream } from "./use-runner-stream.ts";
+import { getCachedPipelineDirs } from "./data/shared.ts";
 
 const REFRESH_MS = 3000;
 const GITHUB_REFRESH_MS = 30_000;
@@ -228,13 +232,77 @@ export function useAppState(termRows: number, termCols: number) {
     null,
   );
 
+  // --- IPC streaming for real-time output ---
+  // Compute socket path when the selected plan is in-progress with a runner.
+  // Placed before progress/output loaders so ipcConnected can gate polling.
+  const socketPath = useMemo(() => {
+    if (
+      !selectedPlan ||
+      !selectedRepo?.repoPath ||
+      selectedPlan.state !== "in-progress" ||
+      !selectedPlan.runnerPid
+    ) {
+      return null;
+    }
+    try {
+      const dirs = getCachedPipelineDirs(selectedRepo.repoPath);
+      const path = getSocketPath(dirs.wipDir, selectedPlan.slug);
+      return existsSync(path) ? path : null;
+    } catch {
+      return null;
+    }
+  }, [
+    selectedPlan?.slug,
+    selectedPlan?.state,
+    selectedPlan?.runnerPid,
+    selectedRepo?.repoPath,
+  ]);
+
+  // Compute the PID file path for stale socket detection
+  const pidFilePath = useMemo(() => {
+    if (
+      !selectedPlan ||
+      !selectedRepo?.repoPath ||
+      selectedPlan.state !== "in-progress"
+    ) {
+      return null;
+    }
+    try {
+      const dirs = getCachedPipelineDirs(selectedRepo.repoPath);
+      return join(dirs.wipDir, selectedPlan.slug, "runner.pid");
+    } catch {
+      return null;
+    }
+  }, [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath]);
+
+  const {
+    outputLines: ipcOutputLines,
+    connected: ipcConnected,
+    progressContent: ipcProgressContent,
+    tasksCompleted: ipcTasksCompleted,
+    completed: ipcCompleted,
+  } = useRunnerStream(
+    socketPath,
+    selectedRepo?.repoPath ?? null,
+    selectedPlan,
+    pidFilePath,
+  );
+
   // Progress and output poll on the refresh interval so live updates appear.
+  // When IPC is connected, skip filesystem reads (IPC provides real-time data).
   const progressLoader = useCallback(
     () =>
-      selectedPlan && selectedRepo?.repoPath
-        ? loadProgressContentAsync(selectedRepo.repoPath, selectedPlan)
-        : Promise.resolve(null),
-    [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath],
+      ipcConnected
+        ? Promise.resolve(null)
+        : selectedPlan && selectedRepo?.repoPath
+          ? loadProgressContentAsync(selectedRepo.repoPath, selectedPlan)
+          : Promise.resolve(null),
+    [
+      selectedPlan?.slug,
+      selectedPlan?.state,
+      selectedRepo?.repoPath,
+      ipcConnected,
+    ],
   );
   const { data: progressContent } = useAsyncAutoRefresh<string | null>(
     progressLoader,
@@ -244,15 +312,39 @@ export function useAppState(termRows: number, termCols: number) {
 
   const outputLoader = useCallback(
     () =>
-      selectedPlan && selectedRepo?.repoPath
-        ? loadOutputTailAsync(selectedRepo.repoPath, selectedPlan)
-        : Promise.resolve(null),
-    [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath],
+      ipcConnected
+        ? Promise.resolve(null)
+        : selectedPlan && selectedRepo?.repoPath
+          ? loadOutputTailAsync(selectedRepo.repoPath, selectedPlan)
+          : Promise.resolve(null),
+    [
+      selectedPlan?.slug,
+      selectedPlan?.state,
+      selectedRepo?.repoPath,
+      ipcConnected,
+    ],
   );
   const { data: outputData } = useAsyncAutoRefresh<{
     content: string;
     totalLines: number;
   } | null>(outputLoader, REFRESH_MS, null);
+
+  // Merge IPC output with polled output: IPC takes priority when connected.
+  const mergedOutputData = useMemo(() => {
+    if (ipcConnected && ipcOutputLines.length > 0) {
+      const content = ipcOutputLines.join("\n");
+      return { content, totalLines: ipcOutputLines.length };
+    }
+    return outputData;
+  }, [ipcConnected, ipcOutputLines, outputData]);
+
+  // Merge IPC progress with polled progress: IPC takes priority when connected.
+  const mergedProgressContent = useMemo(() => {
+    if (ipcConnected && ipcProgressContent) {
+      return ipcProgressContent;
+    }
+    return progressContent;
+  }, [ipcConnected, ipcProgressContent, progressContent]);
 
   // Detail overlay content area: terminal height minus border chrome (2),
   // title row (1), tab bar (1), content margin (1).
@@ -526,8 +618,9 @@ export function useAppState(termRows: number, termCols: number) {
     scrollOffset,
     setScrollOffset,
     planContent,
-    progressContent,
-    outputData,
+    progressContent: mergedProgressContent,
+    outputData: mergedOutputData,
+    ipcConnected,
     contentHeight,
     // Split pane
     isSplitMode,

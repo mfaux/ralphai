@@ -156,3 +156,63 @@ When the user presses Enter on a plan (or `3` from any pane) and the terminal is
 **Narrow terminal fallback.** When `termCols < 80`, Enter opens the original full-screen overlay with an opaque backdrop, preserving usability on small screens. The `SPLIT_MIN_COLS` constant in `app-state.ts` controls the threshold.
 
 **State model.** The split introduces a new valid combination: `focus === "list" && showDetail === true`. Previously these were mutually exclusive. `isSplitMode` is a derived boolean (`showDetail && termCols >= SPLIT_MIN_COLS`) that controls which layout path renders.
+
+## IPC Architecture: Real-Time Agent Output Streaming
+
+The dashboard receives agent output in real-time via Unix domain sockets (named pipes on Windows), eliminating the 3-second polling delay for the Output tab.
+
+### Why IPC over `fs.watch`?
+
+`fs.watch` is unreliable across platforms (missed events on Linux, duplicate events on macOS, no content — only notifications). A socket gives us push-based delivery with guaranteed ordering, and `net.Server`/`net.Socket` use the same API for Unix sockets and Windows named pipes — no platform branching.
+
+### Socket Lifecycle
+
+One socket per plan. The runner creates the server immediately after writing `runner.pid`, and the socket file lives at `<wipDir>/<slug>/runner.sock`, co-located with the PID file and other plan artifacts.
+
+```
+Runner start:  write runner.pid → create runner.sock → enter iteration loop
+Plan complete:  close IPC server → remove runner.sock → remove runner.pid → archive
+SIGINT/SIGTERM: close IPC server → remove runner.sock → remove runner.pid
+Stuck abort:    close IPC server → remove runner.sock → remove runner.pid → process.exit(1)
+```
+
+The server calls `server.unref()` so it does not prevent the runner process from exiting.
+
+### Protocol Format
+
+Newline-delimited JSON (`\n`-separated). Each line is a complete JSON object with a `type` discriminator:
+
+| Type       | Description                   | Fields                                       |
+| ---------- | ----------------------------- | -------------------------------------------- |
+| `output`   | Agent stdout/stderr chunk     | `data: string`, `stream: "stdout"\|"stderr"` |
+| `progress` | Iteration progress block      | `iteration: number`, `content: string`       |
+| `receipt`  | Updated tasks-completed count | `tasksCompleted: number`                     |
+| `complete` | Plan finished                 | `planSlug: string`                           |
+
+All four message types are implemented end-to-end. The runner broadcasts `progress` after extracting iteration blocks, `receipt` after updating receipt tasks, and `complete` before closing the IPC server. The dashboard stream client handles all types and merges IPC data with polled data.
+
+### Fallback Behavior
+
+When no `runner.sock` file exists (older runner version, server failed to start, or plan not actively running), the dashboard falls back to file-based polling via `useAsyncAutoRefresh` and `loadOutputTailAsync`. The `useRunnerStream` hook returns empty state when the socket path is null. When IPC is connected, `app-state.ts` pauses filesystem polling for both progress and output (loaders return `Promise.resolve(null)`), and merges IPC data with polled data — IPC takes priority when connected.
+
+### Catch-Up on Connect
+
+When the dashboard connects mid-run, it performs a one-time tail read of `agent-output.log` to populate historical output, then appends new IPC data after it. This ensures the user sees the full context, not just output that arrived after the dashboard opened.
+
+### Module Structure
+
+- **`ipc-protocol.ts`** — Message type definitions, `serialize`/`deserialize`, `getSocketPath`. Shared between runner and dashboard.
+- **`ipc-server.ts`** — Runner-side `net.Server` wrapper: `createIpcServer(socketPath)` returns `{ broadcast, close, clientCount }`.
+- **`dashboard/ring-buffer.ts`** — Generic circular buffer (capacity 200) for holding recent output lines.
+- **`dashboard/stream-client.ts`** — Pure connection state machine and line-buffered message parser. No React, no I/O.
+- **`dashboard/use-runner-stream.ts`** — React hook wrapping the stream client with actual `net.Socket` lifecycle. Not tested per testing strategy convention.
+
+### Testing
+
+The IPC stack is tested at each layer:
+
+- **Protocol** (`ipc-protocol.test.ts`): round-trip serialization, special characters, multi-message chunks, partial-line buffering, edge cases.
+- **Server** (`ipc-server.test.ts`): real `net.Server`/`net.Socket` pairs verifying broadcast delivery, multi-client support, disconnect isolation, and cleanup.
+- **Ring buffer** (`ring-buffer.test.ts`): insertion order, wrap-around, overflow eviction, clear, empty state, stress test.
+- **Stream client** (`stream-client.test.ts`): state machine transitions, message parsing, partial-line buffering across chunks, mixed message types.
+- **React hook**: not tested (thin glue layer per DESIGN.md testing strategy).

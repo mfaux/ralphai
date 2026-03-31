@@ -21,6 +21,12 @@ import {
 import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
+import { createIpcServer, type IpcServer } from "./ipc-server.ts";
+import {
+  getSocketPath,
+  type IpcMessage,
+  type OutputMessage,
+} from "./ipc-protocol.ts";
 import {
   getRepoPipelineDirs,
   getRepoLearningsPath,
@@ -141,6 +147,7 @@ export function spawnAgent(
   iterationTimeout: number,
   cwd: string,
   outputLogPath?: string,
+  ipcBroadcast?: (msg: IpcMessage) => void,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Split the agent command respecting quotes
@@ -201,12 +208,22 @@ export function spawnAgent(
       process.stdout.write(data);
       logStream?.write(data);
       chunks.push(data);
+      ipcBroadcast?.({
+        type: "output",
+        data: data.toString(),
+        stream: "stdout",
+      });
     });
 
     child.stderr?.on("data", (data: Buffer) => {
       process.stderr.write(data);
       logStream?.write(data);
       chunks.push(data);
+      ipcBroadcast?.({
+        type: "output",
+        data: data.toString(),
+        stream: "stderr",
+      });
     });
 
     child.on("close", (code) => {
@@ -488,6 +505,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
   let activePidFile: string | null = null;
+  let activeIpcServer: IpcServer | null = null;
 
   while (!interrupted) {
     console.log();
@@ -708,6 +726,19 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     writeFileSync(pidFile, String(process.pid), "utf8");
     activePidFile = pidFile;
 
+    // --- Start IPC server for real-time output streaming ---
+    let ipcServer: IpcServer | null = null;
+    const socketPath = getSocketPath(dirs.wipDir, planSlug);
+    try {
+      ipcServer = await createIpcServer(socketPath);
+      activeIpcServer = ipcServer;
+    } catch (err) {
+      console.log(
+        `WARNING: IPC server failed to start: ${err instanceof Error ? err.message : err}`,
+      );
+      console.log("Continuing without real-time streaming.");
+    }
+
     // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
@@ -760,6 +791,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         iterationTimeout,
         cwd,
         outputLogPath,
+        ipcServer ? (msg) => ipcServer!.broadcast(msg) : undefined,
       );
 
       if (timedOut) {
@@ -785,6 +817,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         console.log(
           `Appended progress block from iteration ${iterationNumber}.`,
         );
+        // Broadcast progress to connected dashboard clients
+        if (ipcServer) {
+          ipcServer.broadcast({
+            type: "progress",
+            iteration: iterationNumber,
+            content: progressContent,
+          });
+        }
       }
 
       if (exitCode !== 0 && !timedOut) {
@@ -811,6 +851,17 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             console.log("Pushing partial work to continuous branch...");
             const push = pushBranch(branch, cwd);
             console.log(push.message);
+          }
+          // Clean up PID file and IPC server before exiting
+          if (ipcServer) {
+            ipcServer.close();
+          }
+          if (activePidFile) {
+            try {
+              rmSync(activePidFile, { force: true });
+            } catch {
+              // Best-effort cleanup
+            }
           }
           process.exit(1);
         }
@@ -842,6 +893,17 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
       // --- Update receipt tasks_completed from progress.md ---
       updateReceiptTasks(receiptFile, progressFile, planFormat);
+      // Broadcast updated tasks-completed count to connected dashboard clients
+      if (ipcServer) {
+        const updatedTasksCompleted = countCompletedTasks(
+          progressFile,
+          planFormat,
+        );
+        ipcServer.broadcast({
+          type: "receipt",
+          tasksCompleted: updatedTasksCompleted,
+        });
+      }
 
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
@@ -855,7 +917,16 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         const prSummary = extractPrSummary(output) ?? undefined;
         if (prSummary) lastPrSummary = prSummary;
 
-        // Remove PID file before archiving so it doesn't end up in out/
+        // Remove PID file and close IPC server before archiving so they
+        // don't end up in out/
+        if (ipcServer) {
+          // Broadcast completion before closing so dashboard clients
+          // know the plan finished
+          ipcServer.broadcast({ type: "complete", planSlug });
+          ipcServer.close();
+          ipcServer = null;
+          activeIpcServer = null;
+        }
         try {
           rmSync(pidFile, { force: true });
         } catch {
@@ -967,6 +1038,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       summary: lastPrSummary,
     });
     console.log(finalize.message);
+  }
+
+  // --- Clean up IPC server on exit (interrupted or drained backlog) ---
+  if (activeIpcServer) {
+    activeIpcServer.close();
+    activeIpcServer = null;
   }
 
   // --- Clean up PID file on exit (interrupted or drained backlog) ---
