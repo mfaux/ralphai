@@ -126,7 +126,7 @@ ralphai purge            # delete archived artifacts from pipeline/out/
 
 ### 6. Close the learnings loop
 
-Ralphai logs mistakes to `LEARNINGS.md` (in global state) and flags durable lessons in `LEARNING_CANDIDATES.md` for human review. After a run, review candidates and promote useful ones to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
+Ralphai extracts learnings from the agent's output during each run and surfaces them in the **Learnings** section of the draft PR. Review them when reviewing the PR and promote useful lessons to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
 
 ## GitHub Issues Integration
 
