@@ -40,6 +40,8 @@ export interface StreamClientState {
   tasksCompleted: number;
   /** Whether a complete message has been received. */
   completed: boolean;
+  /** Number of reconnection attempts since last successful connect. */
+  reconnectAttempts: number;
 }
 
 /** Events that drive state transitions. */
@@ -64,6 +66,7 @@ export function createStreamClientState(capacity = 200): StreamClientState {
     progressContent: "",
     tasksCompleted: 0,
     completed: false,
+    reconnectAttempts: 0,
   };
 }
 
@@ -95,7 +98,7 @@ export function applyEvent(
 
     case "connect-success":
       if (state.connectionState === "connecting") {
-        return { ...state, connectionState: "connected" };
+        return { ...state, connectionState: "connected", reconnectAttempts: 0 };
       }
       return state;
 
@@ -105,7 +108,12 @@ export function applyEvent(
         state.connectionState === "connecting" ||
         state.connectionState === "connected"
       ) {
-        return { ...state, connectionState: "disconnected", lineBuffer: "" };
+        return {
+          ...state,
+          connectionState: "disconnected",
+          lineBuffer: "",
+          reconnectAttempts: state.reconnectAttempts + 1,
+        };
       }
       return state;
 
@@ -124,6 +132,7 @@ export function applyEvent(
         progressContent: "",
         tasksCompleted: 0,
         completed: false,
+        reconnectAttempts: 0,
       };
 
     default:
@@ -193,4 +202,23 @@ function pushOutputLines(buffer: RingBuffer<string>, data: string): void {
   for (const line of lines) {
     buffer.push(line);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reconnection backoff (pure)
+// ---------------------------------------------------------------------------
+
+/** Reconnection backoff constants. */
+export const BACKOFF_INITIAL_MS = 100;
+export const BACKOFF_MAX_MS = 3_000;
+
+/**
+ * Compute the reconnection delay for the current attempt.
+ *
+ * Exponential backoff: 100ms → 200ms → 400ms → 800ms → 1600ms → 3000ms (cap).
+ * Pure function — no side effects.
+ */
+export function getReconnectDelay(attempts: number): number {
+  const delay = BACKOFF_INITIAL_MS * Math.pow(2, attempts);
+  return Math.min(delay, BACKOFF_MAX_MS);
 }

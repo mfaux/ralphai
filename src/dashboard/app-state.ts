@@ -258,13 +258,35 @@ export function useAppState(termRows: number, termCols: number) {
     selectedRepo?.repoPath,
   ]);
 
+  // Compute the PID file path for stale socket detection
+  const pidFilePath = useMemo(() => {
+    if (
+      !selectedPlan ||
+      !selectedRepo?.repoPath ||
+      selectedPlan.state !== "in-progress"
+    ) {
+      return null;
+    }
+    try {
+      const dirs = getCachedPipelineDirs(selectedRepo.repoPath);
+      return join(dirs.wipDir, selectedPlan.slug, "runner.pid");
+    } catch {
+      return null;
+    }
+  }, [selectedPlan?.slug, selectedPlan?.state, selectedRepo?.repoPath]);
+
   const {
     outputLines: ipcOutputLines,
     connected: ipcConnected,
     progressContent: ipcProgressContent,
     tasksCompleted: ipcTasksCompleted,
     completed: ipcCompleted,
-  } = useRunnerStream(socketPath, selectedRepo?.repoPath ?? null, selectedPlan);
+  } = useRunnerStream(
+    socketPath,
+    selectedRepo?.repoPath ?? null,
+    selectedPlan,
+    pidFilePath,
+  );
 
   // Progress and output poll on the refresh interval so live updates appear.
   // When IPC is connected, skip filesystem reads (IPC provides real-time data).

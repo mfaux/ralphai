@@ -11,6 +11,9 @@ import {
 import {
   createStreamClientState,
   applyEvent,
+  getReconnectDelay,
+  BACKOFF_INITIAL_MS,
+  BACKOFF_MAX_MS,
   type StreamClientState,
   type StreamEvent,
 } from "./stream-client.ts";
@@ -540,5 +543,87 @@ describe("mixed message types end-to-end", () => {
     expect(state.progressContent).toContain("- [x] Build");
     expect(state.tasksCompleted).toBe(1);
     expect(state.completed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reconnection backoff
+// ---------------------------------------------------------------------------
+
+describe("reconnection backoff", () => {
+  test("initial reconnectAttempts is 0", () => {
+    const state = createStreamClientState();
+    expect(state.reconnectAttempts).toBe(0);
+  });
+
+  test("disconnect increments reconnectAttempts", () => {
+    const state = connectedState();
+    const next = applyEvent(state, { type: "disconnect" });
+    expect(next.reconnectAttempts).toBe(1);
+  });
+
+  test("error increments reconnectAttempts", () => {
+    const state = connectedState();
+    const next = applyEvent(state, { type: "error" });
+    expect(next.reconnectAttempts).toBe(1);
+  });
+
+  test("multiple disconnects accumulate reconnectAttempts", () => {
+    let state = connectedState();
+    state = applyEvent(state, { type: "disconnect" });
+    expect(state.reconnectAttempts).toBe(1);
+
+    // Reconnect cycle
+    state = applyEvent(state, { type: "connect-start" });
+    state = applyEvent(state, { type: "disconnect" }); // disconnect from connecting
+    expect(state.reconnectAttempts).toBe(2);
+  });
+
+  test("successful connect resets reconnectAttempts to 0", () => {
+    let state = connectedState();
+    state = applyEvent(state, { type: "disconnect" });
+    expect(state.reconnectAttempts).toBe(1);
+
+    state = applyEvent(state, { type: "connect-start" });
+    state = applyEvent(state, { type: "connect-success" });
+    expect(state.reconnectAttempts).toBe(0);
+  });
+
+  test("reset clears reconnectAttempts", () => {
+    let state = connectedState();
+    state = applyEvent(state, { type: "disconnect" });
+    state = applyEvent(state, { type: "connect-start" });
+    state = applyEvent(state, { type: "disconnect" });
+    expect(state.reconnectAttempts).toBe(2);
+
+    state = applyEvent(state, { type: "reset" });
+    expect(state.reconnectAttempts).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getReconnectDelay
+// ---------------------------------------------------------------------------
+
+describe("getReconnectDelay", () => {
+  test("first attempt delay is BACKOFF_INITIAL_MS (100ms)", () => {
+    expect(getReconnectDelay(0)).toBe(BACKOFF_INITIAL_MS);
+    expect(getReconnectDelay(0)).toBe(100);
+  });
+
+  test("delay doubles with each attempt", () => {
+    expect(getReconnectDelay(0)).toBe(100);
+    expect(getReconnectDelay(1)).toBe(200);
+    expect(getReconnectDelay(2)).toBe(400);
+    expect(getReconnectDelay(3)).toBe(800);
+    expect(getReconnectDelay(4)).toBe(1600);
+  });
+
+  test("delay caps at BACKOFF_MAX_MS (3000ms)", () => {
+    expect(getReconnectDelay(5)).toBe(BACKOFF_MAX_MS);
+    expect(getReconnectDelay(5)).toBe(3000);
+    expect(getReconnectDelay(6)).toBe(3000);
+    expect(getReconnectDelay(10)).toBe(3000);
+    expect(getReconnectDelay(100)).toBe(3000);
   });
 });

@@ -17,13 +17,31 @@ import { createServer, type Server, type Socket } from "net";
 import { rmSync } from "fs";
 import { serialize, type IpcMessage } from "./ipc-protocol.ts";
 
+/**
+ * Default backpressure threshold in bytes.
+ * If a client's socket.writableLength exceeds this value, the message
+ * is dropped for that client. The file-based agent-output.log still
+ * captures all output, so no data is permanently lost.
+ */
+export const DEFAULT_BACKPRESSURE_THRESHOLD = 64 * 1024; // 64 KiB
+
 export interface IpcServer {
-  /** Send a message to all connected clients. */
+  /** Send a message to all connected clients. Drops messages for slow clients. */
   broadcast(msg: IpcMessage): void;
   /** Stop listening and clean up. */
   close(): void;
   /** Number of currently connected clients. */
   clientCount(): number;
+  /** Number of messages dropped due to backpressure since server creation. */
+  droppedCount(): number;
+}
+
+export interface IpcServerOptions {
+  /**
+   * Backpressure threshold in bytes. Messages are dropped for clients whose
+   * socket.writableLength exceeds this value. Default: 64 KiB.
+   */
+  backpressureThreshold?: number;
 }
 
 /**
@@ -32,7 +50,13 @@ export interface IpcServer {
  * Returns a promise that resolves with the server interface once listening,
  * or rejects if the server fails to start.
  */
-export function createIpcServer(socketPath: string): Promise<IpcServer> {
+export function createIpcServer(
+  socketPath: string,
+  options: IpcServerOptions = {},
+): Promise<IpcServer> {
+  const threshold =
+    options.backpressureThreshold ?? DEFAULT_BACKPRESSURE_THRESHOLD;
+
   return new Promise((resolve, reject) => {
     // Remove stale socket file (e.g., from a previous crash)
     try {
@@ -42,6 +66,8 @@ export function createIpcServer(socketPath: string): Promise<IpcServer> {
     }
 
     const clients = new Set<Socket>();
+    let dropped = 0;
+
     const server: Server = createServer((socket) => {
       clients.add(socket);
       socket.on("close", () => {
@@ -65,6 +91,11 @@ export function createIpcServer(socketPath: string): Promise<IpcServer> {
           const data = serialize(msg);
           for (const socket of clients) {
             try {
+              // Backpressure: drop message for slow clients
+              if (socket.writableLength > threshold) {
+                dropped++;
+                continue;
+              }
               socket.write(data);
             } catch {
               // Client disconnected — will be cleaned up by close event
@@ -96,6 +127,10 @@ export function createIpcServer(socketPath: string): Promise<IpcServer> {
 
         clientCount(): number {
           return clients.size;
+        },
+
+        droppedCount(): number {
+          return dropped;
         },
       });
     });
