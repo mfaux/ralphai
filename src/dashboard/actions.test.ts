@@ -45,7 +45,10 @@ mock.module("fs", () => ({
   rmSync: mockRmSync,
 }));
 
+const realGlobalState = require("../global-state.ts");
+
 mock.module("../global-state.ts", () => ({
+  ...realGlobalState,
   getRepoPipelineDirs: mock(() => ({
     backlogDir: join("/repo", ".ralphai", "pipeline", "backlog"),
     wipDir: join("/repo", ".ralphai", "pipeline", "wip"),

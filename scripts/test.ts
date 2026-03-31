@@ -11,7 +11,14 @@ import { execSync } from "child_process";
 import { readdirSync, statSync } from "fs";
 import { join, relative } from "path";
 
-const ISOLATED = ["src/fetch-prd-issue.test.ts"];
+// Files that call mock.module() on built-in Node modules (child_process, fs).
+// These must run in separate processes to prevent mock leaks.
+const ISOLATED = [
+  "src/fetch-prd-issue.test.ts",
+  "src/dashboard/actions.test.ts",
+  "src/dashboard/issue-loader.test.ts",
+  "src/dashboard/data-loaders.test.ts",
+];
 
 function findTestFiles(dir: string): string[] {
   const results: string[] = [];
