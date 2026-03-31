@@ -25,7 +25,7 @@ import {
   loadPlanContentAsync,
   loadProgressContentAsync,
   loadOutputTailAsync,
-} from "./data.ts";
+} from "./data/index.ts";
 import { useAsyncAutoRefresh, filterPlans, useListCursor } from "./hooks.ts";
 import { defaultTabForState } from "./DetailOverlay.tsx";
 import { buildMenuItems } from "./ActionMenu.tsx";

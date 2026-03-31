@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { parseReceiptFromContent } from "./data.ts";
+import { parseReceiptFromContent } from "./data/index.ts";
 
 // ---------------------------------------------------------------------------
 // parseReceiptFromContent

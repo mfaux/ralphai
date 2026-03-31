@@ -19,7 +19,7 @@ mock.module("../global-state.ts", () => ({
 
 // Now import the functions under test (after mock.module is declared).
 const { loadPlans, loadPlansAsync, loadPlanContent, loadPlanContentAsync } =
-  await import("./data.ts");
+  await import("./data/index.ts");
 import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
