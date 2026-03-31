@@ -12,7 +12,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockExecSync = vi.fn();
 
-vi.mock("child_process", () => ({
+vi.mock("child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("child_process")>()),
   execSync: (...args: unknown[]) => mockExecSync(...args),
 }));
 

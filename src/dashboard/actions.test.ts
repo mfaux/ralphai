@@ -13,7 +13,8 @@ const BACKLOG = join("/repo", ".ralphai", "pipeline", "backlog");
 const WIP = join("/repo", ".ralphai", "pipeline", "wip");
 const ARCHIVE = join("/repo", ".ralphai", "pipeline", "out");
 
-vi.mock("child_process", () => ({
+vi.mock("child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("child_process")>()),
   execSync: vi.fn(),
   spawn: vi.fn(() => ({
     pid: 12345,
@@ -21,7 +22,8 @@ vi.mock("child_process", () => ({
   })),
 }));
 
-vi.mock("fs", () => ({
+vi.mock("fs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("fs")>()),
   existsSync: vi.fn(() => true),
   mkdirSync: vi.fn(),
   renameSync: vi.fn(),

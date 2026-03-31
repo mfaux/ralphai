@@ -31,7 +31,10 @@ export interface DetectedPlan {
 }
 
 /** Reason why no plan was detected. */
-export type DetectFailReason = "empty-backlog" | "all-blocked" | "target-not-found";
+export type DetectFailReason =
+  | "empty-backlog"
+  | "all-blocked"
+  | "target-not-found";
 
 /** Blocked plan info returned when detection finds no runnable plans. */
 export interface BlockedPlanInfo {
@@ -62,6 +65,15 @@ export interface PipelineDirs {
   wipDir: string;
   backlogDir: string;
   archiveDir: string;
+}
+
+/** Format of a plan file: task headings, checkboxes, or neither. */
+export type PlanFormat = "tasks" | "checkboxes" | "none";
+
+/** Result of detecting the plan format and counting tasks. */
+export interface PlanFormatResult {
+  format: PlanFormat;
+  totalTasks: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,36 +167,110 @@ export function planExistsForSlug(dir: string, slug: string): boolean {
   return resolvePlanPath(dir, slug) !== null;
 }
 
+// ---------------------------------------------------------------------------
+// Plan format detection
+// ---------------------------------------------------------------------------
+
 /**
- * Count total tasks in a plan file by counting `### Task N:` headings.
+ * Strip YAML frontmatter from plan content.
+ * Returns the body after the closing `---` marker, or the full content
+ * if no valid frontmatter is found.
  */
-export function countPlanTasks(planPath: string): number {
-  if (!existsSync(planPath)) return 0;
-  const content = readFileSync(planPath, "utf-8");
-  const matches = content.match(/^### Task \d+/gm);
-  return matches ? matches.length : 0;
+function stripFrontmatter(content: string): string {
+  if (!content.startsWith("---\n")) return content;
+  const endIdx = content.indexOf("\n---", 4);
+  if (endIdx === -1) return content;
+  return content.slice(endIdx + 4);
 }
 
 /**
- * Count completed tasks in a progress file.
- * Counts individual `**Status:** Complete` markers.
+ * Detect the format of a plan and count its total tasks.
  *
- * @deprecated Batch `### Tasks X-Y` headings are no longer generated
- * (the execution model is now one iteration per task). The batch pattern
- * is still accepted for backward-compatibility with older progress files
- * but will be removed in a future release.
+ * Detection priority:
+ * 1. `### Task N:` headings → format "tasks"
+ * 2. `- [ ]` or `- [x]` checkboxes → format "checkboxes"
+ * 3. Neither → format "none" with totalTasks = 0
+ *
+ * Strips YAML frontmatter before scanning.
  */
-export function countCompletedTasks(progressPath: string): number {
-  if (!existsSync(progressPath)) return 0;
-  const content = readFileSync(progressPath, "utf-8");
+export function detectPlanFormat(content: string): PlanFormatResult {
+  const body = stripFrontmatter(content);
 
-  // Count individual `**Status:** Complete` entries
+  // Priority 1: task headings
+  const taskMatches = body.match(/^### Task \d+/gm);
+  if (taskMatches && taskMatches.length > 0) {
+    return { format: "tasks", totalTasks: taskMatches.length };
+  }
+
+  // Priority 2: checkboxes (both unchecked and checked)
+  const checkboxMatches = body.match(/^- \[[ x]\]/gm);
+  if (checkboxMatches && checkboxMatches.length > 0) {
+    return { format: "checkboxes", totalTasks: checkboxMatches.length };
+  }
+
+  // Priority 3: neither
+  return { format: "none", totalTasks: 0 };
+}
+
+/**
+ * Count total tasks in plan content (string).
+ * Returns `undefined` when no tasks are found, consistent with the
+ * dashboard's `PlanInfo.totalTasks` type.
+ *
+ * This is the single source of truth for content-based task counting,
+ * replacing the private copy that lived in `dashboard/data.ts`.
+ */
+export function countPlanTasksFromContent(content: string): number | undefined {
+  const { totalTasks } = detectPlanFormat(content);
+  return totalTasks > 0 ? totalTasks : undefined;
+}
+
+/**
+ * Count total tasks in a plan file.
+ * Returns `undefined` when the file doesn't exist or contains no tasks.
+ *
+ * Uses `detectPlanFormat` internally so it recognizes both `### Task N:`
+ * headings and `- [ ]` / `- [x]` checkboxes.
+ */
+export function countPlanTasks(planPath: string): number | undefined {
+  if (!existsSync(planPath)) return undefined;
+  const content = readFileSync(planPath, "utf-8");
+  return countPlanTasksFromContent(content);
+}
+
+/**
+ * Count completed tasks from progress content, using the plan's format
+ * to determine the counting strategy.
+ *
+ * - "tasks" format: counts `**Status:** Complete` markers. Falls back to
+ *   deprecated batch `### Tasks X-Y` headings only when no individual
+ *   markers are present (no double-counting).
+ * - "checkboxes" format: counts `- [x]` items.
+ *
+ * This is the single source of truth for progress-based completion counting.
+ */
+export function countCompletedFromProgress(
+  content: string,
+  format: PlanFormat,
+): number {
+  if (format === "checkboxes") {
+    const matches = content.match(/^- \[x\]/gm);
+    return matches ? matches.length : 0;
+  }
+
+  // "tasks" (and "none" as fallback): count **Status:** Complete markers
   const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
-  let count = completeMatches ? completeMatches.length : 0;
+  const individualCount = completeMatches ? completeMatches.length : 0;
 
-  // DEPRECATED: batch entries from older progress files.
-  // One iteration now completes exactly one task, so batch headings
-  // should not appear in new progress files.
+  // When individual markers exist, they take precedence — skip batch headings
+  // to avoid double-counting.
+  if (individualCount > 0) {
+    return individualCount;
+  }
+
+  // DEPRECATED fallback: batch entries from older progress files.
+  // Only used when no individual **Status:** Complete markers are present.
+  let batchCount = 0;
   const batchMatches = content.matchAll(
     /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
   );
@@ -192,11 +278,27 @@ export function countCompletedTasks(progressPath: string): number {
     const start = parseInt(match[1]!, 10);
     const end = parseInt(match[2]!, 10);
     if (end > start) {
-      count += end - start + 1;
+      batchCount += end - start + 1;
     }
   }
 
-  return count;
+  return batchCount;
+}
+
+/**
+ * Count completed tasks in a progress file.
+ *
+ * This is a convenience wrapper that reads the file and delegates to
+ * `countCompletedFromProgress`. Defaults to "tasks" format for
+ * backward-compatibility with callers that don't know the plan format.
+ */
+export function countCompletedTasks(
+  progressPath: string,
+  format: PlanFormat = "tasks",
+): number {
+  if (!existsSync(progressPath)) return 0;
+  const content = readFileSync(progressPath, "utf-8");
+  return countCompletedFromProgress(content, format);
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +423,13 @@ export function detectPlan(opts: {
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   targetPlan?: string;
 }): DetectPlanResult {
-  const { dirs, worktreeBranch, dryRun = false, skippedSlugs, targetPlan } = opts;
+  const {
+    dirs,
+    worktreeBranch,
+    dryRun = false,
+    skippedSlugs,
+    targetPlan,
+  } = opts;
 
   // --- 1. Check for in-progress plans ---
   const inProgressPlans: string[] = [];

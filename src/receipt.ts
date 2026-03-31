@@ -7,6 +7,10 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs";
 import { join } from "path";
+import {
+  countCompletedFromProgress,
+  type PlanFormat,
+} from "./plan-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,13 +66,14 @@ export function parseReceipt(filePath: string): Receipt | null {
       fields[line.slice(0, eq)] = line.slice(eq + 1);
     }
   }
+  const parsedTasks = parseInt(fields.tasks_completed ?? "0", 10);
   return {
     started_at: fields.started_at ?? "",
     worktree_path: fields.worktree_path,
     branch: fields.branch ?? "",
     slug: fields.slug ?? "",
     plan_file: fields.plan_file,
-    tasks_completed: parseInt(fields.tasks_completed ?? "0", 10),
+    tasks_completed: Number.isNaN(parsedTasks) ? 0 : parsedTasks,
     outcome: fields.outcome,
   };
 }
@@ -98,46 +103,23 @@ export function initReceipt(path: string, fields: InitReceiptFields): void {
 /**
  * Count completed tasks from a progress.md file and update the receipt.
  *
- * Counts individual `**Status:** Complete` markers (case-insensitive).
- *
- * @deprecated Batch `### Tasks X-Y` headings are no longer generated
- * (the execution model is now one iteration per task). The batch pattern
- * is still accepted for backward-compatibility with older progress files
- * but will be removed in a future release.
+ * Delegates to `countCompletedFromProgress` for the actual counting logic.
+ * The `format` parameter determines the counting strategy:
+ * - "tasks": counts `**Status:** Complete` markers
+ * - "checkboxes": counts `- [x]` items
  *
  * No-op if either the receipt or progress file does not exist.
  */
 export function updateReceiptTasks(
   receiptPath: string,
   progressFilePath: string,
+  format: PlanFormat = "tasks",
 ): void {
   if (!existsSync(receiptPath)) return;
   if (!existsSync(progressFilePath)) return;
 
   const progressContent = readFileSync(progressFilePath, "utf-8");
-  let count = 0;
-
-  // Count individual **Status:** Complete markers (case-insensitive)
-  const individualMatches = progressContent.match(
-    /\*\*Status:\*\*\s*Complete/gi,
-  );
-  if (individualMatches) {
-    count += individualMatches.length;
-  }
-
-  // DEPRECATED: batch entries from older progress files.
-  // One iteration now completes exactly one task, so batch headings
-  // should not appear in new progress files.
-  // Count batch entries: ### Tasks X-Y or ### Tasks X–Y (en-dash or hyphen)
-  const batchPattern = /^### .*[Tt]asks?\s+(\d+)\s*[–-]\s*(\d+)/gim;
-  let match;
-  while ((match = batchPattern.exec(progressContent)) !== null) {
-    const start = parseInt(match[1]!, 10);
-    const end = parseInt(match[2]!, 10);
-    if (end > start) {
-      count += end - start + 1;
-    }
-  }
+  const count = countCompletedFromProgress(progressContent, format);
 
   // Update or append tasks_completed
   const receiptContent = readFileSync(receiptPath, "utf-8");

@@ -13,7 +13,7 @@
 import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 import type { PlanInfo, DetailTab } from "./types.ts";
-import { wrapText } from "./format.ts";
+import { wrapText, hasProgressData, clampCompleted } from "./format.ts";
 import { useSpinner } from "./hooks.ts";
 import { getPlanStateLabel } from "./state-labels.ts";
 
@@ -160,11 +160,11 @@ function SummaryView({ plan }: { plan: PlanInfo }) {
         </Box>
       )}
 
-      {(plan.totalTasks !== undefined || plan.tasksCompleted !== undefined) && (
+      {hasProgressData(plan.totalTasks, plan.tasksCompleted) && (
         <Box>
           <Text dimColor>{"Tasks       "}</Text>
           <ProgressBar
-            current={plan.tasksCompleted ?? 0}
+            current={clampCompleted(plan.tasksCompleted, plan.totalTasks)}
             total={plan.totalTasks ?? 0}
           />
         </Box>

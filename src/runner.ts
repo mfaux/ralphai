@@ -13,6 +13,7 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
   renameSync,
@@ -40,7 +41,7 @@ import {
 import {
   detectPlan,
   collectBacklogPlans,
-  countPlanTasks,
+  detectPlanFormat,
   countCompletedTasks,
   getPlanDescription,
   type PipelineDirs,
@@ -707,12 +708,15 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     let lastHash = getCurrentCommitHash(cwd) ?? "";
     let completed = false;
 
-    const totalTasks = countPlanTasks(planFile);
+    // Detect plan format once per plan; the result flows into the
+    // iteration log header and future downstream consumers.
+    const planContent = readFileSync(planFile, "utf-8");
+    const { format: planFormat, totalTasks } = detectPlanFormat(planContent);
     let iterationNumber = 0;
 
     while (!interrupted) {
       iterationNumber++;
-      const completedTasks = countCompletedTasks(progressFile);
+      const completedTasks = countCompletedTasks(progressFile, planFormat);
       const currentTask = Math.min(completedTasks + 1, totalTasks);
 
       console.log();
@@ -734,6 +738,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         scopeHint,
         learningsFile,
         learningCandidatesFile,
+        planFormat,
       });
 
       // --- Spawn agent (with output log persistence) ---
@@ -831,7 +836,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
 
       // --- Update receipt tasks_completed from progress.md ---
-      updateReceiptTasks(receiptFile, progressFile);
+      updateReceiptTasks(receiptFile, progressFile, planFormat);
 
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {

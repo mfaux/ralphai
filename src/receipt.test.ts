@@ -89,6 +89,23 @@ describe("parseReceipt", () => {
     expect(receipt!.tasks_completed).toBe(0);
   });
 
+  it("returns tasks_completed: 0 for non-numeric values (NaN guard)", () => {
+    const receiptPath = join(ctx.dir, "receipt-nan.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-01-01T00:00:00Z",
+        "branch=main",
+        "slug=test",
+        "tasks_completed=abc",
+      ].join("\n") + "\n",
+    );
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.tasks_completed).toBe(0);
+  });
+
   it("handles receipt without optional fields", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     writeFileSync(
@@ -230,7 +247,7 @@ describe("updateReceiptTasks", () => {
     expect(content).toContain("tasks_completed=2");
   });
 
-  it("counts batch heading Tasks X-Y plus Status Complete", () => {
+  it("individual Status Complete markers take precedence over batch headings", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     const progressPath = join(ctx.dir, "progress.md");
     writeFileSync(receiptPath, "tasks_completed=0\n");
@@ -244,8 +261,8 @@ describe("updateReceiptTasks", () => {
     updateReceiptTasks(receiptPath, progressPath);
 
     const content = readFileSync(receiptPath, "utf-8");
-    // 3 from batch (1-3) + 1 from Status Complete = 4
-    expect(content).toContain("tasks_completed=4");
+    // Individual markers take precedence: 1 Status Complete, batch ignored
+    expect(content).toContain("tasks_completed=1");
   });
 
   it("counts batch heading with en-dash", () => {
@@ -319,6 +336,50 @@ describe("updateReceiptTasks", () => {
     // tasks_completed should remain 0
     const content = readFileSync(receiptPath, "utf-8");
     expect(content).toContain("tasks_completed=0");
+  });
+
+  it("counts checked checkboxes when format is 'checkboxes'", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    const progressPath = join(ctx.dir, "progress.md");
+    writeFileSync(receiptPath, "tasks_completed=0\n");
+    writeFileSync(
+      progressPath,
+      [
+        "# Progress",
+        "",
+        "- [x] First task done",
+        "- [ ] Second task pending",
+        "- [x] Third task done",
+        "- [x] Fourth task done",
+      ].join("\n"),
+    );
+
+    updateReceiptTasks(receiptPath, progressPath, "checkboxes");
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).toContain("tasks_completed=3");
+  });
+
+  it("defaults to 'tasks' format when format is not specified", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    const progressPath = join(ctx.dir, "progress.md");
+    writeFileSync(receiptPath, "tasks_completed=0\n");
+    writeFileSync(
+      progressPath,
+      [
+        "### Task 1: A",
+        "**Status:** Complete",
+        "",
+        "### Task 2: B",
+        "**Status:** Complete",
+      ].join("\n"),
+    );
+
+    // No format argument — should default to "tasks"
+    updateReceiptTasks(receiptPath, progressPath);
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).toContain("tasks_completed=2");
   });
 });
 

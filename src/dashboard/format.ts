@@ -103,6 +103,36 @@ export function wrapText(text: string, width: number): string[] {
 }
 
 /**
+ * Whether a plan has meaningful task-progress data worth displaying.
+ *
+ * Returns `true` only when `totalTasks` is a positive number — this
+ * prevents nonsensical displays like "1/0" or "0/0".  The function is
+ * intentionally shared across SummaryView, PlanList, and StatusBar so
+ * all three sites use the same show/hide logic.
+ */
+export function hasProgressData(
+  totalTasks: number | undefined,
+  tasksCompleted: number | undefined,
+): boolean {
+  return totalTasks != null && totalTasks > 0;
+}
+
+/**
+ * Clamp a completed-task count so it never exceeds `total`.
+ *
+ * Agent duplication can cause `tasksCompleted > totalTasks`; this
+ * helper ensures the display never shows e.g. "7/5".
+ */
+export function clampCompleted(
+  completed: number | undefined,
+  total: number | undefined,
+): number {
+  const c = completed ?? 0;
+  const t = total ?? 0;
+  return Math.min(c, t);
+}
+
+/**
  * Derive a user-friendly display name for a repo.
  *
  * Uses `basename(repoPath)` as the primary name (e.g. "ralphai").
