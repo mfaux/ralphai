@@ -7,7 +7,6 @@ import {
   categorizeCommits,
   formatCommitsByCategory,
   buildCommitLog,
-  buildDiffStat,
   buildPrBody,
   buildContinuousPrBodyStructured,
 } from "./pr-description.ts";
@@ -185,37 +184,13 @@ describe("buildCommitLog", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildDiffStat (integration with git)
-// ---------------------------------------------------------------------------
-
-describe("buildDiffStat", () => {
-  const ctx = useTempDir();
-
-  it("returns diffstat between base and head", () => {
-    initRepo(ctx.dir);
-    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
-    commitFile(ctx.dir, "new-file.txt", "content\n", "feat: add new file");
-
-    const stat = buildDiffStat("main", "feature", ctx.dir);
-    expect(stat).toContain("new-file.txt");
-    expect(stat).toMatch(/\d+ file/);
-  });
-
-  it("returns empty string when no diff", () => {
-    initRepo(ctx.dir);
-    const stat = buildDiffStat("main", "main", ctx.dir);
-    expect(stat).toBe("");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // buildPrBody
 // ---------------------------------------------------------------------------
 
 describe("buildPrBody", () => {
   const ctx = useTempDir();
 
-  it("includes summary, changes, and files changed sections", () => {
+  it("leads with description and includes changes section", () => {
     initRepo(ctx.dir);
     execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
     commitFile(
@@ -237,24 +212,50 @@ describe("buildPrBody", () => {
       "feature",
       ctx.dir,
     );
-    expect(body).toContain("## Summary");
-    expect(body).toContain("Add authentication system");
+    // Description is the first thing in the body
+    expect(body.startsWith("Add authentication system")).toBe(true);
+    // No ## Summary heading
+    expect(body).not.toContain("## Summary");
+    // No ## Files Changed section
+    expect(body).not.toContain("## Files Changed");
+    // Changes section present
     expect(body).toContain("## Changes");
     expect(body).toContain("### Features");
     expect(body).toContain("- add user login");
     expect(body).toContain("### Bug Fixes");
     expect(body).toContain("- resolve crash on startup");
-    expect(body).toContain("## Files Changed");
-    expect(body).toContain("login.ts");
-    expect(body).toContain("bug.ts");
   });
 
-  it("omits Files Changed section when no diff", () => {
+  it("uses agent summary when provided", () => {
     initRepo(ctx.dir);
-    const body = buildPrBody("Empty plan", "main", "main", ctx.dir);
-    expect(body).toContain("## Summary");
-    expect(body).toContain("Empty plan");
-    expect(body).not.toContain("## Files Changed");
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Plan description", "main", "feature", ctx.dir, {
+      summary:
+        "Implement JWT auth with bcrypt hashing, replacing cookie sessions.",
+    });
+    expect(
+      body.startsWith(
+        "Implement JWT auth with bcrypt hashing, replacing cookie sessions.",
+      ),
+    ).toBe(true);
+    // Plan description should NOT appear when summary is provided
+    expect(body).not.toContain("Plan description");
+  });
+
+  it("falls back to plan description when no summary", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody(
+      "Add authentication system",
+      "main",
+      "feature",
+      ctx.dir,
+    );
+    expect(body.startsWith("Add authentication system")).toBe(true);
   });
 
   it("handles non-conventional commits in Other category", () => {
@@ -267,7 +268,7 @@ describe("buildPrBody", () => {
     expect(body).toContain("- random commit message");
   });
 
-  it("renders PRD line when prd and issueRepo are provided", () => {
+  it("renders PRD line after description", () => {
     initRepo(ctx.dir);
     execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
     commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
@@ -282,13 +283,12 @@ describe("buildPrBody", () => {
         issueRepo: "org/repo",
       },
     );
-    expect(body).toContain("## Summary");
     expect(body).toContain("**PRD:** org/repo#30");
     expect(body).toContain("Fix widget validation");
-    // PRD line should appear before the plan description
-    const prdIdx = body.indexOf("**PRD:**");
+    // Description should appear before PRD line
     const descIdx = body.indexOf("Fix widget validation");
-    expect(prdIdx).toBeLessThan(descIdx);
+    const prdIdx = body.indexOf("**PRD:**");
+    expect(descIdx).toBeLessThan(prdIdx);
   });
 
   it("omits PRD line when prd is not provided", () => {
@@ -311,7 +311,7 @@ describe("buildPrBody", () => {
     expect(body).not.toContain("**PRD:**");
   });
 
-  it("includes Closes #N when issueNumber is provided (same-repo)", () => {
+  it("includes Closes #N after description (same-repo)", () => {
     initRepo(ctx.dir);
     execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
     commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
@@ -320,10 +320,13 @@ describe("buildPrBody", () => {
       issueNumber: 42,
     });
     expect(body).toContain("Closes #42");
-    // Closes line should appear before Summary
+    // Description should appear before Closes
+    const descIdx = body.indexOf("Fix login bug");
     const closesIdx = body.indexOf("Closes #42");
-    const summaryIdx = body.indexOf("## Summary");
-    expect(closesIdx).toBeLessThan(summaryIdx);
+    expect(descIdx).toBeLessThan(closesIdx);
+    // Closes should appear before Changes
+    const changesIdx = body.indexOf("## Changes");
+    expect(closesIdx).toBeLessThan(changesIdx);
   });
 
   it("omits Closes line for manual plans (no issueNumber)", () => {
@@ -363,7 +366,7 @@ describe("buildPrBody", () => {
     expect(body).not.toContain("Closes org/repo#42");
   });
 
-  it("includes both Closes #N and PRD reference when both are provided", () => {
+  it("includes description, Closes, and PRD in correct order", () => {
     initRepo(ctx.dir);
     execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
     commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
@@ -382,12 +385,14 @@ describe("buildPrBody", () => {
     );
     expect(body).toContain("Closes #42");
     expect(body).toContain("**PRD:** org/repo#30");
-    // Closes should appear before Summary, PRD should appear within Summary
-    const closesIdx = body.indexOf("Closes #42");
-    const summaryIdx = body.indexOf("## Summary");
+    // Order: description -> PRD -> Closes -> Changes
+    const descIdx = body.indexOf("Implement feature from PRD");
     const prdIdx = body.indexOf("**PRD:**");
-    expect(closesIdx).toBeLessThan(summaryIdx);
-    expect(summaryIdx).toBeLessThan(prdIdx);
+    const closesIdx = body.indexOf("Closes #42");
+    const changesIdx = body.indexOf("## Changes");
+    expect(descIdx).toBeLessThan(prdIdx);
+    expect(prdIdx).toBeLessThan(closesIdx);
+    expect(closesIdx).toBeLessThan(changesIdx);
   });
 });
 
@@ -417,7 +422,8 @@ describe("buildContinuousPrBodyStructured", () => {
     expect(body).toContain("## Changes");
     expect(body).toContain("### Features");
     expect(body).toContain("- implement plan A");
-    expect(body).toContain("## Files Changed");
+    // No Files Changed section
+    expect(body).not.toContain("## Files Changed");
   });
 
   it("shows placeholders when no plans completed", () => {
@@ -488,5 +494,57 @@ describe("buildContinuousPrBodyStructured", () => {
     expect(body2).toContain("Closes #146");
     expect(body2).toContain("- [x] plan-a");
     expect(body2).toContain("- [x] plan-b");
+  });
+
+  it("leads with summary when provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBodyStructured(
+      ["plan-a"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+      {
+        prdNumber: 146,
+        summary: "Add a complete metrics dashboard with real-time tracking.",
+      },
+    );
+    expect(
+      body.startsWith(
+        "Add a complete metrics dashboard with real-time tracking.",
+      ),
+    ).toBe(true);
+    // Summary should appear before Closes and Completed Plans
+    const summaryIdx = body.indexOf("Add a complete metrics dashboard");
+    const closesIdx = body.indexOf("Closes #146");
+    const plansIdx = body.indexOf("## Completed Plans");
+    expect(summaryIdx).toBeLessThan(closesIdx);
+    expect(closesIdx).toBeLessThan(plansIdx);
+  });
+
+  it("omits summary paragraph when not provided", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBodyStructured(
+      ["plan-a"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+      { prdNumber: 146 },
+    );
+    // Body should start with Closes (no summary paragraph)
+    expect(body.trimStart().startsWith("Closes #146")).toBe(true);
+  });
+
+  it("starts with Completed Plans when no summary and no Closes", () => {
+    initRepo(ctx.dir);
+    const body = buildContinuousPrBodyStructured(
+      ["manual-task.md"],
+      [],
+      "main",
+      "main",
+      ctx.dir,
+    );
+    expect(body.trimStart().startsWith("## Completed Plans")).toBe(true);
   });
 });

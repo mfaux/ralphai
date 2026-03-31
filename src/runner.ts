@@ -29,6 +29,7 @@ import {
 import { processLearnings } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
+import { extractPrSummary } from "./pr-summary.ts";
 import { peekGithubIssues, pullGithubIssues } from "./issues.ts";
 import {
   archiveRun,
@@ -484,6 +485,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const completedPlans: string[] = [];
   let continuousBranch = "";
   let continuousPrUrl = "";
+  let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
   let activePidFile: string | null = null;
 
@@ -849,6 +851,10 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         );
         completedPlans.push(basename(planFile));
 
+        // Extract agent-generated PR description
+        const prSummary = extractPrSummary(output) ?? undefined;
+        if (prSummary) lastPrSummary = prSummary;
+
         // Remove PID file before archiving so it doesn't end up in out/
         try {
           rmSync(pidFile, { force: true });
@@ -876,6 +882,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               firstPlanDescription: planDesc,
               prd,
               issueRepo,
+              summary: prSummary,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -891,6 +898,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               prUrl: continuousPrUrl,
               prd,
               issueRepo,
+              summary: prSummary,
             });
             console.log(update.message);
           }
@@ -905,6 +913,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             issueRepo,
             issueCommentProgress,
             prd: issueFm.prd,
+            summary: prSummary,
           });
           console.log(prResult.message);
         }
@@ -955,6 +964,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       prUrl: continuousPrUrl,
       prd,
       issueRepo,
+      summary: lastPrSummary,
     });
     console.log(finalize.message);
   }

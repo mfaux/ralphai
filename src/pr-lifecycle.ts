@@ -41,6 +41,8 @@ export interface CreatePrOptions {
   issueRepo?: string;
   issueCommentProgress?: boolean;
   prd?: number;
+  /** Agent-generated PR description from `<pr-summary>` block. */
+  summary?: string;
 }
 
 export interface ContinuousPrOptions {
@@ -53,6 +55,8 @@ export interface ContinuousPrOptions {
   prd?: { number: number; title: string };
   /** Repository that owns the issues (e.g. "org/repo"). */
   issueRepo?: string;
+  /** Agent-generated PR description from `<pr-summary>` block. */
+  summary?: string;
 }
 
 export interface ArchiveRunOptions {
@@ -181,6 +185,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     issueRepo: options.issueRepo,
     issueNumber: isGitHub ? options.issueNumber : undefined,
     prRepo,
+    summary: options.summary,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
@@ -226,7 +231,12 @@ export function buildContinuousPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prdNumber?: number; issueRepo?: string; prRepo?: string },
+  options?: {
+    prdNumber?: number;
+    issueRepo?: string;
+    prRepo?: string;
+    summary?: string;
+  },
 ): string {
   const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
   return buildContinuousPrBodyStructured(
@@ -310,7 +320,7 @@ export function updateContinuousPr(
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo },
+    { prdNumber: prd?.number, issueRepo, prRepo, summary: options.summary },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   if (
@@ -338,7 +348,7 @@ export function finalizeContinuousPr(
     baseBranch,
     headBranch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo },
+    { prdNumber: prd?.number, issueRepo, prRepo, summary: options.summary },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
