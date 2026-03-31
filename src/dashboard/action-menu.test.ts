@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { buildMenuItems } from "./ActionMenu.tsx";
 import type { PlanInfo, WorktreeInfo } from "./types.ts";
 

@@ -2,7 +2,7 @@ import { execFileSync, execSync } from "child_process";
 import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { beforeEach, afterEach } from "vitest";
+import { beforeEach, afterEach } from "bun:test";
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

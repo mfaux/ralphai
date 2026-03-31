@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, mock, beforeEach } from "bun:test";
 import type { PlanInfo } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Mocks — set up before importing the module under test
 // ---------------------------------------------------------------------------
 
-const mockExecAsync = vi.fn<(cmd: string, cwd: string) => Promise<string>>();
+const mockExecAsync = mock<(cmd: string, cwd: string) => Promise<string>>();
 
-vi.mock("node:child_process", () => ({
-  exec: vi.fn(
+mock.module("node:child_process", () => ({
+  exec: mock(
     (
       cmd: string,
       opts: unknown,
@@ -21,21 +21,25 @@ vi.mock("node:child_process", () => ({
   ),
 }));
 
-vi.mock("../config.ts", () => ({
-  getConfigFilePath: vi.fn(() => "/mock/.ralphai/repos/test/config.json"),
-  parseConfigFile: vi.fn(() => ({
-    values: {
-      issueSource: "github",
-      issueLabel: "ralphai",
-      issueRepo: "",
-    },
-    warnings: [],
-  })),
+const mockParseConfigFile = mock((): unknown => ({
+  values: {
+    issueSource: "github",
+    issueLabel: "ralphai",
+    issueRepo: "",
+  },
+  warnings: [],
 }));
 
-vi.mock("../issues.ts", () => ({
-  detectIssueRepo: vi.fn(() => "owner/repo"),
-  slugify: vi.fn((text: string) =>
+const mockDetectIssueRepo = mock((): unknown => "owner/repo");
+
+mock.module("../config.ts", () => ({
+  getConfigFilePath: mock(() => "/mock/.ralphai/repos/test/config.json"),
+  parseConfigFile: mockParseConfigFile,
+}));
+
+mock.module("../issues.ts", () => ({
+  detectIssueRepo: mockDetectIssueRepo,
+  slugify: mock((text: string) =>
     text
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -44,19 +48,16 @@ vi.mock("../issues.ts", () => ({
   ),
 }));
 
-import { loadGithubIssuesAsync } from "./issue-loader.ts";
-import { parseConfigFile } from "../config.ts";
-import { detectIssueRepo } from "../issues.ts";
-
-const mockParseConfigFile = parseConfigFile as ReturnType<typeof vi.fn>;
-const mockDetectIssueRepo = detectIssueRepo as ReturnType<typeof vi.fn>;
+const { loadGithubIssuesAsync } = await import("./issue-loader.ts");
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mockExecAsync.mockReset();
+  mockParseConfigFile.mockReset();
+  mockDetectIssueRepo.mockReset();
   // Restore defaults
   mockParseConfigFile.mockReturnValue({
     values: {

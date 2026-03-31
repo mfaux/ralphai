@@ -14,7 +14,7 @@
   "scripts": {
     "build": "obuild",
     "dev": "node --experimental-strip-types src/cli.ts",
-    "test": "vitest --run",
+    "test": "bun scripts/test.ts",
     "type-check": "tsc --noEmit",
     "format": "prettier --write 'src/**/*.ts'",
     "dogfood": "obuild && node bin/cli.mjs"
@@ -54,8 +54,7 @@
     "obuild": "^0.4.22",
     "prettier": "^3.8.1",
     "react": "^19.2.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18"

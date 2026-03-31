@@ -4,7 +4,7 @@
  * Covers: help text, missing issue number, non-numeric issue number,
  * git repo guard, worktree guard, --repo blocked, and top-level help listing.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
 import { mkdtempSync, rmSync } from "fs";
 import { join } from "path";

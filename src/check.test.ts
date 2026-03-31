@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { join, dirname } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";

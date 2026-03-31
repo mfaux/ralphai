@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, spyOn } from "bun:test";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
@@ -433,7 +433,7 @@ describe("checkReceiptSource", () => {
     );
 
     // Suppress console.error output during test
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const spy = spyOn(console, "error").mockImplementation(() => {});
     const result = checkReceiptSource(wipDir, false);
     spy.mockRestore();
 
