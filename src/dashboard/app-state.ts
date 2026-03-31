@@ -9,7 +9,9 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { getRepoPipelineDirs, type RepoSummary } from "../global-state.ts";
+import { getSocketPath } from "../ipc-protocol.ts";
 import type {
   FocusTarget,
   DetailTab,
@@ -39,6 +41,8 @@ import {
   pullAndRunOldest,
 } from "./actions.ts";
 import { loadGithubIssuesAsync } from "./issue-loader.ts";
+import { useRunnerStream } from "./use-runner-stream.ts";
+import { getCachedPipelineDirs } from "./data/shared.ts";
 
 const REFRESH_MS = 3000;
 const GITHUB_REFRESH_MS = 30_000;
@@ -253,6 +257,43 @@ export function useAppState(termRows: number, termCols: number) {
     content: string;
     totalLines: number;
   } | null>(outputLoader, REFRESH_MS, null);
+
+  // --- IPC streaming for real-time output ---
+  // Compute socket path when the selected plan is in-progress with a runner.
+  const socketPath = useMemo(() => {
+    if (
+      !selectedPlan ||
+      !selectedRepo?.repoPath ||
+      selectedPlan.state !== "in-progress" ||
+      !selectedPlan.runnerPid
+    ) {
+      return null;
+    }
+    try {
+      const dirs = getCachedPipelineDirs(selectedRepo.repoPath);
+      const path = getSocketPath(dirs.wipDir, selectedPlan.slug);
+      return existsSync(path) ? path : null;
+    } catch {
+      return null;
+    }
+  }, [
+    selectedPlan?.slug,
+    selectedPlan?.state,
+    selectedPlan?.runnerPid,
+    selectedRepo?.repoPath,
+  ]);
+
+  const { outputLines: ipcOutputLines, connected: ipcConnected } =
+    useRunnerStream(socketPath, selectedRepo?.repoPath ?? null, selectedPlan);
+
+  // Merge IPC output with polled output: IPC takes priority when connected.
+  const mergedOutputData = useMemo(() => {
+    if (ipcConnected && ipcOutputLines.length > 0) {
+      const content = ipcOutputLines.join("\n");
+      return { content, totalLines: ipcOutputLines.length };
+    }
+    return outputData;
+  }, [ipcConnected, ipcOutputLines, outputData]);
 
   // Detail overlay content area: terminal height minus border chrome (2),
   // title row (1), tab bar (1), content margin (1).
@@ -527,7 +568,8 @@ export function useAppState(termRows: number, termCols: number) {
     setScrollOffset,
     planContent,
     progressContent,
-    outputData,
+    outputData: mergedOutputData,
+    ipcConnected,
     contentHeight,
     // Split pane
     isSplitMode,

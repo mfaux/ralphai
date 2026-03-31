@@ -21,6 +21,8 @@ import {
 import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
+import { createIpcServer, type IpcServer } from "./ipc-server.ts";
+import { getSocketPath, type OutputMessage } from "./ipc-protocol.ts";
 import {
   getRepoPipelineDirs,
   getRepoLearningsPath,
@@ -141,6 +143,7 @@ export function spawnAgent(
   iterationTimeout: number,
   cwd: string,
   outputLogPath?: string,
+  ipcBroadcast?: (msg: OutputMessage) => void,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Split the agent command respecting quotes
@@ -201,12 +204,22 @@ export function spawnAgent(
       process.stdout.write(data);
       logStream?.write(data);
       chunks.push(data);
+      ipcBroadcast?.({
+        type: "output",
+        data: data.toString(),
+        stream: "stdout",
+      });
     });
 
     child.stderr?.on("data", (data: Buffer) => {
       process.stderr.write(data);
       logStream?.write(data);
       chunks.push(data);
+      ipcBroadcast?.({
+        type: "output",
+        data: data.toString(),
+        stream: "stderr",
+      });
     });
 
     child.on("close", (code) => {
@@ -488,6 +501,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
   let activePidFile: string | null = null;
+  let activeIpcServer: IpcServer | null = null;
 
   while (!interrupted) {
     console.log();
@@ -708,6 +722,19 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     writeFileSync(pidFile, String(process.pid), "utf8");
     activePidFile = pidFile;
 
+    // --- Start IPC server for real-time output streaming ---
+    let ipcServer: IpcServer | null = null;
+    const socketPath = getSocketPath(dirs.wipDir, planSlug);
+    try {
+      ipcServer = await createIpcServer(socketPath);
+      activeIpcServer = ipcServer;
+    } catch (err) {
+      console.log(
+        `WARNING: IPC server failed to start: ${err instanceof Error ? err.message : err}`,
+      );
+      console.log("Continuing without real-time streaming.");
+    }
+
     // --- Iteration loop (per-plan) ---
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
@@ -760,6 +787,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         iterationTimeout,
         cwd,
         outputLogPath,
+        ipcServer ? (msg) => ipcServer!.broadcast(msg) : undefined,
       );
 
       if (timedOut) {
@@ -812,6 +840,17 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
             const push = pushBranch(branch, cwd);
             console.log(push.message);
           }
+          // Clean up PID file and IPC server before exiting
+          if (ipcServer) {
+            ipcServer.close();
+          }
+          if (activePidFile) {
+            try {
+              rmSync(activePidFile, { force: true });
+            } catch {
+              // Best-effort cleanup
+            }
+          }
           process.exit(1);
         }
       } else {
@@ -855,7 +894,13 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         const prSummary = extractPrSummary(output) ?? undefined;
         if (prSummary) lastPrSummary = prSummary;
 
-        // Remove PID file before archiving so it doesn't end up in out/
+        // Remove PID file and close IPC server before archiving so they
+        // don't end up in out/
+        if (ipcServer) {
+          ipcServer.close();
+          ipcServer = null;
+          activeIpcServer = null;
+        }
         try {
           rmSync(pidFile, { force: true });
         } catch {
@@ -967,6 +1012,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       summary: lastPrSummary,
     });
     console.log(finalize.message);
+  }
+
+  // --- Clean up IPC server on exit (interrupted or drained backlog) ---
+  if (activeIpcServer) {
+    activeIpcServer.close();
+    activeIpcServer = null;
   }
 
   // --- Clean up PID file on exit (interrupted or drained backlog) ---
