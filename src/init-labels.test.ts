@@ -16,58 +16,119 @@ describe("init label creation", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Source-level verification: ensureGitHubLabels creates all three labels
+  // Source-level: labelDefs includes all four labels
   // ---------------------------------------------------------------------------
 
-  it("ensureGitHubLabels creates the ralphai label", () => {
-    expect(ralphaiSrc).toContain(
-      'gh label create ralphai --description "Ralphai picks up this issue" --color 7057ff --force',
-    );
+  it("labelDefs includes the intake label with color 7057ff", () => {
+    expect(ralphaiSrc).toContain('description: "Ralphai picks up this issue"');
+    expect(ralphaiSrc).toContain('color: "7057ff"');
   });
 
-  it("ensureGitHubLabels creates the ralphai:in-progress label", () => {
+  it("labelDefs includes the in-progress label with color fbca04", () => {
     expect(ralphaiSrc).toContain(
-      'gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force',
+      'description: "Ralphai is working on this issue"',
     );
+    expect(ralphaiSrc).toContain('color: "fbca04"');
   });
 
-  it("ensureGitHubLabels creates the ralphai-prd label", () => {
-    expect(ralphaiSrc).toContain(
-      'gh label create ralphai-prd --description "Ralphai PRD',
-    );
-    expect(ralphaiSrc).toContain("--color 1d76db --force");
+  it("labelDefs includes the done label with color 0e8a16", () => {
+    expect(ralphaiSrc).toContain('description: "Ralphai finished this issue"');
+    expect(ralphaiSrc).toContain('color: "0e8a16"');
   });
 
-  // ---------------------------------------------------------------------------
-  // Success message lists all three labels
-  // ---------------------------------------------------------------------------
-
-  it("success message includes all three label names", () => {
+  it("labelDefs includes the ralphai-prd label with color 1d76db", () => {
+    expect(ralphaiSrc).toContain('name: "ralphai-prd"');
     expect(ralphaiSrc).toContain(
-      'Created "ralphai", "ralphai:in-progress", and "ralphai-prd" labels',
+      'description: "Ralphai PRD — names the continuous-mode branch"',
     );
+    expect(ralphaiSrc).toContain('color: "1d76db"');
   });
 
   // ---------------------------------------------------------------------------
-  // Manual-fallback error message includes all three gh label create commands
+  // Source-level: ghLabelCreateCmd produces proper commands
   // ---------------------------------------------------------------------------
 
-  it("manual-fallback error includes gh label create for ralphai", () => {
+  it("ghLabelCreateCmd quotes names with colons or spaces", () => {
     expect(ralphaiSrc).toContain(
-      '  gh label create ralphai --description "Ralphai picks up this issue" --color 7057ff --force',
+      'const quotedName = /[\\s:]/.test(name) ? `"${name}"` : name;',
     );
   });
 
-  it("manual-fallback error includes gh label create for ralphai:in-progress", () => {
+  // ---------------------------------------------------------------------------
+  // Source-level: ensureGitHubLabels uses configured names (LabelNames)
+  // ---------------------------------------------------------------------------
+
+  it("ensureGitHubLabels accepts LabelNames parameter", () => {
     expect(ralphaiSrc).toContain(
-      '  gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force',
+      "function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult",
     );
   });
 
-  it("manual-fallback error includes gh label create for ralphai-prd", () => {
+  it("scaffold passes configured label names to ensureGitHubLabels", () => {
     expect(ralphaiSrc).toContain(
-      '  gh label create ralphai-prd --description "Ralphai PRD',
+      "labelResult = ensureGitHubLabels(cwd, initLabelNames);",
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: scaffold builds LabelNames from config object
+  // ---------------------------------------------------------------------------
+
+  it("scaffold builds initLabelNames from config values", () => {
+    expect(ralphaiSrc).toContain("intake: configObj.issueLabel as string");
+    expect(ralphaiSrc).toContain(
+      "inProgress: configObj.issueInProgressLabel as string",
+    );
+    expect(ralphaiSrc).toContain("done: configObj.issueDoneLabel as string");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: manual-fallback error builds commands dynamically
+  // ---------------------------------------------------------------------------
+
+  it("manual-fallback error is built from labelDefs", () => {
+    expect(ralphaiSrc).toContain(
+      "Could not create labels. Create them manually:",
+    );
+    // Verify the error message is built dynamically from labelDefs
+    expect(ralphaiSrc).toContain("const manual = labelDefs(names)");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: success message lists all four labels dynamically
+  // ---------------------------------------------------------------------------
+
+  it("success message is built from labelDefs", () => {
+    expect(ralphaiSrc).toContain("const allLabels = labelDefs(initLabelNames)");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: best-effort label ensure at run start
+  // ---------------------------------------------------------------------------
+
+  it("runRalphaiRunner ensures labels when issueSource is github", () => {
+    expect(ralphaiSrc).toContain('config.issueSource.value === "github"');
+    // Verify the ensure call uses config values
+    expect(ralphaiSrc).toContain("intake: config.issueLabel.value");
+    expect(ralphaiSrc).toContain(
+      "inProgress: config.issueInProgressLabel.value",
+    );
+    expect(ralphaiSrc).toContain("done: config.issueDoneLabel.value");
+  });
+
+  it("run-start label ensure is skipped in dry-run mode", () => {
+    // The ensure block is inside `if (!isDryRun && config.issueSource.value === "github")`
+    expect(ralphaiSrc).toContain(
+      '!isDryRun && config.issueSource.value === "github"',
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: init config includes issueDoneLabel
+  // ---------------------------------------------------------------------------
+
+  it("scaffold config includes issueDoneLabel", () => {
+    expect(ralphaiSrc).toContain('issueDoneLabel: "ralphai:done"');
   });
 
   // ---------------------------------------------------------------------------

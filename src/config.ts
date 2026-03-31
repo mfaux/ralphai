@@ -24,6 +24,7 @@ export interface RalphaiConfig {
   issueSource: "none" | "github";
   issueLabel: string;
   issueInProgressLabel: string;
+  issueDoneLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
@@ -65,6 +66,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueSource: "none",
   issueLabel: "ralphai",
   issueInProgressLabel: "ralphai:in-progress",
+  issueDoneLabel: "ralphai:done",
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
@@ -173,6 +175,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueSource",
   "issueLabel",
   "issueInProgressLabel",
+  "issueDoneLabel",
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
@@ -303,6 +306,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     const v = String(obj.issueInProgressLabel || "");
     if (v === "") err("'issueInProgressLabel' must be a non-empty label name");
     values.issueInProgressLabel = v;
+  }
+
+  // issueDoneLabel (string, non-empty)
+  if ("issueDoneLabel" in obj) {
+    const v = String(obj.issueDoneLabel || "");
+    if (v === "") err("'issueDoneLabel' must be a non-empty label name");
+    values.issueDoneLabel = v;
   }
 
   // issueRepo (string, can be empty)
@@ -437,6 +447,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_SOURCE", "issueSource"],
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
+  ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_CONTINUOUS", "continuous"],
@@ -509,6 +520,10 @@ export function applyEnvOverrides(
   // issueInProgressLabel
   const issueIpLabel = get("RALPHAI_ISSUE_IN_PROGRESS_LABEL");
   if (issueIpLabel !== undefined) overrides.issueInProgressLabel = issueIpLabel;
+
+  // issueDoneLabel
+  const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
+  if (issueDoneLabel !== undefined) overrides.issueDoneLabel = issueDoneLabel;
 
   // issueRepo
   const issueRepo = get("RALPHAI_ISSUE_REPO");
@@ -640,6 +655,15 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       }
       overrides.issueInProgressLabel = v;
       rawFlags.issueInProgressLabel = arg;
+    } else if (arg.startsWith("--issue-done-label=")) {
+      const v = arg.slice("--issue-done-label=".length);
+      if (v === "") {
+        throw new ConfigError(
+          "ERROR: --issue-done-label requires a non-empty value",
+        );
+      }
+      overrides.issueDoneLabel = v;
+      rawFlags.issueDoneLabel = arg;
     } else if (arg.startsWith("--issue-repo=")) {
       const v = arg.slice("--issue-repo=".length);
       overrides.issueRepo = v;

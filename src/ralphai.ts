@@ -613,12 +613,57 @@ interface LabelResult {
   error?: string;
 }
 
+interface LabelNames {
+  intake: string;
+  inProgress: string;
+  done: string;
+}
+
+/** Build a `gh label create` command string for a given label. */
+function ghLabelCreateCmd(
+  name: string,
+  description: string,
+  color: string,
+): string {
+  // Quote label names that contain special characters (colons, spaces, etc.)
+  const quotedName = /[\s:]/.test(name) ? `"${name}"` : name;
+  return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
+}
+
+/** The four label definitions with their descriptions and colors. */
+function labelDefs(names: LabelNames) {
+  return [
+    {
+      name: names.intake,
+      description: "Ralphai picks up this issue",
+      color: "7057ff",
+    },
+    {
+      name: names.inProgress,
+      description: "Ralphai is working on this issue",
+      color: "fbca04",
+    },
+    {
+      name: names.done,
+      description: "Ralphai finished this issue",
+      color: "0e8a16",
+    },
+    {
+      name: "ralphai-prd",
+      description: "Ralphai PRD — names the continuous-mode branch",
+      color: "1d76db",
+    },
+  ];
+}
+
 /**
- * Create the `ralphai`, `ralphai:in-progress`, and `ralphai-prd` labels on the
- * GitHub repo. Uses `gh label create --force` so it is idempotent. Never
- * throws — label creation is best-effort.
+ * Create issue-tracking labels on the GitHub repo. Uses `gh label create
+ * --force` so it is idempotent. Never throws — label creation is best-effort.
+ *
+ * Creates four labels: intake, in-progress, done, and prd. The first three use
+ * the configured label names; the prd label is always `ralphai-prd`.
  */
-function ensureGitHubLabels(cwd: string): LabelResult {
+function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
     // Check gh is available
     execSync("gh --version", { cwd, stdio: "pipe" });
@@ -640,27 +685,20 @@ function ensureGitHubLabels(cwd: string): LabelResult {
   }
 
   try {
-    execSync(
-      'gh label create ralphai --description "Ralphai picks up this issue" --color 7057ff --force',
-      { cwd, stdio: "pipe" },
-    );
-    execSync(
-      'gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force',
-      { cwd, stdio: "pipe" },
-    );
-    execSync(
-      'gh label create ralphai-prd --description "Ralphai PRD — names the continuous-mode branch" --color 1d76db --force',
-      { cwd, stdio: "pipe" },
-    );
+    for (const label of labelDefs(names)) {
+      execSync(ghLabelCreateCmd(label.name, label.description, label.color), {
+        cwd,
+        stdio: "pipe",
+      });
+    }
     return { success: true };
   } catch {
+    const manual = labelDefs(names)
+      .map((l) => `  ${ghLabelCreateCmd(l.name, l.description, l.color)}`)
+      .join("\n");
     return {
       success: false,
-      error:
-        "Could not create labels. Create them manually:\n" +
-        '  gh label create ralphai --description "Ralphai picks up this issue" --color 7057ff --force\n' +
-        '  gh label create "ralphai:in-progress" --description "Ralphai is working on this issue" --color fbca04 --force\n' +
-        '  gh label create ralphai-prd --description "Ralphai PRD — names the continuous-mode branch" --color 1d76db --force',
+      error: `Could not create labels. Create them manually:\n${manual}`,
     };
   }
 }
@@ -696,6 +734,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueSource: answers.issueSource ?? "none",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
+    issueDoneLabel: "ralphai:done",
     issueRepo: "",
     issueCommentProgress: true,
   };
@@ -728,9 +767,14 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   }
 
   // Create GitHub labels if issues integration is enabled
+  const initLabelNames: LabelNames = {
+    intake: configObj.issueLabel as string,
+    inProgress: configObj.issueInProgressLabel as string,
+    done: configObj.issueDoneLabel as string,
+  };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
-    labelResult = ensureGitHubLabels(cwd);
+    labelResult = ensureGitHubLabels(cwd, initLabelNames);
   }
 
   // Create sample plan in backlog
@@ -754,8 +798,11 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   );
   if (labelResult) {
     if (labelResult.success) {
+      const allLabels = labelDefs(initLabelNames).map((l) => `"${l.name}"`);
+      const labelList =
+        allLabels.slice(0, -1).join(", ") + ", and " + allLabels.at(-1);
       console.log(
-        `  GitHub labels              ${DIM}Created "ralphai", "ralphai:in-progress", and "ralphai-prd" labels${RESET}`,
+        `  GitHub labels              ${DIM}Created ${labelList} labels${RESET}`,
       );
     } else {
       console.log();
@@ -2627,6 +2674,7 @@ const CONFIG_FLAG_PATTERNS = [
   /^--issue-source=/,
   /^--issue-label=/,
   /^--issue-in-progress-label=/,
+  /^--issue-done-label=/,
   /^--issue-repo=/,
   /^--issue-comment-progress=/,
 ];
@@ -2673,6 +2721,7 @@ function showRunHelp(): void {
     "  --issue-source=<source>          Issue source: 'none' or 'github' (default: none)",
     "  --issue-label=<label>            Label to filter issues by (default: ralphai)",
     "  --issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)",
+    "  --issue-done-label=<label>       Label applied when issue is done (default: ralphai:done)",
     "  --issue-repo=<owner/repo>        Override repo for issue operations (default: auto-detect)",
     "  --issue-comment-progress=<bool>  Comment on issue during run (default: true)",
     "  --show-config                    Print resolved settings and exit",
@@ -2682,7 +2731,7 @@ function showRunHelp(): void {
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, baseBranch, maxStuck,",
     "                  continuous, autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, issueLabel,",
-    "                  issueInProgressLabel, issueRepo,",
+    "                  issueInProgressLabel, issueDoneLabel, issueRepo,",
     "                  issueCommentProgress",
     "",
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
@@ -2694,6 +2743,7 @@ function showRunHelp(): void {
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
     "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,",
+    "                   RALPHAI_ISSUE_DONE_LABEL,",
     "                   RALPHAI_ISSUE_REPO,",
     "                   RALPHAI_ISSUE_COMMENT_PROGRESS",
     "",
@@ -3441,6 +3491,20 @@ async function runRalphaiRunner(
     const { wipDir } = getRepoPipelineDirs(cwd);
     if (!checkReceiptSource(wipDir, worktreeInfo.isWorktree)) {
       process.exit(1);
+    }
+  }
+
+  // Best-effort: ensure all issue-tracking labels exist. Non-throwing so
+  // upgrading users don't need to re-run `ralphai init`. Skipped in dry-run.
+  if (!isDryRun && config.issueSource.value === "github") {
+    try {
+      ensureGitHubLabels(cwd, {
+        intake: config.issueLabel.value,
+        inProgress: config.issueInProgressLabel.value,
+        done: config.issueDoneLabel.value,
+      });
+    } catch {
+      // Intentionally swallowed — label creation is best-effort.
     }
   }
 

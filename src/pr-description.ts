@@ -125,6 +125,62 @@ export function categorizeCommits(commitLog: string): CategorizedCommits {
 }
 
 // ---------------------------------------------------------------------------
+// Child-issue extraction and Closes block
+// ---------------------------------------------------------------------------
+
+const GH_PLAN_PATTERN = /^gh-(\d+)-/;
+
+/**
+ * Extract deduplicated issue numbers from GitHub-sourced plan filenames.
+ *
+ * Matches filenames like `gh-42-fix-login.md` and extracts the number.
+ * Skips non-GitHub filenames, `gh-0-*`, and `gh-abc-*` patterns.
+ */
+export function extractIssueNumbersFromPlans(plans: string[]): number[] {
+  const seen = new Set<number>();
+  for (const plan of plans) {
+    const m = plan.match(GH_PLAN_PATTERN);
+    if (!m) continue;
+    const n = parseInt(m[1]!, 10);
+    if (n > 0) seen.add(n);
+  }
+  return [...seen];
+}
+
+/**
+ * Build `Closes #N` lines for a PR body.
+ *
+ * When `issueRepo` and `prRepo` differ (and both are non-empty), uses
+ * cross-repo syntax `Closes org/repo#N`. When same repo or either is
+ * missing, uses short `Closes #N`.
+ *
+ * Deduplicates: if `prdNumber` also appears in `issueNumbers`, it is
+ * emitted only once.
+ */
+export function buildClosesBlock(options: {
+  prdNumber?: number;
+  issueNumbers: number[];
+  issueRepo?: string;
+  prRepo?: string;
+}): string {
+  const { prdNumber, issueNumbers, issueRepo, prRepo } = options;
+  const crossRepo =
+    issueRepo && prRepo && issueRepo !== prRepo ? issueRepo : undefined;
+
+  // Collect all unique numbers, PRD first (if present), then children
+  const all = new Set<number>();
+  if (prdNumber !== undefined && prdNumber > 0) all.add(prdNumber);
+  for (const n of issueNumbers) all.add(n);
+
+  if (all.size === 0) return "";
+
+  const lines = [...all].map(
+    (n) => `Closes ${crossRepo ? `${crossRepo}#${n}` : `#${n}`}`,
+  );
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Body builders
 // ---------------------------------------------------------------------------
 
@@ -166,14 +222,33 @@ export function buildPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prd?: number; issueRepo?: string },
+  options?: {
+    prd?: number;
+    issueRepo?: string;
+    issueNumber?: number;
+    prRepo?: string;
+  },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
   const categorized = categorizeCommits(commitLog);
   const formattedCommits = formatCommitsByCategory(categorized);
   const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
 
-  const parts: string[] = [`## Summary\n`];
+  const parts: string[] = [];
+
+  // Emit Closes #N when the plan is from a GitHub issue
+  if (options?.issueNumber) {
+    const closesBlock = buildClosesBlock({
+      issueNumbers: [options.issueNumber],
+      issueRepo: options.issueRepo,
+      prRepo: options.prRepo,
+    });
+    if (closesBlock) {
+      parts.push(closesBlock + "\n");
+    }
+  }
+
+  parts.push(`## Summary\n`);
 
   if (options?.prd !== undefined && options.issueRepo) {
     parts.push(`**PRD:** ${options.issueRepo}#${options.prd}\n`);
@@ -203,12 +278,19 @@ export function buildContinuousPrBodyStructured(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prdNumber?: number },
+  options?: { prdNumber?: number; issueRepo?: string; prRepo?: string },
 ): string {
   const parts: string[] = [];
 
-  if (options?.prdNumber !== undefined) {
-    parts.push(`Closes #${options.prdNumber}\n`);
+  const childIssues = extractIssueNumbersFromPlans(completedPlans);
+  const closesBlock = buildClosesBlock({
+    prdNumber: options?.prdNumber,
+    issueNumbers: childIssues,
+    issueRepo: options?.issueRepo,
+    prRepo: options?.prRepo,
+  });
+  if (closesBlock) {
+    parts.push(closesBlock + "\n");
   }
 
   parts.push("## Completed Plans\n");

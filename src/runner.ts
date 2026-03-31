@@ -454,6 +454,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
+  const issueDoneLabel = config.issueDoneLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -535,6 +536,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(finalize.message);
           }
@@ -570,6 +572,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(finalize.message);
           }
@@ -858,6 +861,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           wipFiles: [planFile],
           archiveDir: dirs.archiveDir,
           issueInProgressLabel,
+          issueDoneLabel,
           cwd,
         });
 
@@ -871,6 +875,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               firstPlanDescription: planDesc,
               prd,
+              issueRepo,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -885,6 +890,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(update.message);
           }
@@ -948,6 +954,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       cwd,
       prUrl: continuousPrUrl,
       prd,
+      issueRepo,
     });
     console.log(finalize.message);
   }

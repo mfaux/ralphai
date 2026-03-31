@@ -108,6 +108,7 @@ describe("archiveRun", () => {
       wipFiles: [],
       archiveDir: join(ctx.dir, "out"),
       issueInProgressLabel: "ralphai:in-progress",
+      issueDoneLabel: "ralphai:done",
       cwd: ctx.dir,
     });
     expect(result.archived).toBe(false);
@@ -127,6 +128,7 @@ describe("archiveRun", () => {
       wipFiles: [join(wipDir, "plan.md"), join(wipDir, "progress.md")],
       archiveDir,
       issueInProgressLabel: "ralphai:in-progress",
+      issueDoneLabel: "ralphai:done",
       cwd: ctx.dir,
     });
 
@@ -149,6 +151,7 @@ describe("archiveRun", () => {
       wipFiles: [join(wipDir, "plan.md")],
       archiveDir,
       issueInProgressLabel: "ralphai:in-progress",
+      issueDoneLabel: "ralphai:done",
       cwd: ctx.dir,
     });
 
@@ -171,6 +174,7 @@ describe("archiveRun", () => {
       wipFiles: [join(wipDir, "plan.md")],
       archiveDir,
       issueInProgressLabel: "ralphai:in-progress",
+      issueDoneLabel: "ralphai:done",
       cwd: ctx.dir,
     });
 
