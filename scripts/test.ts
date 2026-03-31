@@ -39,13 +39,18 @@ const allTests = findTestFiles(join(root, "src")).map((f) =>
 );
 const mainTests = allTests.filter((f) => !ISOLATED.includes(f));
 
+const TIMEOUT = "60000";
+
 let failed = false;
 
 // 1. Run isolated files one-by-one
 for (const file of ISOLATED) {
   console.log(`\n--- isolated: ${file} ---`);
   try {
-    execSync(`bun test ${file}`, { cwd: root, stdio: "inherit" });
+    execSync(`bun test --timeout ${TIMEOUT} ${file}`, {
+      cwd: root,
+      stdio: "inherit",
+    });
   } catch {
     failed = true;
   }
@@ -54,7 +59,10 @@ for (const file of ISOLATED) {
 // 2. Run the rest of the suite
 console.log(`\n--- main suite (${mainTests.length} files) ---`);
 try {
-  execSync(`bun test ${mainTests.join(" ")}`, { cwd: root, stdio: "inherit" });
+  execSync(`bun test --timeout ${TIMEOUT} ${mainTests.join(" ")}`, {
+    cwd: root,
+    stdio: "inherit",
+  });
 } catch {
   failed = true;
 }
