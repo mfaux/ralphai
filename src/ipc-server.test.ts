@@ -12,7 +12,14 @@ import { join } from "path";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
-import { deserialize, type OutputMessage } from "./ipc-protocol.ts";
+import {
+  deserialize,
+  type OutputMessage,
+  type ProgressMessage,
+  type ReceiptMessage,
+  type CompleteMessage,
+  type IpcMessage,
+} from "./ipc-protocol.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -275,5 +282,92 @@ describe("IPC server", () => {
     server.broadcast({ type: "output", data: "works", stream: "stdout" });
     const messages = await collecting;
     expect(messages.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Broadcasting non-output message types
+// ---------------------------------------------------------------------------
+
+describe("IPC server message type broadcasts", () => {
+  test("broadcasts progress message to client", async () => {
+    const socketPath = freshSocketPath();
+    server = await createIpcServer(socketPath);
+
+    const client = await connectClient(socketPath);
+    const collecting = collectMessages(client, 1);
+
+    const msg: ProgressMessage = {
+      type: "progress",
+      iteration: 2,
+      content: "- [x] Updated config\n- [x] Added tests",
+    };
+    server.broadcast(msg);
+
+    const messages = await collecting;
+    expect(messages.length).toBe(1);
+    expect(deserialize(messages[0]!)).toEqual(msg);
+  });
+
+  test("broadcasts receipt message to client", async () => {
+    const socketPath = freshSocketPath();
+    server = await createIpcServer(socketPath);
+
+    const client = await connectClient(socketPath);
+    const collecting = collectMessages(client, 1);
+
+    const msg: ReceiptMessage = {
+      type: "receipt",
+      tasksCompleted: 5,
+    };
+    server.broadcast(msg);
+
+    const messages = await collecting;
+    expect(messages.length).toBe(1);
+    expect(deserialize(messages[0]!)).toEqual(msg);
+  });
+
+  test("broadcasts complete message to client", async () => {
+    const socketPath = freshSocketPath();
+    server = await createIpcServer(socketPath);
+
+    const client = await connectClient(socketPath);
+    const collecting = collectMessages(client, 1);
+
+    const msg: CompleteMessage = {
+      type: "complete",
+      planSlug: "feat-auth-flow",
+    };
+    server.broadcast(msg);
+
+    const messages = await collecting;
+    expect(messages.length).toBe(1);
+    expect(deserialize(messages[0]!)).toEqual(msg);
+  });
+
+  test("broadcasts mixed message types in sequence", async () => {
+    const socketPath = freshSocketPath();
+    server = await createIpcServer(socketPath);
+
+    const client = await connectClient(socketPath);
+    const collecting = collectMessages(client, 4);
+
+    const msgs: IpcMessage[] = [
+      { type: "output", data: "starting...", stream: "stdout" },
+      { type: "progress", iteration: 1, content: "- [x] Done" },
+      { type: "receipt", tasksCompleted: 1 },
+      { type: "complete", planSlug: "my-plan" },
+    ];
+
+    for (const msg of msgs) {
+      server.broadcast(msg);
+    }
+
+    const received = await collecting;
+    expect(received.length).toBe(4);
+    expect(deserialize(received[0]!)).toEqual(msgs[0]!);
+    expect(deserialize(received[1]!)).toEqual(msgs[1]!);
+    expect(deserialize(received[2]!)).toEqual(msgs[2]!);
+    expect(deserialize(received[3]!)).toEqual(msgs[3]!);
   });
 });

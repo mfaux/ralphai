@@ -12,6 +12,8 @@ import {
   deserialize,
   type IpcMessage,
   type OutputMessage,
+  type ProgressMessage,
+  type ReceiptMessage,
 } from "../ipc-protocol.ts";
 import { RingBuffer } from "./ring-buffer.ts";
 
@@ -32,6 +34,12 @@ export interface StreamClientState {
   outputLines: RingBuffer<string>;
   /** Incomplete line buffer for partial-line buffering across chunks. */
   lineBuffer: string;
+  /** Accumulated progress content from progress messages. */
+  progressContent: string;
+  /** Latest tasks-completed count from receipt messages. */
+  tasksCompleted: number;
+  /** Whether a complete message has been received. */
+  completed: boolean;
 }
 
 /** Events that drive state transitions. */
@@ -53,6 +61,9 @@ export function createStreamClientState(capacity = 200): StreamClientState {
     connectionState: "idle",
     outputLines: new RingBuffer<string>(capacity),
     lineBuffer: "",
+    progressContent: "",
+    tasksCompleted: 0,
+    completed: false,
   };
 }
 
@@ -106,7 +117,14 @@ export function applyEvent(
 
     case "reset":
       state.outputLines.clear();
-      return { ...state, connectionState: "idle", lineBuffer: "" };
+      return {
+        ...state,
+        connectionState: "idle",
+        lineBuffer: "",
+        progressContent: "",
+        tasksCompleted: 0,
+        completed: false,
+      };
 
     default:
       return state;
@@ -141,18 +159,28 @@ function processChunk(state: StreamClientState, chunk: string): void {
 }
 
 /**
- * Handle a parsed IPC message. Currently only processes `output` messages;
- * other types are reserved for future slices.
+ * Handle a parsed IPC message. Dispatches on message type to update
+ * the appropriate state fields.
  */
 function handleMessage(state: StreamClientState, msg: IpcMessage): void {
   switch (msg.type) {
     case "output":
       pushOutputLines(state.outputLines, (msg as OutputMessage).data);
       break;
-    case "progress":
-    case "receipt":
+    case "progress": {
+      const pm = msg as ProgressMessage;
+      // Accumulate iteration blocks (same format as appendProgressBlock)
+      const block = `\n### Iteration ${pm.iteration}\n${pm.content}\n`;
+      state.progressContent += block;
+      break;
+    }
+    case "receipt": {
+      const rm = msg as ReceiptMessage;
+      state.tasksCompleted = rm.tasksCompleted;
+      break;
+    }
     case "complete":
-      // Reserved for future slices — no-op for now
+      state.completed = true;
       break;
   }
 }

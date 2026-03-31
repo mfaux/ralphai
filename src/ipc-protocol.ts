@@ -6,9 +6,9 @@
  *
  * Four message types:
  * - `output`   — agent stdout/stderr chunk
- * - `progress` — task progress update (future slice)
- * - `receipt`  — receipt field update (future slice)
- * - `complete` — plan completed (future slice)
+ * - `progress` — iteration progress block extracted from agent output
+ * - `receipt`  — updated tasks-completed count after receipt update
+ * - `complete` — plan completed notification
  */
 
 import { join } from "path";
@@ -26,27 +26,27 @@ export interface OutputMessage {
   stream: "stdout" | "stderr";
 }
 
-/** Task progress update (reserved for future slice). */
+/** Progress block extracted from agent output after an iteration. */
 export interface ProgressMessage {
   type: "progress";
-  /** Number of tasks completed. */
-  tasksCompleted: number;
-  /** Total tasks in the plan. */
-  totalTasks: number;
+  /** The iteration number that produced this progress block. */
+  iteration: number;
+  /** The extracted progress content (markdown text). */
+  content: string;
 }
 
-/** Receipt field update (reserved for future slice). */
+/** Updated tasks-completed count after a receipt update. */
 export interface ReceiptMessage {
   type: "receipt";
-  /** Updated receipt fields. */
-  fields: Record<string, string>;
+  /** Number of tasks completed so far. */
+  tasksCompleted: number;
 }
 
-/** Plan completion notification (reserved for future slice). */
+/** Plan completion notification, broadcast before the IPC server closes. */
 export interface CompleteMessage {
   type: "complete";
-  /** Whether the plan completed successfully. */
-  success: boolean;
+  /** The plan slug that completed. */
+  planSlug: string;
 }
 
 /** Union of all IPC message types. */

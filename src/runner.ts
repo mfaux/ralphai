@@ -22,7 +22,11 @@ import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
-import { getSocketPath, type OutputMessage } from "./ipc-protocol.ts";
+import {
+  getSocketPath,
+  type IpcMessage,
+  type OutputMessage,
+} from "./ipc-protocol.ts";
 import {
   getRepoPipelineDirs,
   getRepoLearningsPath,
@@ -143,7 +147,7 @@ export function spawnAgent(
   iterationTimeout: number,
   cwd: string,
   outputLogPath?: string,
-  ipcBroadcast?: (msg: OutputMessage) => void,
+  ipcBroadcast?: (msg: IpcMessage) => void,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Split the agent command respecting quotes
@@ -813,6 +817,14 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         console.log(
           `Appended progress block from iteration ${iterationNumber}.`,
         );
+        // Broadcast progress to connected dashboard clients
+        if (ipcServer) {
+          ipcServer.broadcast({
+            type: "progress",
+            iteration: iterationNumber,
+            content: progressContent,
+          });
+        }
       }
 
       if (exitCode !== 0 && !timedOut) {
@@ -881,6 +893,17 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
       // --- Update receipt tasks_completed from progress.md ---
       updateReceiptTasks(receiptFile, progressFile, planFormat);
+      // Broadcast updated tasks-completed count to connected dashboard clients
+      if (ipcServer) {
+        const updatedTasksCompleted = countCompletedTasks(
+          progressFile,
+          planFormat,
+        );
+        ipcServer.broadcast({
+          type: "receipt",
+          tasksCompleted: updatedTasksCompleted,
+        });
+      }
 
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
@@ -897,6 +920,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         // Remove PID file and close IPC server before archiving so they
         // don't end up in out/
         if (ipcServer) {
+          // Broadcast completion before closing so dashboard clients
+          // know the plan finished
+          ipcServer.broadcast({ type: "complete", planSlug });
           ipcServer.close();
           ipcServer = null;
           activeIpcServer = null;

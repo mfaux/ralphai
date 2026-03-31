@@ -182,18 +182,18 @@ The server calls `server.unref()` so it does not prevent the runner process from
 
 Newline-delimited JSON (`\n`-separated). Each line is a complete JSON object with a `type` discriminator:
 
-| Type       | Description                   | Fields                                         |
-| ---------- | ----------------------------- | ---------------------------------------------- |
-| `output`   | Agent stdout/stderr chunk     | `data: string`, `stream: "stdout"\|"stderr"`   |
-| `progress` | Task progress (future slice)  | `tasksCompleted: number`, `totalTasks: number` |
-| `receipt`  | Receipt update (future slice) | `fields: Record<string, string>`               |
-| `complete` | Plan finished (future slice)  | `success: boolean`                             |
+| Type       | Description                   | Fields                                       |
+| ---------- | ----------------------------- | -------------------------------------------- |
+| `output`   | Agent stdout/stderr chunk     | `data: string`, `stream: "stdout"\|"stderr"` |
+| `progress` | Iteration progress block      | `iteration: number`, `content: string`       |
+| `receipt`  | Updated tasks-completed count | `tasksCompleted: number`                     |
+| `complete` | Plan finished                 | `planSlug: string`                           |
 
-This tracer bullet implements `output` messages end-to-end. The other three types are defined in the protocol but not yet exercised.
+All four message types are implemented end-to-end. The runner broadcasts `progress` after extracting iteration blocks, `receipt` after updating receipt tasks, and `complete` before closing the IPC server. The dashboard stream client handles all types and merges IPC data with polled data.
 
 ### Fallback Behavior
 
-When no `runner.sock` file exists (older runner version, server failed to start, or plan not actively running), the dashboard falls back to file-based polling via `useAsyncAutoRefresh` and `loadOutputTailAsync`. The `useRunnerStream` hook returns empty state when the socket path is null, and `app-state.ts` merges IPC output with polled output — IPC takes priority when connected.
+When no `runner.sock` file exists (older runner version, server failed to start, or plan not actively running), the dashboard falls back to file-based polling via `useAsyncAutoRefresh` and `loadOutputTailAsync`. The `useRunnerStream` hook returns empty state when the socket path is null. When IPC is connected, `app-state.ts` pauses filesystem polling for both progress and output (loaders return `Promise.resolve(null)`), and merges IPC data with polled data — IPC takes priority when connected.
 
 ### Catch-Up on Connect
 

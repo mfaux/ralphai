@@ -43,8 +43,8 @@ describe("serialize", () => {
   test("progress message round-trips", () => {
     const msg: ProgressMessage = {
       type: "progress",
-      tasksCompleted: 3,
-      totalTasks: 10,
+      iteration: 3,
+      content: "- [x] Implement feature A\n- [x] Add tests",
     };
     const result = deserialize(serialize(msg));
     expect(result).toEqual(msg);
@@ -53,14 +53,14 @@ describe("serialize", () => {
   test("receipt message round-trips", () => {
     const msg: ReceiptMessage = {
       type: "receipt",
-      fields: { branch: "feat/test", slug: "my-plan" },
+      tasksCompleted: 5,
     };
     const result = deserialize(serialize(msg));
     expect(result).toEqual(msg);
   });
 
   test("complete message round-trips", () => {
-    const msg: CompleteMessage = { type: "complete", success: true };
+    const msg: CompleteMessage = { type: "complete", planSlug: "my-plan" };
     const result = deserialize(serialize(msg));
     expect(result).toEqual(msg);
   });
@@ -185,7 +185,7 @@ describe("multi-message chunk parsing", () => {
     const msgs: IpcMessage[] = [
       { type: "output", data: "line 1", stream: "stdout" },
       { type: "output", data: "line 2", stream: "stderr" },
-      { type: "progress", tasksCompleted: 1, totalTasks: 5 },
+      { type: "progress", iteration: 1, content: "- [x] Task 1" },
     ];
 
     const chunk = msgs.map(serialize).join("");

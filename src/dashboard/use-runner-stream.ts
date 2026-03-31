@@ -17,13 +17,18 @@ import {
 } from "./stream-client.ts";
 import { loadOutputTailAsync } from "./data/output.ts";
 import type { PlanInfo } from "./types.ts";
-import { RingBuffer } from "./ring-buffer.ts";
 
 export interface RunnerStreamResult {
   /** Output lines from IPC streaming. */
   outputLines: string[];
   /** Whether the IPC connection is active. */
   connected: boolean;
+  /** Accumulated progress content from IPC progress messages. */
+  progressContent: string;
+  /** Latest tasks-completed count from IPC receipt messages. */
+  tasksCompleted: number;
+  /** Whether a completion message was received. */
+  completed: boolean;
 }
 
 /**
@@ -47,12 +52,19 @@ export function useRunnerStream(
   const [connected, setConnected] = useState(false);
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const [historicalLines, setHistoricalLines] = useState<string[]>([]);
+  const [progressContent, setProgressContent] = useState("");
+  const [tasksCompleted, setTasksCompleted] = useState(0);
+  const [completed, setCompleted] = useState(false);
   const catchUpDoneRef = useRef(false);
 
-  // Force re-render on data updates
-  const updateOutput = useCallback(() => {
-    const ipcLines = stateRef.current.outputLines.toArray();
+  /** Sync React state from the pure state machine. */
+  const syncState = useCallback(() => {
+    const s = stateRef.current;
+    const ipcLines = s.outputLines.toArray();
     setOutputLines([...historicalLines, ...ipcLines]);
+    setProgressContent(s.progressContent);
+    setTasksCompleted(s.tasksCompleted);
+    setCompleted(s.completed);
   }, [historicalLines]);
 
   useEffect(() => {
@@ -62,6 +74,9 @@ export function useRunnerStream(
     setHistoricalLines([]);
     setOutputLines([]);
     setConnected(false);
+    setProgressContent("");
+    setTasksCompleted(0);
+    setCompleted(false);
 
     if (!socketPath || !existsSync(socketPath)) {
       return;
@@ -91,12 +106,7 @@ export function useRunnerStream(
 
     socket.on("data", (data: Buffer) => {
       applyEvent(stateRef.current, { type: "data", chunk: data.toString() });
-      // Trigger re-render with latest lines
-      const ipcLines = stateRef.current.outputLines.toArray();
-      setOutputLines((prev) => {
-        // Include historical lines
-        return [...historicalLines, ...ipcLines];
-      });
+      syncState();
     });
 
     socket.on("close", () => {
@@ -125,5 +135,5 @@ export function useRunnerStream(
     }
   }, [historicalLines]);
 
-  return { outputLines, connected };
+  return { outputLines, connected, progressContent, tasksCompleted, completed };
 }
