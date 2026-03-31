@@ -51,6 +51,8 @@ export interface ContinuousPrOptions {
   cwd: string;
   /** PRD issue driving this continuous run. */
   prd?: { number: number; title: string };
+  /** Repository that owns the issues (e.g. "org/repo"). */
+  issueRepo?: string;
 }
 
 export interface ArchiveRunOptions {
@@ -218,7 +220,7 @@ export function buildContinuousPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prdNumber?: number },
+  options?: { prdNumber?: number; issueRepo?: string; prRepo?: string },
 ): string {
   const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
   return buildContinuousPrBodyStructured(
@@ -243,17 +245,19 @@ export function createContinuousPr(
     backlogDir,
     cwd,
     prd,
+    issueRepo,
   } = options;
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
 
+  const prRepo = detectIssueRepo(cwd) ?? undefined;
   const prBody = buildContinuousPrBody(
     completedPlans,
     backlogDir,
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number },
+    { prdNumber: prd?.number, issueRepo, prRepo },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
@@ -279,19 +283,28 @@ export function createContinuousPr(
 export function updateContinuousPr(
   options: ContinuousPrOptions & { prUrl: string },
 ): PushResult {
-  const { branch, baseBranch, prUrl, completedPlans, backlogDir, cwd, prd } =
-    options;
+  const {
+    branch,
+    baseBranch,
+    prUrl,
+    completedPlans,
+    backlogDir,
+    cwd,
+    prd,
+    issueRepo,
+  } = options;
   const push = pushBranch(branch, cwd, false);
   if (!push.ok) return push;
   if (!prUrl) return { ok: false, message: "No PR URL to update" };
 
+  const prRepo = detectIssueRepo(cwd) ?? undefined;
   const prBody = buildContinuousPrBody(
     completedPlans,
     backlogDir,
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number },
+    { prdNumber: prd?.number, issueRepo, prRepo },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   if (
@@ -306,18 +319,20 @@ export function updateContinuousPr(
 export function finalizeContinuousPr(
   options: ContinuousPrOptions & { prUrl: string },
 ): PushResult {
-  const { baseBranch, prUrl, completedPlans, backlogDir, cwd, prd } = options;
+  const { baseBranch, prUrl, completedPlans, backlogDir, cwd, prd, issueRepo } =
+    options;
   if (!prUrl) return { ok: false, message: "No continuous PR to finalize" };
 
   const headBranch =
     execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "HEAD";
+  const prRepo = detectIssueRepo(cwd) ?? undefined;
   const prBody = buildContinuousPrBody(
     completedPlans,
     backlogDir,
     baseBranch,
     headBranch,
     cwd,
-    { prdNumber: prd?.number },
+    { prdNumber: prd?.number, issueRepo, prRepo },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
 

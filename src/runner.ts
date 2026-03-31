@@ -535,6 +535,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(finalize.message);
           }
@@ -570,6 +571,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(finalize.message);
           }
@@ -871,6 +873,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               firstPlanDescription: planDesc,
               prd,
+              issueRepo,
             });
             console.log(prResult.message);
             if (prResult.ok) {
@@ -885,6 +888,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               cwd,
               prUrl: continuousPrUrl,
               prd,
+              issueRepo,
             });
             console.log(update.message);
           }
@@ -948,6 +952,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       cwd,
       prUrl: continuousPrUrl,
       prd,
+      issueRepo,
     });
     console.log(finalize.message);
   }
