@@ -27,7 +27,9 @@ function findTestFiles(dir: string): string[] {
 }
 
 const root = join(import.meta.dirname, "..");
-const allTests = findTestFiles(join(root, "src")).map((f) => relative(root, f));
+const allTests = findTestFiles(join(root, "src")).map((f) =>
+  relative(root, f).split("\\").join("/"),
+);
 const mainTests = allTests.filter((f) => !ISOLATED.includes(f));
 
 let failed = false;
