@@ -10,7 +10,7 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 import * as clack from "@clack/prompts";
-import { RESET, DIM, TEXT } from "./utils.ts";
+import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope, extractDependsOn } from "./frontmatter.ts";
 import {
@@ -66,6 +66,7 @@ import {
   slugify,
 } from "./issues.ts";
 import type { PrdIssue } from "./issues.ts";
+import { isPidAlive, readRunnerPid } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -2531,11 +2532,21 @@ function runRalphaiStatus(cwd: string): void {
       parts.push(`worktree: ${slug}`);
     }
 
-    // Outcome / status tag
+    // Outcome / status tag with runner liveness
     if (receipt?.outcome) {
       parts.push(`[${receipt.outcome}]`);
     } else {
-      parts.push("[in progress]");
+      const slugDir = join(inProgressDir, slug);
+      const pid = readRunnerPid(slugDir);
+      if (pid !== null) {
+        if (isPidAlive(pid)) {
+          parts.push(`[running PID ${pid}]`);
+        } else {
+          parts.push(`${RESET}${BOLD}[stalled]${RESET}`);
+        }
+      } else {
+        parts.push("[in progress]");
+      }
     }
 
     const suffix =
