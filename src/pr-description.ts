@@ -222,14 +222,33 @@ export function buildPrBody(
   baseBranch: string,
   headBranch: string,
   cwd: string,
-  options?: { prd?: number; issueRepo?: string },
+  options?: {
+    prd?: number;
+    issueRepo?: string;
+    issueNumber?: number;
+    prRepo?: string;
+  },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
   const categorized = categorizeCommits(commitLog);
   const formattedCommits = formatCommitsByCategory(categorized);
   const diffStat = buildDiffStat(baseBranch, headBranch, cwd);
 
-  const parts: string[] = [`## Summary\n`];
+  const parts: string[] = [];
+
+  // Emit Closes #N when the plan is from a GitHub issue
+  if (options?.issueNumber) {
+    const closesBlock = buildClosesBlock({
+      issueNumbers: [options.issueNumber],
+      issueRepo: options.issueRepo,
+      prRepo: options.prRepo,
+    });
+    if (closesBlock) {
+      parts.push(closesBlock + "\n");
+    }
+  }
+
+  parts.push(`## Summary\n`);
 
   if (options?.prd !== undefined && options.issueRepo) {
     parts.push(`**PRD:** ${options.issueRepo}#${options.prd}\n`);

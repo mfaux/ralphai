@@ -174,9 +174,13 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
 
+  const isGitHub = options.issueSource === "github";
+  const prRepo = isGitHub ? (detectIssueRepo(cwd) ?? undefined) : undefined;
   const prBody = buildPrBody(planDescription, baseBranch, branch, cwd, {
     prd: options.prd,
     issueRepo: options.issueRepo,
+    issueNumber: isGitHub ? options.issueNumber : undefined,
+    prRepo,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 

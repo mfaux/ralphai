@@ -310,6 +310,85 @@ describe("buildPrBody", () => {
     });
     expect(body).not.toContain("**PRD:**");
   });
+
+  it("includes Closes #N when issueNumber is provided (same-repo)", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Fix login bug", "main", "feature", ctx.dir, {
+      issueNumber: 42,
+    });
+    expect(body).toContain("Closes #42");
+    // Closes line should appear before Summary
+    const closesIdx = body.indexOf("Closes #42");
+    const summaryIdx = body.indexOf("## Summary");
+    expect(closesIdx).toBeLessThan(summaryIdx);
+  });
+
+  it("omits Closes line for manual plans (no issueNumber)", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Manual task", "main", "feature", ctx.dir);
+    expect(body).not.toContain("Closes");
+  });
+
+  it("uses cross-repo syntax when issueRepo differs from prRepo", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Fix cross-repo bug", "main", "feature", ctx.dir, {
+      issueNumber: 99,
+      issueRepo: "org/issues",
+      prRepo: "org/code",
+    });
+    expect(body).toContain("Closes org/issues#99");
+    expect(body).not.toContain("Closes #99");
+  });
+
+  it("uses short form when issueRepo equals prRepo", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody("Fix same-repo bug", "main", "feature", ctx.dir, {
+      issueNumber: 42,
+      issueRepo: "org/repo",
+      prRepo: "org/repo",
+    });
+    expect(body).toContain("Closes #42");
+    expect(body).not.toContain("Closes org/repo#42");
+  });
+
+  it("includes both Closes #N and PRD reference when both are provided", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
+    commitFile(ctx.dir, "a.txt", "a", "feat: add feature");
+
+    const body = buildPrBody(
+      "Implement feature from PRD",
+      "main",
+      "feature",
+      ctx.dir,
+      {
+        issueNumber: 42,
+        issueRepo: "org/repo",
+        prRepo: "org/repo",
+        prd: 30,
+      },
+    );
+    expect(body).toContain("Closes #42");
+    expect(body).toContain("**PRD:** org/repo#30");
+    // Closes should appear before Summary, PRD should appear within Summary
+    const closesIdx = body.indexOf("Closes #42");
+    const summaryIdx = body.indexOf("## Summary");
+    const prdIdx = body.indexOf("**PRD:**");
+    expect(closesIdx).toBeLessThan(summaryIdx);
+    expect(summaryIdx).toBeLessThan(prdIdx);
+  });
 });
 
 // ---------------------------------------------------------------------------
