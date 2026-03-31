@@ -59,6 +59,7 @@ export interface ArchiveRunOptions {
   wipFiles: string[];
   archiveDir: string;
   issueInProgressLabel: string;
+  issueDoneLabel: string;
   cwd: string;
 }
 
@@ -109,7 +110,8 @@ export function archiveRun(options: ArchiveRunOptions): {
   archived: boolean;
   message: string;
 } {
-  const { wipFiles, archiveDir, issueInProgressLabel, cwd } = options;
+  const { wipFiles, archiveDir, issueInProgressLabel, issueDoneLabel, cwd } =
+    options;
   if (wipFiles.length === 0) {
     return { archived: false, message: "No WIP files to archive" };
   }
@@ -153,7 +155,7 @@ export function archiveRun(options: ArchiveRunOptions): {
       );
       execQuiet(
         `gh issue edit ${issueNumber} --repo "${repo}" ` +
-          `--remove-label "${issueInProgressLabel}"`,
+          `--add-label "${issueDoneLabel}" --remove-label "${issueInProgressLabel}"`,
         cwd,
       );
     }

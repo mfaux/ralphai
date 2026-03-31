@@ -454,6 +454,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
+  const issueDoneLabel = config.issueDoneLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -860,6 +861,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           wipFiles: [planFile],
           archiveDir: dirs.archiveDir,
           issueInProgressLabel,
+          issueDoneLabel,
           cwd,
         });
 
