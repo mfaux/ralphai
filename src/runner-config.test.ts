@@ -449,11 +449,12 @@ echo "$AUTO_COMMIT"
       expect(combined).toContain("--once");
     });
 
-    it("run 3 is rejected by the bundled runner", () => {
+    it("run 3 is treated as an issue target (requires GitHub)", () => {
       const result = runCli(["run", "3"], ctx.dir, testEnv());
       const combined = result.stdout + result.stderr;
       expect(result.exitCode).not.toBe(0);
-      expect(combined).toContain("Unrecognized argument: 3");
+      // Issue target requires GitHub repo detection — fails in test env
+      expect(combined).toMatch(/GitHub repo|gh CLI/i);
     });
 
     it("built CLI runs the TS runner directly (no shell subprocess)", () => {

@@ -526,6 +526,60 @@ export function ensurePrdLabel(cwd: string): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Fetch issue title (for branch naming, no plan file written)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a GitHub issue by number and return its title.
+ *
+ * Used by `ralphai run <number>` to derive the `feat/<slug>` branch name
+ * before pulling the issue into a plan file. Does not write files or
+ * mutate labels — read-only and safe for dry-run.
+ *
+ * Throws a descriptive error if:
+ * - `gh` is not available or not authenticated
+ * - the issue is not found or is inaccessible
+ */
+export function fetchIssueTitleByNumber(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): { number: number; title: string } {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot fetch issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title`,
+    cwd,
+  );
+
+  if (!raw) {
+    throw new Error(
+      `Could not fetch issue #${issueNumber} from ${repo}. ` +
+        `Check that the issue exists and you have access.`,
+    );
+  }
+
+  let data: { title: string };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Failed to parse response for issue #${issueNumber} from ${repo}`,
+    );
+  }
+
+  return { number: issueNumber, title: data.title };
+}
+
+// ---------------------------------------------------------------------------
+// Pull specific issue by number
+// ---------------------------------------------------------------------------
+
 /**
  * Pull a specific GitHub issue by number and convert it to a plan file.
  *

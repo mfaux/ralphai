@@ -39,7 +39,7 @@ function showHelp(): void {
 
 ${BOLD}Commands:${RESET}
   init         Set up Ralphai in your project (interactive wizard)
-  run          Create or reuse a worktree and run a plan
+  run          Create or reuse a worktree and run a plan (or 'run <issue>' / 'run <plan.md>')
   status       Show pipeline status (auto-refreshes in terminal)
   stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
@@ -60,7 +60,9 @@ Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai               ${DIM}# show pipeline status (auto-refreshes in terminal)${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
-  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}`);
+  ${DIM}$${RESET} ralphai run           ${DIM}# auto-detect work and run${RESET}
+  ${DIM}$${RESET} ralphai run 42        ${DIM}# fetch issue #42, create branch, run${RESET}
+  ${DIM}$${RESET} ralphai run plan.md   ${DIM}# run a specific plan file${RESET}`);
 }
 
 async function main(): Promise<void> {

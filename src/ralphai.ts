@@ -65,10 +65,13 @@ import {
   ensurePrdLabel,
   fetchPrdIssue,
   fetchPrdIssueByNumber,
+  fetchIssueTitleByNumber,
   prdBranchName,
+  pullGithubIssueByNumber,
   slugify,
 } from "./issues.ts";
-import type { PrdIssue } from "./issues.ts";
+import type { PrdIssue, PullIssueOptions } from "./issues.ts";
+import { detectRunTarget, type RunTarget } from "./target-detection.ts";
 import { isPidAlive, readRunnerPid } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
@@ -122,6 +125,7 @@ interface RalphaiOptions {
   prdNumber?: string; // positional arg for `prd` subcommand
   once: boolean; // --once (for status auto-watch)
   stopSlug?: string; // positional arg for `stop` subcommand
+  runTarget?: RunTarget; // positional target for `run` (issue number, plan path, or auto)
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -219,6 +223,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let targetDir: string | undefined;
   let repo: string | undefined;
   let prdNumber: string | undefined;
+  let runTarget: RunTarget | undefined;
   const capabilities: string[] = [];
   const checkCapabilities: string[] = [];
   let configKey: string | undefined;
@@ -229,6 +234,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let collectingRunArgs = false;
   let collectingConfigArgs = false;
   let expectingPrdNumber = false;
+  let expectingRunTarget = false;
   let expectingStopSlug = false;
   let stopSlug: string | undefined;
 
@@ -240,6 +246,19 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       if (expectingPrdNumber && !arg.startsWith("-")) {
         prdNumber = arg;
         expectingPrdNumber = false;
+        continue;
+      }
+      // For `run`, the first non-flag positional arg is the target
+      if (expectingRunTarget && !arg.startsWith("-")) {
+        try {
+          runTarget = detectRunTarget(arg);
+        } catch (err: unknown) {
+          console.error(
+            err instanceof Error ? err.message : `Invalid run target: ${arg}`,
+          );
+          process.exit(1);
+        }
+        expectingRunTarget = false;
         continue;
       }
       runArgs.push(arg);
@@ -312,6 +331,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
         // For `run`, everything after is forwarded to the runner
         if (subcommand === "run") {
           collectingRunArgs = true;
+          expectingRunTarget = true;
         }
         // For `prd`, next positional is the issue number, rest are runArgs
         if (subcommand === "prd") {
@@ -360,6 +380,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     checkCapabilities,
     prdNumber,
     stopSlug,
+    runTarget,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -2752,10 +2773,15 @@ function validateRunArgs(runArgs: string[]): void {
 
 function showRunHelp(): void {
   const lines = [
-    "Usage: ralphai run [options]",
+    "Usage: ralphai run [<target>] [options]",
     "",
     "  Auto-detects work, creates or reuses a worktree, and runs there.",
-    "  Ralphai commits on a ralphai/<slug> branch, pushes it, and opens a draft PR when possible.",
+    "  Ralphai commits on a feature branch, pushes it, and opens a draft PR when possible.",
+    "",
+    "Target (optional):",
+    "  <number>                         GitHub issue number (e.g. 42) — fetches the issue, creates feat/<slug> branch",
+    "  <file.md>                        Plan file path (e.g. my-feature.md) — runs that specific plan and stops",
+    "  (omitted)                        Auto-detect from backlog or GitHub issues",
     "",
     "Options:",
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
@@ -2797,7 +2823,9 @@ function showRunHelp(): void {
     "Precedence: CLI flags > env vars > config file > built-in defaults",
     "",
     "Examples:",
-    "  ralphai run                                             # create or reuse a worktree and run",
+    "  ralphai run                                             # auto-detect work and run",
+    "  ralphai run 42                                          # fetch issue #42, create branch, run",
+    "  ralphai run my-feature.md                               # run a specific plan file",
     "  ralphai run --dry-run                                   # preview only",
     "  ralphai run --once                                      # run a single plan then exit",
     "  ralphai run --resume                                    # recover dirty state and continue",
@@ -2940,6 +2968,310 @@ function executeSetupCommand(setupCommand: string, worktreeDir: string): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Explicit target handlers: `ralphai run <issue-number>` / `ralphai run <plan.md>`
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle `ralphai run <issue-number>` — fetch the GitHub issue, create a
+ * `feat/<slug>` branch and worktree, pull the issue into a plan file,
+ * run the agent on it, and open a PR on completion.
+ *
+ * This is a single-target operation: the runner processes only that target
+ * and exits (no drain).
+ */
+async function runIssueTarget(
+  issueNumber: number,
+  options: RalphaiOptions,
+  runArgs: string[],
+  cwd: string,
+  flags: {
+    isDryRun: boolean;
+    hasHelp: boolean;
+    hasShowConfig: boolean;
+    setupCommand: string;
+  },
+): Promise<void> {
+  const { isDryRun, hasHelp, hasShowConfig, setupCommand } = flags;
+
+  // Pass through --help and --show-config unchanged
+  if (hasHelp || hasShowConfig) {
+    try {
+      await runRalphaiRunner({ ...options, runArgs }, cwd);
+    } catch {
+      // runRalphaiRunner may call process.exit() on fatal errors
+    }
+    return;
+  }
+
+  // Validate run args (reject unrecognised flags)
+  validateRunArgs(runArgs);
+
+  if (isGitWorktree(cwd)) {
+    console.error("'ralphai run' must be run from the main repository.");
+    console.error(
+      "You are inside a worktree. Run this command from the main repo.",
+    );
+    process.exit(1);
+  }
+
+  if (!existsSync(getConfigFilePath(cwd))) {
+    console.error(
+      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
+    );
+    process.exit(1);
+  }
+
+  // Detect GitHub repo
+  const repo = detectIssueRepo(cwd);
+  if (!repo) {
+    console.error(
+      "Could not detect GitHub repo from git remote. " +
+        "Set issue-repo in config or ensure a remote is configured.",
+    );
+    process.exit(1);
+  }
+
+  // Fetch issue title (validates existence)
+  let issueTitle: string;
+  try {
+    const issue = fetchIssueTitleByNumber(repo, issueNumber, cwd);
+    issueTitle = issue.title;
+  } catch (err: unknown) {
+    console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `\nCheck that issue #${issueNumber} exists and you have access to ${repo}.`,
+    );
+    process.exit(1);
+  }
+
+  const issueSlug = slugify(issueTitle);
+  const branch = `feat/${issueSlug}`;
+
+  // Dry-run: preview and exit
+  if (isDryRun) {
+    console.log();
+    console.log("========================================");
+    console.log("  Ralphai dry-run — issue target");
+    console.log("========================================");
+    console.log(`[dry-run] Issue: #${issueNumber} — ${issueTitle}`);
+    console.log(`[dry-run] Branch: ${branch}`);
+    console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${issueSlug}/`);
+    console.log("[dry-run] Mode: single target (no drain)");
+    console.log(
+      "[dry-run] No files moved, no worktrees created, no agent run executed.",
+    );
+    return;
+  }
+
+  // Ensure repo has at least one commit
+  try {
+    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
+  } catch {
+    console.error(
+      "This repository has no commits yet. Git worktrees require at least one commit.",
+    );
+    console.error(
+      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
+    );
+    console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
+    process.exit(1);
+  }
+
+  const baseBranch = detectBaseBranch(cwd);
+  const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
+  const desiredWorktreeDir = join(worktreeBase, issueSlug);
+  mkdirSync(worktreeBase, { recursive: true });
+
+  // Check for active worktree on this branch
+  const activeWorktrees = listRalphaiWorktrees(cwd);
+  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+
+  let resolvedWorktreeDir = desiredWorktreeDir;
+  if (activeWorktree) {
+    resolvedWorktreeDir = activeWorktree.path;
+    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
+    console.log(`Branch: ${branch}`);
+  } else {
+    if (existsSync(resolvedWorktreeDir)) {
+      console.log(
+        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
+      );
+      execSync("git worktree prune", { cwd, stdio: "ignore" });
+      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+    }
+
+    let branchExists = false;
+    try {
+      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
+        cwd,
+        stdio: "ignore",
+      });
+      branchExists = true;
+    } catch {
+      branchExists = false;
+    }
+
+    try {
+      if (branchExists) {
+        console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
+        console.log(`Branch: ${branch}`);
+        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
+          cwd,
+          stdio: ["inherit", "pipe", "pipe"],
+        });
+      } else {
+        console.log(`Creating worktree: ${resolvedWorktreeDir}`);
+        console.log(`Branch: ${branch} (from ${baseBranch})`);
+        execSync(
+          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
+          { cwd, stdio: ["inherit", "pipe", "pipe"] },
+        );
+      }
+    } catch (err: unknown) {
+      const stderr = extractExecStderr(err);
+      console.error(`${TEXT}Error:${RESET} Failed to prepare worktree.`);
+      if (stderr) console.error(`  git: ${stderr}`);
+      process.exit(1);
+    }
+  }
+
+  // Run setup command in freshly-created worktrees (not reused ones)
+  if (!activeWorktree) {
+    executeSetupCommand(setupCommand, resolvedWorktreeDir);
+  }
+
+  // Pull the issue into a plan file in the worktree's pipeline
+  const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+  let cfgResult;
+  try {
+    cfgResult = resolveConfig({
+      cwd: resolvedWorktreeDir,
+      envVars: process.env as Record<string, string | undefined>,
+      cliArgs: runArgs,
+    });
+  } catch {
+    cfgResult = resolveConfig({
+      cwd,
+      envVars: process.env as Record<string, string | undefined>,
+      cliArgs: runArgs,
+    });
+  }
+  const config = cfgResult.config;
+
+  const pullResult = pullGithubIssueByNumber({
+    backlogDir,
+    cwd: resolvedWorktreeDir,
+    issueSource: "github",
+    issueLabel: config.issueLabel.value,
+    issueInProgressLabel: config.issueInProgressLabel.value,
+    issueRepo: config.issueRepo.value || repo,
+    issueCommentProgress: config.issueCommentProgress.value === "true",
+    issueNumber,
+  });
+
+  if (!pullResult.pulled) {
+    console.error(
+      `Failed to pull issue #${issueNumber}: ${pullResult.message}`,
+    );
+    process.exit(1);
+  }
+
+  console.log(pullResult.message);
+  console.log("Running ralphai in worktree...");
+
+  // Build runner options: single-target, no drain
+  const shouldResume = activeWorktree !== undefined;
+  const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
+  const worktreeRunOptions: RalphaiOptions = {
+    ...options,
+    subcommand: "run",
+    runTarget: undefined, // already handled
+    runArgs: [
+      ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+      ...runArgs,
+    ],
+  };
+
+  try {
+    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
+  } catch {
+    // runRalphaiRunner may call process.exit() on fatal errors
+  }
+}
+
+/**
+ * Handle `ralphai run <plan.md>` — work on a specific plan file and stop
+ * after completion (single target, no drain).
+ *
+ * Validates the plan file exists in the backlog or in-progress directory.
+ * If it doesn't exist, prints an error listing available plans.
+ */
+async function runPlanTarget(
+  planPath: string,
+  options: RalphaiOptions,
+  runArgs: string[],
+  cwd: string,
+  flags: {
+    isDryRun: boolean;
+    hasHelp: boolean;
+    hasShowConfig: boolean;
+  },
+): Promise<void> {
+  const { hasHelp, hasShowConfig } = flags;
+
+  // Pass through --help and --show-config unchanged
+  if (hasHelp || hasShowConfig) {
+    try {
+      await runRalphaiRunner({ ...options, runArgs }, cwd);
+    } catch {
+      // runRalphaiRunner may call process.exit() on fatal errors
+    }
+    return;
+  }
+
+  // Inject --plan=<path> into runArgs so existing plan-based flow handles it
+  const planFlagAlreadySet = runArgs.some((a) => a.startsWith("--plan="));
+  if (!planFlagAlreadySet) {
+    runArgs = [...runArgs, `--plan=${planPath}`];
+  }
+
+  // Validate the plan file exists before proceeding
+  const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
+  const slug = planPath.replace(/\.md$/, "");
+  const backlogPlan = resolvePlanPath(backlogDir, slug);
+  const wipPlan = resolvePlanPath(wipDir, slug);
+
+  if (!backlogPlan && !wipPlan) {
+    console.error(`Plan '${planPath}' not found in backlog or in-progress.`);
+    const backlogPlans = listPlanFiles(backlogDir, true);
+    const wipPlans = listPlanFiles(wipDir);
+    const available = [...backlogPlans, ...wipPlans];
+    if (available.length > 0) {
+      console.error("\nAvailable plans:");
+      for (const p of available) {
+        console.error(`  ${p}`);
+      }
+    } else {
+      console.error(
+        "\nNo plans found. Create a plan file or configure GitHub issue integration.",
+      );
+    }
+    process.exit(1);
+  }
+
+  // Delegate to the existing flow — runRalphaiInManagedWorktree will handle
+  // the rest via --plan=<path>. Clear runTarget to avoid re-entry.
+  const delegatedOptions: RalphaiOptions = {
+    ...options,
+    runTarget: undefined, // already handled
+    runArgs,
+  };
+
+  // Re-enter the main worktree flow which handles --plan=<file>
+  await runRalphaiInManagedWorktree(delegatedOptions, cwd);
+}
+
 async function runRalphaiInManagedWorktree(
   options: RalphaiOptions,
   cwd: string,
@@ -2968,6 +3300,26 @@ async function runRalphaiInManagedWorktree(
     setupCommand = cfgResult.config.setupCommand.value;
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
+  }
+
+  // --- Handle explicit positional target: `ralphai run 42` or `ralphai run my-feature.md` ---
+  const target = options.runTarget;
+
+  if (target?.type === "issue") {
+    return runIssueTarget(target.number, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+      setupCommand,
+    });
+  }
+
+  if (target?.type === "plan") {
+    return runPlanTarget(target.path, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+    });
   }
 
   // --- Parse --prd=<number> ---
