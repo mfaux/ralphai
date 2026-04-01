@@ -803,7 +803,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       } else {
         const learningContent = parseLearningContent(learningsBlock);
         if (learningContent !== null) {
-          accumulatedLearnings.push(learningContent);
+          if (!accumulatedLearnings.includes(learningContent)) {
+            accumulatedLearnings.push(learningContent);
+          }
           console.log(
             `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
           );
