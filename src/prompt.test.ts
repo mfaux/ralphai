@@ -12,9 +12,11 @@ import type { AssemblePromptOptions } from "./prompt.ts";
 describe("formatFileRef", () => {
   const ctx = useTempDir();
 
-  it("returns @path when file does not exist", () => {
+  it("returns inline placeholder XML when file does not exist", () => {
     const result = formatFileRef("/nonexistent/file.md");
-    expect(result).toBe("@/nonexistent/file.md");
+    expect(result).toBe(
+      `<file path="/nonexistent/file.md">\n(No content yet.)\n</file>`,
+    );
   });
 
   it("wraps file contents in XML tags", () => {
@@ -52,10 +54,15 @@ describe("assemblePrompt", () => {
     };
   }
 
-  it("includes plan and progress file references", () => {
+  it("includes inline plan and progress file references even when files are missing", () => {
     const prompt = assemblePrompt(baseOptions());
-    expect(prompt).toContain("@plan.md");
-    expect(prompt).toContain("@progress.md");
+    expect(prompt).toContain(
+      `<file path="plan.md">\n(No content yet.)\n</file>`,
+    );
+    expect(prompt).toContain(
+      `<file path="progress.md">\n(No content yet.)\n</file>`,
+    );
+    expect(prompt).not.toContain("@progress.md");
   });
 
   it("includes numbered instruction steps", () => {

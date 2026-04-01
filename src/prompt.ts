@@ -44,7 +44,7 @@ export interface AssemblePromptOptions {
  * path so that agents running inside a sandbox never see absolute paths
  * outside the repository and do not attempt to re-read them.
  *
- * Falls back to `@<label>` if the file does not exist.
+ * Falls back to an inline placeholder block if the file does not exist.
  */
 export function formatFileRef(filepath: string, label?: string): string {
   const tag = label ?? filepath;
@@ -52,8 +52,7 @@ export function formatFileRef(filepath: string, label?: string): string {
     const content = readFileSync(filepath, "utf8");
     return `<file path="${tag}">\n${content}\n</file>`;
   }
-  // File doesn't exist — fall back to at-path reference
-  return `@${tag}`;
+  return `<file path="${tag}">\n(No content yet.)\n</file>`;
 }
 
 // ---------------------------------------------------------------------------

@@ -130,6 +130,17 @@ function rollbackPlan(planFile: string, backlogDir: string): void {
   console.log(`Rolled back: moved plan to ${dest}`);
 }
 
+function ensureProgressFile(progressFile: string): void {
+  if (existsSync(progressFile)) {
+    console.log(`Resuming — keeping existing ${progressFile}`);
+    return;
+  }
+
+  mkdirSync(dirname(progressFile), { recursive: true });
+  writeFileSync(progressFile, "## Progress Log\n\n");
+  console.log(`Initialized ${progressFile}`);
+}
+
 /**
  * Spawn the agent command, capture its output, and apply a timeout.
  *
@@ -666,15 +677,13 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         continuousBranch = branch;
       }
       console.log(`Resuming on existing branch: ${branch}`);
-      console.log(`Resuming — keeping existing ${progressFile}`);
+      ensureProgressFile(progressFile);
     } else if (continuous && continuousBranch) {
       // Continuous mode, subsequent plan: reuse the existing branch
       branch = continuousBranch;
       console.log(`Continuous mode: continuing on branch '${branch}'`);
 
-      mkdirSync(dirname(progressFile), { recursive: true });
-      writeFileSync(progressFile, "## Progress Log\n\n");
-      console.log(`Initialized ${progressFile}`);
+      ensureProgressFile(progressFile);
 
       initReceipt(receiptFile, {
         worktree_path: isWorktree ? cwd : undefined,
@@ -701,9 +710,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         continuousBranch = branch;
       }
 
-      mkdirSync(dirname(progressFile), { recursive: true });
-      writeFileSync(progressFile, "## Progress Log\n\n");
-      console.log(`Initialized ${progressFile}`);
+      ensureProgressFile(progressFile);
 
       initReceipt(receiptFile, {
         worktree_path: cwd,
