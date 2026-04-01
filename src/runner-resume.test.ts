@@ -43,7 +43,7 @@ function setupGlobalPipeline(cwd: string): {
 } {
   const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
   process.env.RALPHAI_HOME = ralphaiHome;
-  return getRepoPipelineDirs(cwd);
+  return getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
 }
 
 function makeResolvedConfig(
