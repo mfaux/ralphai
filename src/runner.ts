@@ -567,6 +567,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           issueSource,
           issueLabel,
           issueInProgressLabel,
+          issueDoneLabel,
           issueRepo,
           issueCommentProgress,
         };
