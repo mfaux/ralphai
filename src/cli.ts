@@ -48,8 +48,7 @@ ${BOLD}Commands:${RESET}
   purge        Delete archived artifacts from pipeline/out/
   clean        Remove archived plans and orphaned worktrees
   update       Update ralphai to the latest (or specified) version
-  teardown     Remove Ralphai from your project
-  uninstall    Remove all global state and uninstall the CLI
+  uninstall    Remove Ralphai from this project (or --global to uninstall)
   doctor       Check your ralphai setup for problems
   check        Verify whether ralphai is configured for a repo
   config       Query resolved configuration
@@ -129,9 +128,10 @@ async function main(): Promise<void> {
   await runRalphai(args);
 
   // Update notification (after command completes, so it doesn't interfere).
-  // Skip after uninstall — the cache dir would re-create ~/.ralphai.
-  const isUninstall = args[0] === "uninstall";
-  if (!process.env.RALPHAI_NO_UPDATE_CHECK && !isUninstall) {
+  // Skip after global uninstall — the cache dir would re-create ~/.ralphai.
+  const isGlobalUninstall =
+    args[0] === "uninstall" && args.includes("--global");
+  if (!process.env.RALPHAI_NO_UPDATE_CHECK && !isGlobalUninstall) {
     const currentVersion = getVersion();
     const update = checkForUpdate("ralphai", currentVersion);
     if (update) {

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { existsSync, rmSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
-import { tmpdir } from "os";
 import { execSync } from "child_process";
 import {
   runCli,
@@ -9,71 +8,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs, resolveRepoStateDir } from "./global-state.ts";
-
-describe("teardown command", () => {
-  const ctx = useTempGitDir();
-
-  function testEnv() {
-    return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
-  }
-
-  it("teardown --yes removes global state dir", () => {
-    // First, set up ralphai
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
-    const configPath = getConfigFilePath(ctx.dir, testEnv());
-    expect(existsSync(configPath)).toBe(true);
-
-    // Now tear down
-    const output = stripLogo(
-      runCliOutput(["teardown", "--yes"], ctx.dir, testEnv()),
-    );
-
-    expect(output).toContain("Ralphai torn down");
-    // Global state should be removed
-    const stateDir = resolveRepoStateDir(ctx.dir, testEnv());
-    // resolveRepoStateDir does not auto-create, so check the config file specifically
-    expect(existsSync(configPath)).toBe(false);
-  });
-
-  it("teardown --yes prints not set up when config does not exist", () => {
-    const output = stripLogo(
-      runCliOutput(["teardown", "--yes"], ctx.dir, testEnv()),
-    );
-
-    expect(output).toContain("not set up");
-    expect(output).toContain("no config found");
-  });
-
-  it("teardown --yes <target-dir> tears down from target directory", () => {
-    const targetDir = join(
-      tmpdir(),
-      `ralphai-teardown-target-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(targetDir, { recursive: true });
-    execSync("git init", { cwd: targetDir, stdio: "ignore" });
-
-    try {
-      // Set up ralphai in target
-      runCliOutput(["init", "--yes", targetDir], ctx.dir, testEnv());
-      const configPath = getConfigFilePath(targetDir, testEnv());
-      expect(existsSync(configPath)).toBe(true);
-
-      // Tear down from target
-      const output = stripLogo(
-        runCliOutput(["teardown", "--yes", targetDir], ctx.dir, testEnv()),
-      );
-
-      expect(output).toContain("Ralphai torn down");
-      expect(existsSync(configPath)).toBe(false);
-    } finally {
-      if (existsSync(targetDir)) {
-        rmSync(targetDir, { recursive: true, force: true });
-      }
-    }
-  });
-});
+import { getRepoPipelineDirs } from "./global-state.ts";
 
 describe("reset command", () => {
   const ctx = useTempGitDir();

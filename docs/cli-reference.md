@@ -23,8 +23,7 @@ ralphai <command> [options]
 | `check`        | Verify whether Ralphai is configured for a repo                        |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update Ralphai to the latest (or specified) version                    |
-| `teardown`     | Remove Ralphai from your project                                       |
-| `uninstall`    | Remove all global state and uninstall the CLI                          |
+| `uninstall`    | Remove Ralphai from this project (or `--global` to remove all state)   |
 
 ## Global Options
 
@@ -45,7 +44,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `stop`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`, `config`.
+Works with: `status`, `stop`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, `config`.
 
 Blocked for: `run`, `prd`, `worktree`, `init`.
 
@@ -330,17 +329,16 @@ Multiple `--capability` flags can be combined; all must pass for exit 0.
 
 Does not require a git repository. Useful for CI scripts and setup verification.
 
-## Teardown
+## Uninstall
 
 ```
+--global          Remove all global state (~/.ralphai) instead of just this repo
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project by deleting global state for this repo at `~/.ralphai/repos/<id>/`.
+By default, `ralphai uninstall` removes only the current repo's state directory at `~/.ralphai/repos/<id>/`.
 
-## Uninstall
-
-Removes all global state in `~/.ralphai/` and uninstalls the CLI.
+With `--global`, it removes the entire `~/.ralphai/` directory (all repos) and prints the command to uninstall the CLI binary. When active plans exist in other repos, a warning lists affected repos before confirmation.
 
 ## Backlog Dir
 

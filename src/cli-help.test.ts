@@ -17,7 +17,7 @@ describe("CLI help and flags", () => {
     expect(output).toContain("init");
     expect(output).toContain("run");
     expect(output).toContain("update");
-    expect(output).toContain("teardown");
+    expect(output).toContain("uninstall");
     expect(output).toContain("reset");
   });
 
@@ -46,7 +46,7 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("run");
     expect(result.stdout).toContain("update");
-    expect(result.stdout).toContain("teardown");
+    expect(result.stdout).toContain("uninstall");
   });
 
   // -------------------------------------------------------------------------
@@ -107,11 +107,12 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("update");
   });
 
-  it("teardown --help shows teardown usage and flags", () => {
-    const result = runCli(["teardown", "--help"]);
+  it("uninstall --help shows uninstall usage and flags", () => {
+    const result = runCli(["uninstall", "--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("teardown");
+    expect(result.stdout).toContain("uninstall");
     expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("--global");
   });
 
   it("run --help shows --prd flag", () => {
@@ -170,8 +171,8 @@ describe("CLI help and flags", () => {
     expect(result.stderr).toContain("Unknown flag");
   });
 
-  it("teardown --wrong exits with error", () => {
-    const result = runCli(["teardown", "--wrong"], ctx.dir);
+  it("uninstall --wrong exits with error", () => {
+    const result = runCli(["uninstall", "--wrong"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
   });

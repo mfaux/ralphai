@@ -156,7 +156,7 @@ ralphai status --repo=my-app            # check status of a different repo
 ralphai config backlog-dir --repo=~/work/api  # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
 ## Interactive Dashboard
 
@@ -174,8 +174,8 @@ For most people, this is the main way to use Ralphai. Reach for `ralphai run` wh
 
 ```bash
 ralphai update           # update to the latest version
-ralphai teardown         # remove Ralphai from your project
-ralphai uninstall        # remove all global state and uninstall the CLI
+ralphai uninstall        # remove Ralphai from this project
+ralphai uninstall --global  # remove all global state and uninstall the CLI
 ```
 
 ## Monorepo Support

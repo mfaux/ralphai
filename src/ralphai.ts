@@ -31,7 +31,6 @@ import {
 } from "./receipt.ts";
 import {
   getRepoPipelineDirs,
-  resolveRepoStateDir,
   resolveRepoByNameOrPath,
 } from "./global-state.ts";
 import {
@@ -80,7 +79,6 @@ type RalphaiSubcommand =
   | "update"
   | "run"
   | "prd"
-  | "teardown"
   | "uninstall"
   | "worktree"
   | "status"
@@ -110,6 +108,7 @@ interface RalphaiOptions {
   force: boolean;
   clean: boolean;
   all: boolean;
+  global: boolean; // --global (for `uninstall`)
   worktrees: boolean; // --worktrees (for `clean`)
   archive: boolean; // --archive (for `clean`)
   agentCommand?: string;
@@ -188,7 +187,6 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "update",
   "run",
   "prd",
-  "teardown",
   "uninstall",
   "worktree",
   "status",
@@ -210,6 +208,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let force = false;
   let clean = false;
   let all = false;
+  let global = false;
   let once = false;
   let worktrees = false;
   let archive = false;
@@ -283,6 +282,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       clean = true;
     } else if (arg === "--all") {
       all = true;
+    } else if (arg === "--global") {
+      global = true;
     } else if (arg === "--worktrees") {
       worktrees = true;
     } else if (arg === "--archive") {
@@ -344,6 +345,7 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     force,
     clean,
     all,
+    global,
     worktrees,
     archive,
     once,
@@ -637,48 +639,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     updateAgentsMd,
     createSamplePlan,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Teardown logic
-// ---------------------------------------------------------------------------
-
-async function teardownRalphai(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  const configPath = getConfigFilePath(cwd);
-  if (!existsSync(configPath)) {
-    console.log(
-      `${TEXT}Ralphai is not set up in this project (no config found).${RESET}`,
-    );
-    return;
-  }
-
-  const stateDir = resolveRepoStateDir(cwd);
-
-  if (!options.yes) {
-    clack.intro("Tearing down Ralphai");
-    const confirmed = await clack.confirm({
-      message:
-        "This will permanently delete the global state for this repo. " +
-        "Any plans will be lost. Continue?",
-    });
-
-    if (clack.isCancel(confirmed) || !confirmed) {
-      clack.cancel("Teardown cancelled.");
-      return;
-    }
-  }
-
-  // Remove global state directory for this repo
-  rmSync(stateDir, { recursive: true, force: true });
-
-  console.log(`${TEXT}Ralphai torn down.${RESET}`);
-  console.log();
-  console.log(`${DIM}Removed:${RESET}`);
-  console.log(`  ${stateDir}  ${DIM}Global state${RESET}`);
-  console.log();
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,10 +1181,7 @@ function showRalphaiHelp(): void {
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
   );
   console.log(
-    `  ${TEXT}teardown${RESET}    ${DIM}Remove Ralphai from your project${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}uninstall${RESET}   ${DIM}Remove all global state and uninstall the CLI${RESET}`,
+    `  ${TEXT}uninstall${RESET}   ${DIM}Remove Ralphai from this project (or --global to uninstall)${RESET}`,
   );
   console.log(
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
@@ -1316,7 +1273,6 @@ export async function runRalphai(args: string[]): Promise<void> {
     "purge",
     "clean",
     "update",
-    "teardown",
     "uninstall",
     "doctor",
     "backlog-dir",
@@ -1379,19 +1335,12 @@ export async function runRalphai(args: string[]): Promise<void> {
         tag: options.targetDir, // first positional arg after "update" is parsed as targetDir
       });
       break;
-    case "teardown":
-      if (helpRequested) {
-        showTeardownHelp();
-        return;
-      }
-      await teardownRalphai(options, cwd);
-      break;
     case "uninstall":
       if (helpRequested) {
         showUninstallHelp();
         return;
       }
-      await runUninstall({ yes: options.yes, cwd });
+      await runUninstall({ yes: options.yes, global: options.global, cwd });
       break;
     case "run":
       await runRalphaiInManagedWorktree(options, cwd);
@@ -1991,17 +1940,6 @@ function showUpdateHelp(): void {
   );
   console.log(
     `  ${DIM}$${RESET} ralphai update beta     ${DIM}# install beta version${RESET}`,
-  );
-}
-
-function showTeardownHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai teardown [options]`);
-  console.log();
-  console.log(`${DIM}Remove Ralphai from your project.${RESET}`);
-  console.log();
-  console.log(`${TEXT}Options:${RESET}`);
-  console.log(
-    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
   );
 }
 
