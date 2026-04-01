@@ -130,7 +130,7 @@ async function runRepoUninstall(options: UninstallOptions): Promise<void> {
   }
 
   // Remove global state directory for this repo
-  rmSync(stateDir, { recursive: true, force: true });
+  rmSync(stateDir, { recursive: true, force: true, maxRetries: 5 });
 
   console.log(`${TEXT}Ralphai torn down.${RESET}`);
   console.log();
@@ -176,7 +176,7 @@ async function runGlobalUninstall(options: UninstallOptions): Promise<void> {
 
   // 1. Remove ~/.ralphai (global state for all repos)
   if (homeExists) {
-    rmSync(ralphaiHome, { recursive: true, force: true });
+    rmSync(ralphaiHome, { recursive: true, force: true, maxRetries: 5 });
     console.log(`${TEXT}Removed ${ralphaiHome}${RESET}`);
   } else {
     console.log(
