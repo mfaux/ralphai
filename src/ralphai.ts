@@ -2929,7 +2929,7 @@ function executeSetupCommand(setupCommand: string, worktreeDir: string): void {
  * 2. **PRD with unchecked sub-issues** — create a single `feat/<slug>`
  *    worktree and work through each sub-issue sequentially.
  * 3. **PRD all completed** — report and exit.
- * 4. **PRD no task list (fallback)** — treat the PRD body as the plan.
+ * 4. **PRD no task list** — error with guidance to add sub-issues.
  */
 async function runIssueTarget(
   issueNumber: number,
@@ -3096,7 +3096,7 @@ async function runIssueTarget(
  *
  * Special cases:
  * - All sub-issues already completed → report and exit
- * - No task list items → fallback to treating the PRD body as the plan
+ * - No task list items → error with guidance to add sub-issues
  */
 async function runPrdIssueTarget(
   discovery: PrdDiscoveryResult & { isPrd: true },
@@ -3112,7 +3112,7 @@ async function runPrdIssueTarget(
   },
 ): Promise<void> {
   const { isDryRun, setupCommand } = flags;
-  const { prd, subIssues, allCompleted, body } = discovery;
+  const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(prd.title);
   const branch = `feat/${prdSlug}`;
 
@@ -3125,6 +3125,15 @@ async function runPrdIssueTarget(
     return;
   }
 
+  // --- PRD with no task list: error out ---
+  if (subIssues.length === 0) {
+    console.error(`PRD #${prd.number} has no sub-issue task list.`);
+    console.error(
+      `Add ${BOLD}- [ ] #<issue>${RESET} items to the PRD body, then retry.`,
+    );
+    process.exit(1);
+  }
+
   // --- Dry-run: preview ---
   if (isDryRun) {
     console.log();
@@ -3134,15 +3143,10 @@ async function runPrdIssueTarget(
     console.log(`[dry-run] PRD: #${prd.number} — ${prd.title}`);
     console.log(`[dry-run] Branch: ${branch}`);
     console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`);
-    if (subIssues.length > 0) {
-      console.log(
-        `[dry-run] Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")} (${subIssues.length} total)`,
-      );
-      console.log("[dry-run] Mode: PRD sequential (one branch, one PR)");
-    } else {
-      console.log("[dry-run] No sub-issues found — will use PRD body as plan");
-      console.log("[dry-run] Mode: single target (PRD body fallback)");
-    }
+    console.log(
+      `[dry-run] Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")} (${subIssues.length} total)`,
+    );
+    console.log("[dry-run] Mode: PRD sequential (one branch, one PR)");
     console.log(
       "[dry-run] No files moved, no worktrees created, no agent run executed.",
     );
@@ -3166,48 +3170,6 @@ async function runPrdIssueTarget(
     cwd,
     runArgs,
   );
-
-  // --- PRD with no task list: fallback to body as plan ---
-  if (subIssues.length === 0) {
-    console.log(
-      `PRD #${prd.number} has no sub-issue task list — using PRD body as plan.`,
-    );
-    const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
-    if (!existsSync(backlogDir)) {
-      mkdirSync(backlogDir, { recursive: true });
-    }
-    const planFilename = `gh-${prd.number}-${prdSlug}.md`;
-    const planPath = join(backlogDir, planFilename);
-    const planContent = `---\nsource: github\nissue: ${prd.number}\n---\n\n# ${prd.title}\n\n${body}\n`;
-    writeFileSync(planPath, planContent, "utf-8");
-    console.log(`Created plan from PRD body: ${planFilename}`);
-    console.log("Running ralphai in worktree...");
-
-    const activeWorktrees = listRalphaiWorktrees(cwd);
-    const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
-    const shouldResume = activeWorktree !== undefined;
-    const hasResumeFlag =
-      runArgs.includes("--resume") || runArgs.includes("-r");
-    const worktreeRunOptions: RalphaiOptions = {
-      ...options,
-      subcommand: "run",
-      runTarget: undefined,
-      runArgs: [
-        ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-        ...runArgs,
-      ],
-    };
-
-    try {
-      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir, {
-        number: prd.number,
-        title: prd.title,
-      });
-    } catch {
-      // runRalphaiRunner may call process.exit() on fatal errors
-    }
-    return;
-  }
 
   // --- PRD with unchecked sub-issues: work through sequentially ---
   console.log(

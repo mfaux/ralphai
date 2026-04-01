@@ -2,7 +2,7 @@
  * Unit tests for discoverPrdTarget() — PRD discovery I/O module.
  *
  * Uses mock.module to control `child_process.execSync` so we can test
- * PRD detection, sub-issue parsing, fallback, and non-PRD passthrough
+ * PRD detection, sub-issue parsing, empty task list, and non-PRD passthrough
  * without requiring a real GitHub repo.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
@@ -177,7 +177,7 @@ describe("discoverPrdTarget — all sub-issues completed", () => {
   });
 });
 
-describe("discoverPrdTarget — PRD with no task list (fallback)", () => {
+describe("discoverPrdTarget — PRD with no task list", () => {
   it("returns empty subIssues and allCompleted=false when body has no task list", () => {
     const body = [
       "# Feature: Auth",
