@@ -40,19 +40,14 @@ function showHelp(): void {
 ${BOLD}Commands:${RESET}
   init         Set up Ralphai in your project (interactive wizard)
   run          Create or reuse a worktree and run a plan
-  prd          Run a PRD issue in continuous mode (shorthand for run)
-  worktree     Manage ralphai git worktrees
   status       Show pipeline status (auto-refreshes in terminal)
   stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
-  purge        Delete archived artifacts from pipeline/out/
   clean        Remove archived plans and orphaned worktrees
   update       Update ralphai to the latest (or specified) version
   uninstall    Remove Ralphai from this project (or --global to uninstall)
   doctor       Check your ralphai setup for problems
-  check        Verify whether ralphai is configured for a repo
   config       Query resolved configuration
-  backlog-dir  Print the path to the plan backlog directory
   repos        List all known repos with pipeline summaries
 
 ${BOLD}Options:${RESET}
@@ -65,9 +60,7 @@ Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai               ${DIM}# show pipeline status (auto-refreshes in terminal)${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
-  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}
-  ${DIM}$${RESET} ralphai worktree list ${DIM}# show active worktrees${RESET}
-  ${DIM}$${RESET} ralphai worktree clean ${DIM}# remove completed worktrees${RESET}`);
+  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}`);
 }
 
 async function main(): Promise<void> {

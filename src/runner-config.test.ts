@@ -446,7 +446,7 @@ echo "$AUTO_COMMIT"
       expect(result.exitCode).toBe(0);
       const combined = result.stdout + result.stderr;
       expect(combined).toContain("--dry-run");
-      expect(combined).toContain("--continuous");
+      expect(combined).toContain("--once");
     });
 
     it("run 3 is rejected by the bundled runner", () => {
