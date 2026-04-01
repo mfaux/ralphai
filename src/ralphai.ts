@@ -71,6 +71,8 @@ import {
   slugify,
 } from "./issues.ts";
 import type { PrdIssue, PullIssueOptions } from "./issues.ts";
+import { discoverPrdTarget } from "./prd-discovery.ts";
+import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
 import { isPidAlive, readRunnerPid } from "./process-utils.ts";
 
@@ -2973,12 +2975,15 @@ function executeSetupCommand(setupCommand: string, worktreeDir: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Handle `ralphai run <issue-number>` — fetch the GitHub issue, create a
- * `feat/<slug>` branch and worktree, pull the issue into a plan file,
- * run the agent on it, and open a PR on completion.
+ * Handle `ralphai run <issue-number>` — fetch the GitHub issue, determine
+ * whether it is a PRD (has `ralphai-prd` label), and either:
  *
- * This is a single-target operation: the runner processes only that target
- * and exits (no drain).
+ * 1. **Non-PRD** — pull the issue into a plan file, create a `feat/<slug>`
+ *    branch and worktree, run the agent once, open a PR on completion.
+ * 2. **PRD with unchecked sub-issues** — create a single `feat/<slug>`
+ *    worktree and work through each sub-issue sequentially.
+ * 3. **PRD all completed** — report and exit.
+ * 4. **PRD no task list (fallback)** — treat the PRD body as the plan.
  */
 async function runIssueTarget(
   issueNumber: number,
@@ -3032,11 +3037,10 @@ async function runIssueTarget(
     process.exit(1);
   }
 
-  // Fetch issue title (validates existence)
-  let issueTitle: string;
+  // Discover whether this issue is a PRD or a standalone issue
+  let discovery: PrdDiscoveryResult;
   try {
-    const issue = fetchIssueTitleByNumber(repo, issueNumber, cwd);
-    issueTitle = issue.title;
+    discovery = discoverPrdTarget(repo, issueNumber, cwd);
   } catch (err: unknown) {
     console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
@@ -3045,6 +3049,13 @@ async function runIssueTarget(
     process.exit(1);
   }
 
+  if (discovery.isPrd) {
+    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, flags);
+  }
+
+  // --- Non-PRD: standalone issue flow (unchanged) ---
+  const { issue } = discovery;
+  const issueTitle = issue.title;
   const issueSlug = slugify(issueTitle);
   const branch = `feat/${issueSlug}`;
 
@@ -3065,6 +3076,288 @@ async function runIssueTarget(
   }
 
   // Ensure repo has at least one commit
+  ensureRepoHasCommit(cwd);
+
+  const baseBranch = detectBaseBranch(cwd);
+  const resolvedWorktreeDir = prepareWorktree(
+    cwd,
+    issueSlug,
+    branch,
+    baseBranch,
+    setupCommand,
+  );
+
+  // Pull the issue into a plan file in the worktree's pipeline
+  const worktreeConfig = resolveWorktreeConfig(
+    resolvedWorktreeDir,
+    cwd,
+    runArgs,
+  );
+  const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+
+  const pullResult = pullGithubIssueByNumber({
+    backlogDir,
+    cwd: resolvedWorktreeDir,
+    issueSource: "github",
+    issueLabel: worktreeConfig.issueLabel.value,
+    issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
+    issueRepo: worktreeConfig.issueRepo.value || repo,
+    issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
+    issueNumber,
+  });
+
+  if (!pullResult.pulled) {
+    console.error(
+      `Failed to pull issue #${issueNumber}: ${pullResult.message}`,
+    );
+    process.exit(1);
+  }
+
+  console.log(pullResult.message);
+  console.log("Running ralphai in worktree...");
+
+  // Build runner options: single-target, no drain
+  const activeWorktrees = listRalphaiWorktrees(cwd);
+  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+  const shouldResume = activeWorktree !== undefined;
+  const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
+  const worktreeRunOptions: RalphaiOptions = {
+    ...options,
+    subcommand: "run",
+    runTarget: undefined, // already handled
+    runArgs: [
+      ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+      ...runArgs,
+    ],
+  };
+
+  try {
+    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
+  } catch {
+    // runRalphaiRunner may call process.exit() on fatal errors
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PRD issue target handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle `ralphai run <issue-number>` where the issue is a PRD.
+ *
+ * Creates a single `feat/<slug>` branch and worktree, then works through
+ * each unchecked sub-issue sequentially. Stuck sub-issues are skipped.
+ *
+ * Special cases:
+ * - All sub-issues already completed → report and exit
+ * - No task list items → fallback to treating the PRD body as the plan
+ */
+async function runPrdIssueTarget(
+  discovery: PrdDiscoveryResult & { isPrd: true },
+  repo: string,
+  options: RalphaiOptions,
+  runArgs: string[],
+  cwd: string,
+  flags: {
+    isDryRun: boolean;
+    hasHelp: boolean;
+    hasShowConfig: boolean;
+    setupCommand: string;
+  },
+): Promise<void> {
+  const { isDryRun, setupCommand } = flags;
+  const { prd, subIssues, allCompleted, body } = discovery;
+  const prdSlug = slugify(prd.title);
+  const branch = `feat/${prdSlug}`;
+
+  // --- All sub-issues already completed ---
+  if (allCompleted) {
+    console.log();
+    console.log(
+      `PRD #${prd.number} — ${prd.title}: all sub-issues already completed.`,
+    );
+    return;
+  }
+
+  // --- Dry-run: preview ---
+  if (isDryRun) {
+    console.log();
+    console.log("========================================");
+    console.log("  Ralphai dry-run — PRD target");
+    console.log("========================================");
+    console.log(`[dry-run] PRD: #${prd.number} — ${prd.title}`);
+    console.log(`[dry-run] Branch: ${branch}`);
+    console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`);
+    if (subIssues.length > 0) {
+      console.log(
+        `[dry-run] Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")} (${subIssues.length} total)`,
+      );
+      console.log("[dry-run] Mode: PRD sequential (one branch, one PR)");
+    } else {
+      console.log("[dry-run] No sub-issues found — will use PRD body as plan");
+      console.log("[dry-run] Mode: single target (PRD body fallback)");
+    }
+    console.log(
+      "[dry-run] No files moved, no worktrees created, no agent run executed.",
+    );
+    return;
+  }
+
+  // Ensure repo has at least one commit
+  ensureRepoHasCommit(cwd);
+
+  const baseBranch = detectBaseBranch(cwd);
+  const resolvedWorktreeDir = prepareWorktree(
+    cwd,
+    prdSlug,
+    branch,
+    baseBranch,
+    setupCommand,
+  );
+
+  const worktreeConfig = resolveWorktreeConfig(
+    resolvedWorktreeDir,
+    cwd,
+    runArgs,
+  );
+
+  // --- PRD with no task list: fallback to body as plan ---
+  if (subIssues.length === 0) {
+    console.log(
+      `PRD #${prd.number} has no sub-issue task list — using PRD body as plan.`,
+    );
+    const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+    if (!existsSync(backlogDir)) {
+      mkdirSync(backlogDir, { recursive: true });
+    }
+    const planFilename = `gh-${prd.number}-${prdSlug}.md`;
+    const planPath = join(backlogDir, planFilename);
+    const planContent = `---\nsource: github\nissue: ${prd.number}\n---\n\n# ${prd.title}\n\n${body}\n`;
+    writeFileSync(planPath, planContent, "utf-8");
+    console.log(`Created plan from PRD body: ${planFilename}`);
+    console.log("Running ralphai in worktree...");
+
+    const activeWorktrees = listRalphaiWorktrees(cwd);
+    const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+    const shouldResume = activeWorktree !== undefined;
+    const hasResumeFlag =
+      runArgs.includes("--resume") || runArgs.includes("-r");
+    const worktreeRunOptions: RalphaiOptions = {
+      ...options,
+      subcommand: "run",
+      runTarget: undefined,
+      runArgs: [
+        ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...runArgs,
+      ],
+    };
+
+    try {
+      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir, {
+        number: prd.number,
+        title: prd.title,
+      });
+    } catch {
+      // runRalphaiRunner may call process.exit() on fatal errors
+    }
+    return;
+  }
+
+  // --- PRD with unchecked sub-issues: work through sequentially ---
+  console.log(
+    `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
+  );
+  console.log(`Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")}`);
+
+  const stuckSubIssues: number[] = [];
+  let completedCount = 0;
+
+  for (const subIssueNumber of subIssues) {
+    console.log();
+    console.log("----------------------------------------");
+    console.log(
+      `PRD #${prd.number} — working on sub-issue #${subIssueNumber} (${completedCount + 1}/${subIssues.length})`,
+    );
+    console.log("----------------------------------------");
+
+    // Pull the sub-issue into a plan file
+    const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+
+    const pullResult = pullGithubIssueByNumber({
+      backlogDir,
+      cwd: resolvedWorktreeDir,
+      issueSource: "github",
+      issueLabel: worktreeConfig.issueLabel.value,
+      issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
+      issueRepo: worktreeConfig.issueRepo.value || repo,
+      issueCommentProgress:
+        worktreeConfig.issueCommentProgress.value === "true",
+      issueNumber: subIssueNumber,
+    });
+
+    if (!pullResult.pulled) {
+      console.error(
+        `Failed to pull sub-issue #${subIssueNumber}: ${pullResult.message}`,
+      );
+      stuckSubIssues.push(subIssueNumber);
+      console.log(
+        `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
+      );
+      continue;
+    }
+
+    console.log(pullResult.message);
+    console.log("Running ralphai in worktree...");
+
+    // For sub-issues after the first, we always resume on the existing branch
+    const isFirstSubIssue = completedCount === 0;
+    const activeWorktrees = listRalphaiWorktrees(cwd);
+    const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+    const shouldResume = activeWorktree !== undefined || !isFirstSubIssue;
+    const hasResumeFlag =
+      runArgs.includes("--resume") || runArgs.includes("-r");
+    const worktreeRunOptions: RalphaiOptions = {
+      ...options,
+      subcommand: "run",
+      runTarget: undefined,
+      runArgs: [
+        ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...runArgs,
+      ],
+    };
+
+    try {
+      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir, {
+        number: prd.number,
+        title: prd.title,
+      });
+      completedCount++;
+    } catch {
+      // Runner may exit on stuck detection — treat as stuck sub-issue
+      stuckSubIssues.push(subIssueNumber);
+      console.log(`Sub-issue #${subIssueNumber} got stuck — skipping to next.`);
+    }
+  }
+
+  // --- Summary ---
+  console.log();
+  console.log("========================================");
+  console.log(`  PRD #${prd.number} — summary`);
+  console.log("========================================");
+  console.log(`Completed: ${completedCount}/${subIssues.length} sub-issue(s)`);
+  if (stuckSubIssues.length > 0) {
+    console.log(
+      `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers for issue/PRD target flows
+// ---------------------------------------------------------------------------
+
+/** Ensure the repo has at least one commit (required for worktrees). */
+function ensureRepoHasCommit(cwd: string): void {
   try {
     execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
   } catch {
@@ -3077,13 +3370,23 @@ async function runIssueTarget(
     console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
     process.exit(1);
   }
+}
 
-  const baseBranch = detectBaseBranch(cwd);
+/**
+ * Create or reuse a worktree for a given slug/branch.
+ * Returns the resolved worktree directory path.
+ */
+function prepareWorktree(
+  cwd: string,
+  slug: string,
+  branch: string,
+  baseBranch: string,
+  setupCommand: string,
+): string {
   const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
-  const desiredWorktreeDir = join(worktreeBase, issueSlug);
+  const desiredWorktreeDir = join(worktreeBase, slug);
   mkdirSync(worktreeBase, { recursive: true });
 
-  // Check for active worktree on this branch
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
 
@@ -3141,63 +3444,30 @@ async function runIssueTarget(
     executeSetupCommand(setupCommand, resolvedWorktreeDir);
   }
 
-  // Pull the issue into a plan file in the worktree's pipeline
-  const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+  return resolvedWorktreeDir;
+}
+
+/** Resolve config for a worktree, falling back to the main repo config. */
+function resolveWorktreeConfig(
+  worktreeDir: string,
+  mainCwd: string,
+  runArgs: string[],
+) {
   let cfgResult;
   try {
     cfgResult = resolveConfig({
-      cwd: resolvedWorktreeDir,
+      cwd: worktreeDir,
       envVars: process.env as Record<string, string | undefined>,
       cliArgs: runArgs,
     });
   } catch {
     cfgResult = resolveConfig({
-      cwd,
+      cwd: mainCwd,
       envVars: process.env as Record<string, string | undefined>,
       cliArgs: runArgs,
     });
   }
-  const config = cfgResult.config;
-
-  const pullResult = pullGithubIssueByNumber({
-    backlogDir,
-    cwd: resolvedWorktreeDir,
-    issueSource: "github",
-    issueLabel: config.issueLabel.value,
-    issueInProgressLabel: config.issueInProgressLabel.value,
-    issueRepo: config.issueRepo.value || repo,
-    issueCommentProgress: config.issueCommentProgress.value === "true",
-    issueNumber,
-  });
-
-  if (!pullResult.pulled) {
-    console.error(
-      `Failed to pull issue #${issueNumber}: ${pullResult.message}`,
-    );
-    process.exit(1);
-  }
-
-  console.log(pullResult.message);
-  console.log("Running ralphai in worktree...");
-
-  // Build runner options: single-target, no drain
-  const shouldResume = activeWorktree !== undefined;
-  const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
-  const worktreeRunOptions: RalphaiOptions = {
-    ...options,
-    subcommand: "run",
-    runTarget: undefined, // already handled
-    runArgs: [
-      ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-      ...runArgs,
-    ],
-  };
-
-  try {
-    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
-  } catch {
-    // runRalphaiRunner may call process.exit() on fatal errors
-  }
+  return cfgResult.config;
 }
 
 /**
