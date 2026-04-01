@@ -125,6 +125,9 @@ ralphai stop --all       # stop all running plan runners
 ralphai doctor           # validate your setup (agent, feedback commands, config)
 ralphai reset            # move in-progress plans back to backlog
 ralphai purge            # delete archived artifacts from pipeline/out/
+ralphai clean            # remove archived plans and orphaned worktrees
+ralphai clean --archive  # clean only archived plans
+ralphai clean --worktrees # clean only orphaned worktrees
 ```
 
 ### 6. Close the learnings loop
@@ -153,7 +156,7 @@ ralphai status --repo=my-app            # check status of a different repo
 ralphai backlog-dir --repo=~/work/api   # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
 ## Interactive Dashboard
 

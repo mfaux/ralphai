@@ -16,6 +16,7 @@ ralphai <command> [options]
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
+| `clean`        | Remove archived plans and orphaned worktrees                           |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
 | `check`        | Verify whether Ralphai is configured for a repo                        |
@@ -43,7 +44,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `stop`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
+Works with: `status`, `stop`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`.
 
 Blocked for: `run`, `prd`, `worktree`, `init`.
 
@@ -166,6 +167,27 @@ ralphai worktree clean
 - `clean` removes completed or orphaned worktrees and archives any leftover receipt
 
 Use `ralphai run` to start or resume work.
+
+## Clean
+
+```
+ralphai clean [--worktrees] [--archive] [--yes]
+```
+
+Unified cleanup command that removes archived plans and orphaned worktrees. By default both are cleaned; use flags to scope to one type.
+
+```
+--worktrees   Clean only orphaned worktrees
+--archive     Clean only archived plans
+--yes, -y     Skip confirmation prompt
+```
+
+Behavior:
+
+- **No flags:** Cleans both archived plans from `pipeline/out/` and orphaned worktrees
+- **`--archive`:** Only removes archived plans (equivalent to `ralphai purge`)
+- **`--worktrees`:** Only removes orphaned worktrees (equivalent to `ralphai worktree clean`)
+- **Nothing to clean:** Prints "Nothing to clean" and exits 0
 
 ## Stop
 

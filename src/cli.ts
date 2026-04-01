@@ -46,6 +46,7 @@ ${BOLD}Commands:${RESET}
   stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
   purge        Delete archived artifacts from pipeline/out/
+  clean        Remove archived plans and orphaned worktrees
   update       Update ralphai to the latest (or specified) version
   teardown     Remove Ralphai from your project
   uninstall    Remove all global state and uninstall the CLI

@@ -54,6 +54,7 @@ import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runCheck, showCheckHelp } from "./check.ts";
 import { runRalphaiStop, showStopHelp } from "./stop.ts";
+import { runClean, showCleanHelp } from "./clean.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -85,6 +86,7 @@ type RalphaiSubcommand =
   | "stop"
   | "reset"
   | "purge"
+  | "clean"
   | "doctor"
   | "backlog-dir"
   | "repos"
@@ -106,6 +108,8 @@ interface RalphaiOptions {
   force: boolean;
   clean: boolean;
   all: boolean;
+  worktrees: boolean; // --worktrees (for `clean`)
+  archive: boolean; // --archive (for `clean`)
   agentCommand?: string;
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
@@ -187,6 +191,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "stop",
   "reset",
   "purge",
+  "clean",
   "doctor",
   "backlog-dir",
   "repos",
@@ -201,6 +206,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let clean = false;
   let all = false;
   let once = false;
+  let worktrees = false;
+  let archive = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
@@ -249,6 +256,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       clean = true;
     } else if (arg === "--all") {
       all = true;
+    } else if (arg === "--worktrees") {
+      worktrees = true;
+    } else if (arg === "--archive") {
+      archive = true;
     } else if (arg === "--once") {
       once = true;
     } else if (arg === "--dry-run" || arg === "-n") {
@@ -302,6 +313,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     force,
     clean,
     all,
+    worktrees,
+    archive,
     once,
     agentCommand,
     targetDir,
@@ -1169,6 +1182,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}purge${RESET}       ${DIM}Delete archived artifacts from pipeline/out/${RESET}`,
   );
   console.log(
+    `  ${TEXT}clean${RESET}       ${DIM}Remove archived plans and orphaned worktrees${RESET}`,
+  );
+  console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
   );
   console.log(
@@ -1262,6 +1278,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "stop",
     "reset",
     "purge",
+    "clean",
     "update",
     "teardown",
     "uninstall",
@@ -1384,6 +1401,18 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       await runRalphaiPurge(options, cwd);
+      break;
+    case "clean":
+      if (helpRequested) {
+        showCleanHelp();
+        return;
+      }
+      await runClean({
+        cwd,
+        yes: options.yes,
+        worktrees: options.worktrees,
+        archive: options.archive,
+      });
       break;
     case "doctor":
       if (helpRequested) {
@@ -1666,7 +1695,7 @@ async function runRalphaiInit(
 // Worktree subcommand
 // ---------------------------------------------------------------------------
 
-interface WorktreeEntry {
+export interface WorktreeEntry {
   path: string;
   branch: string;
   head: string;
@@ -1682,7 +1711,7 @@ interface SelectedWorktreePlan {
 // Receipt interface and functions (parseReceipt, checkReceiptSource) are
 // imported from ./receipt.ts above.
 
-function parseWorktreeList(output: string): WorktreeEntry[] {
+export function parseWorktreeList(output: string): WorktreeEntry[] {
   const entries: WorktreeEntry[] = [];
   let current: Partial<WorktreeEntry> = {};
 
@@ -1828,11 +1857,11 @@ function selectPlanForWorktree(
   return null;
 }
 
-function isRalphaiManagedBranch(branch: string): boolean {
+export function isRalphaiManagedBranch(branch: string): boolean {
   return branch.startsWith("ralphai/") || branch.startsWith("feat/");
 }
 
-function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
+export function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
   const output = execSync("git worktree list --porcelain", {
     cwd,
     encoding: "utf-8",
