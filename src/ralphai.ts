@@ -12,7 +12,6 @@ import { join, resolve } from "path";
 import * as clack from "@clack/prompts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
-import { extractScope, extractDependsOn } from "./frontmatter.ts";
 import {
   listPlanFolders,
   planPathForSlug,
@@ -20,14 +19,12 @@ import {
   listPlanFiles,
   resolvePlanPath,
   planExistsForSlug,
-  countPlanTasks,
   countCompletedTasks,
 } from "./plan-detection.ts";
 import {
   parseReceipt,
   checkReceiptSource,
   findPlansByBranch,
-  type Receipt,
 } from "./receipt.ts";
 import {
   getRepoPipelineDirs,
@@ -55,6 +52,7 @@ import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
 import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import { handleRemovedCommand, handleRemovedRunFlags } from "./removed.ts";
+import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -72,7 +70,6 @@ import type { PrdIssue, PullIssueOptions } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
-import { isPidAlive, readRunnerPid } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -2492,31 +2489,14 @@ export function runRalphaiStatus(opts: { cwd: string; once?: boolean }): void {
 }
 
 function printStatusOnce(cwd: string): void {
-  const {
-    backlogDir,
-    wipDir: inProgressDir,
-    archiveDir,
-  } = getRepoPipelineDirs(cwd);
-
-  // --- Collect data ---
-  const backlogPlans = listPlanFiles(backlogDir, true);
-
-  const inProgressPlans = listPlanFiles(inProgressDir);
-  const receiptFiles = listPlanFolders(inProgressDir).filter((slug) =>
-    existsSync(join(inProgressDir, slug, "receipt.txt")),
-  );
-
-  const completedSlugs = new Set(listPlanSlugs(archiveDir));
-
-  // Build receipt lookup: plan filename → Receipt
-  const receiptsByPlan = new Map<string, Receipt>();
-  for (const slug of receiptFiles) {
-    const receipt = parseReceipt(join(inProgressDir, slug, "receipt.txt"));
-    if (receipt) {
-      const planFile = receipt.plan_file || `${slug}.md`;
-      receiptsByPlan.set(planFile, receipt);
-    }
+  let worktrees: WorktreeEntry[] = [];
+  try {
+    worktrees = listRalphaiWorktrees(cwd);
+  } catch {
+    // Not in a git repo or git not available
   }
+
+  const state = gatherPipelineState(cwd, { worktrees });
 
   // --- Pipeline section ---
   console.log();
@@ -2525,141 +2505,97 @@ function printStatusOnce(cwd: string): void {
   // Backlog
   console.log();
   console.log(
-    `  ${TEXT}Backlog${RESET}      ${DIM}${backlogPlans.length} plan${backlogPlans.length !== 1 ? "s" : ""}${RESET}`,
+    `  ${TEXT}Backlog${RESET}      ${DIM}${state.backlog.length} plan${state.backlog.length !== 1 ? "s" : ""}${RESET}`,
   );
-  for (const plan of backlogPlans) {
+  for (const plan of state.backlog) {
     let suffix = "";
-    const slug = plan.replace(/\.md$/, "");
-    const planPath = resolvePlanPath(backlogDir, slug);
-    const deps = planPath ? extractDependsOn(planPath) : [];
-    const scope = planPath ? extractScope(planPath) : "";
     const suffixParts: string[] = [];
-    if (scope) {
-      suffixParts.push(`scope: ${scope}`);
+    if (plan.scope) {
+      suffixParts.push(`scope: ${plan.scope}`);
     }
-    if (deps.length > 0) {
-      suffixParts.push(`waiting on ${deps.join(", ")}`);
+    if (plan.dependsOn.length > 0) {
+      suffixParts.push(`waiting on ${plan.dependsOn.join(", ")}`);
     }
     if (suffixParts.length > 0) {
       suffix = `${DIM}${suffixParts.join("  ")}${RESET}`;
     }
-    console.log(`    ${DIM}${plan}${RESET}${suffix ? "  " + suffix : ""}`);
+    console.log(
+      `    ${DIM}${plan.filename}${RESET}${suffix ? "  " + suffix : ""}`,
+    );
   }
 
   // In Progress
   console.log();
   console.log(
-    `  ${TEXT}In Progress${RESET}  ${DIM}${inProgressPlans.length} plan${inProgressPlans.length !== 1 ? "s" : ""}${RESET}`,
+    `  ${TEXT}In Progress${RESET}  ${DIM}${state.inProgress.length} plan${state.inProgress.length !== 1 ? "s" : ""}${RESET}`,
   );
-  for (const plan of inProgressPlans) {
-    const receipt = receiptsByPlan.get(plan);
+  for (const plan of state.inProgress) {
     const parts: string[] = [];
 
-    // Scope info
-    const slug = plan.replace(/\.md$/, "");
-    const planFilePath = join(inProgressDir, slug, plan);
-    const scope = extractScope(planFilePath);
-    if (scope) {
-      parts.push(`scope: ${scope}`);
+    if (plan.scope) {
+      parts.push(`scope: ${plan.scope}`);
     }
 
-    // Task progress
-    const totalTasks = countPlanTasks(planFilePath);
-    if (totalTasks !== undefined && totalTasks > 0) {
-      const completed = receipt?.tasks_completed ?? 0;
-      parts.push(`${completed} of ${totalTasks} tasks`);
+    if (plan.totalTasks !== undefined && plan.totalTasks > 0) {
+      parts.push(`${plan.tasksCompleted} of ${plan.totalTasks} tasks`);
     }
 
-    // Worktree info from receipt
-    if (receipt?.worktree_path) {
-      parts.push(`worktree: ${slug}`);
+    if (plan.hasWorktree) {
+      parts.push(`worktree: ${plan.slug}`);
     }
 
-    // Outcome / status tag with runner liveness
-    if (receipt?.outcome) {
-      parts.push(`[${receipt.outcome}]`);
-    } else {
-      const slugDir = join(inProgressDir, slug);
-      const pid = readRunnerPid(slugDir);
-      if (pid !== null) {
-        if (isPidAlive(pid)) {
-          parts.push(`[running PID ${pid}]`);
-        } else {
-          parts.push(`${RESET}${BOLD}[stalled]${RESET}`);
-        }
-      } else {
+    // Liveness tag
+    switch (plan.liveness.tag) {
+      case "outcome":
+        parts.push(`[${plan.liveness.outcome}]`);
+        break;
+      case "running":
+        parts.push(`[running PID ${plan.liveness.pid}]`);
+        break;
+      case "stalled":
+        parts.push(`${RESET}${BOLD}[stalled]${RESET}`);
+        break;
+      case "in_progress":
         parts.push("[in progress]");
-      }
+        break;
     }
 
     const suffix =
       parts.length > 0 ? `${DIM}${parts.join("    ")}${RESET}` : "";
-    console.log(`    ${DIM}${plan}${RESET}${suffix ? "  " + suffix : ""}`);
+    console.log(
+      `    ${DIM}${plan.filename}${RESET}${suffix ? "  " + suffix : ""}`,
+    );
   }
 
   // Completed
   console.log();
   console.log(
-    `  ${TEXT}Completed${RESET}    ${DIM}${completedSlugs.size} plan${completedSlugs.size !== 1 ? "s" : ""}${RESET}`,
+    `  ${TEXT}Completed${RESET}    ${DIM}${state.completedSlugs.length} plan${state.completedSlugs.length !== 1 ? "s" : ""}${RESET}`,
   );
-  for (const slug of [...completedSlugs].sort()) {
+  for (const slug of state.completedSlugs) {
     console.log(`    ${DIM}${slug}.md${RESET}`);
   }
 
   // --- Worktrees section ---
-  let worktrees: WorktreeEntry[] = [];
-  try {
-    worktrees = listRalphaiWorktrees(cwd);
-  } catch {
-    // Not in a git repo or git not available
-  }
-
-  if (worktrees.length > 0) {
+  if (state.worktrees.length > 0) {
     console.log();
     console.log(`${TEXT}Worktrees${RESET}`);
     console.log();
-    for (const wt of worktrees) {
-      let hasActivePlan: boolean;
-      if (wt.branch.startsWith("ralphai/")) {
-        const slug = wt.branch.replace("ralphai/", "");
-        hasActivePlan = planExistsForSlug(inProgressDir, slug);
-      } else {
-        hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
-      }
-      const state = hasActivePlan ? "in-progress" : "idle";
+    for (const wt of state.worktrees) {
+      const wtState = wt.hasActivePlan ? "in-progress" : "idle";
       console.log(
-        `  ${DIM}${wt.branch}${RESET}  ${DIM}${wt.path}${RESET}  ${DIM}[${state}]${RESET}`,
+        `  ${DIM}${wt.entry.branch}${RESET}  ${DIM}${wt.entry.path}${RESET}  ${DIM}[${wtState}]${RESET}`,
       );
     }
   }
 
   // --- Problems section ---
-  const problems: string[] = [];
-
-  // Orphaned receipts: receipt exists but no matching plan file
-  for (const [planFile, receipt] of receiptsByPlan) {
-    const slug = planFile.replace(/\.md$/, "");
-    const planPath = join(inProgressDir, slug, planFile);
-    if (!existsSync(planPath)) {
-      problems.push(
-        `Orphaned receipt: ${slug}/receipt.txt (no matching plan file)`,
-      );
-    }
-  }
-
-  // Stale worktree entries: worktree listed but directory missing
-  for (const wt of worktrees) {
-    if (!existsSync(wt.path)) {
-      problems.push(`Missing worktree directory: ${wt.path} (${wt.branch})`);
-    }
-  }
-
-  if (problems.length > 0) {
+  if (state.problems.length > 0) {
     console.log();
     console.log(`${TEXT}Problems${RESET}`);
     console.log();
-    for (const p of problems) {
-      console.log(`  ${DIM}${p}${RESET}`);
+    for (const p of state.problems) {
+      console.log(`  ${DIM}${p.message}${RESET}`);
     }
   }
 
