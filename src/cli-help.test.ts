@@ -67,6 +67,31 @@ describe("CLI help and flags", () => {
     const result = runCli(["status", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("status");
+    expect(result.stdout).toContain("--once");
+    expect(result.stdout).toContain("Auto-refreshes every 3s");
+    expect(result.stdout).toContain("--no-color");
+  });
+
+  it("status --once prints once and exits", () => {
+    const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
+    runCli(["init", "--yes"], ctx.dir, env);
+    const result = runCli(["status", "--once"], ctx.dir, env, 10000);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Pipeline");
+  });
+
+  it("stop --help shows stop usage", () => {
+    const result = runCli(["stop", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("stop");
+    expect(result.stdout).toContain("--all");
+    expect(result.stdout).toContain("--dry-run");
+  });
+
+  it("help text lists stop", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("stop");
   });
 
   it("reset --help shows reset usage and flags", () => {
@@ -105,7 +130,7 @@ describe("CLI help and flags", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ralphai <command> --help");
     expect(result.stdout).toContain(
-      "ralphai               # open the interactive dashboard",
+      "ralphai               # show pipeline status (auto-refreshes in terminal)",
     );
     expect(result.stdout).toContain("ralphai init");
     expect(result.stdout).toContain("ralphai run");

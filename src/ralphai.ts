@@ -10,7 +10,7 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 import * as clack from "@clack/prompts";
-import { RESET, DIM, TEXT } from "./utils.ts";
+import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import { extractScope, extractDependsOn } from "./frontmatter.ts";
 import {
@@ -53,6 +53,7 @@ import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runCheck, showCheckHelp } from "./check.ts";
+import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -66,6 +67,7 @@ import {
   slugify,
 } from "./issues.ts";
 import type { PrdIssue } from "./issues.ts";
+import { isPidAlive, readRunnerPid } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +82,7 @@ type RalphaiSubcommand =
   | "uninstall"
   | "worktree"
   | "status"
+  | "stop"
   | "reset"
   | "purge"
   | "doctor"
@@ -102,11 +105,14 @@ interface RalphaiOptions {
   yes: boolean;
   force: boolean;
   clean: boolean;
+  all: boolean;
   agentCommand?: string;
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
   prdNumber?: string; // positional arg for `prd` subcommand
+  once: boolean; // --once (for status auto-watch)
+  stopSlug?: string; // positional arg for `stop` subcommand
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
@@ -178,6 +184,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "uninstall",
   "worktree",
   "status",
+  "stop",
   "reset",
   "purge",
   "doctor",
@@ -192,6 +199,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let yes = false;
   let force = false;
   let clean = false;
+  let all = false;
+  let once = false;
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
@@ -203,6 +212,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
 
   let collectingRunArgs = false;
   let expectingPrdNumber = false;
+  let expectingStopSlug = false;
+  let stopSlug: string | undefined;
 
   for (const arg of args) {
     // After `run`/`prd` subcommand or `--`, collect remaining args for the runner
@@ -218,6 +229,13 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       continue;
     }
 
+    // For `stop`, the first non-flag positional after the subcommand is the slug
+    if (expectingStopSlug && !arg.startsWith("-")) {
+      stopSlug = arg;
+      expectingStopSlug = false;
+      continue;
+    }
+
     if (arg === "--") {
       collectingRunArgs = true;
       continue;
@@ -229,6 +247,12 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
       force = true;
     } else if (arg === "--clean") {
       clean = true;
+    } else if (arg === "--all") {
+      all = true;
+    } else if (arg === "--once") {
+      once = true;
+    } else if (arg === "--dry-run" || arg === "-n") {
+      // Handled by specific subcommands (run, stop) — skip here
     } else if (arg === "--help" || arg === "-h") {
       // Handled by runRalphai() dispatcher — skip here
     } else if (arg === "--no-color") {
@@ -252,6 +276,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
           collectingRunArgs = true;
           expectingPrdNumber = true;
         }
+        // For `stop`, next positional is the plan slug
+        if (subcommand === "stop") {
+          expectingStopSlug = true;
+        }
         // For `worktree`, parse worktree-specific args from the rest
         if (subcommand === "worktree") {
           worktreeOptions = parseWorktreeArgs(
@@ -273,11 +301,14 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     yes,
     force,
     clean,
+    all,
+    once,
     agentCommand,
     targetDir,
     repo,
     capabilities,
     prdNumber,
+    stopSlug,
     runArgs,
     worktreeOptions,
     unknownFlags,
@@ -825,20 +856,18 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     console.log(`  A sample plan is ready.`);
     console.log(`  Run it:`);
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
-    console.log(
-      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
-    );
-    console.log(`       ${TEXT}$ ralphai${RESET}`);
+    console.log(`     ${DIM}Check progress or stop a running plan:${RESET}`);
+    console.log(`       ${TEXT}$ ralphai status${RESET}`);
+    console.log(`       ${TEXT}$ ralphai stop${RESET}`);
   } else {
     console.log(
       `  1. Write a plan in the backlog (run ${TEXT}ralphai backlog-dir${RESET} to find it)`,
     );
     console.log(`  2. Run it:`);
     console.log(`       ${TEXT}$ ralphai run${RESET}`);
-    console.log(
-      `     ${DIM}Or start the TUI, select the plan from the backlog, and run it there:${RESET}`,
-    );
-    console.log(`       ${TEXT}$ ralphai${RESET}`);
+    console.log(`     ${DIM}Check progress or stop a running plan:${RESET}`);
+    console.log(`       ${TEXT}$ ralphai status${RESET}`);
+    console.log(`       ${TEXT}$ ralphai stop${RESET}`);
   }
   if (answers.issueSource === "github") {
     console.log();
@@ -1128,7 +1157,10 @@ function showRalphaiHelp(): void {
     `  ${TEXT}worktree${RESET}    ${DIM}Run in an isolated git worktree${RESET}`,
   );
   console.log(
-    `  ${TEXT}status${RESET}      ${DIM}Show pipeline and worktree status${RESET}`,
+    `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}stop${RESET}        ${DIM}Stop running plan(s)${RESET}`,
   );
   console.log(
     `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
@@ -1227,6 +1259,7 @@ export async function runRalphai(args: string[]): Promise<void> {
   const STRICT_SUBCOMMANDS = new Set([
     "init",
     "status",
+    "stop",
     "reset",
     "purge",
     "update",
@@ -1324,7 +1357,19 @@ export async function runRalphai(args: string[]): Promise<void> {
         showStatusHelp();
         return;
       }
-      runRalphaiStatus(cwd);
+      runRalphaiStatus({ cwd, once: options.once });
+      break;
+    case "stop":
+      if (helpRequested) {
+        showStopHelp();
+        return;
+      }
+      runRalphaiStop({
+        cwd,
+        dryRun: args.includes("--dry-run") || args.includes("-n"),
+        slug: options.stopSlug,
+        all: options.all,
+      });
       break;
     case "reset":
       if (helpRequested) {
@@ -1815,9 +1860,19 @@ function showInitHelp(): void {
 }
 
 function showStatusHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai status`);
+  console.log(`${TEXT}Usage:${RESET} ralphai status [--once] [--no-color]`);
   console.log();
-  console.log(`${DIM}Show pipeline and worktree status.${RESET}`);
+  console.log(
+    `${DIM}Show pipeline status. Auto-refreshes every 3s in a terminal.${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--once${RESET}      ${DIM}Print once and exit (default in non-TTY)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}--no-color${RESET}  ${DIM}Disable color output${RESET}`,
+  );
 }
 
 function showResetHelp(): void {
@@ -2439,7 +2494,8 @@ function runRalphaiDoctor(cwd: string): void {
 // extractScope and extractDependsOn are imported from ./frontmatter.ts
 export { extractScope, extractDependsOn } from "./frontmatter.ts";
 
-function runRalphaiStatus(cwd: string): void {
+export function runRalphaiStatus(opts: { cwd: string; once?: boolean }): void {
+  const { cwd, once } = opts;
   // Verify config exists (global state)
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
@@ -2448,6 +2504,33 @@ function runRalphaiStatus(cwd: string): void {
     process.exit(1);
   }
 
+  const isTTY = process.stdout.isTTY === true;
+
+  // If non-TTY or --once, print once and return
+  if (!isTTY || once) {
+    printStatusOnce(cwd);
+    return;
+  }
+
+  // Auto-watch mode: clear screen and reprint every 3 seconds
+  const print = () => {
+    process.stdout.write("\x1b[2J\x1b[H"); // clear screen + move cursor to top
+    printStatusOnce(cwd);
+  };
+
+  print();
+  const interval = setInterval(print, 3000);
+
+  const cleanup = () => {
+    clearInterval(interval);
+    process.exit(0);
+  };
+
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+}
+
+function printStatusOnce(cwd: string): void {
   const {
     backlogDir,
     wipDir: inProgressDir,
@@ -2531,11 +2614,21 @@ function runRalphaiStatus(cwd: string): void {
       parts.push(`worktree: ${slug}`);
     }
 
-    // Outcome / status tag
+    // Outcome / status tag with runner liveness
     if (receipt?.outcome) {
       parts.push(`[${receipt.outcome}]`);
     } else {
-      parts.push("[in progress]");
+      const slugDir = join(inProgressDir, slug);
+      const pid = readRunnerPid(slugDir);
+      if (pid !== null) {
+        if (isPidAlive(pid)) {
+          parts.push(`[running PID ${pid}]`);
+        } else {
+          parts.push(`${RESET}${BOLD}[stalled]${RESET}`);
+        }
+      } else {
+        parts.push("[in progress]");
+      }
     }
 
     const suffix =

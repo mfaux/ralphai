@@ -1,5 +1,5 @@
 /**
- * IPC protocol for real-time communication between the runner and dashboard.
+ * IPC protocol for real-time communication between the runner and CLI clients.
  *
  * Uses newline-delimited JSON over Unix domain sockets (or named pipes on
  * Windows). Each line is a complete JSON object with a `type` discriminator.

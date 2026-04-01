@@ -113,12 +113,15 @@ Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The
 
 **Headless (`ralphai run`):** Press Ctrl-C to stop the runner. It finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`.
 
-**TUI (`ralphai`):** Closing the TUI does **not** stop a running agent. Runners are detached background processes that continue in the background. See [Troubleshooting: How do I stop a running agent?](docs/troubleshooting.md#how-do-i-stop-a-running-agent) for how to stop one. A built-in "Stop run" action in the TUI is planned.
+**Stop a runner:** Use `ralphai stop` to send SIGTERM to running plan runners. Pass a plan slug to stop a specific runner, or use `--all` to stop all runners. Use `--dry-run` to preview which processes would be stopped.
 
 **Resuming:** Reopen `ralphai` or run `ralphai run` to pick up where the agent left off. Ralphai auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
 
 ```bash
 ralphai status           # see what's queued, in progress, and any problems
+ralphai stop             # stop the running plan runner (auto-selects if only one)
+ralphai stop my-plan     # stop a specific plan runner by slug
+ralphai stop --all       # stop all running plan runners
 ralphai doctor           # validate your setup (agent, feedback commands, config)
 ralphai reset            # move in-progress plans back to backlog
 ralphai purge            # delete archived artifacts from pipeline/out/

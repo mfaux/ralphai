@@ -76,23 +76,16 @@ This is expected. `ralphai run` starts from the main repo, then hands work off t
 
 **Headless (`ralphai run`):** Press Ctrl-C in the terminal where the runner is active. The runner catches SIGINT/SIGTERM, finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`, so you can resume later.
 
-**TUI-launched (`ralphai`):** Closing the TUI does **not** stop a running agent. When you launch a run from the dashboard, the runner is spawned as a detached background process that continues independently.
-
-To stop a TUI-launched runner, find and terminate the process:
+**From another terminal:** Use `ralphai stop` to send SIGTERM to a running plan runner:
 
 ```bash
-# Linux / macOS
-ps aux | grep 'ralphai.*run' | grep -v grep
-kill <pid>
-
-# Windows (PowerShell)
-Get-Process | Where-Object { $_.CommandLine -like '*ralphai*run*' }
-Stop-Process -Id <pid>
+ralphai stop             # auto-selects if only one runner is active
+ralphai stop my-plan     # stop a specific plan runner by slug
+ralphai stop --all       # stop all running plan runners
+ralphai stop --dry-run   # preview which processes would be stopped
 ```
 
 The runner handles SIGTERM gracefully, the same way it handles Ctrl-C: it finishes the current iteration, preserves all work in `in-progress/<slug>/`, and exits cleanly. No work is lost.
-
-A built-in "Stop run" action in the TUI is planned, which will remove the need for manual process management.
 
 ## "Working tree is dirty" after init
 

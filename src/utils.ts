@@ -9,6 +9,17 @@ export const DIM = useColor ? "\x1b[38;5;102m" : "";
 export const TEXT = useColor ? "\x1b[38;5;145m" : "";
 
 /**
+ * Strip ANSI escape sequences (colors, cursor movement, etc.) from a string.
+ * Used to sanitize agent output before inserting into PR descriptions.
+ */
+export function stripAnsi(str: string): string {
+  return str.replace(
+    /[\x1b\x9b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><~]/g,
+    "",
+  );
+}
+
+/**
  * Compare two semver version strings (major.minor.patch).
  * Returns negative if a < b, positive if a > b, 0 if equal.
  */

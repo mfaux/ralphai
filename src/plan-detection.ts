@@ -214,11 +214,9 @@ export function detectPlanFormat(content: string): PlanFormatResult {
 
 /**
  * Count total tasks in plan content (string).
- * Returns `undefined` when no tasks are found, consistent with the
- * dashboard's `PlanInfo.totalTasks` type.
+ * Returns `undefined` when no tasks are found.
  *
- * This is the single source of truth for content-based task counting,
- * replacing the private copy that lived in `dashboard/data.ts`.
+ * This is the single source of truth for content-based task counting.
  */
 export function countPlanTasksFromContent(content: string): number | undefined {
   const { totalTasks } = detectPlanFormat(content);

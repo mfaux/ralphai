@@ -42,7 +42,16 @@ Previews which plan would be selected, which worktree and branch Ralphai would u
 
 **Headless (`ralphai run`):** Press Ctrl-C in the terminal. The runner finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`.
 
-**TUI-launched:** Closing the TUI does **not** stop a running agent. Runners are detached background processes. See [Troubleshooting: How do I stop a running agent?](troubleshooting.md#how-do-i-stop-a-running-agent) for how to stop one outside the TUI. A built-in "Stop run" action is planned.
+**From another terminal:** Use `ralphai stop` to send SIGTERM to a running plan runner. If only one runner is active, it auto-selects. Otherwise, pass the plan slug:
+
+```bash
+ralphai stop             # auto-selects if only one runner is active
+ralphai stop my-plan     # stop a specific plan runner by slug
+ralphai stop --all       # stop all running plan runners
+ralphai stop --dry-run   # preview which processes would be stopped
+```
+
+The runner handles SIGTERM gracefully: it finishes the current iteration, preserves work in `in-progress/<slug>/`, and exits cleanly.
 
 ## Resume after editing a stuck plan
 

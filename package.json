@@ -48,12 +48,9 @@
     "@clack/prompts": "^0.11.0",
     "@types/bun": "latest",
     "@types/node": "^22.10.0",
-    "@types/react": "^19.2.14",
-    "ink": "^6.8.0",
     "jiti": "^2.6.1",
     "obuild": "^0.4.22",
     "prettier": "^3.8.1",
-    "react": "^19.2.4",
     "typescript": "^5.9.3"
   },
   "engines": {

@@ -5,6 +5,7 @@
  *
  * This module has NO filesystem dependencies — all functions are pure.
  */
+import { stripAnsi } from "./utils.ts";
 
 // ---------------------------------------------------------------------------
 // Extraction
@@ -13,6 +14,7 @@
 /**
  * Extract the first `<learnings>...</learnings>` block from agent output.
  * Returns the content between the tags, or null if not found.
+ * Strips ANSI escape codes so terminal colors don't leak into PR bodies.
  */
 export function extractLearningsBlock(text: string): string | null {
   const startTag = "<learnings>";
@@ -24,7 +26,9 @@ export function extractLearningsBlock(text: string): string | null {
   const endIdx = text.indexOf(endTag, startIdx);
   if (endIdx === -1) return null;
 
-  const content = text.slice(startIdx + startTag.length, endIdx).trim();
+  const content = stripAnsi(
+    text.slice(startIdx + startTag.length, endIdx),
+  ).trim();
   return content.length > 0 ? content : null;
 }
 
