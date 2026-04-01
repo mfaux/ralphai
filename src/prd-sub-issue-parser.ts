@@ -65,8 +65,8 @@ export function parseSubIssues(body: string | undefined | null): number[] {
 
 /**
  * Check whether a body contains any checked (`[x]`) task list items that
- * reference issues. Used to distinguish "PRD with no task list" (fallback
- * to body-as-plan) from "all sub-issues already completed".
+ * reference issues. Used to distinguish "PRD with no task list" from
+ * "all sub-issues already completed".
  */
 export function hasCheckedSubIssues(body: string | undefined | null): boolean {
   if (!body) return false;

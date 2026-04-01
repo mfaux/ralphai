@@ -6,7 +6,7 @@
  * Returns a discriminated union:
  * - `{ isPrd: true, prd, subIssues }` — issue is a PRD with sub-issues
  * - `{ isPrd: true, prd, subIssues: [], allCompleted: true }` — all checked
- * - `{ isPrd: true, prd, subIssues: [], allCompleted: false }` — no task list, fallback
+ * - `{ isPrd: true, prd, subIssues: [], allCompleted: false }` — no task list
  * - `{ isPrd: false, issue }` — not a PRD, standalone issue
  */
 import { execSync } from "child_process";
@@ -26,7 +26,7 @@ export interface PrdDiscoveryResultPrd {
   subIssues: number[];
   /** True when there are checked items but no unchecked ones. */
   allCompleted: boolean;
-  /** The raw PRD body (used for fallback: body-as-plan). */
+  /** The raw PRD body. */
   body: string;
 }
 
