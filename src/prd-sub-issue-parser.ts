@@ -23,17 +23,18 @@
  *   Group 2: issue number from a full `https://github.com/.../issues/N` URL
  *
  * The regex requires `- [ ]` (unchecked checkbox) and will not match
- * `- [x]` (checked checkbox).
+ * `- [x]` (checked checkbox). Trailing description text after the
+ * issue reference is allowed (e.g. `- [ ] #7 — Fix the bug`).
  */
 const UNCHECKED_ISSUE_RE =
-  /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))\s*$/;
+  /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))(?:\s.*)?$/;
 
 /**
  * Matches a checked (`[x]` or `[X]`) GitHub task list item that references
  * an issue.
  */
 const CHECKED_ISSUE_RE =
-  /^- \[[xX]\] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))\s*$/;
+  /^- \[[xX]\] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))(?:\s.*)?$/;
 
 /**
  * Extract issue numbers from unchecked task list items in a GitHub issue

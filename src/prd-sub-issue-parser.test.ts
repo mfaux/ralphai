@@ -91,9 +91,33 @@ describe("parseSubIssues", () => {
     expect(parseSubIssues(body)).toEqual([7, 8]);
   });
 
-  it("ignores items with text after the issue reference", () => {
+  it("extracts issue number even with trailing description text", () => {
     const body = "- [ ] #7 some extra text";
-    expect(parseSubIssues(body)).toEqual([]);
+    expect(parseSubIssues(body)).toEqual([7]);
+  });
+
+  it("extracts issue number with em-dash description", () => {
+    const body =
+      "- [ ] #219 — Extract `gatherPipelineState` from `printStatusOnce`";
+    expect(parseSubIssues(body)).toEqual([219]);
+  });
+
+  it("extracts issue numbers from real PRD with descriptions", () => {
+    const body = [
+      "## Slices",
+      "",
+      "- [ ] #219 — Extract `gatherPipelineState` from `printStatusOnce`",
+      "- [ ] #220 — Interactive menu shell with pipeline header and status action",
+      "- [ ] #221 — Interactive run next plan and pick from backlog",
+      "- [x] #222 — Interactive pick from GitHub with PRD tree display",
+      "- [ ] #223 — Interactive resume stalled, stop running, and reset plan",
+    ].join("\n");
+    expect(parseSubIssues(body)).toEqual([219, 220, 221, 223]);
+  });
+
+  it("extracts URL issue number with trailing description text", () => {
+    const body = "- [ ] https://github.com/owner/repo/issues/42 Fix login bug";
+    expect(parseSubIssues(body)).toEqual([42]);
   });
 
   it("ignores items with text before the issue reference", () => {
@@ -208,6 +232,10 @@ describe("hasCheckedSubIssues", () => {
 
   it("returns true when checked items with lowercase x exist", () => {
     expect(hasCheckedSubIssues("- [x] #10")).toBe(true);
+  });
+
+  it("returns true for checked items with trailing description text", () => {
+    expect(hasCheckedSubIssues("- [x] #10 — Implement auth")).toBe(true);
   });
 
   it("returns true when checked items with uppercase X exist", () => {
