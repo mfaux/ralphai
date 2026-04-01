@@ -66,7 +66,7 @@ For day-to-day use, start with the interactive menu:
 ralphai
 ```
 
-This shows a pipeline summary header and an interactive menu. From here you can view pipeline status, and more actions will be added in future releases.
+This shows a pipeline summary header and an interactive menu. From here you can run the next queued plan, pick a specific plan from the backlog, or view pipeline status.
 
 `ralphai` is the primary workflow for humans. Use it to browse the pipeline, inspect progress, and launch actions without remembering subcommands.
 
@@ -160,13 +160,17 @@ The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `uninstall`, `
 
 ## Interactive Menu
 
-Running bare `ralphai` in a terminal launches an interactive menu with a pipeline summary header showing plan counts (backlog, running, completed). Select actions from the menu to view pipeline status and more.
+Running bare `ralphai` in a terminal launches an interactive menu with a pipeline summary header showing plan counts (backlog, running, completed). From the menu you can:
+
+- **Run next plan** — auto-detects the next ready plan (respecting dependency ordering) and hands off to the runner. When the backlog is empty but GitHub issues are configured, it will pull from GitHub.
+- **Pick from backlog** — browse all backlog plans with scope and dependency info, then select one to run.
+- **View pipeline status** — display detailed pipeline status.
 
 ```bash
 ralphai                  # launches the interactive menu (TTY only)
 ```
 
-The menu re-gathers pipeline state before each display so data is always fresh. Ctrl+C or selecting "Quit" exits cleanly. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first, then proceeds to the menu.
+The menu re-gathers pipeline state before each display so data is always fresh. Selecting a run action hands off to the runner (the menu does not re-appear). Ctrl+C or selecting "Quit" exits cleanly. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first, then proceeds to the menu.
 
 For most people, this is the main way to use Ralphai. Reach for `ralphai run` when you want headless execution.
 

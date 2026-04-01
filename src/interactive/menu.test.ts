@@ -8,7 +8,12 @@
 import { describe, it, expect } from "bun:test";
 import { stripAnsi } from "../utils.ts";
 import type { PipelineState } from "../pipeline-state.ts";
-import { buildHeaderLine, buildMenuItems, type MenuItem } from "./menu.ts";
+import {
+  buildHeaderLine,
+  buildMenuItems,
+  type MenuItem,
+  type MenuContext,
+} from "./menu.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,12 +31,15 @@ function makeState(overrides?: Partial<PipelineState>): PipelineState {
   };
 }
 
-/** Create N backlog plan stubs. */
-function makeBacklog(count: number) {
+/** Create N backlog plan stubs with optional customization. */
+function makeBacklog(
+  count: number,
+  opts?: { scope?: string; dependsOn?: string[] },
+) {
   return Array.from({ length: count }, (_, i) => ({
     filename: `plan-${i + 1}.md`,
-    scope: "",
-    dependsOn: [] as string[],
+    scope: opts?.scope ?? "",
+    dependsOn: opts?.dependsOn ?? ([] as string[]),
   }));
 }
 
@@ -47,6 +55,9 @@ function makeInProgress(count: number) {
     liveness: { tag: "in_progress" as const },
   }));
 }
+
+const NO_GITHUB: MenuContext = { hasGitHubIssues: false };
+const WITH_GITHUB: MenuContext = { hasGitHubIssues: true };
 
 // ---------------------------------------------------------------------------
 // buildHeaderLine
@@ -103,54 +114,48 @@ describe("buildHeaderLine", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildMenuItems
+// buildMenuItems — structure and ordering
 // ---------------------------------------------------------------------------
 
 describe("buildMenuItems", () => {
-  it("returns 'View pipeline status' and 'Quit' items", () => {
+  it("returns all expected menu items", () => {
     const state = makeState();
-    const items = buildMenuItems(state);
+    const items = buildMenuItems(state, NO_GITHUB);
 
-    expect(items.length).toBeGreaterThanOrEqual(2);
-
-    const statusItem = items.find((i) => i.value === "view-status");
-    expect(statusItem).toBeDefined();
-    expect(statusItem!.label).toBe("View pipeline status");
-    expect(statusItem!.group).toBe("pipeline");
-
-    const quitItem = items.find((i) => i.value === "quit");
-    expect(quitItem).toBeDefined();
-    expect(quitItem!.label).toBe("Quit");
-    expect(quitItem!.group).toBe("maintenance");
+    const values = items.map((i) => i.value);
+    expect(values).toContain("run-next");
+    expect(values).toContain("pick-from-backlog");
+    expect(values).toContain("view-status");
+    expect(values).toContain("quit");
   });
 
   it("orders items by group: run, pipeline, maintenance", () => {
-    const state = makeState();
-    const items = buildMenuItems(state);
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
 
-    // Find the indexes
+    const runNextIdx = items.findIndex((i) => i.value === "run-next");
+    const pickIdx = items.findIndex((i) => i.value === "pick-from-backlog");
     const statusIdx = items.findIndex((i) => i.value === "view-status");
     const quitIdx = items.findIndex((i) => i.value === "quit");
 
-    // Pipeline items should come before maintenance items
+    // Run group before pipeline before maintenance
+    expect(runNextIdx).toBeLessThan(statusIdx);
+    expect(pickIdx).toBeLessThan(statusIdx);
     expect(statusIdx).toBeLessThan(quitIdx);
   });
 
-  it("returns consistent items regardless of pipeline state", () => {
-    const emptyState = makeState();
-    const busyState = makeState({
-      backlog: makeBacklog(10),
-      inProgress: makeInProgress(3),
-      completedSlugs: ["a", "b", "c"],
-    });
+  it("always returns the same number of items", () => {
+    const emptyItems = buildMenuItems(makeState(), NO_GITHUB);
+    const busyItems = buildMenuItems(
+      makeState({
+        backlog: makeBacklog(10),
+        inProgress: makeInProgress(3),
+        completedSlugs: ["a", "b", "c"],
+      }),
+      NO_GITHUB,
+    );
 
-    const emptyItems = buildMenuItems(emptyState);
-    const busyItems = buildMenuItems(busyState);
-
-    // Same number of items (state doesn't change available actions yet)
     expect(emptyItems.length).toBe(busyItems.length);
-
-    // Same values in same order
     expect(emptyItems.map((i) => i.value)).toEqual(
       busyItems.map((i) => i.value),
     );
@@ -158,7 +163,7 @@ describe("buildMenuItems", () => {
 
   it("all items have required fields", () => {
     const state = makeState();
-    const items = buildMenuItems(state);
+    const items = buildMenuItems(state, NO_GITHUB);
 
     for (const item of items) {
       expect(item.value).toBeTypeOf("string");
@@ -167,5 +172,115 @@ describe("buildMenuItems", () => {
       expect(item.label.length).toBeGreaterThan(0);
       expect(["run", "pipeline", "maintenance"]).toContain(item.group);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — "Run next plan" item
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — Run next plan", () => {
+  it("shows auto-detected plan name when backlog has a ready plan", () => {
+    const state = makeState({ backlog: makeBacklog(3) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan (plan-1.md)");
+    expect(runNext.disabled).toBeFalsy();
+  });
+
+  it("skips blocked plans and shows first ready plan name", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "blocked.md", scope: "", dependsOn: ["dep-a.md"] },
+        { filename: "ready.md", scope: "", dependsOn: [] },
+      ],
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan (ready.md)");
+    expect(runNext.disabled).toBeFalsy();
+  });
+
+  it("is disabled with '(nothing queued)' when backlog is empty and no GitHub", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan");
+    expect(runNext.hint).toBe("(nothing queued)");
+    expect(runNext.disabled).toBe(true);
+  });
+
+  it("is disabled when all plans are blocked", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "a.md", scope: "", dependsOn: ["dep.md"] },
+        { filename: "b.md", scope: "", dependsOn: ["other.md"] },
+      ],
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.disabled).toBe(true);
+    expect(runNext.hint).toBe("(nothing queued)");
+  });
+
+  it("is enabled with GitHub hint when backlog is empty but GitHub configured", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, WITH_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan");
+    expect(runNext.hint).toBe("will pull from GitHub");
+    expect(runNext.disabled).toBe(false);
+  });
+
+  it("recognizes completed dependencies and shows plan as next", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "depends-on-done.md", scope: "", dependsOn: ["dep-a"] },
+      ],
+      completedSlugs: ["dep-a"],
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan (depends-on-done.md)");
+    expect(runNext.disabled).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — "Pick from backlog" item
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — Pick from backlog", () => {
+  it("shows count when backlog has plans", () => {
+    const state = makeState({ backlog: makeBacklog(5) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-backlog")!;
+
+    expect(pick.label).toBe("Pick from backlog (5 plans)");
+    expect(pick.disabled).toBeFalsy();
+  });
+
+  it("uses singular 'plan' for count of 1", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-backlog")!;
+
+    expect(pick.label).toBe("Pick from backlog (1 plan)");
+  });
+
+  it("is disabled with '(empty)' when backlog is empty", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-backlog")!;
+
+    expect(pick.label).toBe("Pick from backlog");
+    expect(pick.hint).toBe("(empty)");
+    expect(pick.disabled).toBe(true);
   });
 });

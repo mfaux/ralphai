@@ -9,8 +9,15 @@
 import * as clack from "@clack/prompts";
 import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
+import { resolveConfig } from "../config.ts";
 import { listRalphaiWorktrees, printStatusOnce } from "../ralphai.ts";
 import { BOLD, DIM, RESET, TEXT } from "../utils.ts";
+import {
+  runNextMenuItem,
+  pickFromBacklogMenuItem,
+  handleRunNext,
+  handlePickFromBacklog,
+} from "./run-actions.ts";
 
 // ---------------------------------------------------------------------------
 // Menu item types
@@ -26,6 +33,12 @@ export interface MenuItem {
   hint?: string;
   group: MenuGroup;
   disabled?: boolean;
+}
+
+/** Extra context for menu construction that lives outside PipelineState. */
+export interface MenuContext {
+  /** Whether GitHub issues are configured as the issue source. */
+  hasGitHubIssues: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,12 +85,34 @@ const GROUP_ORDER: Record<MenuGroup, number> = {
 /**
  * Build menu items from the current pipeline state.
  *
- * Returns an ordered array of `MenuItem` descriptors. Later slices will
- * add more items; this initial version includes "View pipeline status"
- * and "Quit".
+ * Returns an ordered array of `MenuItem` descriptors. Items are sorted
+ * by group (run → pipeline → maintenance) with insertion order preserved
+ * within each group.
  */
-export function buildMenuItems(state: PipelineState): MenuItem[] {
+export function buildMenuItems(
+  state: PipelineState,
+  ctx: MenuContext = { hasGitHubIssues: false },
+): MenuItem[] {
   const items: MenuItem[] = [];
+
+  // --- Run group ---
+  const runNext = runNextMenuItem(state, ctx.hasGitHubIssues);
+  items.push({
+    value: "run-next",
+    label: runNext.label,
+    hint: runNext.hint,
+    group: "run",
+    disabled: runNext.disabled,
+  });
+
+  const pickBacklog = pickFromBacklogMenuItem(state);
+  items.push({
+    value: "pick-from-backlog",
+    label: pickBacklog.label,
+    hint: pickBacklog.hint,
+    group: "run",
+    disabled: pickBacklog.disabled,
+  });
 
   // --- Pipeline group ---
   items.push({
@@ -106,11 +141,22 @@ export function buildMenuItems(state: PipelineState): MenuItem[] {
 /** Return value indicating whether the menu loop should continue. */
 type DispatchResult = "continue" | "exit";
 
-function dispatchAction(action: string, cwd: string): DispatchResult {
+async function dispatchAction(
+  action: string,
+  _cwd: string,
+  state: PipelineState,
+): Promise<DispatchResult> {
   switch (action) {
+    case "run-next":
+      await handleRunNext();
+      return "exit";
+
+    case "pick-from-backlog":
+      return handlePickFromBacklog(state);
+
     case "view-status":
       console.log();
-      printStatusOnce(cwd);
+      printStatusOnce(_cwd);
       return "continue";
 
     case "quit":
@@ -133,6 +179,21 @@ function dispatchAction(action: string, cwd: string): DispatchResult {
  * Exits cleanly on "Quit" or Ctrl+C.
  */
 export async function runInteractive(cwd: string): Promise<void> {
+  // Resolve config once for the session to check GitHub issue source
+  let hasGitHubIssues = false;
+  try {
+    const { config } = resolveConfig({
+      cwd,
+      envVars: process.env,
+      cliArgs: [],
+    });
+    hasGitHubIssues = config.issueSource.value === "github";
+  } catch {
+    // Config resolution failure — proceed with defaults
+  }
+
+  const ctx: MenuContext = { hasGitHubIssues };
+
   while (true) {
     // Gather fresh pipeline state each iteration
     let worktrees: { path: string; branch: string }[] = [];
@@ -149,7 +210,7 @@ export async function runInteractive(cwd: string): Promise<void> {
     console.log();
 
     // Build and display menu
-    const items = buildMenuItems(state);
+    const items = buildMenuItems(state, ctx);
 
     const selected = await clack.select({
       message: "What would you like to do?",
@@ -165,7 +226,7 @@ export async function runInteractive(cwd: string): Promise<void> {
       return;
     }
 
-    const result = dispatchAction(selected as string, cwd);
+    const result = await dispatchAction(selected as string, cwd, state);
     if (result === "exit") {
       return;
     }
