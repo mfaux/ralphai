@@ -19,6 +19,7 @@ ralphai <command> [options]
 | `clean`        | Remove archived plans and orphaned worktrees                           |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
+| `config`       | Query resolved configuration, keys, or capabilities                    |
 | `check`        | Verify whether Ralphai is configured for a repo                        |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update Ralphai to the latest (or specified) version                    |
@@ -44,7 +45,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `stop`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`.
+Works with: `status`, `stop`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`, `config`.
 
 Blocked for: `run`, `prd`, `worktree`, `init`.
 
@@ -249,6 +250,49 @@ Deletes all archived plan artifacts from `pipeline/out/`.
 9. No orphaned receipts in `in-progress/`
 
 When a `workspaces` config key exists, doctor also validates per-workspace feedback commands. Workspace failures produce warnings, not hard errors.
+
+## Config
+
+`ralphai config` is the unified entry point for querying configuration. It consolidates `run --show-config`, `backlog-dir`, and `check` into a single subcommand.
+
+```
+ralphai config [<key>] [--check=<capability>]
+```
+
+### Modes
+
+**Bare config** — prints the fully resolved configuration (equivalent to `run --show-config`):
+
+```bash
+ralphai config
+```
+
+**Key query** — prints a specific config value to stdout:
+
+```bash
+ralphai config backlog-dir
+# ~/.ralphai/repos/<repo-id>/pipeline/backlog
+```
+
+| Key           | Description                            |
+| ------------- | -------------------------------------- |
+| `backlog-dir` | Absolute path to the backlog directory |
+
+**Capability check** — validates whether a capability is configured (same behavior as `ralphai check --capability`):
+
+```bash
+ralphai config --check=issues
+```
+
+```
+--check=<capability>   Check if a capability is enabled (repeatable)
+```
+
+See the [Check](#check) section for output format and exit codes.
+
+### Error handling
+
+On a non-initialized repo, `ralphai config` and `ralphai config <key>` print an error suggesting `ralphai init` and exit 1.
 
 ## Check
 

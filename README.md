@@ -153,10 +153,10 @@ Ralphai tracks every initialized repo automatically. Run `ralphai repos` from an
 ralphai repos                           # list all known repos with plan counts
 ralphai repos --clean                   # remove stale entries (dead paths, no plans)
 ralphai status --repo=my-app            # check status of a different repo
-ralphai backlog-dir --repo=~/work/api   # get backlog path by repo path
+ralphai config backlog-dir --repo=~/work/api  # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `teardown`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
 ## Interactive Dashboard
 

@@ -53,6 +53,7 @@ import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runCheck, showCheckHelp } from "./check.ts";
+import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
 import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import {
@@ -91,6 +92,7 @@ type RalphaiSubcommand =
   | "backlog-dir"
   | "repos"
   | "check"
+  | "config"
   | "seed";
 
 type WorktreeSubcommand = "run" | "list" | "clean";
@@ -114,6 +116,8 @@ interface RalphaiOptions {
   targetDir?: string;
   repo?: string; // --repo=<name-or-path>
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
+  configKey?: string; // positional arg for `config` subcommand
+  checkCapabilities: string[]; // --check=<name> (repeatable, for `config --check`)
   prdNumber?: string; // positional arg for `prd` subcommand
   once: boolean; // --once (for status auto-watch)
   stopSlug?: string; // positional arg for `stop` subcommand
@@ -196,6 +200,7 @@ const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "backlog-dir",
   "repos",
   "check",
+  "config",
   "seed", // hidden — not listed in showRalphaiHelp()
 ]);
 
@@ -213,11 +218,14 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let repo: string | undefined;
   let prdNumber: string | undefined;
   const capabilities: string[] = [];
+  const checkCapabilities: string[] = [];
+  let configKey: string | undefined;
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
 
   let collectingRunArgs = false;
+  let collectingConfigArgs = false;
   let expectingPrdNumber = false;
   let expectingStopSlug = false;
   let stopSlug: string | undefined;
@@ -233,6 +241,25 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
         continue;
       }
       runArgs.push(arg);
+      continue;
+    }
+
+    // After `config` subcommand, collect config-specific args
+    if (collectingConfigArgs) {
+      if (arg.startsWith("--check=")) {
+        checkCapabilities.push(arg.slice("--check=".length));
+        continue;
+      }
+      if (arg === "--help" || arg === "-h") {
+        // Let the main dispatcher handle --help
+        continue;
+      }
+      if (!arg.startsWith("-") && !configKey) {
+        configKey = arg;
+        continue;
+      }
+      // Anything else is an unknown flag (will be caught by strict parsing)
+      unknownFlags.push(arg);
       continue;
     }
 
@@ -298,6 +325,10 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
           );
           break; // worktree parser consumed remaining args
         }
+        // For `config`, collect config-specific args from the rest
+        if (subcommand === "config") {
+          collectingConfigArgs = true;
+        }
       } else {
         targetDir = arg;
       }
@@ -320,6 +351,8 @@ function parseRalphaiOptions(args: string[]): RalphaiOptions {
     targetDir,
     repo,
     capabilities,
+    configKey,
+    checkCapabilities,
     prdNumber,
     stopSlug,
     runArgs,
@@ -1200,6 +1233,9 @@ function showRalphaiHelp(): void {
     `  ${TEXT}check${RESET}       ${DIM}Verify whether ralphai is configured for a repo${RESET}`,
   );
   console.log(
+    `  ${TEXT}config${RESET}      ${DIM}Query resolved configuration${RESET}`,
+  );
+  console.log(
     `  ${TEXT}backlog-dir${RESET} ${DIM}Print the path to the plan backlog directory${RESET}`,
   );
   console.log(
@@ -1286,6 +1322,7 @@ export async function runRalphai(args: string[]): Promise<void> {
     "backlog-dir",
     "repos",
     "check",
+    "config",
   ]);
   if (
     options.subcommand &&
@@ -1441,6 +1478,17 @@ export async function runRalphai(args: string[]): Promise<void> {
         return;
       }
       runCheck(cwd, options.capabilities);
+      break;
+    case "config":
+      if (helpRequested) {
+        showConfigCommandHelp();
+        return;
+      }
+      runConfigCommand({
+        cwd,
+        key: options.configKey,
+        check: options.checkCapabilities,
+      });
       break;
     case "seed":
       runSeed(cwd);
