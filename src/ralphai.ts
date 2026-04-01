@@ -2488,7 +2488,7 @@ export function runRalphaiStatus(opts: { cwd: string; once?: boolean }): void {
   process.on("SIGTERM", cleanup);
 }
 
-function printStatusOnce(cwd: string): void {
+export function printStatusOnce(cwd: string): void {
   let worktrees: WorktreeEntry[] = [];
   try {
     worktrees = listRalphaiWorktrees(cwd);

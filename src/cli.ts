@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from "fs";
 import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { runRalphai, runRalphaiStatus } from "./ralphai.ts";
+import { runRalphai } from "./ralphai.ts";
+import { runInteractive } from "./interactive/menu.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 import { getConfigFilePath } from "./config.ts";
@@ -65,7 +66,7 @@ ${BOLD}Options:${RESET}
 Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} ralphai               ${DIM}# show pipeline status (auto-refreshes in terminal)${RESET}
+  ${DIM}$${RESET} ralphai               ${DIM}# open interactive menu${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
   ${DIM}$${RESET} ralphai run           ${DIM}# auto-detect work and run${RESET}
   ${DIM}$${RESET} ralphai run 42        ${DIM}# fetch issue #42, create branch, run${RESET}
@@ -91,7 +92,7 @@ async function main(): Promise<void> {
   }
 
   if (args.length === 0) {
-    // Show pipeline status when no subcommand is given
+    // Interactive menu when running in a TTY
     if (process.stdout.isTTY && process.stdin.isTTY) {
       // Nudge init if we're in an un-initialized git repo
       if (
@@ -111,12 +112,13 @@ async function main(): Promise<void> {
 
         if (shouldInit) {
           await runRalphai(["init"]);
-          return;
+          // After init completes, proceed to interactive menu
+        } else {
+          // User declined init — fall through to interactive menu
         }
-        // User declined — fall through to status
       }
 
-      runRalphaiStatus({ cwd: process.cwd() });
+      await runInteractive(process.cwd());
       return;
     }
     // Non-interactive: show help text
