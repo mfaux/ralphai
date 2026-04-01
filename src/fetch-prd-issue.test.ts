@@ -4,7 +4,11 @@
  * Uses mock.module to control `child_process.execSync` so we can test the
  * 0, 1, and multiple-result paths without requiring a real GitHub repo.
  */
-import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+
+const realChildProcess = require("child_process");
+const realExecSync =
+  realChildProcess.execSync as typeof import("child_process").execSync;
 
 // ---------------------------------------------------------------------------
 // Mock child_process.execSync
@@ -13,8 +17,15 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 const mockExecSync = mock();
 
 mock.module("child_process", () => ({
-  ...require("child_process"),
-  execSync: (...args: unknown[]) => mockExecSync(...args),
+  ...realChildProcess,
+  execSync: (...args: Parameters<typeof realExecSync>) => {
+    const [cmd, options] = args;
+    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
+      return mockExecSync(...args);
+    }
+
+    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
+  },
 }));
 
 // Import AFTER mocking so the module picks up the mock
