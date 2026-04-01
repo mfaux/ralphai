@@ -110,14 +110,39 @@ describe("removeStaleRepos", () => {
     expect(existsSync(staleDir)).toBe(false);
   });
 
-  it("preserves entries with no repoPath", () => {
+  it("removes entries with no repoPath and empty pipeline", () => {
     const home = join(ctx.dir, ".ralphai-home");
     const dir = join(home, "repos", "_path-no-repopath");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "config.json"), JSON.stringify({}));
 
     const removed = removeStaleRepos(env());
-    expect(removed).not.toContain("_path-no-repopath");
+    expect(removed).toContain("_path-no-repopath");
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it("removes entries with no config.json and empty pipeline", () => {
+    const home = join(ctx.dir, ".ralphai-home");
+    const dir = join(home, "repos", "_path-no-config");
+    const pipelineDir = join(dir, "pipeline");
+    mkdirSync(join(pipelineDir, "backlog"), { recursive: true });
+    mkdirSync(join(pipelineDir, "in-progress"), { recursive: true });
+    mkdirSync(join(pipelineDir, "out"), { recursive: true });
+
+    const removed = removeStaleRepos(env());
+    expect(removed).toContain("_path-no-config");
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it("preserves entries with no config.json but non-empty pipeline", () => {
+    const home = join(ctx.dir, ".ralphai-home");
+    const dir = join(home, "repos", "_path-no-config-has-plans");
+    const backlogDir = join(dir, "pipeline", "backlog");
+    mkdirSync(backlogDir, { recursive: true });
+    writeFileSync(join(backlogDir, "task.md"), "# Task\n");
+
+    const removed = removeStaleRepos(env());
+    expect(removed).not.toContain("_path-no-config-has-plans");
     expect(existsSync(dir)).toBe(true);
   });
 

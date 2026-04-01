@@ -284,9 +284,12 @@ export function resolveRepoByNameOrPath(
 /**
  * Remove stale repo entries from global state.
  *
- * A repo is considered stale when its stored `repoPath` points to a directory
- * that no longer exists **and** its pipeline is completely empty (no backlog,
- * in-progress, or completed plans). Returns the IDs of removed entries.
+ * A repo is considered stale when its pipeline is completely empty (no backlog,
+ * in-progress, or completed plans) **and** either:
+ * - its stored `repoPath` points to a directory that no longer exists, or
+ * - it has no `config.json` at all (e.g. orphaned skeleton from a test leak).
+ *
+ * Returns the IDs of removed entries.
  */
 export function removeStaleRepos(
   env?: Record<string, string | undefined>,
@@ -296,12 +299,13 @@ export function removeStaleRepos(
   const removed: string[] = [];
 
   for (const repo of repos) {
-    const isStale =
-      repo.repoPath !== null &&
-      !repo.pathExists &&
+    const emptyPipeline =
       repo.backlogCount === 0 &&
       repo.inProgressCount === 0 &&
       repo.completedCount === 0;
+
+    const isStale =
+      emptyPipeline && (repo.repoPath === null || !repo.pathExists);
 
     if (isStale) {
       const stateDir = join(reposDir, repo.id);
