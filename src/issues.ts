@@ -26,6 +26,8 @@ export interface PullIssueOptions {
   issueLabel: string;
   /** Label applied when an issue is picked up (e.g. "ralphai:in-progress"). */
   issueInProgressLabel: string;
+  /** Label applied when an issue is completed (e.g. "ralphai:done"). */
+  issueDoneLabel: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
@@ -479,6 +481,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueSource,
     issueLabel,
     issueInProgressLabel,
+    issueDoneLabel,
     issueRepo,
     issueCommentProgress,
   } = options;
@@ -536,8 +539,31 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     };
   }
 
-  // Pull the first unchecked sub-issue into the backlog
-  const subIssueNumber = subIssues[0]!;
+  // Find the first unchecked sub-issue that hasn't already been picked up
+  // or completed. Without this check, the runner's drain loop re-pulls
+  // completed sub-issues because the PRD body checkboxes are never updated.
+  const skipLabels = [issueInProgressLabel, issueDoneLabel];
+  let subIssueNumber: number | undefined;
+  for (const candidate of subIssues) {
+    const labelsRaw = execQuiet(
+      `gh issue view ${candidate} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (skipLabels.some((skip) => labels.includes(skip))) {
+      continue;
+    }
+    subIssueNumber = candidate;
+    break;
+  }
+
+  if (subIssueNumber === undefined) {
+    return {
+      pulled: false,
+      message: `PRD #${prd.number} — all unchecked sub-issues already in-progress or done`,
+    };
+  }
+
   console.log(
     `PRD #${prd.number} — pulling sub-issue #${subIssueNumber} into backlog`,
   );

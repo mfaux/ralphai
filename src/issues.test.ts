@@ -9,6 +9,7 @@ import {
   slugify,
   peekGithubIssues,
   pullGithubIssues,
+  pullPrdSubIssue,
   PRD_LABEL,
   fetchPrdIssueByNumber,
   prdBranchName,
@@ -49,6 +50,7 @@ function defaultOptions(dir: string): PullIssueOptions {
     issueSource: "github",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
+    issueDoneLabel: "ralphai:done",
     issueRepo: "",
     issueCommentProgress: false,
   };
@@ -345,6 +347,32 @@ describe("fetchPrdIssueByNumber", () => {
           ctx.dir,
         ),
       ).toThrow();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pullPrdSubIssue — guard clause tests (no gh required)
+// ---------------------------------------------------------------------------
+
+describe("pullPrdSubIssue", () => {
+  const ctx = useTempDir();
+
+  it("returns early when issueSource is not github", () => {
+    const opts = { ...defaultOptions(ctx.dir), issueSource: "none" };
+    const result = pullPrdSubIssue(opts);
+    expect(result.pulled).toBe(false);
+    expect(result.message).toContain("not 'github'");
+  });
+
+  it("returns early when gh is not available", () => {
+    initRepo(ctx.dir);
+    const ghAvailable = checkGhAvailable();
+    if (!ghAvailable) {
+      const opts = defaultOptions(ctx.dir);
+      const result = pullPrdSubIssue(opts);
+      expect(result.pulled).toBe(false);
+      expect(result.message).toContain("not available");
     }
   });
 });

@@ -3047,6 +3047,7 @@ async function runIssueTarget(
     issueSource: "github",
     issueLabel: worktreeConfig.issueLabel.value,
     issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
+    issueDoneLabel: worktreeConfig.issueDoneLabel.value,
     issueRepo: worktreeConfig.issueRepo.value || repo,
     issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
     issueNumber,
@@ -3197,6 +3198,7 @@ async function runPrdIssueTarget(
       issueSource: "github",
       issueLabel: worktreeConfig.issueLabel.value,
       issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
+      issueDoneLabel: worktreeConfig.issueDoneLabel.value,
       issueRepo: worktreeConfig.issueRepo.value || repo,
       issueCommentProgress:
         worktreeConfig.issueCommentProgress.value === "true",
@@ -3224,12 +3226,18 @@ async function runPrdIssueTarget(
     const shouldResume = activeWorktree !== undefined || !isFirstSubIssue;
     const hasResumeFlag =
       runArgs.includes("--resume") || runArgs.includes("-r");
+    // --once ensures the runner exits after completing this single sub-issue,
+    // so the outer for-loop (not the runner's drain loop) controls sequencing.
+    // Without this, the runner re-fetches the PRD body, finds the same
+    // unchecked sub-issue, and re-pulls it.
+    const hasOnceFlag = runArgs.includes("--once");
     const worktreeRunOptions: RalphaiOptions = {
       ...options,
       subcommand: "run",
       runTarget: undefined,
       runArgs: [
         ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...(!hasOnceFlag ? ["--once"] : []),
         ...runArgs,
       ],
     };
