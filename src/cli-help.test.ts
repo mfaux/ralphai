@@ -13,7 +13,10 @@ describe("CLI help and flags", () => {
     const result = runCli([], ctx.dir);
     const output = stripLogo(result.stdout);
     expect(result.exitCode).toBe(0);
-    expect(output).toContain("Commands:");
+    expect(output).toContain("Core");
+    expect(output).toContain("Management");
+    expect(output).toContain("Setup & Maintenance");
+    expect(output).toContain("Plumbing");
     expect(output).toContain("init");
     expect(output).toContain("run");
     expect(output).toContain("update");
@@ -38,15 +41,31 @@ describe("CLI help and flags", () => {
     expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it("--help shows usage information", () => {
+  it("--help shows usage information with grouped command headings", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Usage:");
     expect(result.stdout).toContain("ralphai");
-    expect(result.stdout).toContain("init");
+    // Grouped headings
+    expect(result.stdout).toContain("Core");
+    expect(result.stdout).toContain("Management");
+    expect(result.stdout).toContain("Setup & Maintenance");
+    expect(result.stdout).toContain("Plumbing");
+    // Commands present
     expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("status");
+    expect(result.stdout).toContain("clean");
+    expect(result.stdout).toContain("config");
+    expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("update");
     expect(result.stdout).toContain("uninstall");
+    expect(result.stdout).toContain("doctor");
+    expect(result.stdout).toContain("stop");
+    expect(result.stdout).toContain("reset");
+    expect(result.stdout).toContain("repos");
+    expect(result.stdout).toContain("seed");
+    // No "Commands:" flat heading
+    expect(result.stdout).not.toMatch(/^Commands:/m);
   });
 
   // -------------------------------------------------------------------------
@@ -119,6 +138,19 @@ describe("CLI help and flags", () => {
     const result = runCli(["run", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("--prd");
+  });
+
+  it("run --help shows [<target>] usage with examples", () => {
+    const result = runCli(["run", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ralphai run [<target>]");
+    // Issue number example
+    expect(result.stdout).toContain("ralphai run 42");
+    // Plan file example
+    expect(result.stdout).toContain("ralphai run my-feature.md");
+    // Auto-select (omitted target)
+    expect(result.stdout).toContain("(omitted)");
+    expect(result.stdout).toContain("Auto-detect");
   });
 
   // -------------------------------------------------------------------------

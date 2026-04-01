@@ -296,23 +296,22 @@ describe("parseConfigFile", () => {
     writeFileSync(
       file,
       JSON.stringify({
-        continuous: true,
         autoCommit: true,
         issueCommentProgress: false,
       }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.continuous).toBe("true");
     expect(result.values.autoCommit).toBe("true");
     expect(result.values.issueCommentProgress).toBe("false");
   });
 
-  it("rejects non-boolean for continuous", () => {
-    const file = join(ctx.dir, "bad-cont.json");
-    writeFileSync(file, JSON.stringify({ continuous: "yes" }));
-    expect(() => parseConfigFile(file)).toThrow(
-      "'continuous' must be 'true' or 'false'",
-    );
+  it("silently ignores deprecated continuous field in config file", () => {
+    const file = join(ctx.dir, "legacy-cont.json");
+    writeFileSync(file, JSON.stringify({ continuous: true, autoCommit: true }));
+    const result = parseConfigFile(file)!;
+    expect(result.values.autoCommit).toBe("true");
+    // continuous is ignored — not present in parsed values
+    expect("continuous" in result.values).toBe(false);
   });
 
   it("parses workspaces", () => {
@@ -396,9 +395,14 @@ describe("applyEnvOverrides", () => {
   });
 
   it("validates boolean fields", () => {
-    expect(() => applyEnvOverrides({ RALPHAI_CONTINUOUS: "yes" })).toThrow(
+    expect(() => applyEnvOverrides({ RALPHAI_AUTO_COMMIT: "yes" })).toThrow(
       "must be 'true' or 'false'",
     );
+  });
+
+  it("silently ignores RALPHAI_CONTINUOUS (deprecated)", () => {
+    const result = applyEnvOverrides({ RALPHAI_CONTINUOUS: "true" });
+    expect("continuous" in result).toBe(false);
   });
 
   it("silently ignores RALPHAI_MAX_LEARNINGS (deprecated)", () => {
@@ -453,10 +457,7 @@ describe("parseCLIArgs", () => {
     expect(result.overrides.baseBranch).toBe("develop");
   });
 
-  it("parses --continuous", () => {
-    const result = parseCLIArgs(["--continuous"]);
-    expect(result.overrides.continuous).toBe("true");
-  });
+  // --continuous is no longer parsed (rejected by removed.ts before reaching parseCLIArgs)
 
   it("parses --auto-commit", () => {
     const result = parseCLIArgs(["--auto-commit"]);
@@ -487,9 +488,9 @@ describe("parseCLIArgs", () => {
   });
 
   it("parses multiple flags together", () => {
-    const result = parseCLIArgs(["--agent-command=claude -p", "--continuous"]);
+    const result = parseCLIArgs(["--agent-command=claude -p", "--auto-commit"]);
     expect(result.overrides.agentCommand).toBe("claude -p");
-    expect(result.overrides.continuous).toBe("true");
+    expect(result.overrides.autoCommit).toBe("true");
   });
 });
 
@@ -583,9 +584,6 @@ describe("resolveConfig", () => {
     // maxStuck: config wins (no env or CLI override)
     expect(config.maxStuck.value).toBe(7);
     expect(config.maxStuck.source).toBe("config");
-    // continuous: default (nothing overrides)
-    expect(config.continuous.value).toBe("false");
-    expect(config.continuous.source).toBe("default");
   });
 
   it("setupCommand: full precedence chain", () => {

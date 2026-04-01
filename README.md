@@ -81,10 +81,10 @@ ralphai run
 Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>` branch, runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
 
 ```bash
-ralphai run              # create or reuse a worktree and open a draft PR
-ralphai run --continuous # keep processing backlog plans after the first
+ralphai run              # drain the backlog: one branch/PR per plan
+ralphai run --once       # process a single plan then exit
 ralphai run --prd=42     # PRD-driven run from GitHub issue #42
-ralphai prd 42           # shorthand for run --continuous --prd=42
+ralphai prd 42           # shorthand for run --prd=42
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```

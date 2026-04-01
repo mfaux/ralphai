@@ -233,7 +233,6 @@ function makeResolvedConfig(
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
-    continuous: "false",
     autoCommit: "false",
     workspaces: null,
     ...overrides,
@@ -275,6 +274,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     // Should not throw
@@ -292,6 +292,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];
@@ -325,6 +326,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     // dry-run should not create branches or modify state
@@ -376,6 +378,7 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     await runRunner(opts);
@@ -407,6 +410,7 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     await runRunner(opts);
@@ -443,26 +447,27 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
-    // This should eventually exit with stuck detection
-    // (the stuck detection calls process.exit, so we need to handle that)
-    const originalExit = process.exit;
-    let exitCode: number | undefined;
-    process.exit = ((code: number) => {
-      exitCode = code;
-      throw new Error(`process.exit(${code})`);
-    }) as never;
+    // Stuck plans are now skipped instead of process.exit(1).
+    // The runner should exit normally after exhausting the backlog.
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    };
 
     try {
       await runRunner(opts);
-    } catch (e) {
-      // Expected — process.exit throws
     } finally {
-      process.exit = originalExit;
+      console.log = origLog;
     }
 
-    expect(exitCode).toBe(1);
+    const output = logs.join("\n");
+    expect(output).toContain("Stuck:");
+    expect(output).toContain("skipped 1 (stuck)");
+    expect(output).toContain("stuck");
   });
 });
 
@@ -495,6 +500,7 @@ describe("runRunner — no work", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     // Should not throw — just prints "nothing to do" and returns
@@ -549,6 +555,7 @@ describe("runRunner — auto-commit", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     await runRunner(opts);

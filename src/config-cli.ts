@@ -54,7 +54,6 @@ const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
   ["issueRepo", "ISSUE_REPO"],
   ["issueCommentProgress", "ISSUE_COMMENT_PROGRESS"],
   ["iterationTimeout", "ITERATION_TIMEOUT"],
-  ["continuous", "CONTINUOUS"],
   ["autoCommit", "AUTO_COMMIT"],
 ];
 

@@ -32,18 +32,15 @@ import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
-import { peekGithubIssues, pullGithubIssues } from "./issues.ts";
 import {
-  archiveRun,
-  createPr,
-  createContinuousPr,
-  updateContinuousPr,
-  finalizeContinuousPr,
-  pushBranch,
-} from "./pr-lifecycle.ts";
+  peekGithubIssues,
+  peekPrdIssues,
+  pullGithubIssues,
+  pullPrdSubIssue,
+} from "./issues.ts";
+import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import {
   detectPlan,
-  collectBacklogPlans,
   detectPlanFormat,
   countCompletedTasks,
   getPlanDescription,
@@ -79,6 +76,8 @@ export interface RunnerOptions {
   resume: boolean;
   /** Whether --allow-dirty was passed. */
   allowDirty: boolean;
+  /** Whether --once was passed (process a single plan then exit). */
+  once: boolean;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   plan?: string;
   /** PRD issue driving this run (set by --prd=N). */
@@ -347,13 +346,41 @@ function printBlockedDiagnostics(
 }
 
 // ---------------------------------------------------------------------------
+// Exit summary
+// ---------------------------------------------------------------------------
+
+/**
+ * Print an exit summary reporting completed and stuck items.
+ * Format: "Completed N, skipped M (stuck)" with stuck slugs listed.
+ *
+ * Exported for testing.
+ */
+export function printExitSummary(
+  completed: number,
+  stuckSlugs: string[],
+): void {
+  if (completed === 0 && stuckSlugs.length === 0) return;
+
+  console.log();
+  const parts: string[] = [`Completed ${completed}`];
+  if (stuckSlugs.length > 0) {
+    parts.push(`skipped ${stuckSlugs.length} (stuck)`);
+  }
+  console.log(parts.join(", "));
+  if (stuckSlugs.length > 0) {
+    for (const slug of stuckSlugs) {
+      console.log(`  - ${slug}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Dry-run mode
 // ---------------------------------------------------------------------------
 
 function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   const { config, cwd, isWorktree, mainWorktree } = opts;
   const baseBranch = config.baseBranch.value;
-  const continuous = config.continuous.value === "true";
 
   console.log();
   console.log("========================================");
@@ -363,12 +390,22 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   const result = detectPlan({ dirs, dryRun: true });
   if (!result.detected) {
     // No local plans — check GitHub issues (read-only, no side effects).
-    const peek = peekGithubIssues({
+    // Priority chain: PRD issues first, then regular issues.
+    const peekOpts = {
       cwd,
       issueSource: config.issueSource.value,
       issueLabel: config.issueLabel.value,
       issueRepo: config.issueRepo.value,
-    });
+    };
+    const prdPeek = peekPrdIssues(peekOpts);
+    if (prdPeek.found) {
+      console.log(`[dry-run] No local plans found, but ${prdPeek.message}`);
+      console.log(
+        "[dry-run] Run without --dry-run to pull the oldest PRD sub-issue into the backlog.",
+      );
+      return;
+    }
+    const peek = peekGithubIssues(peekOpts);
     if (peek.found) {
       console.log(`[dry-run] No local plans found, but ${peek.message}`);
       console.log(
@@ -406,12 +443,6 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   console.log(`[dry-run] Description: ${planDesc}`);
   if (planScope) {
     console.log(`[dry-run] Scope: ${planScope}`);
-  }
-
-  if (continuous) {
-    console.log(
-      "[dry-run] Continuous mode: all backlog plans will run on a single worktree branch with one draft PR.",
-    );
   }
 
   const branch = `ralphai/${planSlug}`;
@@ -465,7 +496,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
  * Run the Ralphai autonomous loop.
  */
 export async function runRunner(opts: RunnerOptions): Promise<void> {
-  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan, prd } =
+  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan, once } =
     opts;
 
   // Unpack config values
@@ -473,7 +504,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const maxStuck = config.maxStuck.value;
   const iterationTimeout = config.iterationTimeout.value;
   const agentCommand = config.agentCommand.value;
-  const continuous = config.continuous.value === "true";
   const autoCommit = config.autoCommit.value === "true";
   const issueSource = config.issueSource.value;
   const issueLabel = config.issueLabel.value;
@@ -502,13 +532,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
 
-  // --- Main plan loop ---
+  // --- Main plan loop (drain-by-default) ---
   let plansCompleted = 0;
   const completedPlans: string[] = [];
-  let continuousBranch = "";
-  let continuousPrUrl = "";
   let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
+  const stuckSlugs: string[] = [];
   let activePidFile: string | null = null;
   let activeIpcServer: IpcServer | null = null;
 
@@ -532,7 +561,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     if (!detectResult.detected) {
       // No plan found — try GitHub issues if backlog is empty
       if (detectResult.reason === "empty-backlog") {
-        const issueResult = pullGithubIssues({
+        const pullOpts = {
           backlogDir: dirs.backlogDir,
           cwd,
           issueSource,
@@ -540,33 +569,21 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           issueInProgressLabel,
           issueRepo,
           issueCommentProgress,
-        });
+        };
 
+        // Priority chain: try PRD sub-issues first, then regular issues
+        const prdResult = pullPrdSubIssue(pullOpts);
+        if (prdResult.pulled) {
+          continue;
+        }
+
+        const issueResult = pullGithubIssues(pullOpts);
         if (issueResult.pulled) {
           // Re-run detection (loop back to the top)
           continue;
         }
 
-        if (plansCompleted > 0) {
-          console.log();
-          console.log(
-            `All done. Completed ${plansCompleted} plan(s) this session.`,
-          );
-          if (continuous && continuousPrUrl) {
-            const finalize = finalizeContinuousPr({
-              branch: continuousBranch,
-              baseBranch,
-              completedPlans,
-              backlogDir: dirs.backlogDir,
-              cwd,
-              prUrl: continuousPrUrl,
-              prd,
-              issueRepo,
-              learnings: accumulatedLearnings,
-            });
-            console.log(finalize.message);
-          }
-        } else {
+        if (plansCompleted === 0 && stuckSlugs.length === 0) {
           console.log(
             `Nothing to do — backlog is empty and no in-progress work. Add plans to ${dirs.backlogDir}/<slug>.md`,
           );
@@ -584,32 +601,13 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
       // All plans blocked
       if (detectResult.reason === "all-blocked") {
-        if (plansCompleted > 0) {
-          console.log();
+        if (plansCompleted === 0 && stuckSlugs.length === 0) {
           console.log(
-            `All done. Completed ${plansCompleted} plan(s) this session.`,
+            `Backlog has ${detectResult.backlogCount} plan(s), but none are runnable yet.`,
           );
-          if (continuous && continuousPrUrl) {
-            const finalize = finalizeContinuousPr({
-              branch: continuousBranch,
-              baseBranch,
-              completedPlans,
-              backlogDir: dirs.backlogDir,
-              cwd,
-              prUrl: continuousPrUrl,
-              prd,
-              issueRepo,
-              learnings: accumulatedLearnings,
-            });
-            console.log(finalize.message);
-          }
-          break;
+          console.log();
+          printBlockedDiagnostics(detectResult.blocked, dirs.archiveDir);
         }
-        console.log(
-          `Backlog has ${detectResult.backlogCount} plan(s), but none are runnable yet.`,
-        );
-        console.log();
-        printBlockedDiagnostics(detectResult.blocked, dirs.archiveDir);
         break;
       }
 
@@ -673,24 +671,8 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         process.exit(1);
       }
       branch = currentBranch;
-      if (continuous && !continuousBranch) {
-        continuousBranch = branch;
-      }
       console.log(`Resuming on existing branch: ${branch}`);
       ensureProgressFile(progressFile);
-    } else if (continuous && continuousBranch) {
-      // Continuous mode, subsequent plan: reuse the existing branch
-      branch = continuousBranch;
-      console.log(`Continuous mode: continuing on branch '${branch}'`);
-
-      ensureProgressFile(progressFile);
-
-      initReceipt(receiptFile, {
-        worktree_path: isWorktree ? cwd : undefined,
-        branch,
-        slug: planSlug,
-        plan_file: basename(planFile),
-      });
     } else if (isWorktree) {
       branch = gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
 
@@ -706,9 +688,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         process.exit(1);
       }
       console.log(`Running in worktree on branch '${branch}'`);
-      if (continuous) {
-        continuousBranch = branch;
-      }
 
       ensureProgressFile(progressFile);
 
@@ -746,6 +725,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
     let stuckCount = 0;
     let lastHash = getCurrentCommitHash(cwd) ?? "";
     let completed = false;
+    let stuck = false;
 
     // Detect plan format once per plan; the result flows into the
     // iteration log header and future downstream consumers.
@@ -851,21 +831,18 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
         );
         if (stuckCount >= maxStuck) {
-          console.error(
-            `ERROR: ${maxStuck} consecutive iterations with no progress. Aborting.`,
+          console.log(
+            `Stuck: ${maxStuck} consecutive iterations with no progress on '${planSlug}'.`,
           );
-          console.error(`Branch: ${branch}`);
-          console.error(
+          console.log(`Branch: ${branch}`);
+          console.log(
             `Plan files remain in ${wipDir}/ — resume with another run.`,
           );
-          if (continuous && continuousBranch) {
-            console.log("Pushing partial work to continuous branch...");
-            const push = pushBranch(branch, cwd);
-            console.log(push.message);
-          }
-          // Clean up PID file and IPC server before exiting
+          // Clean up PID file and IPC server
           if (ipcServer) {
             ipcServer.close();
+            ipcServer = null;
+            activeIpcServer = null;
           }
           if (activePidFile) {
             try {
@@ -874,7 +851,12 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
               // Best-effort cleanup
             }
           }
-          process.exit(1);
+          activePidFile = null;
+          // Mark as stuck and skip to next work unit
+          stuck = true;
+          skippedSlugs.add(planSlug);
+          stuckSlugs.push(planSlug);
+          break;
         }
       } else {
         stuckCount = 0;
@@ -953,55 +935,20 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           cwd,
         });
 
-        if (continuous) {
-          if (!continuousPrUrl) {
-            const prResult = createContinuousPr({
-              branch,
-              baseBranch,
-              completedPlans,
-              backlogDir: dirs.backlogDir,
-              cwd,
-              firstPlanDescription: planDesc,
-              prd,
-              issueRepo,
-              summary: prSummary,
-              learnings: accumulatedLearnings,
-            });
-            console.log(prResult.message);
-            if (prResult.ok) {
-              continuousPrUrl = prResult.prUrl;
-            }
-          } else {
-            const update = updateContinuousPr({
-              branch,
-              baseBranch,
-              completedPlans,
-              backlogDir: dirs.backlogDir,
-              cwd,
-              prUrl: continuousPrUrl,
-              prd,
-              issueRepo,
-              summary: prSummary,
-              learnings: accumulatedLearnings,
-            });
-            console.log(update.message);
-          }
-        } else {
-          const prResult = createPr({
-            branch,
-            baseBranch,
-            planDescription: planDesc,
-            cwd,
-            issueSource: issueFm.source || issueSource,
-            issueNumber: issueFm.issue,
-            issueRepo,
-            issueCommentProgress,
-            prd: issueFm.prd,
-            summary: prSummary,
-            learnings: accumulatedLearnings,
-          });
-          console.log(prResult.message);
-        }
+        const prResult = createPr({
+          branch,
+          baseBranch,
+          planDescription: planDesc,
+          cwd,
+          issueSource: issueFm.source || issueSource,
+          issueNumber: issueFm.issue,
+          issueRepo,
+          issueCommentProgress,
+          prd: issueFm.prd,
+          summary: prSummary,
+          learnings: accumulatedLearnings,
+        });
+        console.log(prResult.message);
 
         plansCompleted++;
         completed = true;
@@ -1009,51 +956,24 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
       }
     }
 
-    if (!completed && interrupted) {
+    if (!completed && !stuck && interrupted) {
       console.log();
       console.log(`Interrupted during plan: ${planDesc}`);
       console.log(`Plan files remain in ${wipDir}/ — resume with another run.`);
       console.log(`Branch: ${branch}`);
-
-      if (continuous) {
-        console.log("Pushing partial work...");
-        const push = pushBranch(
-          branch,
-          cwd,
-          !continuousPrUrl && plansCompleted === 0,
-        );
-        console.log(push.message);
-      }
       break;
     }
 
-    // --- Non-continuous modes: stop after one plan ---
-    if (!continuous) {
-      console.log();
-      console.log("Plan complete. Stopping after one plan by default.");
-      console.log("Tip: use --continuous to keep processing backlog plans.");
+    // --- --once: stop after a single completed (or stuck) plan ---
+    if (once) {
       break;
     }
 
-    // Loop back to pick the next plan
+    // Loop back to pick the next plan (drain-by-default)
   }
 
-  // --- Continuous mode: refresh draft PR when backlog is drained ---
-  if (continuous && continuousPrUrl && plansCompleted > 0) {
-    const finalize = finalizeContinuousPr({
-      branch: continuousBranch,
-      baseBranch,
-      completedPlans,
-      backlogDir: dirs.backlogDir,
-      cwd,
-      prUrl: continuousPrUrl,
-      prd,
-      issueRepo,
-      summary: lastPrSummary,
-      learnings: accumulatedLearnings,
-    });
-    console.log(finalize.message);
-  }
+  // --- Exit summary ---
+  printExitSummary(plansCompleted, stuckSlugs);
 
   // --- Clean up IPC server on exit (interrupted or drained backlog) ---
   if (activeIpcServer) {

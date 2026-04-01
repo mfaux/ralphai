@@ -51,7 +51,6 @@ import {
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
-import { runCheck, showCheckHelp } from "./check.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
 import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
@@ -63,7 +62,6 @@ import {
 import {
   detectIssueRepo,
   ensurePrdLabel,
-  fetchPrdIssue,
   fetchPrdIssueByNumber,
   fetchIssueTitleByNumber,
   prdBranchName,
@@ -713,7 +711,7 @@ function labelDefs(names: LabelNames) {
     },
     {
       name: "ralphai-prd",
-      description: "Ralphai PRD — names the continuous-mode branch",
+      description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
     },
   ];
@@ -793,7 +791,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     setupCommand: answers.setupCommand ?? "",
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
-    continuous: false,
     issueSource: answers.issueSource ?? "none",
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
@@ -1175,24 +1172,25 @@ async function runRalphaiPurge(
 function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
   console.log();
-  console.log(`${TEXT}Commands:${RESET}`);
+  console.log(`${TEXT}Core${RESET}`);
   console.log(
-    `  ${TEXT}init${RESET}        ${DIM}Set up Ralphai in your project (interactive wizard)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}run${RESET}         ${DIM}Start the Ralphai runner${RESET}`,
+    `  ${TEXT}run${RESET}         ${DIM}Run a plan in an isolated worktree (or 'run <issue>' / 'run <plan.md>')${RESET}`,
   );
   console.log(
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
   );
-  console.log(
-    `  ${TEXT}stop${RESET}        ${DIM}Stop running plan(s)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
-  );
+  console.log();
+  console.log(`${TEXT}Management${RESET}`);
   console.log(
     `  ${TEXT}clean${RESET}       ${DIM}Remove archived plans and orphaned worktrees${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}config${RESET}      ${DIM}Query resolved configuration${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Setup & Maintenance${RESET}`);
+  console.log(
+    `  ${TEXT}init${RESET}        ${DIM}Set up Ralphai in your project (interactive wizard)${RESET}`,
   );
   console.log(
     `  ${TEXT}update${RESET}      ${DIM}Update ralphai to the latest (or specified) version${RESET}`,
@@ -1203,11 +1201,19 @@ function showRalphaiHelp(): void {
   console.log(
     `  ${TEXT}doctor${RESET}      ${DIM}Check your ralphai setup for problems${RESET}`,
   );
+  console.log();
+  console.log(`${TEXT}Plumbing${RESET}`);
   console.log(
-    `  ${TEXT}config${RESET}      ${DIM}Query resolved configuration${RESET}`,
+    `  ${TEXT}stop${RESET}        ${DIM}Stop running plan(s)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}reset${RESET}       ${DIM}Move in-progress plans back to backlog and clean up${RESET}`,
   );
   console.log(
     `  ${TEXT}repos${RESET}       ${DIM}List all known repos with pipeline summaries${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}seed${RESET}        ${DIM}Create a sample plan in the backlog${RESET}`,
   );
   console.log();
   console.log(
@@ -1890,19 +1896,6 @@ function showResetHelp(): void {
   );
 }
 
-function showPurgeHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai purge [options]`);
-  console.log();
-  console.log(
-    `${DIM}Delete all archived plans, progress files, and receipts from pipeline/out/.${RESET}`,
-  );
-  console.log();
-  console.log(`${TEXT}Options:${RESET}`);
-  console.log(
-    `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
-  );
-}
-
 function showUpdateHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai update [tag]`);
   console.log();
@@ -1917,12 +1910,6 @@ function showUpdateHelp(): void {
   console.log(
     `  ${DIM}$${RESET} ralphai update beta     ${DIM}# install beta version${RESET}`,
   );
-}
-
-function showBacklogDirHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai backlog-dir`);
-  console.log();
-  console.log(`${DIM}Print the path to the plan backlog directory.${RESET}`);
 }
 
 function runBacklogDir(cwd: string): void {
@@ -2012,23 +1999,6 @@ function showDoctorHelp(): void {
   console.log();
   console.log(
     `${DIM}Run diagnostic checks on your ralphai setup and report problems.${RESET}`,
-  );
-}
-
-function showWorktreeHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai worktree [command] [options]`);
-  console.log();
-  console.log(`${TEXT}Commands:${RESET}`);
-  console.log(
-    `  ${TEXT}list${RESET}        ${DIM}Show active ralphai-managed worktrees${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}clean${RESET}       ${DIM}Remove completed/orphaned worktrees${RESET}`,
-  );
-  console.log();
-  console.log(`${TEXT}Options:${RESET}`);
-  console.log(
-    `${DIM}Use ${TEXT}ralphai run${DIM} to create or reuse a worktree for execution.${RESET}`,
   );
 }
 
@@ -2707,7 +2677,7 @@ async function runRalphaiWorktree(
 
   // Handle --help
   if (wtOpts.runArgs.includes("--help") || wtOpts.runArgs.includes("-h")) {
-    showWorktreeHelp();
+    showRalphaiHelp();
     return;
   }
 
@@ -2839,28 +2809,8 @@ function showRunHelp(): void {
 }
 
 // ---------------------------------------------------------------------------
-// prd subcommand — sugar for `ralphai run --continuous --prd=<number>`
+// prd subcommand — sugar for `ralphai run --prd=<number>`
 // ---------------------------------------------------------------------------
-
-function showPrdHelp(): void {
-  const lines = [
-    "Usage: ralphai prd <issue-number> [options]",
-    "",
-    "  Shorthand for 'ralphai run --continuous --prd=<issue-number>'.",
-    "  Fetches the GitHub issue, derives a branch, and runs continuously.",
-    "",
-    "  All 'ralphai run' options are accepted and passed through.",
-    "",
-    "Options:",
-    "  All options from 'ralphai run' are supported (see 'ralphai run --help').",
-    "",
-    "Examples:",
-    "  ralphai prd 42                                # PRD-driven continuous run",
-    "  ralphai prd 42 --dry-run                      # preview only",
-    "  ralphai prd 42 --agent-command='claude -p'    # use Claude Code",
-  ];
-  console.log(lines.join("\n"));
-}
 
 async function runRalphaiPrd(
   options: RalphaiOptions,
@@ -2897,11 +2847,7 @@ async function runRalphaiPrd(
   }
 
   // Delegate to `runRalphaiInManagedWorktree` with --prd=<number> injected.
-  // Inject --continuous if not already present (PRD runs are always continuous).
   const runArgs = [...options.runArgs];
-  if (!runArgs.includes("--continuous")) {
-    runArgs.push("--continuous");
-  }
   runArgs.push(`--prd=${prdNumber}`);
 
   const delegatedOptions: RalphaiOptions = {
@@ -3605,14 +3551,6 @@ async function runRalphaiInManagedWorktree(
       process.exit(1);
     }
 
-    // Inject --continuous if not already present (PRD runs are always continuous)
-    if (
-      !runArgs.includes("--continuous") &&
-      !runArgs.some((a) => a === "--continuous")
-    ) {
-      runArgs = [...runArgs, "--continuous"];
-    }
-
     // For dry-run, help, and show-config we still need to resolve PRD so the
     // runner can display derived branch info. We resolve it here (read-only)
     // before the early exit path.
@@ -3668,7 +3606,7 @@ async function runRalphaiInManagedWorktree(
         console.log(`[dry-run] PRD: #${prdIssue.number} — ${prdIssue.title}`);
         console.log(`[dry-run] Branch: ${branch}`);
         console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`);
-        console.log("[dry-run] Mode: continuous (--prd implies --continuous)");
+        console.log("[dry-run] Mode: drain (PRD sub-issues)");
         console.log(
           "[dry-run] No files moved, no worktrees created, no agent run executed.",
         );
@@ -3776,189 +3714,6 @@ async function runRalphaiInManagedWorktree(
       }
       return;
     }
-  }
-
-  // --- Auto-detect single PRD issue when --continuous is set without --prd ---
-  const hasContinuous = runArgs.includes("--continuous");
-  if (hasContinuous && !prdFlag && !hasHelp && !hasShowConfig) {
-    // Attempt auto-detection (read-only: safe for dry-run)
-    const repo = detectIssueRepo(cwd);
-    if (repo) {
-      try {
-        const autoDetectedPrd = fetchPrdIssue(repo, cwd);
-        if (autoDetectedPrd) {
-          prdIssue = autoDetectedPrd;
-          const prdSlug = slugify(prdIssue.title);
-          const branch = prdBranchName(prdIssue.title);
-          console.log(
-            `Auto-detected PRD: #${prdIssue.number} — ${prdIssue.title}`,
-          );
-
-          if (isDryRun) {
-            console.log();
-            console.log("========================================");
-            console.log("  Ralphai dry-run — auto-detected PRD");
-            console.log("========================================");
-            console.log(
-              `[dry-run] PRD: #${prdIssue.number} — ${prdIssue.title}`,
-            );
-            console.log(`[dry-run] Branch: ${branch}`);
-            console.log(
-              `[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`,
-            );
-            console.log("[dry-run] Mode: continuous");
-            console.log(
-              "[dry-run] No files moved, no worktrees created, no agent run executed.",
-            );
-            return;
-          }
-
-          // Real run: validate and create worktree with PRD-derived branch
-          validateRunArgs(runArgs);
-
-          if (isGitWorktree(cwd)) {
-            console.error(
-              `'ralphai run' must be run from the main repository.`,
-            );
-            console.error(
-              "You are inside a worktree. Run this command from the main repo.",
-            );
-            process.exit(1);
-          }
-
-          if (!existsSync(getConfigFilePath(cwd))) {
-            console.error(
-              `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
-            );
-            process.exit(1);
-          }
-
-          try {
-            ensurePrdLabel(cwd);
-          } catch (err: unknown) {
-            console.error(
-              `ERROR: ${err instanceof Error ? err.message : String(err)}`,
-            );
-            process.exit(1);
-          }
-
-          try {
-            execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
-          } catch {
-            console.error(
-              `This repository has no commits yet. Git worktrees require at least one commit.`,
-            );
-            console.error(
-              `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
-            );
-            console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
-            process.exit(1);
-          }
-
-          const baseBranch = detectBaseBranch(cwd);
-          const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
-          const desiredWorktreeDir = join(worktreeBase, prdSlug);
-          mkdirSync(worktreeBase, { recursive: true });
-
-          const activeWorktrees = listRalphaiWorktrees(cwd);
-          const activeWorktree = activeWorktrees.find(
-            (wt) => wt.branch === branch,
-          );
-
-          let resolvedWorktreeDir = desiredWorktreeDir;
-          if (activeWorktree) {
-            resolvedWorktreeDir = activeWorktree.path;
-            console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
-            console.log(`Branch: ${branch}`);
-          } else {
-            if (existsSync(resolvedWorktreeDir)) {
-              console.log(
-                `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
-              );
-              execSync("git worktree prune", { cwd, stdio: "ignore" });
-              rmSync(resolvedWorktreeDir, { recursive: true, force: true });
-            }
-
-            let branchExists = false;
-            try {
-              execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
-                cwd,
-                stdio: "ignore",
-              });
-              branchExists = true;
-            } catch {
-              branchExists = false;
-            }
-
-            try {
-              if (branchExists) {
-                console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
-                console.log(`Branch: ${branch}`);
-                execSync(
-                  `git worktree add "${resolvedWorktreeDir}" "${branch}"`,
-                  {
-                    cwd,
-                    stdio: ["inherit", "pipe", "pipe"],
-                  },
-                );
-              } else {
-                console.log(`Creating worktree: ${resolvedWorktreeDir}`);
-                console.log(`Branch: ${branch} (from ${baseBranch})`);
-                execSync(
-                  `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-                  { cwd, stdio: ["inherit", "pipe", "pipe"] },
-                );
-              }
-            } catch (err: unknown) {
-              const stderr = extractExecStderr(err);
-              console.error(
-                `${TEXT}Error:${RESET} Failed to prepare worktree.`,
-              );
-              if (stderr) console.error(`  git: ${stderr}`);
-              process.exit(1);
-            }
-          }
-
-          // Run setup command in freshly-created worktrees (not reused ones)
-          if (!activeWorktree) {
-            executeSetupCommand(setupCommand, resolvedWorktreeDir);
-          }
-
-          console.log("Running ralphai in worktree...");
-          const shouldResume = activeWorktree !== undefined;
-          const hasResumeFlag =
-            runArgs.includes("--resume") || runArgs.includes("-r");
-          const worktreeRunOptions: RalphaiOptions = {
-            ...options,
-            subcommand: "run",
-            runArgs: [
-              ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-              ...runArgs,
-            ],
-          };
-
-          try {
-            await runRalphaiRunner(
-              worktreeRunOptions,
-              resolvedWorktreeDir,
-              prdIssue,
-            );
-          } catch {
-            // runRalphaiRunner may call process.exit() on fatal errors
-          }
-          return;
-        }
-        // autoDetectedPrd is null — no PRD issues found, fall through
-        // to existing ralphai/<plan-slug> naming
-      } catch (err: unknown) {
-        // fetchPrdIssue throws on multiple PRD issues — surface to user
-        console.error(
-          `ERROR: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        process.exit(1);
-      }
-    }
-    // If repo detection fails, fall through to existing behavior
   }
 
   if (hasHelp || hasShowConfig || isDryRun) {
@@ -4106,6 +3861,7 @@ async function runRalphaiRunner(
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
   let hasAllowDirty = runArgs.includes("--allow-dirty");
   const hasResume = runArgs.includes("--resume") || runArgs.includes("-r");
+  const hasOnce = runArgs.includes("--once");
   const hasShowConfig = runArgs.includes("--show-config");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
@@ -4234,6 +3990,7 @@ async function runRalphaiRunner(
     dryRun: isDryRun,
     resume: hasResume,
     allowDirty: hasAllowDirty,
+    once: hasOnce,
     plan: targetPlan,
     prd: prdIssue,
   };

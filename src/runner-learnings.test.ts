@@ -76,7 +76,6 @@ function makeResolvedConfig(
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
-    continuous: "false",
     autoCommit: "false",
     workspaces: null,
     ...overrides,
@@ -145,6 +144,7 @@ describe("runRunner — in-memory learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];
@@ -195,6 +195,7 @@ describe("runRunner — in-memory learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];
@@ -237,6 +238,7 @@ describe("runRunner — in-memory learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];
@@ -282,6 +284,7 @@ describe("runRunner — in-memory learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];

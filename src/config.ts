@@ -28,7 +28,6 @@ export interface RalphaiConfig {
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
-  continuous: string; // "true" | "false"
   autoCommit: string; // "true" | "false"
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
@@ -69,7 +68,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
-  continuous: "false",
   autoCommit: "false",
   workspaces: null,
 };
@@ -336,13 +334,9 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.iterationTimeout = v as number;
   }
 
-  // continuous (boolean)
-  if ("continuous" in obj) {
-    const v = obj.continuous;
-    if (typeof v !== "boolean")
-      err(`'continuous' must be 'true' or 'false', got '${v}'`);
-    values.continuous = String(v);
-  }
+  // continuous — deprecated and ignored (kept in ALLOWED_CONFIG_KEYS for
+  // backward compatibility so existing config files don't produce warnings).
+  // Use drain-by-default behavior instead; --once opts out.
 
   // autoCommit (boolean)
   if ("autoCommit" in obj) {
@@ -441,7 +435,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
-  ["RALPHAI_CONTINUOUS", "continuous"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
 ];
 
@@ -526,12 +519,8 @@ export function applyEnvOverrides(
     overrides.issueCommentProgress = issueComment;
   }
 
-  // continuous (boolean)
-  const continuous = get("RALPHAI_CONTINUOUS");
-  if (continuous !== undefined) {
-    validateBoolean(continuous, "RALPHAI_CONTINUOUS");
-    overrides.continuous = continuous;
-  }
+  // continuous — env var RALPHAI_CONTINUOUS is silently ignored (deprecated).
+  // Drain-by-default is now the default; use --once to opt out.
 
   // autoCommit (boolean)
   const autoCommit = get("RALPHAI_AUTO_COMMIT");
@@ -606,9 +595,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validateNonNegInt(v, "--iteration-timeout", "seconds");
       overrides.iterationTimeout = parseInt(v, 10);
       rawFlags.iterationTimeout = arg;
-    } else if (arg === "--continuous") {
-      overrides.continuous = "true";
-      rawFlags.continuous = "--continuous";
     } else if (arg === "--auto-commit") {
       overrides.autoCommit = "true";
       rawFlags.autoCommit = "--auto-commit";

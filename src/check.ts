@@ -112,39 +112,3 @@ export function runCheck(cwd: string, capabilities: string[] = []): void {
   // All passed
   console.log(`configured (${passMessages.join(", ")})`);
 }
-
-// ---------------------------------------------------------------------------
-// Help
-// ---------------------------------------------------------------------------
-
-export function showCheckHelp(): void {
-  console.log(`${TEXT}Usage:${RESET} ralphai check [options]`);
-  console.log();
-  console.log(
-    `${DIM}Verify whether ralphai is configured for the current repo.${RESET}`,
-  );
-  console.log();
-  console.log(`${TEXT}Output:${RESET}`);
-  console.log(
-    `  ${TEXT}configured${RESET}                 ${DIM}Config exists and is valid (exit 0)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}not configured${RESET}             ${DIM}No config file found (exit 1)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}invalid config — <detail>${RESET}  ${DIM}Config exists but is malformed (exit 1)${RESET}`,
-  );
-  console.log();
-  console.log(`${TEXT}Options:${RESET}`);
-  console.log(
-    `  ${TEXT}--capability=<name>${RESET}   ${DIM}Check if a specific capability is enabled (repeatable)${RESET}`,
-  );
-  console.log(
-    `  ${TEXT}--repo=<name>${RESET}         ${DIM}Check config for a different repo${RESET}`,
-  );
-  console.log();
-  console.log(`${TEXT}Supported capabilities:${RESET}`);
-  console.log(
-    `  ${TEXT}issues${RESET}   ${DIM}issueSource is "github" in config${RESET}`,
-  );
-}

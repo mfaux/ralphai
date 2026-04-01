@@ -102,9 +102,7 @@ describe("seed command", () => {
     expect(existsSync(archiveSlugDir)).toBe(false);
     // Fresh plan should be in backlog
     expect(existsSync(backlogFile)).toBe(true);
-    expect(readFileSync(backlogFile, "utf8")).toContain(
-      "# Plan: Hello World",
-    );
+    expect(readFileSync(backlogFile, "utf8")).toContain("# Plan: Hello World");
     expect(output).toContain("archive");
     expect(output).toContain("Seeded hello-world into backlog");
   });
@@ -190,9 +188,10 @@ describe("seed command", () => {
     expect(output).toContain("Seeded hello-world into backlog");
   });
 
-  it("is not listed in help output", () => {
+  it("is listed under Plumbing in help output", () => {
     const output = stripLogo(runCliOutput(["--help"], ctx.dir, testEnv()));
 
-    expect(output).not.toContain("seed");
+    expect(output).toContain("Plumbing");
+    expect(output).toContain("seed");
   });
 });

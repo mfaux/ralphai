@@ -37,18 +37,25 @@ function getVersion(): string {
 function showHelp(): void {
   console.log(`${BOLD}Usage:${RESET} ralphai <command> [options]
 
-${BOLD}Commands:${RESET}
-  init         Set up Ralphai in your project (interactive wizard)
-  run          Create or reuse a worktree and run a plan (or 'run <issue>' / 'run <plan.md>')
+${BOLD}Core${RESET}
+  run          Run a plan in an isolated worktree (or 'run <issue>' / 'run <plan.md>')
   status       Show pipeline status (auto-refreshes in terminal)
-  stop         Stop running plan(s)
-  reset        Move in-progress plans back to backlog and clean up
+
+${BOLD}Management${RESET}
   clean        Remove archived plans and orphaned worktrees
+  config       Query resolved configuration
+
+${BOLD}Setup & Maintenance${RESET}
+  init         Set up Ralphai in your project (interactive wizard)
   update       Update ralphai to the latest (or specified) version
   uninstall    Remove Ralphai from this project (or --global to uninstall)
   doctor       Check your ralphai setup for problems
-  config       Query resolved configuration
+
+${BOLD}Plumbing${RESET}
+  stop         Stop running plan(s)
+  reset        Move in-progress plans back to backlog and clean up
   repos        List all known repos with pipeline summaries
+  seed         Create a sample plan in the backlog
 
 ${BOLD}Options:${RESET}
   --help, -h      Show this help message

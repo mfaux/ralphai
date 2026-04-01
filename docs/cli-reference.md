@@ -10,7 +10,7 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
-| `prd`          | Run a PRD issue in continuous mode (shorthand for `run`)               |
+| `prd`          | Run a PRD issue (shorthand for `run --prd=<number>`)                   |
 | `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
@@ -114,7 +114,7 @@ What it does:
 --setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)
---continuous                      Keep processing backlog plans after the first completes
+--once                            Process a single work unit then exit
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
 --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
 --auto-commit                     Enable auto-commit recovery snapshots
@@ -122,14 +122,14 @@ What it does:
 --show-config                     Print resolved settings and exit
 ```
 
-### Continuous Mode
+### Drain Mode
 
-`--continuous` keeps draining the backlog on one long-lived worktree branch.
+By default, `ralphai run` drains the backlog — processing plans sequentially, one branch and PR per plan, until the queue is empty. Use `--once` to process a single work unit and exit.
 
-- The first completed plan creates a draft PR
-- Later plans update that same draft PR
-- If the run is interrupted or gets stuck, Ralphai still pushes partial work
-- The PR stays draft until a human marks it ready
+- Each plan gets its own worktree branch and draft PR
+- Stuck plans are skipped and reported in the exit summary
+- When the backlog is empty, Ralphai checks for PRD issues, then regular issues
+- Exit summary reports "Completed N, skipped M (stuck)" with stuck slugs
 
 ### Issue Tracking
 
@@ -144,10 +144,10 @@ What it does:
 
 ## Prd
 
-`ralphai prd <issue-number>` is shorthand for `ralphai run --continuous --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and runs continuously in a managed worktree.
+`ralphai prd <issue-number>` is shorthand for `ralphai run --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and drains its sub-issues in a managed worktree.
 
 ```bash
-ralphai prd 42                                # PRD-driven continuous run
+ralphai prd 42                                # PRD-driven drain run
 ralphai prd 42 --dry-run                      # preview only
 ralphai prd 42 --agent-command='claude -p'    # use Claude Code
 ```
@@ -376,7 +376,6 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
-| `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |
