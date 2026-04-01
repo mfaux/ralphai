@@ -14,13 +14,13 @@ Running `ralphai` with no arguments in a terminal opens the interactive dashboar
 
 This is the primary workflow for humans. Use it to browse the backlog, inspect in-progress work, and launch runs without switching commands.
 
-## Drain the backlog onto one branch
+## Drain the backlog
 
 ```bash
-ralphai run --continuous
+ralphai run
 ```
 
-Processes all dependency-ready plans sequentially on a single `ralphai/<first-plan-slug>` branch. A draft PR is created after the first plan completes and updated after each subsequent plan. When the backlog is empty, Ralphai refreshes the draft PR body and leaves it in draft.
+Processes all dependency-ready plans sequentially, one branch and PR per plan. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. Use `--once` to process a single plan and exit.
 
 ## Parallel runs
 
@@ -77,10 +77,10 @@ ralphai run --allow-dirty
 ## Run overnight unattended
 
 ```bash
-ralphai run --continuous
+ralphai run
 ```
 
-Processes the entire backlog (`--continuous`) on one worktree branch and opens/updates a draft PR. Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) still stops runaway plans.
+Drains the entire backlog on one worktree per plan and opens/updates a draft PR for each. Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) skips runaway plans and continues to the next.
 
 ## Work on a specific plan
 
@@ -98,7 +98,7 @@ ralphai status --repo=my-app            # check a repo without cd-ing
 ralphai reset --repo=~/work/api --yes   # reset a stuck plan remotely
 ```
 
-Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `purge`, `teardown`, and `backlog-dir`.
+Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `purge`, `uninstall`, and `backlog-dir`.
 
 To clean up stale entries (from deleted temp dirs or old projects):
 

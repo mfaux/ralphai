@@ -103,17 +103,16 @@ If **N consecutive iterations** produce no new commits, Ralphai aborts. The defa
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume it.
 
-## Continuous Mode
+## Drain Mode
 
-By default, Ralphai stops after one plan. With `--continuous`, it keeps draining the backlog, picking the next dependency-ready plan after each completion.
+By default, `ralphai run` drains the backlog — processing plans sequentially until the queue is empty. Each plan gets its own worktree branch and draft PR.
 
-In continuous mode, Ralphai uses one long-lived worktree branch:
+1. **Each completed plan** -> pushes the branch and creates a draft PR
+2. **Stuck plans** -> skipped, logged, and reported in the exit summary
+3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues
+4. **Nothing left** -> exits with a summary: "Completed N, skipped M (stuck)"
 
-1. **First completed plan** -> pushes the branch and creates a draft PR
-2. **Each later plan** -> keeps working on the same branch and updates the same draft PR
-3. **Backlog drained** -> refreshes the draft PR body and leaves it in draft
-
-If the run is interrupted or gets stuck, Ralphai still pushes partial work so the branch and PR reflect the latest progress.
+Use `--once` to process a single work unit and exit instead of draining.
 
 ## Iteration Timeout
 
@@ -147,7 +146,7 @@ When Ralphai looks for work, it follows this priority:
 3. **Single ready plan** -> auto-selected
 4. **Multiple ready plans** -> the first plan in alphabetical order is picked
 
-Plans are also skipped if their branch or PR already exists. That avoids collisions when multiple worktrees or continuous sessions overlap.
+Plans are also skipped if their branch or PR already exists. That avoids collisions when multiple worktrees or parallel sessions overlap.
 
 ## Receipt Files
 

@@ -108,8 +108,8 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  setupCommand       = <none>  (default (none))");
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
-    expect(output).toContain("  continuous         = false  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
+    expect(output).not.toContain("continuous");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  issueSource        = none  (default)");

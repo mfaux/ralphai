@@ -2,7 +2,12 @@ import { existsSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
-import { getRalphaiHome, getRepoPipelineDirs } from "./global-state.ts";
+import {
+  getRalphaiHome,
+  getRepoPipelineDirs,
+  resolveRepoStateDir,
+} from "./global-state.ts";
+import { getConfigFilePath } from "./config.ts";
 import { detectInstallerPM } from "./self-update.ts";
 import { listPlanSlugs } from "./plan-detection.ts";
 
@@ -12,6 +17,7 @@ import { listPlanSlugs } from "./plan-detection.ts";
 
 interface UninstallOptions {
   yes: boolean;
+  global: boolean;
   cwd: string;
   env?: Record<string, string | undefined>;
 }
@@ -60,6 +66,25 @@ function findPipelineWarnings(ralphaiHome: string): PipelineWarning[] {
   return warnings;
 }
 
+function printWarnings(warnings: PipelineWarning[]): void {
+  console.log(
+    `${TEXT}Warning: active plans found in ${warnings.length} repo${warnings.length !== 1 ? "s" : ""}:${RESET}`,
+  );
+  for (const w of warnings) {
+    const parts: string[] = [];
+    if (w.backlogCount > 0) {
+      parts.push(`${w.backlogCount} in backlog`);
+    }
+    if (w.inProgressCount > 0) {
+      parts.push(`${w.inProgressCount} in progress`);
+    }
+    console.log(
+      `  ${TEXT}${w.repoId}${RESET} ${DIM}(${parts.join(", ")})${RESET}`,
+    );
+  }
+  console.log();
+}
+
 function buildUninstallCommand(
   pm: ReturnType<typeof detectInstallerPM>,
 ): string {
@@ -76,10 +101,49 @@ function buildUninstallCommand(
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Repo-scoped uninstall (default — no --global)
 // ---------------------------------------------------------------------------
 
-export async function runUninstall(options: UninstallOptions): Promise<void> {
+async function runRepoUninstall(options: UninstallOptions): Promise<void> {
+  const configPath = getConfigFilePath(options.cwd, options.env);
+  if (!existsSync(configPath)) {
+    console.log(
+      `${TEXT}Ralphai is not set up in this project (no config found).${RESET}`,
+    );
+    return;
+  }
+
+  const stateDir = resolveRepoStateDir(options.cwd, options.env);
+
+  if (!options.yes) {
+    clack.intro("Uninstall Ralphai");
+    const confirmed = await clack.confirm({
+      message:
+        "This will permanently delete the global state for this repo. " +
+        "Any plans will be lost. Continue?",
+    });
+
+    if (clack.isCancel(confirmed) || !confirmed) {
+      clack.cancel("Uninstall cancelled.");
+      return;
+    }
+  }
+
+  // Remove global state directory for this repo
+  rmSync(stateDir, { recursive: true, force: true });
+
+  console.log(`${TEXT}Ralphai torn down.${RESET}`);
+  console.log();
+  console.log(`${DIM}Removed:${RESET}`);
+  console.log(`  ${stateDir}  ${DIM}Global state${RESET}`);
+  console.log();
+}
+
+// ---------------------------------------------------------------------------
+// Global uninstall (--global)
+// ---------------------------------------------------------------------------
+
+async function runGlobalUninstall(options: UninstallOptions): Promise<void> {
   const ralphaiHome = getRalphaiHome(options.env);
   const homeExists = existsSync(ralphaiHome);
 
@@ -92,22 +156,7 @@ export async function runUninstall(options: UninstallOptions): Promise<void> {
     // Show plan warnings before asking for confirmation
     if (warnings.length > 0) {
       console.log();
-      console.log(
-        `${TEXT}Warning: active plans found in ${warnings.length} repo${warnings.length !== 1 ? "s" : ""}:${RESET}`,
-      );
-      for (const w of warnings) {
-        const parts: string[] = [];
-        if (w.backlogCount > 0) {
-          parts.push(`${w.backlogCount} in backlog`);
-        }
-        if (w.inProgressCount > 0) {
-          parts.push(`${w.inProgressCount} in progress`);
-        }
-        console.log(
-          `  ${TEXT}${w.repoId}${RESET} ${DIM}(${parts.join(", ")})${RESET}`,
-        );
-      }
-      console.log();
+      printWarnings(warnings);
     }
 
     const confirmed = await clack.confirm({
@@ -122,22 +171,7 @@ export async function runUninstall(options: UninstallOptions): Promise<void> {
     }
   } else if (warnings.length > 0) {
     // Even in --yes mode, print warnings so they're visible in logs
-    console.log(
-      `${TEXT}Warning: active plans found in ${warnings.length} repo${warnings.length !== 1 ? "s" : ""}:${RESET}`,
-    );
-    for (const w of warnings) {
-      const parts: string[] = [];
-      if (w.backlogCount > 0) {
-        parts.push(`${w.backlogCount} in backlog`);
-      }
-      if (w.inProgressCount > 0) {
-        parts.push(`${w.inProgressCount} in progress`);
-      }
-      console.log(
-        `  ${TEXT}${w.repoId}${RESET} ${DIM}(${parts.join(", ")})${RESET}`,
-      );
-    }
-    console.log();
+    printWarnings(warnings);
   }
 
   // 1. Remove ~/.ralphai (global state for all repos)
@@ -164,6 +198,18 @@ export async function runUninstall(options: UninstallOptions): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+export async function runUninstall(options: UninstallOptions): Promise<void> {
+  if (options.global) {
+    await runGlobalUninstall(options);
+  } else {
+    await runRepoUninstall(options);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Help
 // ---------------------------------------------------------------------------
 
@@ -171,18 +217,20 @@ export function showUninstallHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai uninstall [options]`);
   console.log();
   console.log(
-    `${DIM}Remove all Ralphai global state and show how to uninstall the CLI.${RESET}`,
+    `${DIM}Remove Ralphai from the current project (repo-scoped by default).${RESET}`,
   );
   console.log();
   console.log(
-    `${DIM}Deletes ~/.ralphai (or $RALPHAI_HOME), which contains config, plans,${RESET}`,
+    `${DIM}By default, removes only this repo's state directory. Use --global${RESET}`,
   );
   console.log(
-    `${DIM}learnings, and pipeline state for all repos. Warns if any repos still${RESET}`,
+    `${DIM}to remove ~/.ralphai (or $RALPHAI_HOME) and all repo state.${RESET}`,
   );
-  console.log(`${DIM}have plans in the backlog or in progress.${RESET}`);
   console.log();
   console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--global${RESET}    ${DIM}Remove all global state and show how to uninstall the CLI${RESET}`,
+  );
   console.log(
     `  ${TEXT}--yes, -y${RESET}   ${DIM}Skip confirmation prompt${RESET}`,
   );

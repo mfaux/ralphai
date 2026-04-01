@@ -29,6 +29,13 @@ const UNCHECKED_ISSUE_RE =
   /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))\s*$/;
 
 /**
+ * Matches a checked (`[x]` or `[X]`) GitHub task list item that references
+ * an issue.
+ */
+const CHECKED_ISSUE_RE =
+  /^- \[[xX]\] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))\s*$/;
+
+/**
  * Extract issue numbers from unchecked task list items in a GitHub issue
  * body. Returns an array of issue numbers (as numbers), preserving the
  * order they appear in the body.
@@ -53,4 +60,21 @@ export function parseSubIssues(body: string | undefined | null): number[] {
   }
 
   return issues;
+}
+
+/**
+ * Check whether a body contains any checked (`[x]`) task list items that
+ * reference issues. Used to distinguish "PRD with no task list" (fallback
+ * to body-as-plan) from "all sub-issues already completed".
+ */
+export function hasCheckedSubIssues(body: string | undefined | null): boolean {
+  if (!body) return false;
+
+  for (const line of body.split("\n")) {
+    if (CHECKED_ISSUE_RE.test(line.trimEnd())) {
+      return true;
+    }
+  }
+
+  return false;
 }

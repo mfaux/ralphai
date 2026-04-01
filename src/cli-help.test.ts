@@ -13,11 +13,14 @@ describe("CLI help and flags", () => {
     const result = runCli([], ctx.dir);
     const output = stripLogo(result.stdout);
     expect(result.exitCode).toBe(0);
-    expect(output).toContain("Commands:");
+    expect(output).toContain("Core");
+    expect(output).toContain("Management");
+    expect(output).toContain("Setup & Maintenance");
+    expect(output).toContain("Plumbing");
     expect(output).toContain("init");
     expect(output).toContain("run");
     expect(output).toContain("update");
-    expect(output).toContain("teardown");
+    expect(output).toContain("uninstall");
     expect(output).toContain("reset");
   });
 
@@ -38,15 +41,31 @@ describe("CLI help and flags", () => {
     expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it("--help shows usage information", () => {
+  it("--help shows usage information with grouped command headings", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Usage:");
     expect(result.stdout).toContain("ralphai");
-    expect(result.stdout).toContain("init");
+    // Grouped headings
+    expect(result.stdout).toContain("Core");
+    expect(result.stdout).toContain("Management");
+    expect(result.stdout).toContain("Setup & Maintenance");
+    expect(result.stdout).toContain("Plumbing");
+    // Commands present
     expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("status");
+    expect(result.stdout).toContain("clean");
+    expect(result.stdout).toContain("config");
+    expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("update");
-    expect(result.stdout).toContain("teardown");
+    expect(result.stdout).toContain("uninstall");
+    expect(result.stdout).toContain("doctor");
+    expect(result.stdout).toContain("stop");
+    expect(result.stdout).toContain("reset");
+    expect(result.stdout).toContain("repos");
+    expect(result.stdout).toContain("seed");
+    // No "Commands:" flat heading
+    expect(result.stdout).not.toMatch(/^Commands:/m);
   });
 
   // -------------------------------------------------------------------------
@@ -107,18 +126,31 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("update");
   });
 
-  it("teardown --help shows teardown usage and flags", () => {
-    const result = runCli(["teardown", "--help"]);
+  it("uninstall --help shows uninstall usage and flags", () => {
+    const result = runCli(["uninstall", "--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("teardown");
+    expect(result.stdout).toContain("uninstall");
     expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("--global");
   });
 
-  it("run --help shows --prd flag", () => {
+  it("run --help does not show removed --prd flag", () => {
     const result = runCli(["run", "--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("--prd=<number>");
-    expect(result.stdout).toContain("PRD");
+    expect(result.stdout).not.toContain("--prd");
+  });
+
+  it("run --help shows [<target>] usage with examples", () => {
+    const result = runCli(["run", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ralphai run [<target>]");
+    // Issue number example
+    expect(result.stdout).toContain("ralphai run 42");
+    // Plan file example
+    expect(result.stdout).toContain("ralphai run my-feature.md");
+    // Auto-select (omitted target)
+    expect(result.stdout).toContain("(omitted)");
+    expect(result.stdout).toContain("Auto-detect");
   });
 
   // -------------------------------------------------------------------------
@@ -134,8 +166,9 @@ describe("CLI help and flags", () => {
     );
     expect(result.stdout).toContain("ralphai init");
     expect(result.stdout).toContain("ralphai run");
-    expect(result.stdout).toContain("ralphai worktree list");
-    expect(result.stdout).toContain("ralphai worktree clean");
+    // Removed commands should not appear in examples
+    expect(result.stdout).not.toContain("ralphai worktree list");
+    expect(result.stdout).not.toContain("ralphai worktree clean");
   });
 
   it("--help does not show subcommand-specific flags", () => {
@@ -170,8 +203,8 @@ describe("CLI help and flags", () => {
     expect(result.stderr).toContain("Unknown flag");
   });
 
-  it("teardown --wrong exits with error", () => {
-    const result = runCli(["teardown", "--wrong"], ctx.dir);
+  it("uninstall --wrong exits with error", () => {
+    const result = runCli(["uninstall", "--wrong"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
   });
@@ -210,34 +243,35 @@ describe("CLI help and flags", () => {
   });
 
   // -------------------------------------------------------------------------
-  // backlog-dir command
+  // backlog-dir command (removed — now shows guidance)
   // -------------------------------------------------------------------------
 
-  it("backlog-dir prints a directory path", () => {
+  it("backlog-dir prints removal guidance", () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
     runCli(["init", "--yes"], ctx.dir, env);
     const result = runCli(["backlog-dir"], ctx.dir, env);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.trim()).toContain("pipeline");
-    expect(result.stdout.trim()).toContain("backlog");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
+    expect(result.stderr).toContain("ralphai config backlog-dir");
   });
 
-  it("backlog-dir --help shows usage", () => {
+  it("backlog-dir --help also prints removal guidance (not help)", () => {
     const result = runCli(["backlog-dir", "--help"]);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("backlog-dir");
-    expect(result.stdout).toContain("backlog");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
+    expect(result.stderr).toContain("ralphai config backlog-dir");
   });
 
-  it("backlog-dir --unknown exits with error", () => {
+  it("backlog-dir --unknown prints removal guidance", () => {
     const result = runCli(["backlog-dir", "--unknown"], ctx.dir);
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Unknown flag");
+    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
+    expect(result.stderr).toContain("ralphai config backlog-dir");
   });
 
-  it("help text lists backlog-dir", () => {
+  it("help text does not list removed backlog-dir", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("backlog-dir");
+    expect(result.stdout).not.toContain("backlog-dir");
   });
 });

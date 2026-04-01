@@ -10,19 +10,20 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
-| `prd`          | Run a PRD issue in continuous mode (shorthand for `run`)               |
+| `prd`          | Run a PRD issue (shorthand for `run --prd=<number>`)                   |
 | `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
 | `purge`        | Delete archived artifacts from `pipeline/out/`                         |
+| `clean`        | Remove archived plans and orphaned worktrees                           |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
+| `config`       | Query resolved configuration, keys, or capabilities                    |
 | `check`        | Verify whether Ralphai is configured for a repo                        |
 | `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update Ralphai to the latest (or specified) version                    |
-| `teardown`     | Remove Ralphai from your project                                       |
-| `uninstall`    | Remove all global state and uninstall the CLI                          |
+| `uninstall`    | Remove Ralphai from this project (or `--global` to remove all state)   |
 
 ## Global Options
 
@@ -43,7 +44,7 @@ ralphai doctor --repo=~/work/api
 ralphai backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `stop`, `reset`, `purge`, `teardown`, `backlog-dir`, `doctor`, `check`.
+Works with: `status`, `stop`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, `config`.
 
 Blocked for: `run`, `prd`, `worktree`, `init`.
 
@@ -113,7 +114,7 @@ What it does:
 --setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
 --feedback-commands=<list>        Comma-separated feedback commands
 --base-branch=<branch>            Override base branch (default: main)
---continuous                      Keep processing backlog plans after the first completes
+--once                            Process a single work unit then exit
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
 --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
 --auto-commit                     Enable auto-commit recovery snapshots
@@ -121,14 +122,14 @@ What it does:
 --show-config                     Print resolved settings and exit
 ```
 
-### Continuous Mode
+### Drain Mode
 
-`--continuous` keeps draining the backlog on one long-lived worktree branch.
+By default, `ralphai run` drains the backlog — processing plans sequentially, one branch and PR per plan, until the queue is empty. Use `--once` to process a single work unit and exit.
 
-- The first completed plan creates a draft PR
-- Later plans update that same draft PR
-- If the run is interrupted or gets stuck, Ralphai still pushes partial work
-- The PR stays draft until a human marks it ready
+- Each plan gets its own worktree branch and draft PR
+- Stuck plans are skipped and reported in the exit summary
+- When the backlog is empty, Ralphai checks for PRD issues, then regular issues
+- Exit summary reports "Completed N, skipped M (stuck)" with stuck slugs
 
 ### Issue Tracking
 
@@ -143,10 +144,10 @@ What it does:
 
 ## Prd
 
-`ralphai prd <issue-number>` is shorthand for `ralphai run --continuous --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and runs continuously in a managed worktree.
+`ralphai prd <issue-number>` is shorthand for `ralphai run --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and drains its sub-issues in a managed worktree.
 
 ```bash
-ralphai prd 42                                # PRD-driven continuous run
+ralphai prd 42                                # PRD-driven drain run
 ralphai prd 42 --dry-run                      # preview only
 ralphai prd 42 --agent-command='claude -p'    # use Claude Code
 ```
@@ -166,6 +167,27 @@ ralphai worktree clean
 - `clean` removes completed or orphaned worktrees and archives any leftover receipt
 
 Use `ralphai run` to start or resume work.
+
+## Clean
+
+```
+ralphai clean [--worktrees] [--archive] [--yes]
+```
+
+Unified cleanup command that removes archived plans and orphaned worktrees. By default both are cleaned; use flags to scope to one type.
+
+```
+--worktrees   Clean only orphaned worktrees
+--archive     Clean only archived plans
+--yes, -y     Skip confirmation prompt
+```
+
+Behavior:
+
+- **No flags:** Cleans both archived plans from `pipeline/out/` and orphaned worktrees
+- **`--archive`:** Only removes archived plans (equivalent to `ralphai purge`)
+- **`--worktrees`:** Only removes orphaned worktrees (equivalent to `ralphai worktree clean`)
+- **Nothing to clean:** Prints "Nothing to clean" and exits 0
 
 ## Stop
 
@@ -228,6 +250,49 @@ Deletes all archived plan artifacts from `pipeline/out/`.
 
 When a `workspaces` config key exists, doctor also validates per-workspace feedback commands. Workspace failures produce warnings, not hard errors.
 
+## Config
+
+`ralphai config` is the unified entry point for querying configuration. It consolidates `run --show-config`, `backlog-dir`, and `check` into a single subcommand.
+
+```
+ralphai config [<key>] [--check=<capability>]
+```
+
+### Modes
+
+**Bare config** — prints the fully resolved configuration (equivalent to `run --show-config`):
+
+```bash
+ralphai config
+```
+
+**Key query** — prints a specific config value to stdout:
+
+```bash
+ralphai config backlog-dir
+# ~/.ralphai/repos/<repo-id>/pipeline/backlog
+```
+
+| Key           | Description                            |
+| ------------- | -------------------------------------- |
+| `backlog-dir` | Absolute path to the backlog directory |
+
+**Capability check** — validates whether a capability is configured (same behavior as `ralphai check --capability`):
+
+```bash
+ralphai config --check=issues
+```
+
+```
+--check=<capability>   Check if a capability is enabled (repeatable)
+```
+
+See the [Check](#check) section for output format and exit codes.
+
+### Error handling
+
+On a non-initialized repo, `ralphai config` and `ralphai config <key>` print an error suggesting `ralphai init` and exit 1.
+
 ## Check
 
 `ralphai check` verifies whether Ralphai is configured for the current repo. It prints a single line of plain text (no ANSI color codes) and exits 0 on success or 1 on failure.
@@ -264,17 +329,16 @@ Multiple `--capability` flags can be combined; all must pass for exit 0.
 
 Does not require a git repository. Useful for CI scripts and setup verification.
 
-## Teardown
+## Uninstall
 
 ```
+--global          Remove all global state (~/.ralphai) instead of just this repo
 --yes, -y         Skip confirmation prompt
 ```
 
-Removes Ralphai from your project by deleting global state for this repo at `~/.ralphai/repos/<id>/`.
+By default, `ralphai uninstall` removes only the current repo's state directory at `~/.ralphai/repos/<id>/`.
 
-## Uninstall
-
-Removes all global state in `~/.ralphai/` and uninstalls the CLI.
+With `--global`, it removes the entire `~/.ralphai/` directory (all repos) and prints the command to uninstall the CLI binary. When active plans exist in other repos, a warning lists affected repos before confirmation.
 
 ## Backlog Dir
 
@@ -312,7 +376,6 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_FEEDBACK_COMMANDS`       | `feedbackCommands`     |
 | `RALPHAI_BASE_BRANCH`             | `baseBranch`           |
 | `RALPHAI_AUTO_COMMIT`             | `autoCommit`           |
-| `RALPHAI_CONTINUOUS`              | `continuous`           |
 | `RALPHAI_MAX_STUCK`               | `maxStuck`             |
 | `RALPHAI_ITERATION_TIMEOUT`       | `iterationTimeout`     |
 | `RALPHAI_NO_UPDATE_CHECK`         | _(none)_               |

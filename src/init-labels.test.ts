@@ -39,7 +39,7 @@ describe("init label creation", () => {
   it("labelDefs includes the ralphai-prd label with color 1d76db", () => {
     expect(ralphaiSrc).toContain('name: "ralphai-prd"');
     expect(ralphaiSrc).toContain(
-      'description: "Ralphai PRD — names the continuous-mode branch"',
+      'description: "Ralphai PRD — groups sub-issues for drain runs"',
     );
     expect(ralphaiSrc).toContain('color: "1d76db"');
   });

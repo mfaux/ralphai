@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { parseSubIssues } from "./prd-sub-issue-parser.ts";
+import { parseSubIssues, hasCheckedSubIssues } from "./prd-sub-issue-parser.ts";
 
 // ---------------------------------------------------------------------------
 // Basic extraction
@@ -178,5 +178,76 @@ describe("parseSubIssues", () => {
 
   it("ignores checkbox variants with uppercase X", () => {
     expect(parseSubIssues("- [X] #13")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasCheckedSubIssues
+// ---------------------------------------------------------------------------
+
+describe("hasCheckedSubIssues", () => {
+  it("returns false for empty string", () => {
+    expect(hasCheckedSubIssues("")).toBe(false);
+  });
+
+  it("returns false for undefined", () => {
+    expect(hasCheckedSubIssues(undefined)).toBe(false);
+  });
+
+  it("returns false for null", () => {
+    expect(hasCheckedSubIssues(null)).toBe(false);
+  });
+
+  it("returns false when no task list items exist", () => {
+    expect(hasCheckedSubIssues("Some text\n\nMore text")).toBe(false);
+  });
+
+  it("returns false when only unchecked items exist", () => {
+    expect(hasCheckedSubIssues("- [ ] #10\n- [ ] #11")).toBe(false);
+  });
+
+  it("returns true when checked items with lowercase x exist", () => {
+    expect(hasCheckedSubIssues("- [x] #10")).toBe(true);
+  });
+
+  it("returns true when checked items with uppercase X exist", () => {
+    expect(hasCheckedSubIssues("- [X] #10")).toBe(true);
+  });
+
+  it("returns true for checked full URL items", () => {
+    expect(
+      hasCheckedSubIssues("- [x] https://github.com/owner/repo/issues/42"),
+    ).toBe(true);
+  });
+
+  it("returns true when mixed checked and unchecked exist", () => {
+    const body = "- [x] #10\n- [ ] #11\n- [x] #12";
+    expect(hasCheckedSubIssues(body)).toBe(true);
+  });
+
+  it("returns true when all items are checked", () => {
+    const body = "- [x] #10\n- [x] #11\n- [x] #12";
+    expect(hasCheckedSubIssues(body)).toBe(true);
+  });
+
+  it("returns false for non-issue checked items", () => {
+    expect(hasCheckedSubIssues("- [x] Implement the parser")).toBe(false);
+  });
+
+  it("handles realistic PRD body with all checked", () => {
+    const body = [
+      "# Feature: Auth",
+      "",
+      "## Sub-issues",
+      "",
+      "- [x] #1",
+      "- [x] #2",
+      "- [x] https://github.com/acme/app/issues/3",
+      "",
+      "## Notes",
+      "",
+      "All done!",
+    ].join("\n");
+    expect(hasCheckedSubIssues(body)).toBe(true);
   });
 });

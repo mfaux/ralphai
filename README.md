@@ -81,10 +81,10 @@ ralphai run
 Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>` branch, runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
 
 ```bash
-ralphai run              # create or reuse a worktree and open a draft PR
-ralphai run --continuous # keep processing backlog plans after the first
+ralphai run              # drain the backlog: one branch/PR per plan
+ralphai run --once       # process a single plan then exit
 ralphai run --prd=42     # PRD-driven run from GitHub issue #42
-ralphai prd 42           # shorthand for run --continuous --prd=42
+ralphai prd 42           # shorthand for run --prd=42
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
@@ -125,6 +125,9 @@ ralphai stop --all       # stop all running plan runners
 ralphai doctor           # validate your setup (agent, feedback commands, config)
 ralphai reset            # move in-progress plans back to backlog
 ralphai purge            # delete archived artifacts from pipeline/out/
+ralphai clean            # remove archived plans and orphaned worktrees
+ralphai clean --archive  # clean only archived plans
+ralphai clean --worktrees # clean only orphaned worktrees
 ```
 
 ### 6. Close the learnings loop
@@ -150,10 +153,10 @@ Ralphai tracks every initialized repo automatically. Run `ralphai repos` from an
 ralphai repos                           # list all known repos with plan counts
 ralphai repos --clean                   # remove stale entries (dead paths, no plans)
 ralphai status --repo=my-app            # check status of a different repo
-ralphai backlog-dir --repo=~/work/api   # get backlog path by repo path
+ralphai config backlog-dir --repo=~/work/api  # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `teardown`, `backlog-dir`, and `doctor`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
 ## Interactive Dashboard
 
@@ -171,8 +174,8 @@ For most people, this is the main way to use Ralphai. Reach for `ralphai run` wh
 
 ```bash
 ralphai update           # update to the latest version
-ralphai teardown         # remove Ralphai from your project
-ralphai uninstall        # remove all global state and uninstall the CLI
+ralphai uninstall        # remove Ralphai from this project
+ralphai uninstall --global  # remove all global state and uninstall the CLI
 ```
 
 ## Monorepo Support

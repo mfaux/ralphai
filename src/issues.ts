@@ -8,6 +8,7 @@
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { parseSubIssues } from "./prd-sub-issue-parser.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -234,6 +235,82 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
   };
 }
 
+/**
+ * Read-only check for open PRD issues (`ralphai-prd` label).
+ * Safe for dry-run mode.
+ */
+export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
+  const { cwd, issueSource, issueRepo } = options;
+
+  if (issueSource !== "github") {
+    return { found: false, count: 0, message: "Issue source is not 'github'" };
+  }
+
+  if (!checkGhAvailable()) {
+    return {
+      found: false,
+      count: 0,
+      message: "gh CLI not available or not authenticated — skipping PRD peek",
+    };
+  }
+
+  const repo = detectIssueRepo(cwd, issueRepo);
+  if (!repo) {
+    return {
+      found: false,
+      count: 0,
+      message: "Could not detect GitHub repo — skipping PRD peek",
+    };
+  }
+
+  const raw = execQuiet(
+    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
+      `--limit 10 --json number,title`,
+    cwd,
+  );
+
+  if (!raw) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Could not list PRD issues in ${repo}`,
+    };
+  }
+
+  let issues: Array<{ number: number; title: string }>;
+  try {
+    issues = JSON.parse(raw);
+  } catch {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Failed to parse PRD issue list from ${repo}`,
+    };
+  }
+
+  if (issues.length === 0) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `No open PRD issues with label '${PRD_LABEL}' in ${repo}`,
+    };
+  }
+
+  const oldest = issues[issues.length - 1]!;
+  return {
+    found: true,
+    count: issues.length,
+    oldest,
+    repo,
+    message:
+      `${issues.length} PRD issue(s) with label '${PRD_LABEL}' in ${repo}` +
+      ` (oldest: #${oldest.number} — ${oldest.title})`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Internal: shared pull logic
 // ---------------------------------------------------------------------------
@@ -385,6 +462,98 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
 }
 
 // ---------------------------------------------------------------------------
+// PRD sub-issue pull (for priority chain: PRDs before regular issues)
+// ---------------------------------------------------------------------------
+
+/**
+ * Discover the oldest open `ralphai-prd` issue, extract its first unchecked
+ * sub-issue, and pull that sub-issue into the backlog as a plan file.
+ *
+ * Returns `{ pulled: true }` when a sub-issue was written to the backlog.
+ * Returns `{ pulled: false }` when no PRD or no unchecked sub-issues exist.
+ */
+export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
+  const {
+    backlogDir,
+    cwd,
+    issueSource,
+    issueLabel,
+    issueInProgressLabel,
+    issueRepo,
+    issueCommentProgress,
+  } = options;
+
+  if (issueSource !== "github") {
+    return { pulled: false, message: "Issue source is not 'github'" };
+  }
+
+  if (!checkGhAvailable()) {
+    return {
+      pulled: false,
+      message:
+        "gh CLI not available or not authenticated — skipping PRD discovery",
+    };
+  }
+
+  const repo = detectIssueRepo(cwd, issueRepo);
+  if (!repo) {
+    return {
+      pulled: false,
+      message: "Could not detect GitHub repo — skipping PRD discovery",
+    };
+  }
+
+  // Look for open issues with the ralphai-prd label
+  const raw = execQuiet(
+    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
+      `--limit 10 --json number,title,body`,
+    cwd,
+  );
+
+  if (!raw) {
+    return { pulled: false, message: "No open PRD issues found" };
+  }
+
+  let prdIssues: Array<{ number: number; title: string; body: string }>;
+  try {
+    prdIssues = JSON.parse(raw);
+  } catch {
+    return { pulled: false, message: "Failed to parse PRD issue response" };
+  }
+
+  if (prdIssues.length === 0) {
+    return { pulled: false, message: "No open PRD issues found" };
+  }
+
+  // Pick the oldest PRD (gh returns newest first, so last element)
+  const prd = prdIssues[prdIssues.length - 1]!;
+  const subIssues = parseSubIssues(prd.body);
+
+  if (subIssues.length === 0) {
+    return {
+      pulled: false,
+      message: `PRD #${prd.number} has no unchecked sub-issues`,
+    };
+  }
+
+  // Pull the first unchecked sub-issue into the backlog
+  const subIssueNumber = subIssues[0]!;
+  console.log(
+    `PRD #${prd.number} — pulling sub-issue #${subIssueNumber} into backlog`,
+  );
+
+  return fetchAndWriteIssuePlan({
+    repo,
+    issueNumber: String(subIssueNumber),
+    backlogDir,
+    cwd,
+    issueInProgressLabel,
+    issueLabel,
+    issueCommentProgress,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // PRD (Product Requirements Document) support
 // ---------------------------------------------------------------------------
 
@@ -525,6 +694,60 @@ export function ensurePrdLabel(cwd: string): void {
     cwd,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Fetch issue title (for branch naming, no plan file written)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a GitHub issue by number and return its title.
+ *
+ * Used by `ralphai run <number>` to derive the `feat/<slug>` branch name
+ * before pulling the issue into a plan file. Does not write files or
+ * mutate labels — read-only and safe for dry-run.
+ *
+ * Throws a descriptive error if:
+ * - `gh` is not available or not authenticated
+ * - the issue is not found or is inaccessible
+ */
+export function fetchIssueTitleByNumber(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): { number: number; title: string } {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot fetch issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title`,
+    cwd,
+  );
+
+  if (!raw) {
+    throw new Error(
+      `Could not fetch issue #${issueNumber} from ${repo}. ` +
+        `Check that the issue exists and you have access.`,
+    );
+  }
+
+  let data: { title: string };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Failed to parse response for issue #${issueNumber} from ${repo}`,
+    );
+  }
+
+  return { number: issueNumber, title: data.title };
+}
+
+// ---------------------------------------------------------------------------
+// Pull specific issue by number
+// ---------------------------------------------------------------------------
 
 /**
  * Pull a specific GitHub issue by number and convert it to a plan file.

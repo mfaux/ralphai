@@ -61,7 +61,6 @@ function makeResolvedConfig(
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
-    continuous: "false",
     autoCommit: "false",
     workspaces: null,
     ...overrides,
@@ -115,6 +114,7 @@ describe("runRunner — resume", () => {
       dryRun: false,
       resume: true,
       allowDirty: false,
+      once: false,
     };
 
     const logs: string[] = [];

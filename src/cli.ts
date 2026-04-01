@@ -37,22 +37,25 @@ function getVersion(): string {
 function showHelp(): void {
   console.log(`${BOLD}Usage:${RESET} ralphai <command> [options]
 
-${BOLD}Commands:${RESET}
-  init         Set up Ralphai in your project (interactive wizard)
-  run          Create or reuse a worktree and run a plan
-  prd          Run a PRD issue in continuous mode (shorthand for run)
-  worktree     Manage ralphai git worktrees
+${BOLD}Core${RESET}
+  run          Run a plan in an isolated worktree (or 'run <issue>' / 'run <plan.md>')
   status       Show pipeline status (auto-refreshes in terminal)
+
+${BOLD}Management${RESET}
+  clean        Remove archived plans and orphaned worktrees
+  config       Query resolved configuration
+
+${BOLD}Setup & Maintenance${RESET}
+  init         Set up Ralphai in your project (interactive wizard)
+  update       Update ralphai to the latest (or specified) version
+  uninstall    Remove Ralphai from this project (or --global to uninstall)
+  doctor       Check your ralphai setup for problems
+
+${BOLD}Plumbing${RESET}
   stop         Stop running plan(s)
   reset        Move in-progress plans back to backlog and clean up
-  purge        Delete archived artifacts from pipeline/out/
-  update       Update ralphai to the latest (or specified) version
-  teardown     Remove Ralphai from your project
-  uninstall    Remove all global state and uninstall the CLI
-  doctor       Check your ralphai setup for problems
-  check        Verify whether ralphai is configured for a repo
-  backlog-dir  Print the path to the plan backlog directory
   repos        List all known repos with pipeline summaries
+  seed         Create a sample plan in the backlog
 
 ${BOLD}Options:${RESET}
   --help, -h      Show this help message
@@ -64,9 +67,9 @@ Run ${TEXT}'ralphai <command> --help'${RESET} for command-specific options.
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai               ${DIM}# show pipeline status (auto-refreshes in terminal)${RESET}
   ${DIM}$${RESET} ralphai init          ${DIM}# set up your project${RESET}
-  ${DIM}$${RESET} ralphai run           ${DIM}# run the next plan headlessly${RESET}
-  ${DIM}$${RESET} ralphai worktree list ${DIM}# show active worktrees${RESET}
-  ${DIM}$${RESET} ralphai worktree clean ${DIM}# remove completed worktrees${RESET}`);
+  ${DIM}$${RESET} ralphai run           ${DIM}# auto-detect work and run${RESET}
+  ${DIM}$${RESET} ralphai run 42        ${DIM}# fetch issue #42, create branch, run${RESET}
+  ${DIM}$${RESET} ralphai run plan.md   ${DIM}# run a specific plan file${RESET}`);
 }
 
 async function main(): Promise<void> {
@@ -127,9 +130,10 @@ async function main(): Promise<void> {
   await runRalphai(args);
 
   // Update notification (after command completes, so it doesn't interfere).
-  // Skip after uninstall — the cache dir would re-create ~/.ralphai.
-  const isUninstall = args[0] === "uninstall";
-  if (!process.env.RALPHAI_NO_UPDATE_CHECK && !isUninstall) {
+  // Skip after global uninstall — the cache dir would re-create ~/.ralphai.
+  const isGlobalUninstall =
+    args[0] === "uninstall" && args.includes("--global");
+  if (!process.env.RALPHAI_NO_UPDATE_CHECK && !isGlobalUninstall) {
     const currentVersion = getVersion();
     const update = checkForUpdate("ralphai", currentVersion);
     if (update) {

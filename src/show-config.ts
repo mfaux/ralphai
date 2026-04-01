@@ -53,7 +53,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueDoneLabel: "RALPHAI_ISSUE_DONE_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
-  continuous: "RALPHAI_CONTINUOUS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
 };
 
@@ -152,16 +151,6 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   );
   lines.push(
     `  baseBranch         = ${config.baseBranch.value}  (${baseBranchSrc})`,
-  );
-
-  // continuous: CLI label is just "--continuous"
-  const continuousSrc = sourceLabel(
-    "continuous",
-    config.continuous.source,
-    input,
-  );
-  lines.push(
-    `  continuous         = ${config.continuous.value}  (${continuousSrc})`,
   );
 
   // autoCommit: CLI label is "--auto-commit" or "--no-auto-commit"

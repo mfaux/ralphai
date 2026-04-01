@@ -435,13 +435,16 @@ export function detectPlan(opts: {
   if (worktreeBranch) {
     // Worktree mode: only consider the plan matching this branch
     const slug = worktreeBranch.replace(/^ralphai\//, "");
-    const planFile = planPathForSlug(dirs.wipDir, slug);
-    if (existsSync(planFile)) {
-      inProgressPlans.push(planFile);
+    if (!skippedSlugs?.has(slug)) {
+      const planFile = planPathForSlug(dirs.wipDir, slug);
+      if (existsSync(planFile)) {
+        inProgressPlans.push(planFile);
+      }
     }
   } else {
     // Normal mode: scan all in-progress slug-folders
     for (const folder of listPlanFolders(dirs.wipDir)) {
+      if (skippedSlugs?.has(folder)) continue;
       const planFile = planPathForSlug(dirs.wipDir, folder);
       if (existsSync(planFile)) {
         inProgressPlans.push(planFile);
