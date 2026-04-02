@@ -32,6 +32,12 @@ import {
   handleResetPlan,
   handleRecentActivity,
 } from "./pipeline-actions.ts";
+import {
+  handleDoctor,
+  handleClean,
+  handleViewConfig,
+  handleEditConfig,
+} from "./maintenance-actions.ts";
 
 // ---------------------------------------------------------------------------
 // Menu item types
@@ -201,6 +207,32 @@ export function buildMenuItems(
 
   // --- Maintenance group ---
   items.push({
+    value: "doctor",
+    label: "Doctor",
+    hint: "run health checks",
+    group: "maintenance",
+  });
+
+  items.push({
+    value: "clean",
+    label: "Clean worktrees",
+    group: "maintenance",
+  });
+
+  items.push({
+    value: "view-config",
+    label: "View config",
+    group: "maintenance",
+  });
+
+  items.push({
+    value: "edit-config",
+    label: "Edit config",
+    hint: "re-run init wizard",
+    group: "maintenance",
+  });
+
+  items.push({
     value: "quit",
     label: "Quit",
     group: "maintenance",
@@ -255,6 +287,18 @@ async function dispatchAction(
 
     case "recent-activity":
       return handleRecentActivity(_cwd);
+
+    case "doctor":
+      return handleDoctor(_cwd);
+
+    case "clean":
+      return handleClean(_cwd);
+
+    case "view-config":
+      return handleViewConfig(_cwd);
+
+    case "edit-config":
+      return handleEditConfig();
 
     case "quit":
       return "exit";

@@ -165,6 +165,10 @@ Running bare `ralphai` in a terminal launches an interactive menu with a pipelin
 - **Run next plan** — auto-detects the next ready plan (respecting dependency ordering) and hands off to the runner. When the backlog is empty but GitHub issues are configured, it will pull from GitHub.
 - **Pick from backlog** — browse all backlog plans with scope and dependency info, then select one to run.
 - **View pipeline status** — display detailed pipeline status.
+- **Doctor** — run health checks (agent, feedback commands, config, git).
+- **Clean worktrees** — remove archived plans and orphaned worktrees.
+- **View config** — display the fully resolved configuration with source tracking.
+- **Edit config** — re-run the init wizard to update settings.
 
 ```bash
 ralphai                  # launches the interactive menu (TTY only)

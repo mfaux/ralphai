@@ -137,6 +137,10 @@ describe("buildMenuItems", () => {
     expect(values).toContain("reset-plan");
     expect(values).toContain("view-status");
     expect(values).toContain("recent-activity");
+    expect(values).toContain("doctor");
+    expect(values).toContain("clean");
+    expect(values).toContain("view-config");
+    expect(values).toContain("edit-config");
     expect(values).toContain("quit");
   });
 
@@ -550,5 +554,32 @@ describe("buildMenuItems — pipeline management items", () => {
 
     expect(reset.hint).toBe("(none)");
     expect(reset.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — maintenance items
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — maintenance items", () => {
+  it("all four maintenance items are in the maintenance group and never disabled", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+
+    for (const value of ["doctor", "clean", "view-config", "edit-config"]) {
+      const item = items.find((i) => i.value === value)!;
+      expect(item.group).toBe("maintenance");
+      expect(item.disabled).toBeFalsy();
+    }
+  });
+
+  it("maintenance items appear after pipeline items, quit is last", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const statusIdx = items.findIndex((i) => i.value === "view-status");
+    const doctorIdx = items.findIndex((i) => i.value === "doctor");
+
+    expect(doctorIdx).toBeGreaterThan(statusIdx);
+    expect(items[items.length - 1]!.value).toBe("quit");
   });
 });
