@@ -64,9 +64,11 @@ import {
   fetchIssueTitleByNumber,
   prdBranchName,
   pullGithubIssueByNumber,
+  pullGithubIssues,
+  pullPrdSubIssue,
   slugify,
 } from "./issues.ts";
-import type { PrdIssue, PullIssueOptions } from "./issues.ts";
+import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
@@ -1744,10 +1746,18 @@ export interface WorktreeEntry {
   bare: boolean;
 }
 
-interface SelectedWorktreePlan {
+export interface SelectedWorktreePlan {
   planFile: string;
   slug: string;
   source: "backlog" | "in-progress";
+}
+
+/** Options for attempting a GitHub issue pull when the local backlog is empty. */
+export interface GitHubFallbackOptions {
+  /** Configured issue source — pull is only attempted when this is "github". */
+  issueSource: string;
+  /** Function that attempts to pull a GitHub issue into the backlog. */
+  pullFn: () => import("./issues.ts").PullIssueResult;
 }
 
 // Receipt interface and functions (parseReceipt, checkReceiptSource) are
@@ -1793,10 +1803,11 @@ export function parseWorktreeList(output: string): WorktreeEntry[] {
   return entries;
 }
 
-function selectPlanForWorktree(
+export function selectPlanForWorktree(
   cwd: string,
   specificPlan?: string,
   activeWorktrees: WorktreeEntry[] = [],
+  githubOptions?: GitHubFallbackOptions,
 ): SelectedWorktreePlan | null {
   const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
 
@@ -1890,6 +1901,22 @@ function selectPlanForWorktree(
     for (const planFile of attendedPlans) {
       console.error(`  ${planFile}`);
     }
+    return null;
+  }
+
+  // --- GitHub issue fallback: pull an issue if configured ---
+  if (githubOptions?.issueSource === "github") {
+    const result = githubOptions.pullFn();
+    if (result.pulled) {
+      // Re-check backlog after pulling
+      const newBacklogPlans = listPlanFiles(backlogDir, true);
+      if (newBacklogPlans.length > 0) {
+        const firstPlan = newBacklogPlans[0]!;
+        const slug = firstPlan.replace(/\.md$/, "");
+        return { planFile: firstPlan, slug, source: "backlog" };
+      }
+    }
+    console.error(`No plans in backlog and no GitHub issues available.`);
     return null;
   }
 
@@ -3477,8 +3504,14 @@ async function runRalphaiInManagedWorktree(
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
 
-  // Resolve setupCommand from config/env/CLI (read-only, safe for dry-run)
+  // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
+  let resolvedIssueSource = "none";
+  let resolvedIssueLabel = "ralphai";
+  let resolvedIssueInProgressLabel = "ralphai:in-progress";
+  let resolvedIssueDoneLabel = "ralphai:done";
+  let resolvedIssueRepo = "";
+  let resolvedIssueCommentProgress = false;
   try {
     const cfgResult = resolveConfig({
       cwd,
@@ -3486,6 +3519,13 @@ async function runRalphaiInManagedWorktree(
       cliArgs: runArgs,
     });
     setupCommand = cfgResult.config.setupCommand.value;
+    resolvedIssueSource = cfgResult.config.issueSource.value;
+    resolvedIssueLabel = cfgResult.config.issueLabel.value;
+    resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+    resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
+    resolvedIssueRepo = cfgResult.config.issueRepo.value;
+    resolvedIssueCommentProgress =
+      cfgResult.config.issueCommentProgress.value === "true";
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
@@ -3728,7 +3768,39 @@ async function runRalphaiInManagedWorktree(
   }
 
   const activeWorktrees = listRalphaiWorktrees(cwd);
-  const plan = selectPlanForWorktree(cwd, targetPlan, activeWorktrees);
+
+  // Build GitHub fallback options so selectPlanForWorktree can pull an issue
+  // when the local backlog is empty and issueSource is "github".
+  const githubFallback: GitHubFallbackOptions | undefined =
+    resolvedIssueSource === "github"
+      ? {
+          issueSource: resolvedIssueSource,
+          pullFn: () => {
+            const { backlogDir } = getRepoPipelineDirs(cwd);
+            const pullOpts: PullIssueOptions = {
+              backlogDir,
+              cwd,
+              issueSource: resolvedIssueSource,
+              issueLabel: resolvedIssueLabel,
+              issueInProgressLabel: resolvedIssueInProgressLabel,
+              issueDoneLabel: resolvedIssueDoneLabel,
+              issueRepo: resolvedIssueRepo,
+              issueCommentProgress: resolvedIssueCommentProgress,
+            };
+            // Priority chain: try PRD sub-issues first, then regular issues
+            const prdResult = pullPrdSubIssue(pullOpts);
+            if (prdResult.pulled) return prdResult;
+            return pullGithubIssues(pullOpts);
+          },
+        }
+      : undefined;
+
+  const plan = selectPlanForWorktree(
+    cwd,
+    targetPlan,
+    activeWorktrees,
+    githubFallback,
+  );
   if (!plan) process.exit(1);
 
   const baseBranch = detectBaseBranch(cwd);
