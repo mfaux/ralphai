@@ -18,9 +18,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/prompt.ts`         | Builds the prompt passed to the agent each iteration.                                                                                       |
 | `src/progress.ts`       | Tracks iteration progress and task completion.                                                                                              |
 
-## Extracted feature modules
-
-These were extracted from `ralphai.ts` to give each file a single responsibility.
+## Feature modules
 
 | File                   | Role                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------ |
