@@ -5,6 +5,9 @@
  * classifies them as regular issues vs PRDs, and builds a combined display
  * list for the `clack.select` picker.
  *
+ * Sub-issues for PRDs are fetched via the REST API
+ * (`repos/{owner}/{repo}/issues/{N}/sub_issues`) rather than body parsing.
+ *
  * This module is intentionally separate from `src/issues.ts` (which handles
  * pull/peek operations for the runner) to keep both files under the 300-line
  * size limit.
@@ -12,27 +15,7 @@
 
 import { execSync } from "child_process";
 import { checkGhAvailable, detectIssueRepo, PRD_LABEL } from "../issues.ts";
-
-// ---------------------------------------------------------------------------
-// Inline sub-issue body parser (temporary — will be replaced by REST API in
-// a later slice). Only used by listGithubIssues for the interactive picker.
-// ---------------------------------------------------------------------------
-
-const UNCHECKED_ISSUE_RE =
-  /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))(?:\s.*)?$/;
-
-function parseSubIssues(body: string | undefined | null): number[] {
-  if (!body) return [];
-  const issues: number[] = [];
-  for (const line of body.split("\n")) {
-    const match = UNCHECKED_ISSUE_RE.exec(line.trimEnd());
-    if (!match) continue;
-    const raw = match[1] ?? match[2];
-    if (!raw) continue;
-    issues.push(Number(raw));
-  }
-  return issues;
-}
+import type { PrdSubIssue } from "../prd-discovery.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,8 +28,10 @@ export interface GithubIssueListItem {
   labels: string[];
   /** True when the issue has the `ralphai-prd` label. */
   isPrd: boolean;
-  /** Unchecked sub-issue numbers (only populated for PRDs). */
+  /** Open sub-issue numbers (only populated for PRDs). */
   subIssues: number[];
+  /** Full sub-issue objects from the REST API (only populated for PRDs). */
+  subIssueDetails: PrdSubIssue[];
 }
 
 /** Options for fetching the issue list. */
@@ -88,6 +73,49 @@ function execQuiet(cmd: string, cwd: string): string | null {
   }
 }
 
+/**
+ * Fetch open sub-issues for a PRD via the REST API.
+ *
+ * Fail-open: returns an empty array if the API call fails, the response
+ * is not valid JSON, or the response is not an array. This keeps the
+ * picker functional even when the sub-issues endpoint is unavailable.
+ */
+function fetchSubIssuesForPrd(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): PrdSubIssue[] {
+  const raw = execQuiet(
+    `gh api repos/${repo}/issues/${issueNumber}/sub_issues`,
+    cwd,
+  );
+
+  if (raw === null) return [];
+
+  let allSubIssues: Array<{
+    number: number;
+    title: string;
+    state: string;
+    node_id: string;
+  }>;
+  try {
+    allSubIssues = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(allSubIssues)) return [];
+
+  return allSubIssues
+    .filter((si) => si.state === "open")
+    .map((si) => ({
+      number: si.number,
+      title: si.title,
+      state: si.state,
+      node_id: si.node_id,
+    }));
+}
+
 // ---------------------------------------------------------------------------
 // Core function
 // ---------------------------------------------------------------------------
@@ -99,7 +127,8 @@ function execQuiet(cmd: string, cwd: string): string | null {
  * label in a single `gh` call (using comma-separated labels would AND them,
  * so we make two calls and deduplicate by issue number).
  *
- * For PRD issues, parses sub-issues from the body using `parseSubIssues`.
+ * For PRD issues, fetches sub-issues via the REST API
+ * (`repos/{owner}/{repo}/issues/{N}/sub_issues`).
  */
 export function listGithubIssues(
   options: ListGithubIssuesOptions,
@@ -128,14 +157,14 @@ export function listGithubIssues(
   // Fetch regular issues (with the configured label)
   const regularRaw = execQuiet(
     `gh issue list --repo "${repo}" --label "${issueLabel}" --state open ` +
-      `--limit 100 --json number,title,labels,body`,
+      `--limit 100 --json number,title,labels`,
     cwd,
   );
 
   // Fetch PRD issues (with the ralphai-prd label)
   const prdRaw = execQuiet(
     `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
-      `--limit 100 --json number,title,labels,body`,
+      `--limit 100 --json number,title,labels`,
     cwd,
   );
 
@@ -158,7 +187,6 @@ export function listGithubIssues(
       number: number;
       title: string;
       labels: Array<{ name: string }>;
-      body: string;
     }>;
     try {
       parsed = JSON.parse(raw);
@@ -171,14 +199,20 @@ export function listGithubIssues(
 
       const labelNames = issue.labels.map((l) => l.name);
       const isPrd = labelNames.includes(PRD_LABEL);
-      const subIssues = isPrd ? parseSubIssues(issue.body) : [];
+
+      // For PRDs, fetch sub-issues via the REST API (fail-open: empty on error)
+      let subIssueDetails: PrdSubIssue[] = [];
+      if (isPrd) {
+        subIssueDetails = fetchSubIssuesForPrd(repo, issue.number, cwd);
+      }
 
       seen.set(issue.number, {
         number: issue.number,
         title: issue.title,
         labels: labelNames,
         isPrd,
-        subIssues,
+        subIssues: subIssueDetails.map((si) => si.number),
+        subIssueDetails,
       });
     }
   }
@@ -229,12 +263,11 @@ export interface PickListItem {
  * doesn't support non-selectable items natively, so we include sub-issues
  * as separate items with a distinct value prefix.
  *
- * @param subIssueTitles - Map from issue number to title, for resolving
- *   sub-issue display. When a title is not available, falls back to `#N`.
+ * Sub-issue titles are derived from `subIssueDetails` on each issue — no
+ * separate title-resolution step is needed.
  */
 export function buildGithubPickList(
   issues: GithubIssueListItem[],
-  subIssueTitles: Map<number, string> = new Map(),
 ): PickListItem[] {
   const items: PickListItem[] = [];
 
@@ -249,10 +282,15 @@ export function buildGithubPickList(
         hint,
       });
 
+      // Build a title lookup from subIssueDetails
+      const titleByNumber = new Map(
+        issue.subIssueDetails.map((si) => [si.number, si.title]),
+      );
+
       // Sub-issue context lines — non-selectable (separator prefix)
       for (let i = 0; i < issue.subIssues.length; i++) {
         const subNum = issue.subIssues[i]!;
-        const subTitle = subIssueTitles.get(subNum) ?? "";
+        const subTitle = titleByNumber.get(subNum) ?? "";
         const isLast = i === issue.subIssues.length - 1;
         const connector = isLast ? "\u2514" : "\u251C";
         const titleSuffix = subTitle ? ` ${subTitle}` : "";
