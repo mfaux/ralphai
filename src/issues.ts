@@ -8,7 +8,26 @@
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { parseSubIssues } from "./prd-sub-issue-parser.ts";
+// ---------------------------------------------------------------------------
+// Inline sub-issue body parser (temporary — will be replaced by REST API in
+// a later slice). Only used by pullPrdSubIssue.
+// ---------------------------------------------------------------------------
+
+const UNCHECKED_ISSUE_RE =
+  /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))(?:\s.*)?$/;
+
+function parseSubIssues(body: string | undefined | null): number[] {
+  if (!body) return [];
+  const issues: number[] = [];
+  for (const line of body.split("\n")) {
+    const match = UNCHECKED_ISSUE_RE.exec(line.trimEnd());
+    if (!match) continue;
+    const raw = match[1] ?? match[2];
+    if (!raw) continue;
+    issues.push(Number(raw));
+  }
+  return issues;
+}
 
 // ---------------------------------------------------------------------------
 // Types

@@ -2,7 +2,7 @@
  * Unit tests for discoverPrdTarget() — PRD discovery I/O module.
  *
  * Uses mock.module to control `child_process.execSync` so we can test
- * PRD detection, sub-issue parsing, empty task list, and non-PRD passthrough
+ * PRD detection, sub-issue API discovery, and non-PRD passthrough
  * without requiring a real GitHub repo.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
@@ -36,7 +36,41 @@ const { discoverPrdTarget } = await import("./prd-discovery.ts");
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Make gh available and return specific JSON for `gh issue view`. */
+/** Standard sub-issue object as returned by the REST API. */
+function subIssue(
+  number: number,
+  title: string,
+  state: "open" | "closed" = "open",
+  node_id?: string,
+) {
+  return {
+    number,
+    title,
+    state,
+    node_id: node_id ?? `MDExOklzc3VlMTIz${number}`,
+  };
+}
+
+/** Make gh available and return specific JSON for issue view + sub-issues. */
+function mockGhWithIssueAndSubIssues(
+  issueJson: string,
+  subIssuesJson: string,
+): void {
+  mockExecSync.mockImplementation((cmd: string) => {
+    if (cmd === "gh --version" || cmd === "gh auth status") {
+      return Buffer.from("ok");
+    }
+    if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+      return issueJson;
+    }
+    if (typeof cmd === "string" && cmd.includes("gh api")) {
+      return subIssuesJson;
+    }
+    throw new Error(`Unexpected command: ${cmd}`);
+  });
+}
+
+/** Make gh available but only for issue view (no sub-issues). */
 function mockGhWithIssue(json: string): void {
   mockExecSync.mockImplementation((cmd: string) => {
     if (cmd === "gh --version" || cmd === "gh auth status") {
@@ -44,6 +78,9 @@ function mockGhWithIssue(json: string): void {
     }
     if (typeof cmd === "string" && cmd.includes("gh issue view")) {
       return json;
+    }
+    if (typeof cmd === "string" && cmd.includes("gh api")) {
+      return "[]";
     }
     throw new Error(`Unexpected command: ${cmd}`);
   });
@@ -110,113 +147,143 @@ describe("discoverPrdTarget — non-PRD passthrough", () => {
   });
 });
 
-describe("discoverPrdTarget — PRD with sub-issues", () => {
-  it("detects PRD and extracts unchecked sub-issues", () => {
-    const body = [
-      "# Feature: Dark Mode",
-      "",
-      "## Sub-issues",
-      "",
-      "- [ ] #11",
-      "- [ ] #12",
-      "- [ ] #13",
-    ].join("\n");
+describe("discoverPrdTarget — PRD with open sub-issues via REST API", () => {
+  it("detects PRD and returns open sub-issues from the API", () => {
     const issueData = {
       title: "Add dark mode",
-      body,
+      body: "PRD body text",
       labels: [{ name: "ralphai-prd" }],
     };
-    mockGhWithIssue(JSON.stringify(issueData));
+    const apiSubIssues = [
+      subIssue(11, "Dark mode toggle"),
+      subIssue(12, "Theme persistence"),
+      subIssue(13, "Color palette"),
+    ];
+    mockGhWithIssueAndSubIssues(
+      JSON.stringify(issueData),
+      JSON.stringify(apiSubIssues),
+    );
 
     const result = discoverPrdTarget("owner/repo", 42, "/tmp");
     expect(result.isPrd).toBe(true);
     if (result.isPrd) {
       expect(result.prd).toEqual({ number: 42, title: "Add dark mode" });
       expect(result.subIssues).toEqual([11, 12, 13]);
+      expect(result.subIssueDetails).toEqual(apiSubIssues);
       expect(result.allCompleted).toBe(false);
-      expect(result.body).toBe(body);
+      expect(result.body).toBe("PRD body text");
     }
   });
 
-  it("excludes checked sub-issues from the list", () => {
-    const body = ["- [x] #10", "- [ ] #11", "- [x] #12", "- [ ] #13"].join(
-      "\n",
-    );
+  it("filters out closed sub-issues, returning only open ones", () => {
     const issueData = {
       title: "Feature A",
-      body,
+      body: "Feature body",
       labels: [{ name: "ralphai-prd" }],
     };
-    mockGhWithIssue(JSON.stringify(issueData));
+    const apiSubIssues = [
+      subIssue(10, "Done task", "closed"),
+      subIssue(11, "Open task A"),
+      subIssue(12, "Another done task", "closed"),
+      subIssue(13, "Open task B"),
+    ];
+    mockGhWithIssueAndSubIssues(
+      JSON.stringify(issueData),
+      JSON.stringify(apiSubIssues),
+    );
 
     const result = discoverPrdTarget("owner/repo", 1, "/tmp");
     expect(result.isPrd).toBe(true);
     if (result.isPrd) {
       expect(result.subIssues).toEqual([11, 13]);
+      expect(result.subIssueDetails).toHaveLength(2);
+      expect(result.subIssueDetails[0]!.title).toBe("Open task A");
+      expect(result.subIssueDetails[1]!.title).toBe("Open task B");
       expect(result.allCompleted).toBe(false);
+    }
+  });
+
+  it("carries node_id for each sub-issue", () => {
+    const issueData = {
+      title: "PRD with node IDs",
+      body: "",
+      labels: [{ name: "ralphai-prd" }],
+    };
+    const apiSubIssues = [subIssue(11, "Task", "open", "I_kwDOABC123")];
+    mockGhWithIssueAndSubIssues(
+      JSON.stringify(issueData),
+      JSON.stringify(apiSubIssues),
+    );
+
+    const result = discoverPrdTarget("owner/repo", 42, "/tmp");
+    expect(result.isPrd).toBe(true);
+    if (result.isPrd) {
+      expect(result.subIssueDetails[0]!.node_id).toBe("I_kwDOABC123");
     }
   });
 });
 
 describe("discoverPrdTarget — all sub-issues completed", () => {
-  it("sets allCompleted when all items are checked", () => {
-    const body = ["- [x] #10", "- [x] #11", "- [x] #12"].join("\n");
+  it("sets allCompleted when all sub-issues are closed", () => {
     const issueData = {
       title: "Done PRD",
-      body,
+      body: "All done",
       labels: [{ name: "ralphai-prd" }],
     };
-    mockGhWithIssue(JSON.stringify(issueData));
+    const apiSubIssues = [
+      subIssue(10, "Done A", "closed"),
+      subIssue(11, "Done B", "closed"),
+      subIssue(12, "Done C", "closed"),
+    ];
+    mockGhWithIssueAndSubIssues(
+      JSON.stringify(issueData),
+      JSON.stringify(apiSubIssues),
+    );
 
     const result = discoverPrdTarget("owner/repo", 99, "/tmp");
     expect(result.isPrd).toBe(true);
     if (result.isPrd) {
       expect(result.subIssues).toEqual([]);
+      expect(result.subIssueDetails).toEqual([]);
       expect(result.allCompleted).toBe(true);
     }
   });
 });
 
-describe("discoverPrdTarget — PRD with no task list", () => {
-  it("returns empty subIssues and allCompleted=false when body has no task list", () => {
-    const body = [
-      "# Feature: Auth",
-      "",
-      "Implement authentication with JWT tokens.",
-      "",
-      "## Requirements",
-      "",
-      "- Support login/logout",
-      "- Token refresh",
-    ].join("\n");
+describe("discoverPrdTarget — PRD with no sub-issues", () => {
+  it("returns empty lists and allCompleted=false when API returns no sub-issues", () => {
     const issueData = {
       title: "Auth feature",
-      body,
+      body: "Implement authentication",
       labels: [{ name: "ralphai-prd" }],
     };
-    mockGhWithIssue(JSON.stringify(issueData));
+    mockGhWithIssueAndSubIssues(JSON.stringify(issueData), JSON.stringify([]));
 
     const result = discoverPrdTarget("owner/repo", 50, "/tmp");
     expect(result.isPrd).toBe(true);
     if (result.isPrd) {
       expect(result.subIssues).toEqual([]);
+      expect(result.subIssueDetails).toEqual([]);
       expect(result.allCompleted).toBe(false);
-      expect(result.body).toBe(body);
+      expect(result.body).toBe("Implement authentication");
     }
   });
 
-  it("returns empty subIssues when body is empty", () => {
+  it("ignores body task lists — only uses API sub-issues", () => {
+    const bodyWithTaskList = ["# Feature", "- [ ] #11", "- [ ] #12"].join("\n");
     const issueData = {
-      title: "Empty PRD",
-      body: "",
+      title: "PRD with body tasks but no native sub-issues",
+      body: bodyWithTaskList,
       labels: [{ name: "ralphai-prd" }],
     };
-    mockGhWithIssue(JSON.stringify(issueData));
+    // API returns empty — body task lists are ignored
+    mockGhWithIssueAndSubIssues(JSON.stringify(issueData), JSON.stringify([]));
 
     const result = discoverPrdTarget("owner/repo", 60, "/tmp");
     expect(result.isPrd).toBe(true);
     if (result.isPrd) {
       expect(result.subIssues).toEqual([]);
+      expect(result.subIssueDetails).toEqual([]);
       expect(result.allCompleted).toBe(false);
     }
   });
@@ -246,7 +313,7 @@ describe("discoverPrdTarget — error handling", () => {
     );
   });
 
-  it("throws when response is not valid JSON", () => {
+  it("throws when issue response is not valid JSON", () => {
     mockExecSync.mockImplementation((cmd: string) => {
       if (cmd === "gh --version" || cmd === "gh auth status") {
         return Buffer.from("ok");
@@ -259,6 +326,75 @@ describe("discoverPrdTarget — error handling", () => {
 
     expect(() => discoverPrdTarget("owner/repo", 42, "/tmp")).toThrow(
       /Failed to parse response/,
+    );
+  });
+
+  it("throws when sub-issues API call fails", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "PRD",
+          body: "",
+          labels: [{ name: "ralphai-prd" }],
+        });
+      }
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        throw new Error("rate limited");
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    expect(() => discoverPrdTarget("owner/repo", 42, "/tmp")).toThrow(
+      /Failed to fetch sub-issues.*rate limit.*auth failure/,
+    );
+  });
+
+  it("throws when sub-issues response is not valid JSON", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "PRD",
+          body: "",
+          labels: [{ name: "ralphai-prd" }],
+        });
+      }
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        return "not json";
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    expect(() => discoverPrdTarget("owner/repo", 42, "/tmp")).toThrow(
+      /Failed to parse sub-issues response/,
+    );
+  });
+
+  it("throws when sub-issues response is not an array", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "PRD",
+          body: "",
+          labels: [{ name: "ralphai-prd" }],
+        });
+      }
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        return JSON.stringify({ message: "Not Found" });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    expect(() => discoverPrdTarget("owner/repo", 42, "/tmp")).toThrow(
+      /Unexpected sub-issues response.*expected an array/,
     );
   });
 });
@@ -282,5 +418,23 @@ describe("discoverPrdTarget — passes correct arguments to gh", () => {
     expect(ghViewCall![0]).toContain('--repo "myorg/myrepo"');
     expect(ghViewCall![0]).toContain("42");
     expect(ghViewCall![0]).toContain("--json title,body,labels");
+  });
+
+  it("calls the sub-issues REST API with correct repo and issue number", () => {
+    const issueData = {
+      title: "PRD",
+      body: "",
+      labels: [{ name: "ralphai-prd" }],
+    };
+    mockGhWithIssueAndSubIssues(JSON.stringify(issueData), JSON.stringify([]));
+
+    discoverPrdTarget("myorg/myrepo", 42, "/some/dir");
+
+    const ghApiCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh api"),
+    );
+    expect(ghApiCall).toBeDefined();
+    expect(ghApiCall![0]).toContain("repos/myorg/myrepo/issues/42/sub_issues");
   });
 });

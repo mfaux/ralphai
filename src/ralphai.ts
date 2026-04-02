@@ -1667,12 +1667,10 @@ async function runPrdIssueTarget(
     return;
   }
 
-  // --- PRD with no task list: error out ---
+  // --- PRD with no sub-issues: error out ---
   if (subIssues.length === 0) {
-    console.error(`PRD #${prd.number} has no sub-issue task list.`);
-    console.error(
-      `Add ${BOLD}- [ ] #<issue>${RESET} items to the PRD body, then retry.`,
-    );
+    console.error(`PRD #${prd.number} has no sub-issues.`);
+    console.error(`Add sub-issues to the PRD on GitHub, then retry.`);
     process.exit(1);
   }
 
