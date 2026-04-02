@@ -14,6 +14,10 @@ import { collectBacklogPlans } from "./plan-detection.ts";
 import {
   buildPrBody,
   buildContinuousPrBodyStructured,
+  buildClosesBlock,
+  buildCommitLog,
+  categorizeCommits,
+  formatCommitsByCategory,
 } from "./pr-description.ts";
 
 // ---------------------------------------------------------------------------
@@ -376,4 +380,154 @@ export function finalizeContinuousPr(
     return { ok: false, message: "Failed to refresh final draft PR body" };
   }
   return { ok: true, message: `Draft PR updated: ${prUrl}` };
+}
+
+// ---------------------------------------------------------------------------
+// PRD aggregate PR
+// ---------------------------------------------------------------------------
+
+export interface PrdPrBodyOptions {
+  prd: { number: number; title: string };
+  completedSubIssues: number[];
+  stuckSubIssues: number[];
+  baseBranch: string;
+  headBranch: string;
+  cwd: string;
+  issueRepo?: string;
+  prRepo?: string;
+}
+
+/** Build a PR body for an aggregate PRD pull request. */
+export function buildPrdPrBody(options: PrdPrBodyOptions): string {
+  const {
+    prd,
+    completedSubIssues,
+    stuckSubIssues,
+    baseBranch,
+    headBranch,
+    cwd,
+    issueRepo,
+    prRepo,
+  } = options;
+
+  const parts: string[] = [];
+
+  // Title / description
+  parts.push(`PRD #${prd.number}: ${prd.title}\n`);
+
+  // Closes references — PRD + completed sub-issues only (not stuck ones)
+  const closesBlock = buildClosesBlock({
+    prdNumber: prd.number,
+    issueNumbers: completedSubIssues,
+    issueRepo,
+    prRepo,
+  });
+  if (closesBlock) {
+    parts.push(closesBlock + "\n");
+  }
+
+  // Completed sub-issues
+  parts.push("## Completed Sub-Issues\n");
+  if (completedSubIssues.length > 0) {
+    parts.push(...completedSubIssues.map((n) => `- [x] #${n}`));
+  } else {
+    parts.push("_None._");
+  }
+
+  // Stuck sub-issues
+  if (stuckSubIssues.length > 0) {
+    parts.push("\n## Stuck Sub-Issues\n");
+    parts.push(...stuckSubIssues.map((n) => `- [ ] #${n}`));
+  }
+
+  // Changes
+  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
+  const categorized = categorizeCommits(commitLog);
+  const formattedCommits = formatCommitsByCategory(categorized);
+  parts.push("\n## Changes\n", formattedCommits);
+
+  return parts.join("\n");
+}
+
+export interface CreatePrdPrOptions {
+  branch: string;
+  baseBranch: string;
+  prd: { number: number; title: string };
+  completedSubIssues: number[];
+  stuckSubIssues: number[];
+  cwd: string;
+  issueRepo?: string;
+}
+
+/** Push branch and create (or update) a draft PR for a PRD aggregate run. */
+export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
+  const {
+    branch,
+    baseBranch,
+    prd,
+    completedSubIssues,
+    stuckSubIssues,
+    cwd,
+    issueRepo,
+  } = options;
+
+  const push = pushBranch(branch, cwd, true);
+  if (!push.ok) return { ok: false, prUrl: "", message: push.message };
+
+  const prRepo = detectIssueRepo(cwd) ?? undefined;
+
+  // Check if a PR already exists for this branch
+  const existingPrUrl = execQuiet(
+    `gh pr view "${branch}" --json url --jq .url`,
+    cwd,
+  );
+
+  const prBody = buildPrdPrBody({
+    prd,
+    completedSubIssues,
+    stuckSubIssues,
+    baseBranch,
+    headBranch: branch,
+    cwd,
+    issueRepo,
+    prRepo,
+  });
+  const esc = (s: string) => s.replace(/"/g, '\\"');
+  const prTitle = `feat: ${prd.title}`;
+
+  if (existingPrUrl) {
+    // Update existing PR body
+    if (
+      execQuiet(
+        `gh pr edit "${existingPrUrl}" --body "${esc(prBody)}"`,
+        cwd,
+      ) === null
+    ) {
+      return {
+        ok: false,
+        prUrl: existingPrUrl,
+        message: `Failed to update PRD PR body. PR exists at: ${existingPrUrl}`,
+      };
+    }
+    return {
+      ok: true,
+      prUrl: existingPrUrl,
+      message: `PRD PR updated: ${existingPrUrl}`,
+    };
+  }
+
+  // Create new draft PR
+  const prUrl = execQuiet(
+    `gh pr create --base "${baseBranch}" --head "${branch}" ` +
+      `--title "${esc(prTitle)}" --body "${esc(prBody)}" --draft`,
+    cwd,
+  );
+  if (!prUrl) {
+    return {
+      ok: false,
+      prUrl: "",
+      message: `Failed to create PRD draft PR. Branch '${branch}' pushed. Create PR manually.`,
+    };
+  }
+  return { ok: true, prUrl, message: `PRD draft PR created: ${prUrl}` };
 }

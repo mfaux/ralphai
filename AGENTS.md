@@ -33,6 +33,10 @@ The `--dry-run` / `-n` flag must never cause side effects. When adding code that
 
 CI runs on both Ubuntu and Windows. Don't hardcode Unix paths or assume Linux-specific behavior in tests. Use `path.join()` for path assertions and `describe.skipIf(process.platform === "win32")` for inherently platform-specific tests.
 
+## GitHub Issue Dependencies
+
+When pulling GitHub issues into plan files, blocking references in the issue body (e.g. "Blocked by #42", "Depends on #15") are translated to `depends-on` frontmatter using issue-based slugs like `gh-42`. The dependency checker in `plan-detection.ts` supports these slugs via prefix matching: `gh-42` matches any file/directory starting with `gh-42-` in the pipeline directories.
+
 ## Package Manager
 
 This project uses **bun**.

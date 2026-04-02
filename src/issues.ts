@@ -154,6 +154,80 @@ export function slugify(text: string): string {
     .slice(0, 60);
 }
 
+// ---------------------------------------------------------------------------
+// Blocker extraction from GitHub issue bodies
+// ---------------------------------------------------------------------------
+
+/**
+ * Pattern that matches "Blocked by" or "Depends on" followed by issue
+ * references like "#42", "#10, #20", or "#10 and #20".
+ * Case-insensitive. Captures the issue-number portion after the keyword.
+ */
+const BLOCKER_LINE_RE =
+  /(?:blocked\s+by|depends\s+on)\s+(#\d+(?:\s*(?:,|and)\s*#\d+)*)/gi;
+
+/** Extracts individual issue numbers from a matched reference group. */
+const ISSUE_NUM_RE = /#(\d+)/g;
+
+/**
+ * Parse blocker issue numbers from a GitHub issue body.
+ * Recognises patterns like "Blocked by #42", "Depends on #15",
+ * "Blocked by #10, #20", and "Blocked by #10 and #20".
+ *
+ * Returns a deduplicated, sorted array of issue numbers.
+ */
+export function extractBlockersFromBody(body: string): number[] {
+  if (!body) return [];
+
+  const numbers = new Set<number>();
+
+  for (const lineMatch of body.matchAll(BLOCKER_LINE_RE)) {
+    const refs = lineMatch[1]!;
+    for (const numMatch of refs.matchAll(ISSUE_NUM_RE)) {
+      numbers.add(parseInt(numMatch[1]!, 10));
+    }
+  }
+
+  return [...numbers].sort((a, b) => a - b);
+}
+
+/**
+ * Generate a dependency slug for a GitHub issue number.
+ * The slug follows the pattern `gh-{N}` and is used in `depends-on`
+ * frontmatter to reference the plan file for that issue.
+ */
+export function issueDepSlug(issueNumber: number): string {
+  return `gh-${issueNumber}`;
+}
+
+/** Input for building plan file content from a GitHub issue. */
+export interface BuildIssuePlanContentOptions {
+  issueNumber: string;
+  title: string;
+  body: string;
+  url: string;
+}
+
+/**
+ * Build the markdown content for a plan file from a GitHub issue.
+ * If the issue body contains blocker references (e.g. "Blocked by #42"),
+ * a `depends-on` field is included in the frontmatter.
+ */
+export function buildIssuePlanContent(
+  opts: BuildIssuePlanContentOptions,
+): string {
+  const { issueNumber, title, body, url } = opts;
+  const blockers = extractBlockersFromBody(body);
+
+  let frontmatter = `source: github\nissue: ${issueNumber}\nissue-url: ${url}`;
+  if (blockers.length > 0) {
+    const depSlugs = blockers.map(issueDepSlug).join(", ");
+    frontmatter += `\ndepends-on: [${depSlugs}]`;
+  }
+
+  return `---\n${frontmatter}\n---\n\n# ${title}\n\n${body}\n`;
+}
+
 /**
  * Read-only check for open GitHub issues matching the configured label.
  *
@@ -371,7 +445,12 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     mkdirSync(backlogDir, { recursive: true });
   }
 
-  const planContent = `---\nsource: github\nissue: ${issueNumber}\nissue-url: ${url ?? ""}\n---\n\n# ${title}\n\n${body ?? ""}\n`;
+  const planContent = buildIssuePlanContent({
+    issueNumber: String(issueNumber),
+    title,
+    body: body ?? "",
+    url: url ?? "",
+  });
   writeFileSync(planPath, planContent, "utf-8");
 
   // Update issue labels: add in-progress, remove intake label

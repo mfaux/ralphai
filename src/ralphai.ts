@@ -72,6 +72,8 @@ import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
+import { restoreIssueLabels } from "./reset-labels.ts";
+import { createPrdPr } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -992,12 +994,45 @@ async function runRalphaiReset(
 
   let actions = 0;
 
+  // Load config to get label names for GitHub issue restoration.
+  // Best-effort: if config resolution fails we skip label restoration.
+  let issueLabel = "";
+  let issueInProgressLabel = "";
+  let issueRepo = "";
+  try {
+    const cfgResult = resolveConfig({
+      cwd,
+      envVars: process.env,
+      cliArgs: [],
+    });
+    issueLabel = cfgResult.config.issueLabel.value;
+    issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+    issueRepo = cfgResult.config.issueRepo.value;
+  } catch {
+    // Config resolution failure is not critical — skip label restoration.
+  }
+
   // 1. Extract plan files from in-progress slug-folders back to backlog as flat files
   for (const slug of planSlugs) {
     const src = join(inProgressDir, slug);
     const planFile = join(src, `${slug}.md`);
     const dest = join(backlogDir, `${slug}.md`);
     mkdirSync(backlogDir, { recursive: true });
+
+    // Restore GitHub issue labels before moving the file (needs frontmatter).
+    if (issueLabel && issueInProgressLabel && existsSync(planFile)) {
+      const labelResult = restoreIssueLabels({
+        planPath: planFile,
+        issueLabel,
+        issueInProgressLabel,
+        issueRepo,
+        cwd,
+      });
+      if (labelResult.restored) {
+        console.log(`  ${DIM}${labelResult.message}${RESET}`);
+      }
+    }
+
     rmSync(join(src, "progress.md"), { force: true });
     rmSync(join(src, "receipt.txt"), { force: true });
     if (existsSync(planFile)) {
@@ -1092,6 +1127,35 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
   const planFile = join(slugDir, `${slug}.md`);
   const dest = join(backlogDir, `${slug}.md`);
   mkdirSync(backlogDir, { recursive: true });
+
+  // Restore GitHub issue labels before moving the file (needs frontmatter).
+  if (existsSync(planFile)) {
+    try {
+      const cfgResult = resolveConfig({
+        cwd,
+        envVars: process.env,
+        cliArgs: [],
+      });
+      const issueLabel = cfgResult.config.issueLabel.value;
+      const issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+      const issueRepo = cfgResult.config.issueRepo.value;
+      if (issueLabel && issueInProgressLabel) {
+        const labelResult = restoreIssueLabels({
+          planPath: planFile,
+          issueLabel,
+          issueInProgressLabel,
+          issueRepo,
+          cwd,
+        });
+        if (labelResult.restored) {
+          console.log(`  ${DIM}${labelResult.message}${RESET}`);
+        }
+      }
+    } catch {
+      // Config resolution failure is not critical — skip label restoration.
+    }
+  }
+
   rmSync(join(slugDir, "progress.md"), { force: true });
   rmSync(join(slugDir, "receipt.txt"), { force: true });
   rmSync(join(slugDir, "runner.pid"), { force: true });
@@ -3208,6 +3272,7 @@ async function runPrdIssueTarget(
   console.log(`Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")}`);
 
   const stuckSubIssues: number[] = [];
+  const completedSubIssues: number[] = [];
   let completedCount = 0;
 
   for (const subIssueNumber of subIssues) {
@@ -3272,15 +3337,26 @@ async function runPrdIssueTarget(
     };
 
     try {
-      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir, {
-        number: prd.number,
-        title: prd.title,
-      });
+      await runRalphaiRunner(
+        worktreeRunOptions,
+        resolvedWorktreeDir,
+        {
+          number: prd.number,
+          title: prd.title,
+        },
+        { skipPrCreation: true },
+      );
       completedCount++;
-    } catch {
-      // Runner may exit on stuck detection — treat as stuck sub-issue
+      completedSubIssues.push(subIssueNumber);
+    } catch (error) {
+      // Runner may exit on stuck detection or other errors
       stuckSubIssues.push(subIssueNumber);
-      console.log(`Sub-issue #${subIssueNumber} got stuck — skipping to next.`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`Sub-issue #${subIssueNumber} failed: ${errorMessage}`);
+      console.log(
+        `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
+      );
     }
   }
 
@@ -3294,6 +3370,26 @@ async function runPrdIssueTarget(
     console.log(
       `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
     );
+  }
+
+  // --- Create aggregate PRD pull request ---
+  if (completedCount > 0) {
+    console.log();
+    console.log("Creating PRD pull request...");
+    const issueRepo = worktreeConfig.issueRepo.value || repo;
+    const prResult = createPrdPr({
+      branch,
+      baseBranch,
+      prd,
+      completedSubIssues,
+      stuckSubIssues,
+      cwd: resolvedWorktreeDir,
+      issueRepo,
+    });
+    console.log(prResult.message);
+  } else {
+    console.log();
+    console.log("No sub-issues completed — skipping PR creation.");
   }
 }
 
@@ -3888,6 +3984,7 @@ async function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
   prdIssue?: PrdIssue,
+  runnerFlags?: { skipPrCreation?: boolean },
 ): Promise<void> {
   const worktreeInfo = resolveWorktreeInfo(cwd);
   const runArgs = options.runArgs;
@@ -4037,6 +4134,7 @@ async function runRalphaiRunner(
     once: hasOnce,
     plan: targetPlan,
     prd: prdIssue,
+    skipPrCreation: runnerFlags?.skipPrCreation,
   };
 
   await runRunner(runnerOpts);

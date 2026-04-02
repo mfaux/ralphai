@@ -320,9 +320,40 @@ export function collectBacklogPlans(backlogDir: string): string[] {
 }
 
 /**
+ * Check if a directory contains any entry (file or subdirectory)
+ * whose name starts with the given prefix.
+ */
+function hasEntryWithPrefix(dir: string, prefix: string): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    return readdirSync(dir).some((name) => name.startsWith(prefix));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a directory contains any `.md` file whose name starts
+ * with the given prefix.
+ */
+function hasFileWithPrefix(dir: string, prefix: string): boolean {
+  if (!existsSync(dir)) return false;
+  try {
+    return readdirSync(dir).some(
+      (name) => name.startsWith(prefix) && name.endsWith(".md"),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check dependency status for a plan slug.
  * Returns "done" if archived, "pending" if in backlog or in-progress,
  * "missing" if not found anywhere.
+ *
+ * Supports issue-based dependency slugs like "gh-42" which match any
+ * plan file starting with "gh-42-" (the full slug includes the title).
  */
 export function checkDependencyStatus(
   depSlug: string,
@@ -332,6 +363,7 @@ export function checkDependencyStatus(
   const slug = depSlug.replace(/\.md$/, "");
   const depBase = `${slug}.md`;
 
+  // --- Exact match (standard dependency slugs) ---
   if (existsSync(join(dirs.archiveDir, slug))) {
     return "done";
   }
@@ -341,6 +373,23 @@ export function checkDependencyStatus(
     existsSync(join(dirs.backlogDir, depBase))
   ) {
     return "pending";
+  }
+
+  // --- Prefix match for issue-based slugs (gh-N) ---
+  const issueMatch = /^gh-(\d+)$/.exec(slug);
+  if (issueMatch) {
+    const prefix = `${slug}-`;
+
+    if (hasEntryWithPrefix(dirs.archiveDir, prefix)) {
+      return "done";
+    }
+
+    if (
+      hasEntryWithPrefix(dirs.wipDir, prefix) ||
+      hasFileWithPrefix(dirs.backlogDir, prefix)
+    ) {
+      return "pending";
+    }
   }
 
   return "missing";

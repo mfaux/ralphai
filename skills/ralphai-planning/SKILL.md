@@ -119,6 +119,11 @@ depends-on: [foundation.md, wiring.md]
 ---
 ```
 
+When pulling GitHub issues, blocking references in the issue body (e.g. "Blocked
+by #42", "Depends on #15") are automatically translated to `depends-on` entries
+using issue-based slugs like `gh-42`. These are matched by issue number prefix
+against plan files in the pipeline.
+
 ### `source` frontmatter (auto-generated)
 
 Ralphai adds this automatically when it pulls a GitHub issue into a plan. On
