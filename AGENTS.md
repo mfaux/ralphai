@@ -19,11 +19,11 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 - **Use the `gh` CLI** to create issues and pull requests. Link PRs to related issues when applicable.
 - **Squash-merge PRs.** The merge commit message should follow conventional commit format.
 
-## File Size Limits
+## Module Focus
 
-- **Test files: max ~500 lines.** When a test file approaches this limit, split it by feature domain before adding more tests. When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one.
-- **Source files: max ~300 lines.** Extract modules when a file grows beyond this. Note: `src/ralphai.ts` currently exceeds this limit and is a candidate for decomposition. Follow this guideline for new files and when refactoring.
-- Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
+- **Single responsibility.** Each source file should have one clear reason to change. When a file accumulates unrelated concerns — even if it's only a few hundred lines — extract the distinct responsibilities into their own modules.
+- **New test files per feature.** When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one. If an existing test file covers multiple unrelated features, split it by domain before adding more tests.
+- **Check before appending.** Before adding substantial new code to a file, review whether it still has a single focus. If your changes would introduce a second responsibility, extract first.
 
 ## Dry-Run Safety
 
