@@ -284,3 +284,71 @@ describe("buildMenuItems — Pick from backlog", () => {
     expect(pick.disabled).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — "Pick from GitHub" item
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — Pick from GitHub", () => {
+  it("includes pick-from-github in menu items", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const values = items.map((i) => i.value);
+    expect(values).toContain("pick-from-github");
+  });
+
+  it("is in the run group", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+    expect(pick.group).toBe("run");
+  });
+
+  it("is disabled with (not configured) when GitHub is not configured", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub");
+    expect(pick.hint).toBe("(not configured)");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("is enabled when GitHub is configured", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, WITH_GITHUB);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.disabled).toBeFalsy();
+  });
+
+  it("shows issue count when available", () => {
+    const state = makeState();
+    const ctx: MenuContext = { hasGitHubIssues: true, githubIssueCount: 7 };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub (7 issues)");
+    expect(pick.disabled).toBeFalsy();
+  });
+
+  it("is disabled with (no issues) when count is 0", () => {
+    const state = makeState();
+    const ctx: MenuContext = { hasGitHubIssues: true, githubIssueCount: 0 };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub");
+    expect(pick.hint).toBe("(no issues)");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("appears before view-status in the ordering", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, WITH_GITHUB);
+    const pickIdx = items.findIndex((i) => i.value === "pick-from-github");
+    const statusIdx = items.findIndex((i) => i.value === "view-status");
+
+    expect(pickIdx).toBeLessThan(statusIdx);
+  });
+});

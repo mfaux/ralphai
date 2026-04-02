@@ -1,14 +1,19 @@
 /**
  * Run action handlers for the interactive menu.
  *
- * Provides "Run next plan" and "Pick from backlog" actions. Both
- * delegate to `runRalphai(["run", ...])` and signal the menu loop
- * to exit so the runner owns the terminal.
+ * Provides "Run next plan", "Pick from backlog", and "Pick from GitHub"
+ * actions. All delegate to `runRalphai(["run", ...])` and signal the
+ * menu loop to exit so the runner owns the terminal.
  */
 
 import * as clack from "@clack/prompts";
 import type { PipelineState, BacklogPlan } from "../pipeline-state.ts";
 import { runRalphai } from "../ralphai.ts";
+import {
+  listGithubIssues,
+  buildGithubPickList,
+  type ListGithubIssuesOptions,
+} from "./github-issues.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers — next-plan detection from PipelineState
@@ -108,6 +113,51 @@ export function pickFromBacklogMenuItem(state: PipelineState): {
   };
 }
 
+/**
+ * Build the label and hint for the "Pick from GitHub" menu item.
+ *
+ * Disabled with "(not configured)" when `issueSource` is not "github".
+ * When configured, shows the count of available issues if known.
+ */
+export function pickFromGithubMenuItem(ctx: {
+  hasGitHubIssues: boolean;
+  githubIssueCount?: number;
+}): {
+  label: string;
+  hint?: string;
+  disabled: boolean;
+} {
+  if (!ctx.hasGitHubIssues) {
+    return {
+      label: "Pick from GitHub",
+      hint: "(not configured)",
+      disabled: true,
+    };
+  }
+
+  const count = ctx.githubIssueCount;
+  if (count !== undefined && count > 0) {
+    return {
+      label: `Pick from GitHub (${count} issue${count === 1 ? "" : "s"})`,
+      disabled: false,
+    };
+  }
+
+  if (count === 0) {
+    return {
+      label: "Pick from GitHub",
+      hint: "(no issues)",
+      disabled: true,
+    };
+  }
+
+  // Count not yet known — show as enabled without count
+  return {
+    label: "Pick from GitHub",
+    disabled: false,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Action handlers
 // ---------------------------------------------------------------------------
@@ -177,5 +227,73 @@ export async function handlePickFromBacklog(
 
   // Hand off to the runner with the selected plan
   await runRalphai(["run", "--plan", selected as string]);
+  return "exit";
+}
+
+/**
+ * Handle the "Pick from GitHub" action.
+ *
+ * Fetches labeled issues, builds a combined display list (PRDs with
+ * sub-issue context + regular issues), and presents a `clack.select`.
+ * Selecting an issue delegates to `runRalphai(["run", String(number)])`.
+ * "Back" or Ctrl+C returns to the main menu.
+ *
+ * Error cases (missing gh, API failure, empty result) are shown with
+ * `clack.log.error` and return to the menu.
+ *
+ * @returns `"continue"` to re-show the main menu, `"exit"` when handing
+ *   off to the runner.
+ */
+export async function handlePickFromGitHub(
+  listOptions: ListGithubIssuesOptions,
+): Promise<"continue" | "exit"> {
+  const result = listGithubIssues(listOptions);
+
+  if (!result.ok) {
+    clack.log.error(result.error);
+    return "continue";
+  }
+
+  if (result.issues.length === 0) {
+    clack.log.warning(
+      `No issues labeled '${listOptions.issueLabel}' found in ${result.repo}.`,
+    );
+    return "continue";
+  }
+
+  const pickList = buildGithubPickList(result.issues);
+
+  const selected = await clack.select({
+    message: `Pick a GitHub issue to run (${result.issues.length} available):`,
+    options: pickList.map((item) => ({
+      value: item.value,
+      label: item.label,
+      hint: item.hint,
+    })),
+  });
+
+  // Ctrl+C or escape — return to main menu
+  if (clack.isCancel(selected)) {
+    return "continue";
+  }
+
+  const value = selected as string;
+
+  if (value === "__back__") {
+    return "continue";
+  }
+
+  // Sub-issue context lines are non-selectable — if somehow selected, ignore
+  if (value.startsWith("__ctx__:")) {
+    return "continue";
+  }
+
+  // Delegate to the runner with the issue number
+  const issueNumber = parseInt(value, 10);
+  if (isNaN(issueNumber)) {
+    return "continue";
+  }
+
+  await runRalphai(["run", String(issueNumber)]);
   return "exit";
 }

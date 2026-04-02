@@ -13,7 +13,10 @@ import { join, relative } from "path";
 
 // Files that call mock.module() on built-in Node modules (child_process, fs).
 // These must run in separate processes to prevent mock leaks.
-const ISOLATED = ["src/fetch-prd-issue.test.ts"];
+const ISOLATED = [
+  "src/fetch-prd-issue.test.ts",
+  "src/interactive/github-issues.test.ts",
+];
 
 function findTestFiles(dir: string): string[] {
   const results: string[] = [];

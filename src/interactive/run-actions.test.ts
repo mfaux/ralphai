@@ -14,6 +14,7 @@ import {
   findNextPlanName,
   runNextMenuItem,
   pickFromBacklogMenuItem,
+  pickFromGithubMenuItem,
 } from "./run-actions.ts";
 
 // ---------------------------------------------------------------------------
@@ -201,5 +202,61 @@ describe("pickFromBacklogMenuItem", () => {
     expect(item.label).toBe("Pick from backlog");
     expect(item.hint).toBe("(empty)");
     expect(item.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickFromGithubMenuItem
+// ---------------------------------------------------------------------------
+
+describe("pickFromGithubMenuItem", () => {
+  it("is disabled with (not configured) when GitHub is not configured", () => {
+    const item = pickFromGithubMenuItem({ hasGitHubIssues: false });
+
+    expect(item.label).toBe("Pick from GitHub");
+    expect(item.hint).toBe("(not configured)");
+    expect(item.disabled).toBe(true);
+  });
+
+  it("shows count when GitHub is configured and count is known", () => {
+    const item = pickFromGithubMenuItem({
+      hasGitHubIssues: true,
+      githubIssueCount: 5,
+    });
+
+    expect(item.label).toBe("Pick from GitHub (5 issues)");
+    expect(item.disabled).toBe(false);
+  });
+
+  it("uses singular 'issue' for count of 1", () => {
+    const item = pickFromGithubMenuItem({
+      hasGitHubIssues: true,
+      githubIssueCount: 1,
+    });
+
+    expect(item.label).toBe("Pick from GitHub (1 issue)");
+    expect(item.disabled).toBe(false);
+  });
+
+  it("is disabled with (no issues) when count is 0", () => {
+    const item = pickFromGithubMenuItem({
+      hasGitHubIssues: true,
+      githubIssueCount: 0,
+    });
+
+    expect(item.label).toBe("Pick from GitHub");
+    expect(item.hint).toBe("(no issues)");
+    expect(item.disabled).toBe(true);
+  });
+
+  it("is enabled without count when count is not yet known", () => {
+    const item = pickFromGithubMenuItem({
+      hasGitHubIssues: true,
+      githubIssueCount: undefined,
+    });
+
+    expect(item.label).toBe("Pick from GitHub");
+    expect(item.hint).toBeUndefined();
+    expect(item.disabled).toBe(false);
   });
 });

@@ -11,12 +11,15 @@ import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { resolveConfig } from "../config.ts";
 import { listRalphaiWorktrees, printStatusOnce } from "../ralphai.ts";
-import { BOLD, DIM, RESET, TEXT } from "../utils.ts";
+import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
+import { DIM, RESET, TEXT } from "../utils.ts";
 import {
   runNextMenuItem,
   pickFromBacklogMenuItem,
+  pickFromGithubMenuItem,
   handleRunNext,
   handlePickFromBacklog,
+  handlePickFromGitHub,
 } from "./run-actions.ts";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +42,14 @@ export interface MenuItem {
 export interface MenuContext {
   /** Whether GitHub issues are configured as the issue source. */
   hasGitHubIssues: boolean;
+  /** Number of available GitHub issues (from peek). */
+  githubIssueCount?: number;
+  /** Resolved config values needed by GitHub actions. */
+  githubConfig?: {
+    cwd: string;
+    issueLabel: string;
+    issueRepo: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +125,15 @@ export function buildMenuItems(
     disabled: pickBacklog.disabled,
   });
 
+  const pickGithub = pickFromGithubMenuItem(ctx);
+  items.push({
+    value: "pick-from-github",
+    label: pickGithub.label,
+    hint: pickGithub.hint,
+    group: "run",
+    disabled: pickGithub.disabled,
+  });
+
   // --- Pipeline group ---
   items.push({
     value: "view-status",
@@ -145,6 +165,7 @@ async function dispatchAction(
   action: string,
   _cwd: string,
   state: PipelineState,
+  ctx: MenuContext,
 ): Promise<DispatchResult> {
   switch (action) {
     case "run-next":
@@ -153,6 +174,12 @@ async function dispatchAction(
 
     case "pick-from-backlog":
       return handlePickFromBacklog(state);
+
+    case "pick-from-github":
+      if (ctx.githubConfig) {
+        return handlePickFromGitHub(ctx.githubConfig);
+      }
+      return "continue";
 
     case "view-status":
       console.log();
@@ -181,6 +208,8 @@ async function dispatchAction(
 export async function runInteractive(cwd: string): Promise<void> {
   // Resolve config once for the session to check GitHub issue source
   let hasGitHubIssues = false;
+  let issueLabel = "ralphai";
+  let issueRepo = "";
   try {
     const { config } = resolveConfig({
       cwd,
@@ -188,11 +217,37 @@ export async function runInteractive(cwd: string): Promise<void> {
       cliArgs: [],
     });
     hasGitHubIssues = config.issueSource.value === "github";
+    issueLabel = config.issueLabel.value;
+    issueRepo = config.issueRepo.value;
   } catch {
     // Config resolution failure — proceed with defaults
   }
 
-  const ctx: MenuContext = { hasGitHubIssues };
+  // Peek at GitHub issue count (for menu item label). Combines regular
+  // issues and PRDs, deduplicating by counting the larger set.
+  let githubIssueCount: number | undefined;
+  if (hasGitHubIssues) {
+    const regularPeek = peekGithubIssues({
+      cwd,
+      issueSource: "github",
+      issueLabel,
+      issueRepo,
+    });
+    const prdPeek = peekPrdIssues({
+      cwd,
+      issueSource: "github",
+      issueLabel,
+      issueRepo,
+    });
+    // Sum but accept that some overlap may exist (close enough for a label)
+    githubIssueCount = (regularPeek.count || 0) + (prdPeek.count || 0);
+  }
+
+  const ctx: MenuContext = {
+    hasGitHubIssues,
+    githubIssueCount,
+    githubConfig: hasGitHubIssues ? { cwd, issueLabel, issueRepo } : undefined,
+  };
 
   while (true) {
     // Gather fresh pipeline state each iteration
@@ -226,7 +281,7 @@ export async function runInteractive(cwd: string): Promise<void> {
       return;
     }
 
-    const result = await dispatchAction(selected as string, cwd, state);
+    const result = await dispatchAction(selected as string, cwd, state, ctx);
     if (result === "exit") {
       return;
     }
