@@ -10,7 +10,15 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 
 ## Documentation
 
-- **Keep docs in sync.** When changing behavior, update the relevant docs in the same change. This includes both external docs and internal docs. Don't leave doc updates as a follow-up.
+- **Keep docs in sync.** When changing behavior, update the relevant docs in the same change. Don't leave doc updates as a follow-up.
+- **Doc inventory.** Check each doc below for relevance when making changes:
+  - `ARCHITECTURE.md` -- module responsibilities and source layout. Update when adding, removing, or restructuring modules.
+  - `docs/cli-reference.md` -- all commands, flags, config keys, and env vars. Update when adding or changing CLI surface.
+  - `docs/how-ralphai-works.md` -- technical deep-dive: feedback loops, stuck detection, context rot. Update when changing core loop behavior.
+  - `docs/workflows.md` -- recipe-based user guide. Update when adding new commands or changing user-facing workflows.
+  - `docs/worktrees.md` -- worktree lifecycle and parallel runs. Update when changing worktree behavior.
+  - `docs/troubleshooting.md` -- common issues and recovery steps. Update when fixing user-facing bugs or changing error behavior.
+  - `AGENTS.md` -- contributor guidelines (this file). Update when changing project conventions.
 
 ## Git & GitHub
 
