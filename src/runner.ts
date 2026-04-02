@@ -83,6 +83,8 @@ export interface RunnerOptions {
   plan?: string;
   /** PRD issue driving this run (set by --prd=N). */
   prd?: { number: number; title: string };
+  /** Skip per-plan PR creation (used by PRD target to defer to aggregate PR). */
+  skipPrCreation?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,8 +499,17 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
  * Run the Ralphai autonomous loop.
  */
 export async function runRunner(opts: RunnerOptions): Promise<void> {
-  const { config, cwd, isWorktree, mainWorktree, dryRun, resume, plan, once } =
-    opts;
+  const {
+    config,
+    cwd,
+    isWorktree,
+    mainWorktree,
+    dryRun,
+    resume,
+    plan,
+    once,
+    skipPrCreation,
+  } = opts;
 
   // Unpack config values
   const baseBranch = config.baseBranch.value;
@@ -929,24 +940,26 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         }
         activePidFile = null;
 
-        const prResult = createPr({
-          branch,
-          baseBranch,
-          planDescription: planDesc,
-          cwd,
-          issueSource: issueFm.source || issueSource,
-          issueNumber: issueFm.issue,
-          issueRepo,
-          issueCommentProgress,
-          prd: issueFm.prd,
-          summary: prSummary,
-          learnings: accumulatedLearnings,
-        });
-        console.log(prResult.message);
+        if (!skipPrCreation) {
+          const prResult = createPr({
+            branch,
+            baseBranch,
+            planDescription: planDesc,
+            cwd,
+            issueSource: issueFm.source || issueSource,
+            issueNumber: issueFm.issue,
+            issueRepo,
+            issueCommentProgress,
+            prd: issueFm.prd,
+            summary: prSummary,
+            learnings: accumulatedLearnings,
+          });
+          console.log(prResult.message);
 
-        // Persist PR URL to receipt before archiving (so it survives the move)
-        if (prResult.ok && prResult.prUrl) {
-          updateReceiptPrUrl(receiptFile, prResult.prUrl);
+          // Persist PR URL to receipt before archiving (so it survives the move)
+          if (prResult.ok && prResult.prUrl) {
+            updateReceiptPrUrl(receiptFile, prResult.prUrl);
+          }
         }
 
         archiveRun({

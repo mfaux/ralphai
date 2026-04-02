@@ -13,6 +13,7 @@ import {
   pushBranch,
   archiveRun,
   buildContinuousPrBody,
+  buildPrdPrBody,
 } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
@@ -299,5 +300,111 @@ describe("buildContinuousPrBody", () => {
       ctx.dir,
     );
     expect(body).not.toContain("Closes #");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPrdPrBody
+// ---------------------------------------------------------------------------
+
+describe("buildPrdPrBody", () => {
+  const ctx = useTempDir();
+
+  it("includes PRD title and completed sub-issues", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10, 11, 12],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Add user dashboard");
+    expect(body).toContain("#10");
+    expect(body).toContain("#11");
+    expect(body).toContain("#12");
+  });
+
+  it("includes Closes references for PRD and sub-issues", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10, 11],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Closes #42");
+    expect(body).toContain("Closes #10");
+    expect(body).toContain("Closes #11");
+  });
+
+  it("marks stuck sub-issues clearly", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [11, 12],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Completed");
+    expect(body).toContain("#10");
+    expect(body).toContain("Stuck");
+    expect(body).toContain("#11");
+    expect(body).toContain("#12");
+  });
+
+  it("does not reference stuck sub-issues in Closes block", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [11],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Closes #42");
+    expect(body).toContain("Closes #10");
+    expect(body).not.toContain("Closes #11");
+  });
+
+  it("includes commit log in Changes section", () => {
+    initRepo(ctx.dir);
+
+    // Add a commit so the log is non-empty
+    execSync("git checkout -b feat/test-prd", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(ctx.dir, "feature.txt"), "feature\n");
+    execSync('git add -A && git commit -m "feat: add dashboard widget"', {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/test-prd",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Changes");
+    expect(body).toContain("add dashboard widget");
   });
 });

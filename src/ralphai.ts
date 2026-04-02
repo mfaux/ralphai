@@ -72,6 +72,7 @@ import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
+import { createPrdPr } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -3208,6 +3209,7 @@ async function runPrdIssueTarget(
   console.log(`Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")}`);
 
   const stuckSubIssues: number[] = [];
+  const completedSubIssues: number[] = [];
   let completedCount = 0;
 
   for (const subIssueNumber of subIssues) {
@@ -3272,15 +3274,26 @@ async function runPrdIssueTarget(
     };
 
     try {
-      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir, {
-        number: prd.number,
-        title: prd.title,
-      });
+      await runRalphaiRunner(
+        worktreeRunOptions,
+        resolvedWorktreeDir,
+        {
+          number: prd.number,
+          title: prd.title,
+        },
+        { skipPrCreation: true },
+      );
       completedCount++;
-    } catch {
-      // Runner may exit on stuck detection — treat as stuck sub-issue
+      completedSubIssues.push(subIssueNumber);
+    } catch (error) {
+      // Runner may exit on stuck detection or other errors
       stuckSubIssues.push(subIssueNumber);
-      console.log(`Sub-issue #${subIssueNumber} got stuck — skipping to next.`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`Sub-issue #${subIssueNumber} failed: ${errorMessage}`);
+      console.log(
+        `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
+      );
     }
   }
 
@@ -3294,6 +3307,26 @@ async function runPrdIssueTarget(
     console.log(
       `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
     );
+  }
+
+  // --- Create aggregate PRD pull request ---
+  if (completedCount > 0) {
+    console.log();
+    console.log("Creating PRD pull request...");
+    const issueRepo = worktreeConfig.issueRepo.value || repo;
+    const prResult = createPrdPr({
+      branch,
+      baseBranch,
+      prd,
+      completedSubIssues,
+      stuckSubIssues,
+      cwd: resolvedWorktreeDir,
+      issueRepo,
+    });
+    console.log(prResult.message);
+  } else {
+    console.log();
+    console.log("No sub-issues completed — skipping PR creation.");
   }
 }
 
@@ -3888,6 +3921,7 @@ async function runRalphaiRunner(
   options: RalphaiOptions,
   cwd: string,
   prdIssue?: PrdIssue,
+  runnerFlags?: { skipPrCreation?: boolean },
 ): Promise<void> {
   const worktreeInfo = resolveWorktreeInfo(cwd);
   const runArgs = options.runArgs;
@@ -4037,6 +4071,7 @@ async function runRalphaiRunner(
     once: hasOnce,
     plan: targetPlan,
     prd: prdIssue,
+    skipPrCreation: runnerFlags?.skipPrCreation,
   };
 
   await runRunner(runnerOpts);
