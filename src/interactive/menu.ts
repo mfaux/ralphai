@@ -10,7 +10,8 @@ import * as clack from "@clack/prompts";
 import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { resolveConfig } from "../config.ts";
-import { listRalphaiWorktrees, printStatusOnce } from "../ralphai.ts";
+import { listRalphaiWorktrees } from "../worktree/index.ts";
+import { printStatusOnce } from "../ralphai.ts";
 import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
 import { DIM, RESET, TEXT } from "../utils.ts";
 import {

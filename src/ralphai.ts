@@ -97,6 +97,20 @@ import {
   runSeed,
   runBacklogDir,
 } from "./seed.ts";
+import {
+  isGitWorktree,
+  resolveWorktreeInfo,
+  executeSetupCommand,
+  ensureRepoHasCommit,
+  prepareWorktree,
+  listRalphaiWorktrees,
+  selectPlanForWorktree,
+} from "./worktree/index.ts";
+import type {
+  WorktreeEntry,
+  SelectedWorktreePlan,
+  GitHubFallbackOptions,
+} from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Agent presets
@@ -1177,34 +1191,8 @@ export async function runRalphai(args: string[]): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Worktree detection
+// Doctor & diagnostics
 // ---------------------------------------------------------------------------
-
-/**
- * Returns `true` when `dir` is inside a git worktree (as opposed to the main
- * working tree). Uses the fact that in a worktree, `--git-common-dir` points
- * to the main repo's `.git` while `--git-dir` points to
- * `.git/worktrees/<name>`.
- */
-function isGitWorktree(dir: string): boolean {
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    const gitDir = execSync("git rev-parse --git-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    // In a worktree, --git-common-dir points to the main repo's .git
-    // while --git-dir points to .git/worktrees/<name>
-    return commonDir !== gitDir;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Check whether the first token of an agent command is reachable in PATH.
@@ -1420,209 +1408,6 @@ async function runRalphaiInit(
 // Worktree subcommand
 // ---------------------------------------------------------------------------
 
-export interface WorktreeEntry {
-  path: string;
-  branch: string;
-  head: string;
-  bare: boolean;
-}
-
-export interface SelectedWorktreePlan {
-  planFile: string;
-  slug: string;
-  source: "backlog" | "in-progress";
-}
-
-/** Options for attempting a GitHub issue pull when the local backlog is empty. */
-export interface GitHubFallbackOptions {
-  /** Configured issue source — pull is only attempted when this is "github". */
-  issueSource: string;
-  /** Function that attempts to pull a GitHub issue into the backlog. */
-  pullFn: () => import("./issues.ts").PullIssueResult;
-}
-
-// Receipt interface and functions (parseReceipt, checkReceiptSource) are
-// imported from ./receipt.ts above.
-
-export function parseWorktreeList(output: string): WorktreeEntry[] {
-  const entries: WorktreeEntry[] = [];
-  let current: Partial<WorktreeEntry> = {};
-
-  for (const line of output.split("\n")) {
-    if (line === "") {
-      if (current.path) {
-        entries.push({
-          path: current.path,
-          branch: current.branch ?? "",
-          head: current.head ?? "",
-          bare: current.bare ?? false,
-        });
-      }
-      current = {};
-    } else if (line.startsWith("worktree ")) {
-      current.path = line.slice("worktree ".length);
-    } else if (line.startsWith("HEAD ")) {
-      current.head = line.slice("HEAD ".length);
-    } else if (line.startsWith("branch ")) {
-      // branch refs/heads/ralphai/foo → ralphai/foo
-      current.branch = line.slice("branch ".length).replace("refs/heads/", "");
-    } else if (line === "bare") {
-      current.bare = true;
-    }
-  }
-
-  // Handle last entry if no trailing newline
-  if (current.path) {
-    entries.push({
-      path: current.path,
-      branch: current.branch ?? "",
-      head: current.head ?? "",
-      bare: current.bare ?? false,
-    });
-  }
-
-  return entries;
-}
-
-export function selectPlanForWorktree(
-  cwd: string,
-  specificPlan?: string,
-  activeWorktrees: WorktreeEntry[] = [],
-  githubOptions?: GitHubFallbackOptions,
-): SelectedWorktreePlan | null {
-  const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
-
-  // Build set of slugs that already have an active worktree
-  const activeSlugs = new Set<string>();
-  for (const wt of activeWorktrees) {
-    if (wt.branch.startsWith("ralphai/")) {
-      activeSlugs.add(wt.branch.replace("ralphai/", ""));
-    } else {
-      // feat/ or other managed branches: look up plans by receipt
-      for (const slug of findPlansByBranch(inProgressDir, wt.branch)) {
-        activeSlugs.add(slug);
-      }
-    }
-  }
-
-  const resolvePlanInDir = (
-    baseDir: string,
-    planFile: string,
-  ): string | null => {
-    const slug = planFile.replace(/\.md$/, "");
-    return resolvePlanPath(baseDir, slug);
-  };
-
-  // --- Specific plan requested ---
-  if (specificPlan) {
-    const slug = specificPlan.replace(/\.md$/, "");
-    const inProgressPath = resolvePlanInDir(inProgressDir, specificPlan);
-    if (inProgressPath) {
-      return { planFile: specificPlan, slug, source: "in-progress" };
-    }
-    const backlogPath = resolvePlanInDir(backlogDir, specificPlan);
-    if (backlogPath) {
-      return { planFile: specificPlan, slug, source: "backlog" };
-    }
-    console.error(
-      `Plan '${specificPlan}' not found in backlog or in-progress.`,
-    );
-    return null;
-  }
-
-  // --- Auto-detect plan ---
-
-  const inProgressPlans = listPlanFiles(inProgressDir);
-
-  // Plans without an active worktree are "unattended" — resume first
-  const unattendedPlans = inProgressPlans.filter(
-    (f) => !activeSlugs.has(f.replace(/\.md$/, "")),
-  );
-
-  if (unattendedPlans.length === 1) {
-    const planFile = unattendedPlans[0]!;
-    const slug = planFile.replace(/\.md$/, "");
-    return { planFile, slug, source: "in-progress" };
-  }
-
-  if (unattendedPlans.length > 1) {
-    console.error(
-      `Multiple unattended in-progress plans. Use ${TEXT}ralphai run --plan=<file>${RESET} to choose which one to resume.`,
-    );
-    for (const planFile of unattendedPlans) {
-      console.error(`  ${planFile}`);
-    }
-    return null;
-  }
-
-  // No unattended plans — check backlog for new work
-  const backlogPlans = listPlanFiles(backlogDir, true);
-
-  if (backlogPlans.length > 0) {
-    const firstPlan = backlogPlans[0]!;
-    const slug = firstPlan.replace(/\.md$/, "");
-    return { planFile: firstPlan, slug, source: "backlog" };
-  }
-
-  // No backlog — try resuming an in-progress plan that has a worktree
-  const attendedPlans = inProgressPlans.filter((f) =>
-    activeSlugs.has(f.replace(/\.md$/, "")),
-  );
-
-  if (attendedPlans.length === 1) {
-    const planFile = attendedPlans[0]!;
-    const slug = planFile.replace(/\.md$/, "");
-    return { planFile, slug, source: "in-progress" };
-  }
-
-  if (attendedPlans.length > 1) {
-    console.error(
-      `Multiple in-progress plans with active worktrees. Use ${TEXT}ralphai run --plan=<file>${RESET} to choose which one to resume.`,
-    );
-    for (const planFile of attendedPlans) {
-      console.error(`  ${planFile}`);
-    }
-    return null;
-  }
-
-  // --- GitHub issue fallback: pull an issue if configured ---
-  if (githubOptions?.issueSource === "github") {
-    const result = githubOptions.pullFn();
-    if (result.pulled) {
-      // Re-check backlog after pulling
-      const newBacklogPlans = listPlanFiles(backlogDir, true);
-      if (newBacklogPlans.length > 0) {
-        const firstPlan = newBacklogPlans[0]!;
-        const slug = firstPlan.replace(/\.md$/, "");
-        return { planFile: firstPlan, slug, source: "backlog" };
-      }
-    }
-    console.error(`No plans in backlog and no GitHub issues available.`);
-    return null;
-  }
-
-  console.error(
-    `No plans in backlog. Add a plan to the pipeline backlog first.`,
-  );
-  return null;
-}
-
-export function isRalphaiManagedBranch(branch: string): boolean {
-  return branch.startsWith("ralphai/") || branch.startsWith("feat/");
-}
-
-export function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
-  const output = execSync("git worktree list --porcelain", {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  return parseWorktreeList(output).filter((wt) =>
-    isRalphaiManagedBranch(wt.branch),
-  );
-}
-
 function showInitHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai init [options] [directory]`);
   console.log();
@@ -1689,107 +1474,6 @@ function showDoctorHelp(): void {
   console.log(
     `${DIM}Run diagnostic checks on your ralphai setup and report problems.${RESET}`,
   );
-}
-
-function listWorktrees(cwd: string): void {
-  const worktrees = listRalphaiWorktrees(cwd);
-
-  if (worktrees.length === 0) {
-    console.log("No active ralphai worktrees.");
-    return;
-  }
-
-  console.log("Active ralphai worktrees:\n");
-  const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
-  for (const wt of worktrees) {
-    let hasActivePlan: boolean;
-    if (wt.branch.startsWith("ralphai/")) {
-      const slug = wt.branch.replace("ralphai/", "");
-      hasActivePlan = planExistsForSlug(inProgressDir, slug);
-    } else {
-      // feat/ or other managed branches: use receipt-based lookup
-      hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
-    }
-    const status = hasActivePlan ? "in-progress" : "idle";
-    console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
-  }
-}
-
-function cleanWorktrees(cwd: string): void {
-  // Prune stale worktree entries first
-  execSync("git worktree prune", { cwd, stdio: "inherit" });
-
-  const worktrees = listRalphaiWorktrees(cwd);
-
-  if (worktrees.length === 0) {
-    console.log("No ralphai worktrees to clean.");
-    return;
-  }
-
-  const { wipDir: inProgressDir, archiveDir } = getRepoPipelineDirs(cwd);
-  let cleaned = 0;
-
-  for (const wt of worktrees) {
-    let hasActivePlan: boolean;
-    let matchedSlugs: string[];
-
-    if (wt.branch.startsWith("ralphai/")) {
-      const slug = wt.branch.replace("ralphai/", "");
-      hasActivePlan = planExistsForSlug(inProgressDir, slug);
-      matchedSlugs = hasActivePlan ? [slug] : [slug]; // always try archiving the slug
-    } else {
-      // feat/ or other managed branches: use receipt-based lookup
-      matchedSlugs = findPlansByBranch(inProgressDir, wt.branch);
-      hasActivePlan = matchedSlugs.length > 0;
-    }
-
-    if (!hasActivePlan) {
-      console.log(`Removing: ${wt.path} (${wt.branch})`);
-      try {
-        // Use --force because the worktree may have uncommitted changes
-        // from interrupted agent work.
-        execSync(`git worktree remove --force "${wt.path}"`, {
-          cwd,
-          stdio: "inherit",
-        });
-        // Force-delete branch (-D) because ralphai/* branches are typically
-        // not merged to main yet. Non-force -d would silently fail, leaving
-        // stale branches that cause dirty-state errors on the next run.
-        try {
-          execSync(`git branch -D "${wt.branch}"`, {
-            cwd,
-            stdio: "pipe",
-          });
-        } catch {
-          // Branch deletion failure is not critical
-        }
-
-        // Archive receipts for matched slugs (ralphai/ has one slug,
-        // feat/ may have multiple from receipt scan)
-        for (const slug of matchedSlugs) {
-          const planDir = join(inProgressDir, slug);
-          const receiptFile = join(planDir, "receipt.txt");
-          if (existsSync(receiptFile)) {
-            const destDir = join(archiveDir, slug);
-            mkdirSync(destDir, { recursive: true });
-            const dest = join(destDir, "receipt.txt");
-            renameSync(receiptFile, dest);
-            console.log(`  Archived receipt: ${slug}/receipt.txt`);
-          }
-        }
-
-        cleaned++;
-      } catch {
-        console.log(`  Warning: Could not remove ${wt.path}. Remove manually.`);
-      }
-    } else {
-      console.log(
-        `Keeping: ${wt.path} (${wt.branch}) — plan still in progress`,
-      );
-    }
-  }
-
-  console.log(`\nCleaned ${cleaned} worktree(s).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2294,38 +1978,6 @@ export function printStatusOnce(cwd: string): void {
   console.log();
 }
 
-async function runRalphaiWorktree(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  const wtOpts = options.worktreeOptions ?? {
-    subcommand: "run",
-    runArgs: [],
-  };
-
-  // Handle --help
-  if (wtOpts.runArgs.includes("--help") || wtOpts.runArgs.includes("-h")) {
-    showRalphaiHelp();
-    return;
-  }
-
-  // Dispatch worktree sub-subcommands
-  switch (wtOpts.subcommand) {
-    case "list":
-      listWorktrees(cwd);
-      return;
-    case "clean":
-      cleanWorktrees(cwd);
-      return;
-    case "run":
-      console.error("'ralphai worktree' no longer starts runs.");
-      console.error(
-        "Use 'ralphai run' to create or reuse a worktree and execute work.",
-      );
-      process.exit(1);
-  }
-}
-
 /** Known non-config flags accepted by `ralphai run`. */
 const KNOWN_RUN_FLAGS = new Set([
   "--dry-run",
@@ -2492,58 +2144,6 @@ async function runRalphaiPrd(
  * Returns { isWorktree, mainWorktree } where mainWorktree is the root
  * of the main worktree (empty string if not in a worktree).
  */
-function resolveWorktreeInfo(dir: string): {
-  isWorktree: boolean;
-  mainWorktree: string;
-} {
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    const gitDir = execSync("git rev-parse --git-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    if (commonDir !== gitDir) {
-      // In a worktree: --git-common-dir points to the main .git
-      const mainRoot = resolve(dir, commonDir, "..");
-      return { isWorktree: true, mainWorktree: mainRoot };
-    }
-  } catch {
-    // Not in a git repo or git not available
-  }
-  return { isWorktree: false, mainWorktree: "" };
-}
-
-/**
- * Run a setup command inside a freshly-created worktree directory.
- * Called only when a new worktree is created (not reused).
- * On failure the process exits with code 1.
- */
-function executeSetupCommand(setupCommand: string, worktreeDir: string): void {
-  if (!setupCommand) return;
-  console.log(`Running setup command: ${setupCommand}`);
-  try {
-    execSync(setupCommand, {
-      cwd: worktreeDir,
-      stdio: "inherit",
-    });
-  } catch (err: unknown) {
-    const stderr = extractExecStderr(err);
-    console.error(
-      `${TEXT}Error:${RESET} Setup command failed: ${setupCommand}`,
-    );
-    if (stderr) console.error(`  ${stderr}`);
-    console.error(
-      `\nFix the issue and re-run, or set ${TEXT}setupCommand${RESET} to "" in config to disable.`,
-    );
-    process.exit(1);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Explicit target handlers: `ralphai run <issue-number>` / `ralphai run <plan.md>`
 // ---------------------------------------------------------------------------
@@ -2931,97 +2531,6 @@ async function runPrdIssueTarget(
 // ---------------------------------------------------------------------------
 // Shared helpers for issue/PRD target flows
 // ---------------------------------------------------------------------------
-
-/** Ensure the repo has at least one commit (required for worktrees). */
-function ensureRepoHasCommit(cwd: string): void {
-  try {
-    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
-  } catch {
-    console.error(
-      "This repository has no commits yet. Git worktrees require at least one commit.",
-    );
-    console.error(
-      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
-    );
-    console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
-    process.exit(1);
-  }
-}
-
-/**
- * Create or reuse a worktree for a given slug/branch.
- * Returns the resolved worktree directory path.
- */
-function prepareWorktree(
-  cwd: string,
-  slug: string,
-  branch: string,
-  baseBranch: string,
-  setupCommand: string,
-): string {
-  const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
-  const desiredWorktreeDir = join(worktreeBase, slug);
-  mkdirSync(worktreeBase, { recursive: true });
-
-  const activeWorktrees = listRalphaiWorktrees(cwd);
-  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
-
-  let resolvedWorktreeDir = desiredWorktreeDir;
-  if (activeWorktree) {
-    resolvedWorktreeDir = activeWorktree.path;
-    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
-    console.log(`Branch: ${branch}`);
-  } else {
-    if (existsSync(resolvedWorktreeDir)) {
-      console.log(
-        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
-      );
-      execSync("git worktree prune", { cwd, stdio: "ignore" });
-      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
-    }
-
-    let branchExists = false;
-    try {
-      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
-        cwd,
-        stdio: "ignore",
-      });
-      branchExists = true;
-    } catch {
-      branchExists = false;
-    }
-
-    try {
-      if (branchExists) {
-        console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
-        console.log(`Branch: ${branch}`);
-        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
-          cwd,
-          stdio: ["inherit", "pipe", "pipe"],
-        });
-      } else {
-        console.log(`Creating worktree: ${resolvedWorktreeDir}`);
-        console.log(`Branch: ${branch} (from ${baseBranch})`);
-        execSync(
-          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-          { cwd, stdio: ["inherit", "pipe", "pipe"] },
-        );
-      }
-    } catch (err: unknown) {
-      const stderr = extractExecStderr(err);
-      console.error(`${TEXT}Error:${RESET} Failed to prepare worktree.`);
-      if (stderr) console.error(`  git: ${stderr}`);
-      process.exit(1);
-    }
-  }
-
-  // Run setup command in freshly-created worktrees (not reused ones)
-  if (!activeWorktree) {
-    executeSetupCommand(setupCommand, resolvedWorktreeDir);
-  }
-
-  return resolvedWorktreeDir;
-}
 
 /** Resolve config for a worktree, falling back to the main repo config. */
 function resolveWorktreeConfig(
@@ -3664,3 +3173,19 @@ async function runRalphaiRunner(
 
   await runRunner(runnerOpts);
 }
+
+// ---------------------------------------------------------------------------
+// Barrel re-exports – preserve backward-compatible import paths
+// ---------------------------------------------------------------------------
+
+export {
+  parseWorktreeList,
+  selectPlanForWorktree,
+  isRalphaiManagedBranch,
+  listRalphaiWorktrees,
+} from "./worktree/index.ts";
+export type {
+  WorktreeEntry,
+  SelectedWorktreePlan,
+  GitHubFallbackOptions,
+} from "./worktree/index.ts";
