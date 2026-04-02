@@ -11,7 +11,7 @@ import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { resolveConfig } from "../config.ts";
 import { listRalphaiWorktrees } from "../worktree/index.ts";
-import { printStatusOnce } from "../ralphai.ts";
+import { printStatusOnce } from "../status.ts";
 import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
 import { DIM, RESET, TEXT } from "../utils.ts";
 import {
