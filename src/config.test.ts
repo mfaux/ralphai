@@ -190,15 +190,6 @@ describe("parseConfigFile", () => {
     );
   });
 
-  it("silently ignores deprecated maxLearnings key (backward compat)", () => {
-    const file = join(ctx.dir, "max-learnings.json");
-    writeFileSync(file, JSON.stringify({ maxLearnings: 50 }));
-    const result = parseConfigFile(file)!;
-    expect(result.warnings).toEqual([]);
-    // maxLearnings should not appear in parsed values
-    expect("maxLearnings" in result.values).toBe(false);
-  });
-
   it("parses agentCommand", () => {
     const file = join(ctx.dir, "agent.json");
     writeFileSync(file, JSON.stringify({ agentCommand: "claude -p" }));
@@ -305,15 +296,6 @@ describe("parseConfigFile", () => {
     expect(result.values.issueCommentProgress).toBe("false");
   });
 
-  it("silently ignores deprecated continuous field in config file", () => {
-    const file = join(ctx.dir, "legacy-cont.json");
-    writeFileSync(file, JSON.stringify({ continuous: true, autoCommit: true }));
-    const result = parseConfigFile(file)!;
-    expect(result.values.autoCommit).toBe("true");
-    // continuous is ignored — not present in parsed values
-    expect("continuous" in result.values).toBe(false);
-  });
-
   it("parses workspaces", () => {
     const file = join(ctx.dir, "ws.json");
     writeFileSync(
@@ -399,16 +381,6 @@ describe("applyEnvOverrides", () => {
       "must be 'true' or 'false'",
     );
   });
-
-  it("silently ignores RALPHAI_CONTINUOUS (deprecated)", () => {
-    const result = applyEnvOverrides({ RALPHAI_CONTINUOUS: "true" });
-    expect("continuous" in result).toBe(false);
-  });
-
-  it("silently ignores RALPHAI_MAX_LEARNINGS (deprecated)", () => {
-    const result = applyEnvOverrides({ RALPHAI_MAX_LEARNINGS: "50" });
-    expect("maxLearnings" in result).toBe(false);
-  });
 });
 
 // ---- CLI arg parsing ----
@@ -457,8 +429,6 @@ describe("parseCLIArgs", () => {
     expect(result.overrides.baseBranch).toBe("develop");
   });
 
-  // --continuous is no longer parsed (rejected by removed.ts before reaching parseCLIArgs)
-
   it("parses --auto-commit", () => {
     const result = parseCLIArgs(["--auto-commit"]);
     expect(result.overrides.autoCommit).toBe("true");
@@ -469,11 +439,6 @@ describe("parseCLIArgs", () => {
     const result = parseCLIArgs(["--no-auto-commit"]);
     expect(result.overrides.autoCommit).toBe("false");
     expect(result.rawFlags.autoCommit).toBe("--no-auto-commit");
-  });
-
-  it("parses --issue-source=github", () => {
-    const result = parseCLIArgs(["--issue-source=github"]);
-    expect(result.overrides.issueSource).toBe("github");
   });
 
   it("ignores non-config flags", () => {

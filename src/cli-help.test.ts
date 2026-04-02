@@ -177,7 +177,6 @@ describe("CLI help and flags", () => {
     expect(result.stdout).not.toContain("--turns");
     expect(result.stdout).not.toContain("--dry-run");
     expect(result.stdout).not.toContain("--resume");
-    expect(result.stdout).not.toContain("--continuous");
   });
 
   // -------------------------------------------------------------------------
@@ -245,29 +244,6 @@ describe("CLI help and flags", () => {
   // -------------------------------------------------------------------------
   // backlog-dir command (removed — now shows guidance)
   // -------------------------------------------------------------------------
-
-  it("backlog-dir prints removal guidance", () => {
-    const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
-    runCli(["init", "--yes"], ctx.dir, env);
-    const result = runCli(["backlog-dir"], ctx.dir, env);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
-    expect(result.stderr).toContain("ralphai config backlog-dir");
-  });
-
-  it("backlog-dir --help also prints removal guidance (not help)", () => {
-    const result = runCli(["backlog-dir", "--help"]);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
-    expect(result.stderr).toContain("ralphai config backlog-dir");
-  });
-
-  it("backlog-dir --unknown prints removal guidance", () => {
-    const result = runCli(["backlog-dir", "--unknown"], ctx.dir);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Unknown command 'backlog-dir'");
-    expect(result.stderr).toContain("ralphai config backlog-dir");
-  });
 
   it("help text does not list removed backlog-dir", () => {
     const result = runCli(["--help"]);

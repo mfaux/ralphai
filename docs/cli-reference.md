@@ -10,18 +10,13 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
-| `prd`          | Run a PRD issue (shorthand for `run --prd=<number>`)                   |
-| `worktree`     | Manage Ralphai worktrees (`list`, `clean`)                             |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
-| `purge`        | Delete archived artifacts from `pipeline/out/`                         |
 | `clean`        | Remove archived plans and orphaned worktrees                           |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
 | `config`       | Query resolved configuration, keys, or capabilities                    |
-| `check`        | Verify whether Ralphai is configured for a repo                        |
-| `backlog-dir`  | Print the path to the plan backlog directory                           |
 | `update [tag]` | Update Ralphai to the latest (or specified) version                    |
 | `uninstall`    | Remove Ralphai from this project (or `--global` to remove all state)   |
 
@@ -41,12 +36,12 @@ The `--repo` flag lets you run read-only commands against a different repo witho
 ```bash
 ralphai status --repo=my-app
 ralphai doctor --repo=~/work/api
-ralphai backlog-dir --repo=my-app
+ralphai config backlog-dir --repo=my-app
 ```
 
-Works with: `status`, `stop`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, `config`.
+Works with: `status`, `stop`, `reset`, `clean`, `uninstall`, `doctor`, `config`.
 
-Blocked for: `run`, `prd`, `worktree`, `init`.
+Blocked for: `run`, `init`.
 
 ## Interactive Dashboard
 
@@ -109,7 +104,6 @@ What it does:
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
 --plan=<file>                     Target a specific backlog plan (default: auto-detect)
---prd=<number>                    Run a PRD-driven session from a GitHub issue
 --agent-command=<command>         Override agent CLI command
 --setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
 --feedback-commands=<list>        Comma-separated feedback commands
@@ -133,40 +127,7 @@ By default, `ralphai run` drains the backlog — processing plans sequentially, 
 
 ### Issue Tracking
 
-```
---issue-source=<source>           Issue source: 'none' or 'github' (default: none)
---issue-label=<label>             Label to filter issues (default: ralphai)
---issue-in-progress-label=<label> Label applied when issue is picked up (default: ralphai:in-progress)
---issue-done-label=<label>       Label applied when issue is done (default: ralphai:done)
---issue-repo=<owner/repo>         Override repo for issue operations (default: auto-detect)
---issue-comment-progress=<bool>   Comment on issue during run (default: true)
-```
-
-## Prd
-
-`ralphai prd <issue-number>` is shorthand for `ralphai run --prd=<issue-number>`. It fetches a GitHub issue, derives a branch name from the issue title, and drains its sub-issues in a managed worktree.
-
-```bash
-ralphai prd 42                                # PRD-driven drain run
-ralphai prd 42 --dry-run                      # preview only
-ralphai prd 42 --agent-command='claude -p'    # use Claude Code
-```
-
-All `ralphai run` flags are accepted and passed through. Must be run from the main repository (not a worktree).
-
-## Worktree
-
-`ralphai worktree` is now a maintenance command. It does not start runs.
-
-```bash
-ralphai worktree list
-ralphai worktree clean
-```
-
-- `list` shows active Ralphai-managed worktrees (both `ralphai/` and `feat/` branches)
-- `clean` removes completed or orphaned worktrees and archives any leftover receipt
-
-Use `ralphai run` to start or resume work.
+Issue tracking is configured via `config.json` or environment variables (see [Configuration](#configuration)). Set `issueSource` to `"github"` to enable pulling plans from GitHub issues when the backlog is empty.
 
 ## Clean
 
@@ -227,14 +188,6 @@ Resets pipeline state so you can start fresh:
 
 Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
 
-## Purge
-
-```
---yes, -y         Skip confirmation prompt
-```
-
-Deletes all archived plan artifacts from `pipeline/out/`.
-
 ## Doctor
 
 `ralphai doctor` validates your setup with these checks:
@@ -288,30 +241,7 @@ ralphai config --check=issues
 --check=<capability>   Check if a capability is enabled (repeatable)
 ```
 
-See the [Check](#check) section for output format and exit codes.
-
-### Error handling
-
-On a non-initialized repo, `ralphai config` and `ralphai config <key>` print an error suggesting `ralphai init` and exit 1.
-
-## Check
-
-`ralphai check` verifies whether Ralphai is configured for the current repo. It prints a single line of plain text (no ANSI color codes) and exits 0 on success or 1 on failure.
-
-```
---capability=<name>   Check if a specific capability is enabled (repeatable)
---repo=<name>         Check config for a different repo
-```
-
-Output (without `--capability`):
-
-| Condition            | stdout                              | Exit code |
-| -------------------- | ----------------------------------- | --------- |
-| Config is valid      | `configured`                        | 0         |
-| No config file       | `not configured — run ralphai init` | 1         |
-| Malformed or invalid | `invalid config — <detail>`         | 1         |
-
-Output (with `--capability`):
+**Capability check output:**
 
 | Condition               | stdout                                                               | Exit code |
 | ----------------------- | -------------------------------------------------------------------- | --------- |
@@ -328,7 +258,9 @@ Supported capabilities:
 
 Multiple `--capability` flags can be combined; all must pass for exit 0.
 
-Does not require a git repository. Useful for CI scripts and setup verification.
+### Error handling
+
+On a non-initialized repo, `ralphai config` and `ralphai config <key>` print an error suggesting `ralphai init` and exit 1.
 
 ## Uninstall
 
@@ -340,15 +272,6 @@ Does not require a git repository. Useful for CI scripts and setup verification.
 By default, `ralphai uninstall` removes only the current repo's state directory at `~/.ralphai/repos/<id>/`.
 
 With `--global`, it removes the entire `~/.ralphai/` directory (all repos) and prints the command to uninstall the CLI binary. When active plans exist in other repos, a warning lists affected repos before confirmation.
-
-## Backlog Dir
-
-Prints the absolute path to the plan backlog directory for the current repository.
-
-```bash
-ralphai backlog-dir
-# ~/.ralphai/repos/<repo-id>/pipeline/backlog
-```
 
 ## Repos
 

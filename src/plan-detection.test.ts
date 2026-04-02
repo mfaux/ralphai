@@ -523,17 +523,10 @@ describe("countPlanTasks / countCompletedTasks", () => {
       p,
       "### Task 1: First\n**Status:** Complete\n\n### Task 2: Second\n**Status:** Complete\n",
     );
-    expect(countCompletedTasks(p)).toBe(2);
-  });
-
-  it("counts batch task headings (range only, no Status line)", () => {
-    const p = join(tmpDir, "progress.md");
-    // Batch entry: the range 1-3 contributes 3, with no separate Status line
-    writeFileSync(p, "### Tasks 1\u20133: Batch work\nDid things.\n");
-    expect(countCompletedTasks(p)).toBe(3);
+    expect(countCompletedTasks(p, "tasks")).toBe(2);
   });
 
   it("returns 0 for nonexistent progress file", () => {
-    expect(countCompletedTasks(join(tmpDir, "nope.md"))).toBe(0);
+    expect(countCompletedTasks(join(tmpDir, "nope.md"), "tasks")).toBe(0);
   });
 });

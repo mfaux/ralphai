@@ -175,9 +175,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
-  "continuous",
   "autoCommit",
-  "maxLearnings",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -334,10 +332,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.iterationTimeout = v as number;
   }
 
-  // continuous — deprecated and ignored (kept in ALLOWED_CONFIG_KEYS for
-  // backward compatibility so existing config files don't produce warnings).
-  // Use drain-by-default behavior instead; --once opts out.
-
   // autoCommit (boolean)
   if ("autoCommit" in obj) {
     const v = obj.autoCommit;
@@ -345,9 +339,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
       err(`'autoCommit' must be 'true' or 'false', got '${v}'`);
     values.autoCommit = String(v);
   }
-
-  // maxLearnings — deprecated and ignored (kept in ALLOWED_CONFIG_KEYS for
-  // backward compatibility so existing config files don't produce warnings).
 
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
@@ -519,9 +510,6 @@ export function applyEnvOverrides(
     overrides.issueCommentProgress = issueComment;
   }
 
-  // continuous — env var RALPHAI_CONTINUOUS is silently ignored (deprecated).
-  // Drain-by-default is now the default; use --once to opt out.
-
   // autoCommit (boolean)
   const autoCommit = get("RALPHAI_AUTO_COMMIT");
   if (autoCommit !== undefined) {
@@ -601,47 +589,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-auto-commit") {
       overrides.autoCommit = "false";
       rawFlags.autoCommit = "--no-auto-commit";
-    } else if (arg.startsWith("--issue-source=")) {
-      const v = arg.slice("--issue-source=".length);
-      validateEnum(v, "--issue-source", ["none", "github"]);
-      overrides.issueSource = v as RalphaiConfig["issueSource"];
-      rawFlags.issueSource = arg;
-    } else if (arg.startsWith("--issue-label=")) {
-      const v = arg.slice("--issue-label=".length);
-      if (v === "") {
-        throw new ConfigError(
-          "ERROR: --issue-label requires a non-empty value",
-        );
-      }
-      overrides.issueLabel = v;
-      rawFlags.issueLabel = arg;
-    } else if (arg.startsWith("--issue-in-progress-label=")) {
-      const v = arg.slice("--issue-in-progress-label=".length);
-      if (v === "") {
-        throw new ConfigError(
-          "ERROR: --issue-in-progress-label requires a non-empty value",
-        );
-      }
-      overrides.issueInProgressLabel = v;
-      rawFlags.issueInProgressLabel = arg;
-    } else if (arg.startsWith("--issue-done-label=")) {
-      const v = arg.slice("--issue-done-label=".length);
-      if (v === "") {
-        throw new ConfigError(
-          "ERROR: --issue-done-label requires a non-empty value",
-        );
-      }
-      overrides.issueDoneLabel = v;
-      rawFlags.issueDoneLabel = arg;
-    } else if (arg.startsWith("--issue-repo=")) {
-      const v = arg.slice("--issue-repo=".length);
-      overrides.issueRepo = v;
-      rawFlags.issueRepo = arg;
-    } else if (arg.startsWith("--issue-comment-progress=")) {
-      const v = arg.slice("--issue-comment-progress=".length);
-      validateBoolean(v, "--issue-comment-progress");
-      overrides.issueCommentProgress = v;
-      rawFlags.issueCommentProgress = arg;
     }
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.

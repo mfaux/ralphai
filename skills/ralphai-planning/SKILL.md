@@ -24,7 +24,7 @@ be self-contained and specific.
    concrete references, not guesses.
 4. **Fill in the template.** Every file path, function name, and line number
    you include saves Ralphai tokens it would otherwise spend exploring.
-5. **Write the plan file.** Run `ralphai backlog-dir` to get the output
+5. **Write the plan file.** Run `ralphai config backlog-dir` to get the output
    directory, then write your plan as `<slug>.md` there.
 
 ## Core Principles

@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
 import { useTempDir } from "./test-utils.ts";
-import { selectPlanForWorktree } from "./ralphai.ts";
+import { selectPlanForWorktree } from "./worktree/index.ts";
 import type { PullIssueResult } from "./issues.ts";
 
 // ---------------------------------------------------------------------------

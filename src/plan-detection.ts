@@ -240,9 +240,7 @@ export function countPlanTasks(planPath: string): number | undefined {
  * Count completed tasks from progress content, using the plan's format
  * to determine the counting strategy.
  *
- * - "tasks" format: counts `**Status:** Complete` markers. Falls back to
- *   deprecated batch `### Tasks X-Y` headings only when no individual
- *   markers are present (no double-counting).
+ * - "tasks" format: counts `**Status:** Complete` markers.
  * - "checkboxes" format: counts `- [x]` items.
  *
  * This is the single source of truth for progress-based completion counting.
@@ -258,41 +256,18 @@ export function countCompletedFromProgress(
 
   // "tasks" (and "none" as fallback): count **Status:** Complete markers
   const completeMatches = content.match(/\*\*Status:\*\*\s*Complete/gi);
-  const individualCount = completeMatches ? completeMatches.length : 0;
-
-  // When individual markers exist, they take precedence — skip batch headings
-  // to avoid double-counting.
-  if (individualCount > 0) {
-    return individualCount;
-  }
-
-  // DEPRECATED fallback: batch entries from older progress files.
-  // Only used when no individual **Status:** Complete markers are present.
-  let batchCount = 0;
-  const batchMatches = content.matchAll(
-    /^### .*Tasks?\s+(\d+)\s*[–-]\s*(\d+)/gim,
-  );
-  for (const match of batchMatches) {
-    const start = parseInt(match[1]!, 10);
-    const end = parseInt(match[2]!, 10);
-    if (end > start) {
-      batchCount += end - start + 1;
-    }
-  }
-
-  return batchCount;
+  return completeMatches ? completeMatches.length : 0;
 }
 
 /**
  * Count completed tasks in a progress file.
  *
  * This is a convenience wrapper that reads the file and delegates to
- * `countCompletedFromProgress`. Defaults to "tasks" format for
- * backward-compatibility with callers that don't know the plan format.
+ * `countCompletedFromProgress`.
  */
 export function countCompletedTasks(
   progressPath: string,
-  format: PlanFormat = "tasks",
+  format: PlanFormat,
 ): number {
   if (!existsSync(progressPath)) return 0;
   const content = readFileSync(progressPath, "utf-8");

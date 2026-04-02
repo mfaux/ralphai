@@ -26,7 +26,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/git-helpers.ts`   | Low-level git utilities: repo detection, base branch detection, stderr extraction.   |
 | `src/doctor.ts`        | `ralphai doctor` -- health checks and diagnostics.                                   |
 | `src/status.ts`        | `ralphai status` -- pipeline state rendering with optional auto-refresh.             |
-| `src/seed.ts`          | `ralphai seed` and `ralphai backlog-dir` -- sample plan management.                  |
+| `src/seed.ts`          | `ralphai seed` -- sample plan management.                                            |
 
 ## Worktree subsystem (`src/worktree/`)
 

@@ -5,7 +5,6 @@ import { useTempDir } from "./test-utils.ts";
 import {
   parseConfigFile,
   applyEnvOverrides,
-  parseCLIArgs,
   resolveConfig,
   getConfigFilePath,
   DEFAULTS,
@@ -56,24 +55,6 @@ describe("applyEnvOverrides — issueDoneLabel", () => {
   it("ignores empty RALPHAI_ISSUE_DONE_LABEL", () => {
     const result = applyEnvOverrides({ RALPHAI_ISSUE_DONE_LABEL: "" });
     expect(result.issueDoneLabel).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// issueDoneLabel — CLI flag parsing
-// ---------------------------------------------------------------------------
-
-describe("parseCLIArgs — issueDoneLabel", () => {
-  it("parses --issue-done-label=value", () => {
-    const result = parseCLIArgs(["--issue-done-label=cli:done"]);
-    expect(result.overrides.issueDoneLabel).toBe("cli:done");
-    expect(result.rawFlags.issueDoneLabel).toBe("--issue-done-label=cli:done");
-  });
-
-  it("rejects empty --issue-done-label=", () => {
-    expect(() => parseCLIArgs(["--issue-done-label="])).toThrow(
-      "ERROR: --issue-done-label requires a non-empty value",
-    );
   });
 });
 
@@ -137,30 +118,5 @@ describe("resolveConfig — issueDoneLabel precedence", () => {
     });
     expect(config.issueDoneLabel.value).toBe("from-env");
     expect(config.issueDoneLabel.source).toBe("env");
-  });
-
-  it("CLI flag overrides env var", () => {
-    const cwd = join(ctx.dir, "repo-done-cli");
-    mkdirSync(cwd, { recursive: true });
-    const { config } = resolveConfig({
-      cwd,
-      envVars: env({ RALPHAI_ISSUE_DONE_LABEL: "from-env" }),
-      cliArgs: ["--issue-done-label=from-cli"],
-    });
-    expect(config.issueDoneLabel.value).toBe("from-cli");
-    expect(config.issueDoneLabel.source).toBe("cli");
-  });
-
-  it("full precedence chain: default < config < env < CLI", () => {
-    const cwd = join(ctx.dir, "repo-done-full");
-    mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { issueDoneLabel: "from-config" });
-    const { config } = resolveConfig({
-      cwd,
-      envVars: env({ RALPHAI_ISSUE_DONE_LABEL: "from-env" }),
-      cliArgs: ["--issue-done-label=from-cli"],
-    });
-    expect(config.issueDoneLabel.value).toBe("from-cli");
-    expect(config.issueDoneLabel.source).toBe("cli");
   });
 });

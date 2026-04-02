@@ -53,7 +53,7 @@ import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
-import { handleRemovedCommand, handleRemovedRunFlags } from "./removed.ts";
+
 import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
@@ -80,16 +80,9 @@ import {
   extractExecStderr,
   detectBaseBranch,
 } from "./git-helpers.ts";
-import {
-  SUBCOMMANDS,
-  parseRalphaiOptions,
-  parseWorktreeArgs,
-  WORKTREE_SUBCOMMANDS,
-} from "./parse-options.ts";
+import { SUBCOMMANDS, parseRalphaiOptions } from "./parse-options.ts";
 import type {
   RalphaiSubcommand,
-  WorktreeSubcommand,
-  WorktreeOptions,
   RalphaiOptions,
   WizardAnswers,
 } from "./parse-options.ts";
@@ -833,102 +826,6 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
 // purge — delete all archived artifacts from pipeline/out/
 // ---------------------------------------------------------------------------
 
-async function runRalphaiPurge(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  if (!existsSync(getConfigFilePath(cwd))) {
-    console.error(
-      `Ralphai is not set up. Run ${TEXT}ralphai init${RESET} first.`,
-    );
-    process.exit(1);
-  }
-
-  const { archiveDir: outDir } = getRepoPipelineDirs(cwd);
-
-  if (!existsSync(outDir)) {
-    console.log("Nothing to purge — no out/ directory.");
-    return;
-  }
-
-  const entries = readdirSync(outDir, { withFileTypes: true });
-  const planDirs = entries.filter((entry) => entry.isDirectory());
-  if (planDirs.length === 0) {
-    console.log("Nothing to purge — out/ is already empty.");
-    return;
-  }
-
-  const planFiles = planDirs.filter((entry) => {
-    const planPath = planPathForSlug(outDir, entry.name);
-    return existsSync(planPath);
-  }).length;
-  const progressFiles = planDirs.filter((entry) =>
-    existsSync(join(outDir, entry.name, "progress.md")),
-  ).length;
-  const receiptFiles = planDirs.filter((entry) =>
-    existsSync(join(outDir, entry.name, "receipt.txt")),
-  ).length;
-
-  // Show what will be deleted
-  console.log();
-  console.log(
-    `${TEXT}The following archived artifacts will be deleted:${RESET}`,
-  );
-  console.log();
-  if (planFiles > 0) {
-    console.log(
-      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles} archived plan${planFiles !== 1 ? "s" : ""}${RESET}`,
-    );
-  }
-  if (progressFiles > 0) {
-    console.log(
-      `  ${TEXT}Progress${RESET}    ${DIM}${progressFiles} progress file${progressFiles !== 1 ? "s" : ""}${RESET}`,
-    );
-  }
-  if (receiptFiles > 0) {
-    console.log(
-      `  ${TEXT}Receipts${RESET}    ${DIM}${receiptFiles} receipt${receiptFiles !== 1 ? "s" : ""}${RESET}`,
-    );
-  }
-  console.log();
-
-  // Confirm unless --yes
-  if (!options.yes) {
-    clack.intro("Ralphai Purge");
-    const confirmed = await clack.confirm({
-      message:
-        "Delete all archived artifacts from pipeline/out/? This cannot be undone.",
-    });
-
-    if (clack.isCancel(confirmed) || !confirmed) {
-      clack.cancel("Purge cancelled.");
-      return;
-    }
-  }
-
-  // Delete all plan folders in out/
-  for (const planDir of planDirs) {
-    rmSync(join(outDir, planDir.name), { recursive: true, force: true });
-  }
-
-  // Summary
-  console.log(`${TEXT}Purged.${RESET}`);
-  console.log();
-  console.log(`${DIM}Deleted:${RESET}`);
-  if (planFiles > 0) {
-    console.log(`  ${planFiles} archived plan${planFiles !== 1 ? "s" : ""}`);
-  }
-  if (progressFiles > 0) {
-    console.log(
-      `  ${progressFiles} progress file${progressFiles !== 1 ? "s" : ""}`,
-    );
-  }
-  if (receiptFiles > 0) {
-    console.log(`  ${receiptFiles} receipt${receiptFiles !== 1 ? "s" : ""}`);
-  }
-  console.log();
-}
-
 // ---------------------------------------------------------------------------
 
 function showRalphaiHelp(): void {
@@ -1081,15 +978,6 @@ export async function runRalphai(args: string[]): Promise<void> {
       `${DIM}Use ${TEXT}ralphai repos${DIM} to see your initialized repos.${RESET}`,
     );
     process.exit(1);
-  }
-
-  // --- Removed command guidance ---
-  // Intercept commands that have been removed before they reach the dispatcher.
-  // This prints an actionable migration message and exits 1.
-  if (options.subcommand) {
-    handleRemovedCommand(options.subcommand, {
-      prdNumber: options.prdNumber,
-    });
   }
 
   switch (options.subcommand) {
@@ -1562,57 +1450,6 @@ function showRunHelp(): void {
     "  RALPHAI_AGENT_COMMAND='codex exec' ralphai run          # override via env var",
   ];
   console.log(lines.join("\n"));
-}
-
-// ---------------------------------------------------------------------------
-// prd subcommand — sugar for `ralphai run --prd=<number>`
-// ---------------------------------------------------------------------------
-
-async function runRalphaiPrd(
-  options: RalphaiOptions,
-  cwd: string,
-): Promise<void> {
-  const { prdNumber } = options;
-
-  // Missing issue number
-  if (!prdNumber) {
-    console.error("Usage: ralphai prd <issue-number>");
-    console.error(
-      `${DIM}Run ${TEXT}ralphai prd --help${RESET}${DIM} for details.${RESET}`,
-    );
-    process.exit(1);
-  }
-
-  // Non-numeric issue number
-  const num = parseInt(prdNumber, 10);
-  if (isNaN(num) || String(num) !== prdNumber) {
-    console.error(
-      `Invalid issue number: '${prdNumber}'. The issue number must be a positive integer.`,
-    );
-    console.error(`${DIM}Example: ${TEXT}ralphai prd 42${RESET}`);
-    process.exit(1);
-  }
-
-  // Reject if inside a worktree
-  if (isGitWorktree(cwd)) {
-    console.error("'ralphai prd' must be run from the main repository.");
-    console.error(
-      "You are inside a worktree. Run this command from the main repo.",
-    );
-    process.exit(1);
-  }
-
-  // Delegate to `runRalphaiInManagedWorktree` with --prd=<number> injected.
-  const runArgs = [...options.runArgs];
-  runArgs.push(`--prd=${prdNumber}`);
-
-  const delegatedOptions: RalphaiOptions = {
-    ...options,
-    subcommand: "run",
-    runArgs,
-  };
-
-  await runRalphaiInManagedWorktree(delegatedOptions, cwd);
 }
 
 /**
@@ -2110,11 +1947,6 @@ async function runRalphaiInManagedWorktree(
   let runArgs = [...options.runArgs];
   const hasHelp = runArgs.includes("--help") || runArgs.includes("-h");
   const hasShowConfig = runArgs.includes("--show-config");
-
-  // Check for removed flags before any other processing
-  if (!hasHelp && !hasShowConfig) {
-    handleRemovedRunFlags(runArgs);
-  }
 
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
@@ -2649,25 +2481,3 @@ async function runRalphaiRunner(
 
   await runRunner(runnerOpts);
 }
-
-// ---------------------------------------------------------------------------
-// Barrel re-exports – preserve backward-compatible import paths
-// ---------------------------------------------------------------------------
-
-export {
-  parseWorktreeList,
-  selectPlanForWorktree,
-  isRalphaiManagedBranch,
-  listRalphaiWorktrees,
-} from "./worktree/index.ts";
-export type {
-  WorktreeEntry,
-  SelectedWorktreePlan,
-  GitHubFallbackOptions,
-} from "./worktree/index.ts";
-export {
-  runRalphaiStatus,
-  printStatusOnce,
-  extractScope,
-  extractDependsOn,
-} from "./status.ts";

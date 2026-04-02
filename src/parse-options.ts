@@ -8,21 +8,15 @@ export type RalphaiSubcommand =
   | "init"
   | "update"
   | "run"
-  | "prd"
   | "uninstall"
-  | "worktree"
   | "status"
   | "stop"
   | "reset"
-  | "purge"
   | "clean"
   | "doctor"
-  | "backlog-dir"
   | "repos"
-  | "check"
   | "config"
-  | "seed"
-  | "teardown";
+  | "seed";
 
 export type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -48,7 +42,6 @@ export interface RalphaiOptions {
   capabilities: string[]; // --capability=<name> (repeatable, for `check`)
   configKey?: string; // positional arg for `config` subcommand
   checkCapabilities: string[]; // --check=<name> (repeatable, for `config --check`)
-  prdNumber?: string; // positional arg for `prd` subcommand
   once: boolean; // --once (for status auto-watch)
   stopSlug?: string; // positional arg for `stop` subcommand
   runTarget?: RunTarget; // positional target for `run` (issue number, plan path, or auto)
@@ -77,21 +70,15 @@ export const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
   "run",
-  "prd",
   "uninstall",
-  "worktree",
   "status",
   "stop",
   "reset",
-  "purge",
   "clean",
   "doctor",
-  "backlog-dir",
   "repos",
-  "check",
   "config",
   "seed", // hidden — not listed in showRalphaiHelp()
-  "teardown", // removed — prints migration guidance
 ]);
 
 export function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -107,7 +94,6 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let agentCommand: string | undefined;
   let targetDir: string | undefined;
   let repo: string | undefined;
-  let prdNumber: string | undefined;
   let runTarget: RunTarget | undefined;
   const capabilities: string[] = [];
   const checkCapabilities: string[] = [];
@@ -118,21 +104,14 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
 
   let collectingRunArgs = false;
   let collectingConfigArgs = false;
-  let expectingPrdNumber = false;
   let expectingRunTarget = false;
   let expectingStopSlug = false;
   let stopSlug: string | undefined;
 
   for (const arg of args) {
-    // After `run`/`prd` subcommand or `--`, collect remaining args for the runner
+    // After `run` subcommand or `--`, collect remaining args for the runner
     if (collectingRunArgs) {
       if (arg === "--") continue; // skip bare `--` separator (still supported)
-      // For `prd`, the first non-flag positional arg is the issue number
-      if (expectingPrdNumber && !arg.startsWith("-")) {
-        prdNumber = arg;
-        expectingPrdNumber = false;
-        continue;
-      }
       // For `run`, the first non-flag positional arg is the target
       if (expectingRunTarget && !arg.startsWith("-")) {
         try {
@@ -218,21 +197,9 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
           collectingRunArgs = true;
           expectingRunTarget = true;
         }
-        // For `prd`, next positional is the issue number, rest are runArgs
-        if (subcommand === "prd") {
-          collectingRunArgs = true;
-          expectingPrdNumber = true;
-        }
         // For `stop`, next positional is the plan slug
         if (subcommand === "stop") {
           expectingStopSlug = true;
-        }
-        // For `worktree`, parse worktree-specific args from the rest
-        if (subcommand === "worktree") {
-          worktreeOptions = parseWorktreeArgs(
-            args.slice(args.indexOf(arg) + 1),
-          );
-          break; // worktree parser consumed remaining args
         }
         // For `config`, collect config-specific args from the rest
         if (subcommand === "config") {
@@ -263,7 +230,6 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
     capabilities,
     configKey,
     checkCapabilities,
-    prdNumber,
     stopSlug,
     runTarget,
     runArgs,
