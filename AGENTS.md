@@ -10,7 +10,15 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 
 ## Documentation
 
-- **Keep docs in sync.** When changing behavior, update the relevant docs in the same change. This includes both external docs and internal docs. Don't leave doc updates as a follow-up.
+- **Keep docs in sync.** When changing behavior, update the relevant docs in the same change. Don't leave doc updates as a follow-up.
+- **Doc inventory.** Check each doc below for relevance when making changes:
+  - `ARCHITECTURE.md` -- module responsibilities and source layout. Update when adding, removing, or restructuring modules.
+  - `docs/cli-reference.md` -- all commands, flags, config keys, and env vars. Update when adding or changing CLI surface.
+  - `docs/how-ralphai-works.md` -- technical deep-dive: feedback loops, stuck detection, context rot. Update when changing core loop behavior.
+  - `docs/workflows.md` -- recipe-based user guide. Update when adding new commands or changing user-facing workflows.
+  - `docs/worktrees.md` -- worktree lifecycle and parallel runs. Update when changing worktree behavior.
+  - `docs/troubleshooting.md` -- common issues and recovery steps. Update when fixing user-facing bugs or changing error behavior.
+  - `AGENTS.md` -- contributor guidelines (this file). Update when changing project conventions.
 
 ## Git & GitHub
 
@@ -19,11 +27,11 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 - **Use the `gh` CLI** to create issues and pull requests. Link PRs to related issues when applicable.
 - **Squash-merge PRs.** The merge commit message should follow conventional commit format.
 
-## File Size Limits
+## Module Focus
 
-- **Test files: max ~500 lines.** When a test file approaches this limit, split it by feature domain before adding more tests. When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one.
-- **Source files: max ~300 lines.** Extract modules when a file grows beyond this. Note: `src/ralphai.ts` currently exceeds this limit and is a candidate for decomposition. Follow this guideline for new files and when refactoring.
-- Before appending to any file, check its current size. If adding your changes would push it past the limit, split first.
+- **Single responsibility.** Each source file should have one clear reason to change. When a file accumulates unrelated concerns — even if it's only a few hundred lines — extract the distinct responsibilities into their own modules.
+- **New test files per feature.** When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one. If an existing test file covers multiple unrelated features, split it by domain before adding more tests.
+- **Check before appending.** Before adding substantial new code to a file, review whether it still has a single focus. If your changes would introduce a second responsibility, extract first.
 
 ## Dry-Run Safety
 

@@ -18,7 +18,7 @@ import { getConfigFilePath } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { planPathForSlug, planExistsForSlug } from "./plan-detection.ts";
 import { findPlansByBranch } from "./receipt.ts";
-import { listRalphaiWorktrees } from "./ralphai.ts";
+import { listRalphaiWorktrees } from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Help
