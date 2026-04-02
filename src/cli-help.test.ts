@@ -162,7 +162,7 @@ describe("CLI help and flags", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ralphai <command> --help");
     expect(result.stdout).toContain(
-      "ralphai               # show pipeline status (auto-refreshes in terminal)",
+      "ralphai               # open interactive menu",
     );
     expect(result.stdout).toContain("ralphai init");
     expect(result.stdout).toContain("ralphai run");

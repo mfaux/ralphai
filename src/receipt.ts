@@ -24,6 +24,7 @@ export interface Receipt {
   plan_file?: string;
   tasks_completed: number;
   outcome?: string;
+  pr_url?: string;
 }
 
 /** Fields required when initializing a new receipt. */
@@ -75,6 +76,7 @@ export function parseReceipt(filePath: string): Receipt | null {
     plan_file: fields.plan_file,
     tasks_completed: Number.isNaN(parsedTasks) ? 0 : parsedTasks,
     outcome: fields.outcome,
+    pr_url: fields.pr_url,
   };
 }
 
@@ -131,6 +133,25 @@ export function updateReceiptTasks(
     writeFileSync(receiptPath, updated);
   } else {
     writeFileSync(receiptPath, receiptContent + `tasks_completed=${count}\n`);
+  }
+}
+
+/**
+ * Write `pr_url=<url>` to an existing receipt file.
+ *
+ * Appends the field if not present, or updates it if it already exists.
+ * No-op if the receipt file does not exist or the URL is empty.
+ */
+export function updateReceiptPrUrl(receiptPath: string, prUrl: string): void {
+  if (!prUrl) return;
+  if (!existsSync(receiptPath)) return;
+
+  const content = readFileSync(receiptPath, "utf-8");
+  if (/^pr_url=/m.test(content)) {
+    const updated = content.replace(/^pr_url=.*/m, `pr_url=${prUrl}`);
+    writeFileSync(receiptPath, updated);
+  } else {
+    writeFileSync(receiptPath, content + `pr_url=${prUrl}\n`);
   }
 }
 

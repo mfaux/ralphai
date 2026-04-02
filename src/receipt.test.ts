@@ -6,6 +6,7 @@ import {
   parseReceipt,
   initReceipt,
   updateReceiptTasks,
+  updateReceiptPrUrl,
   resolveReceiptPath,
   checkReceiptSource,
   findPlansByBranch,
@@ -123,6 +124,25 @@ describe("parseReceipt", () => {
     expect(receipt!.worktree_path).toBeUndefined();
     expect(receipt!.plan_file).toBeUndefined();
     expect(receipt!.outcome).toBeUndefined();
+    expect(receipt!.pr_url).toBeUndefined();
+  });
+
+  it("parses pr_url when present", () => {
+    const receiptPath = join(ctx.dir, "receipt-pr.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-06-15T10:30:00Z",
+        "branch=feat/dark-mode",
+        "slug=dark-mode",
+        "tasks_completed=3",
+        "pr_url=https://github.com/user/repo/pull/42",
+      ].join("\n") + "\n",
+    );
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.pr_url).toBe("https://github.com/user/repo/pull/42");
   });
 });
 
@@ -380,6 +400,73 @@ describe("updateReceiptTasks", () => {
 
     const content = readFileSync(receiptPath, "utf-8");
     expect(content).toContain("tasks_completed=2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateReceiptPrUrl
+// ---------------------------------------------------------------------------
+
+describe("updateReceiptPrUrl", () => {
+  const ctx = useTempDir();
+
+  it("appends pr_url to receipt without one", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    writeFileSync(receiptPath, "slug=test\ntasks_completed=2\n");
+
+    updateReceiptPrUrl(receiptPath, "https://github.com/user/repo/pull/99");
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).toContain("pr_url=https://github.com/user/repo/pull/99");
+  });
+
+  it("updates existing pr_url in receipt", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    writeFileSync(
+      receiptPath,
+      "slug=test\npr_url=https://old-url\ntasks_completed=2\n",
+    );
+
+    updateReceiptPrUrl(receiptPath, "https://github.com/user/repo/pull/100");
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).toContain("pr_url=https://github.com/user/repo/pull/100");
+    expect(content).not.toContain("https://old-url");
+  });
+
+  it("is a no-op when receipt file does not exist", () => {
+    // Should not throw
+    updateReceiptPrUrl(join(ctx.dir, "missing.txt"), "https://example.com");
+  });
+
+  it("is a no-op when URL is empty", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    writeFileSync(receiptPath, "slug=test\n");
+
+    updateReceiptPrUrl(receiptPath, "");
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).not.toContain("pr_url=");
+  });
+
+  it("round-trips through parseReceipt", () => {
+    const receiptPath = join(ctx.dir, "receipt.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-06-15T10:30:00Z",
+        "branch=feat/test",
+        "slug=test",
+        "tasks_completed=3",
+      ].join("\n") + "\n",
+    );
+
+    updateReceiptPrUrl(receiptPath, "https://github.com/user/repo/pull/7");
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.pr_url).toBe("https://github.com/user/repo/pull/7");
+    expect(receipt!.slug).toBe("test");
   });
 });
 

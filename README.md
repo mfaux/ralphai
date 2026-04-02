@@ -60,15 +60,15 @@ Create a Ralphai plan for adding dark mode support.
 
 ### 2. Use the TUI
 
-For day-to-day use, start with the interactive dashboard:
+For day-to-day use, start with the interactive menu:
 
 ```bash
 ralphai
 ```
 
-The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**). The right pane shows summary, plan content, progress log, and live agent output for the selected plan. Press **Tab** to switch panes, **Enter** to open or focus the detail pane, **s/p/g/o** to change tabs, and **r/R/P** to run, reset, or purge plans.
+This shows a pipeline summary header and an interactive menu. From here you can run the next queued plan, pick a specific plan from the backlog, or view pipeline status.
 
-`ralphai` is the primary workflow for humans. Use it to browse the backlog, inspect progress, and launch runs without remembering subcommands.
+`ralphai` is the primary workflow for humans. Use it to browse the pipeline, inspect progress, and launch actions without remembering subcommands.
 
 ### 3. Run headlessly
 
@@ -158,17 +158,25 @@ ralphai config backlog-dir --repo=~/work/api  # get backlog path by repo path
 
 The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
 
-## Interactive Dashboard
+## Interactive Menu
 
-Running bare `ralphai` in a terminal launches an interactive two-pane dashboard. The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**); the right pane shows detail tabs for the selected plan: summary, plan content, progress log, and live agent output.
+Running bare `ralphai` in a terminal launches an interactive menu with a pipeline summary header showing plan counts (backlog, running, completed). From the menu you can:
+
+- **Run next plan** — auto-detects the next ready plan (respecting dependency ordering) and hands off to the runner. When the backlog is empty but GitHub issues are configured, it will pull from GitHub.
+- **Pick from backlog** — browse all backlog plans with scope and dependency info, then select one to run.
+- **View pipeline status** — display detailed pipeline status.
+- **Doctor** — run health checks (agent, feedback commands, config, git).
+- **Clean worktrees** — remove archived plans and orphaned worktrees.
+- **View config** — display the fully resolved configuration with source tracking.
+- **Edit config** — re-run the init wizard to update settings.
 
 ```bash
-ralphai                  # launches the dashboard (TTY only)
+ralphai                  # launches the interactive menu (TTY only)
 ```
 
-Press **Tab** to toggle focus between panes, **Enter** to open or focus the detail pane, **c** to copy the selected repo path, **s/p/g/o** to switch detail tabs, and **r/R/P** to run, reset, or purge plans. The dashboard auto-refreshes every 3 seconds and filters out stale repos with no plans. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first.
+The menu re-gathers pipeline state before each display so data is always fresh. Selecting a run action hands off to the runner (the menu does not re-appear). Ctrl+C or selecting "Quit" exits cleanly. If you run `ralphai` in an un-initialized repo, it offers to run `ralphai init` first, then proceeds to the menu.
 
-For most people, this is the main way to use Ralphai. Reach for `ralphai run` when you want headless execution, and use `ralphai worktree list` or `ralphai worktree clean` for maintenance.
+For most people, this is the main way to use Ralphai. Reach for `ralphai run` when you want headless execution.
 
 ## Manage Your Installation
 

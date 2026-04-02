@@ -52,6 +52,7 @@ import { resolveScope } from "./scope.ts";
 import {
   initReceipt,
   updateReceiptTasks,
+  updateReceiptPrUrl,
   checkReceiptSource,
 } from "./receipt.ts";
 import { type ResolvedConfig } from "./config.ts";
@@ -928,14 +929,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
         }
         activePidFile = null;
 
-        archiveRun({
-          wipFiles: [planFile],
-          archiveDir: dirs.archiveDir,
-          issueInProgressLabel,
-          issueDoneLabel,
-          cwd,
-        });
-
         const prResult = createPr({
           branch,
           baseBranch,
@@ -950,6 +943,19 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           learnings: accumulatedLearnings,
         });
         console.log(prResult.message);
+
+        // Persist PR URL to receipt before archiving (so it survives the move)
+        if (prResult.ok && prResult.prUrl) {
+          updateReceiptPrUrl(receiptFile, prResult.prUrl);
+        }
+
+        archiveRun({
+          wipFiles: [planFile],
+          archiveDir: dirs.archiveDir,
+          issueInProgressLabel,
+          issueDoneLabel,
+          cwd,
+        });
 
         plansCompleted++;
         completed = true;
