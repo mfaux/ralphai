@@ -3863,7 +3863,8 @@ async function runRalphaiInManagedWorktree(
     process.exit(1);
   }
 
-  const activeWorktrees = listRalphaiWorktrees(cwd);
+  const hasOnce = runArgs.includes("--once");
+  const baseBranch = detectBaseBranch(cwd);
 
   // Build GitHub fallback options so selectPlanForWorktree can pull an issue
   // when the local backlog is empty and issueSource is "github".
@@ -3891,92 +3892,81 @@ async function runRalphaiInManagedWorktree(
         }
       : undefined;
 
-  const plan = selectPlanForWorktree(
-    cwd,
-    targetPlan,
-    activeWorktrees,
-    githubFallback,
-  );
-  if (!plan) process.exit(1);
+  // --- Drain loop: each plan gets its own branch and worktree ---
+  // This mirrors how runPrdIssueTarget sequences sub-issues: the outer loop
+  // controls plan selection and worktree lifecycle, while the runner processes
+  // a single plan per invocation (--once).
+  let plansProcessed = 0;
 
-  const baseBranch = detectBaseBranch(cwd);
-  const branch = `ralphai/${plan.slug}`;
-  const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
-  const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
-  const desiredWorktreeDir = join(worktreeBase, plan.slug);
-  mkdirSync(worktreeBase, { recursive: true });
+  while (true) {
+    const activeWorktrees = listRalphaiWorktrees(cwd);
 
-  let resolvedWorktreeDir = desiredWorktreeDir;
-  if (activeWorktree) {
-    resolvedWorktreeDir = activeWorktree.path;
-    console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
-    console.log(`Branch: ${branch}`);
-  } else {
-    if (existsSync(resolvedWorktreeDir)) {
-      console.log(
-        `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
-      );
-      execSync("git worktree prune", { cwd, stdio: "ignore" });
-      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+    const plan = selectPlanForWorktree(
+      cwd,
+      targetPlan,
+      activeWorktrees,
+      githubFallback,
+    );
+    if (!plan) {
+      if (plansProcessed === 0) process.exit(1);
+      break;
     }
 
-    let branchExists = false;
+    const branch = `ralphai/${plan.slug}`;
+    const resolvedWorktreeDir = prepareWorktree(
+      cwd,
+      plan.slug,
+      branch,
+      baseBranch,
+      setupCommand,
+    );
+
+    console.log("Running ralphai in worktree...");
+    const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
+    const shouldResume =
+      plan.source === "in-progress" || activeWorktree !== undefined;
+    const hasResumeFlag =
+      runArgs.includes("--resume") || runArgs.includes("-r");
+    const hasOnceFlag = runArgs.includes("--once");
+    const worktreeRunOptions: RalphaiOptions = {
+      ...options,
+      subcommand: "run",
+      runArgs: [
+        ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...(!hasOnceFlag ? ["--once"] : []),
+        ...runArgs,
+      ],
+    };
+
     try {
-      execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
-        cwd,
-        stdio: "ignore",
-      });
-      branchExists = true;
+      await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
     } catch {
-      branchExists = false;
+      // runRalphaiRunner may call process.exit() on fatal errors
     }
 
-    try {
-      if (branchExists) {
-        console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
-        console.log(`Branch: ${branch}`);
-        execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
+    plansProcessed++;
+
+    // --- Clean up worktree between plans so the next one starts fresh ---
+    // Skip cleanup on --once (the single worktree may still be useful) and
+    // when this was a pre-existing worktree we reused.
+    if (!hasOnce && !activeWorktree) {
+      try {
+        execSync(`git worktree remove --force "${resolvedWorktreeDir}"`, {
           cwd,
-          stdio: ["inherit", "pipe", "pipe"],
+          stdio: "pipe",
         });
-      } else {
-        console.log(`Creating worktree: ${resolvedWorktreeDir}`);
-        console.log(`Branch: ${branch} (from ${baseBranch})`);
-        execSync(
-          `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-          { cwd, stdio: ["inherit", "pipe", "pipe"] },
-        );
+      } catch {
+        // Best-effort cleanup; the worktree may have already been removed
+        // or the directory may not exist.
       }
-    } catch (err: unknown) {
-      const stderr = extractExecStderr(err);
-      console.error(`${TEXT}Error:${RESET} Failed to prepare worktree.`);
-      if (stderr) console.error(`  git: ${stderr}`);
-      process.exit(1);
     }
-  }
 
-  // Run setup command in freshly-created worktrees (not reused ones)
-  if (!activeWorktree) {
-    executeSetupCommand(setupCommand, resolvedWorktreeDir);
-  }
+    // --- --once: stop after a single plan ---
+    if (hasOnce) {
+      break;
+    }
 
-  console.log("Running ralphai in worktree...");
-  const shouldResume =
-    plan.source === "in-progress" || activeWorktree !== undefined;
-  const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
-  const worktreeRunOptions: RalphaiOptions = {
-    ...options,
-    subcommand: "run",
-    runArgs: [
-      ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-      ...runArgs,
-    ],
-  };
-
-  try {
-    await runRalphaiRunner(worktreeRunOptions, resolvedWorktreeDir);
-  } catch {
-    // runRalphaiRunner may call process.exit() on fatal errors
+    // Loop back to select the next plan (each gets a fresh branch/worktree)
   }
 }
 

@@ -58,10 +58,15 @@ export function findNextPlanName(state: PipelineState): string | undefined {
 
 /**
  * Build the label and hint for the "Run next plan" menu item.
+ *
+ * @param githubIssueCount - Number of available GitHub issues (from peek).
+ *   When 0, the item is disabled. When >0, the hint includes the count.
+ *   When undefined, falls back to a generic "will pull from GitHub" hint.
  */
 export function runNextMenuItem(
   state: PipelineState,
   hasGitHubIssues: boolean,
+  githubIssueCount?: number,
 ): { label: string; hint?: string; disabled: boolean } {
   const nextPlan = findNextPlanName(state);
 
@@ -72,9 +77,27 @@ export function runNextMenuItem(
     };
   }
 
-  // No local plans ready — if GitHub issues are configured, the runner
-  // will auto-pull from GitHub, so the item stays enabled.
+  // No local plans ready — check GitHub issue availability
   if (hasGitHubIssues) {
+    // Count known and zero — disable with explicit message
+    if (githubIssueCount === 0) {
+      return {
+        label: "Run next plan",
+        hint: "(no GitHub issues)",
+        disabled: true,
+      };
+    }
+
+    // Count known and positive — show how many are available
+    if (githubIssueCount !== undefined && githubIssueCount > 0) {
+      return {
+        label: "Run next plan",
+        hint: `will pull oldest of ${githubIssueCount} from GitHub`,
+        disabled: false,
+      };
+    }
+
+    // Count unknown (peek not yet completed or failed) — generic hint
     return {
       label: "Run next plan",
       hint: "will pull from GitHub",

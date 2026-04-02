@@ -170,6 +170,49 @@ describe("runNextMenuItem", () => {
     expect(item.disabled).toBe(true);
     expect(item.hint).toBe("(nothing queued)");
   });
+
+  it("is disabled with '(no GitHub issues)' when GitHub configured but count is 0", () => {
+    const state = makeState();
+    const item = runNextMenuItem(state, true, 0);
+
+    expect(item.label).toBe("Run next plan");
+    expect(item.hint).toBe("(no GitHub issues)");
+    expect(item.disabled).toBe(true);
+  });
+
+  it("shows issue count in hint when GitHub issues are available", () => {
+    const state = makeState();
+    const item = runNextMenuItem(state, true, 5);
+
+    expect(item.label).toBe("Run next plan");
+    expect(item.hint).toBe("will pull oldest of 5 from GitHub");
+    expect(item.disabled).toBe(false);
+  });
+
+  it("uses singular 'issue' for count of 1", () => {
+    const state = makeState();
+    const item = runNextMenuItem(state, true, 1);
+
+    expect(item.hint).toBe("will pull oldest of 1 from GitHub");
+  });
+
+  it("falls back to generic hint when count is undefined", () => {
+    const state = makeState();
+    const item = runNextMenuItem(state, true, undefined);
+
+    expect(item.label).toBe("Run next plan");
+    expect(item.hint).toBe("will pull from GitHub");
+    expect(item.disabled).toBe(false);
+  });
+
+  it("shows plan name regardless of GitHub issue count", () => {
+    const state = makeState({ backlog: [makePlan("local.md")] });
+    const item = runNextMenuItem(state, true, 5);
+
+    // Local plan takes precedence — no GitHub hint needed
+    expect(item.label).toBe("Run next plan (local.md)");
+    expect(item.disabled).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
