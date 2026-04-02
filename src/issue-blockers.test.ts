@@ -1,73 +1,140 @@
-import { describe, it, expect } from "bun:test";
-import {
-  extractBlockersFromBody,
-  issueDepSlug,
-  buildIssuePlanContent,
-} from "./issues.ts";
+import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { execSync as realExecSync } from "child_process";
+import * as realChildProcess from "child_process";
+import { issueDepSlug, buildIssuePlanContent } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
-// extractBlockersFromBody — parses blocker references from GitHub issue bodies
+// fetchBlockersViaGraphQL — queries GitHub GraphQL API for blocking issues
 // ---------------------------------------------------------------------------
 
-describe("extractBlockersFromBody", () => {
-  it("extracts a single 'Blocked by #N' reference", () => {
-    const body =
-      "This task is complex.\n\nBlocked by #42\n\nMore details here.";
-    expect(extractBlockersFromBody(body)).toEqual([42]);
+// Mock child_process so we can intercept `gh api graphql` calls.
+const mockExecSync = mock();
+
+mock.module("child_process", () => ({
+  ...realChildProcess,
+  execSync: (...args: Parameters<typeof realExecSync>) => {
+    const [cmd] = args;
+    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
+      return mockExecSync(...args);
+    }
+    return realExecSync(...args);
+  },
+}));
+
+// Import AFTER mocking so the module picks up our mock.
+const { fetchBlockersViaGraphQL } = await import("./issues.ts");
+
+describe("fetchBlockersViaGraphQL", () => {
+  beforeEach(() => {
+    mockExecSync.mockReset();
   });
 
-  it("extracts 'Depends on #N' reference", () => {
-    const body = "Depends on #15\n\nImplementation notes...";
-    expect(extractBlockersFromBody(body)).toEqual([15]);
+  afterEach(() => {
+    mockExecSync.mockReset();
   });
 
-  it("is case-insensitive", () => {
-    const body = "blocked by #7\nDEPENDS ON #8";
-    expect(extractBlockersFromBody(body)).toEqual([7, 8]);
+  it("returns blocker issue numbers from GraphQL response", () => {
+    const graphqlResponse = JSON.stringify({
+      data: {
+        repository: {
+          issue: {
+            blockedBy: {
+              nodes: [{ number: 42 }, { number: 15 }],
+            },
+          },
+        },
+      },
+    });
+    mockExecSync.mockReturnValue(graphqlResponse);
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([15, 42]);
   });
 
-  it("extracts multiple comma-separated blockers", () => {
-    const body = "Blocked by #10, #20, #30";
-    expect(extractBlockersFromBody(body)).toEqual([10, 20, 30]);
+  it("returns empty array when no blockers exist", () => {
+    const graphqlResponse = JSON.stringify({
+      data: {
+        repository: {
+          issue: {
+            blockedBy: {
+              nodes: [],
+            },
+          },
+        },
+      },
+    });
+    mockExecSync.mockReturnValue(graphqlResponse);
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([]);
   });
 
-  it("extracts blockers from multiple lines", () => {
-    const body = "Blocked by #10\nBlocked by #20\nDepends on #30";
-    expect(extractBlockersFromBody(body)).toEqual([10, 20, 30]);
+  it("returns empty array when GraphQL query fails (fail-open)", () => {
+    mockExecSync.mockImplementation(() => {
+      throw new Error("gh api graphql failed");
+    });
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([]);
   });
 
-  it("returns empty array when no blockers found", () => {
-    const body = "This is a simple issue with no blocking references.";
-    expect(extractBlockersFromBody(body)).toEqual([]);
+  it("returns empty array when response is invalid JSON (fail-open)", () => {
+    mockExecSync.mockReturnValue("not json");
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([]);
   });
 
-  it("returns empty array for empty body", () => {
-    expect(extractBlockersFromBody("")).toEqual([]);
+  it("returns empty array when response has no data field", () => {
+    mockExecSync.mockReturnValue(
+      JSON.stringify({ errors: [{ message: "not found" }] }),
+    );
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([]);
   });
 
-  it("returns empty array for null/undefined body", () => {
-    expect(extractBlockersFromBody(null as unknown as string)).toEqual([]);
-    expect(extractBlockersFromBody(undefined as unknown as string)).toEqual([]);
+  it("returns empty array for invalid repo format", () => {
+    const result = fetchBlockersViaGraphQL("invalid-repo", "100", "/tmp");
+    expect(result).toEqual([]);
+    // Should not even call gh
+    expect(mockExecSync).not.toHaveBeenCalled();
   });
 
-  it("deduplicates repeated issue numbers", () => {
-    const body = "Blocked by #42\nDepends on #42";
-    expect(extractBlockersFromBody(body)).toEqual([42]);
+  it("returns sorted blocker numbers", () => {
+    const graphqlResponse = JSON.stringify({
+      data: {
+        repository: {
+          issue: {
+            blockedBy: {
+              nodes: [{ number: 30 }, { number: 10 }, { number: 20 }],
+            },
+          },
+        },
+      },
+    });
+    mockExecSync.mockReturnValue(graphqlResponse);
+
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([10, 20, 30]);
   });
 
-  it("handles 'Blocked by #N and #M' syntax", () => {
-    const body = "Blocked by #10 and #20";
-    expect(extractBlockersFromBody(body)).toEqual([10, 20]);
-  });
+  it("handles single blocker", () => {
+    const graphqlResponse = JSON.stringify({
+      data: {
+        repository: {
+          issue: {
+            blockedBy: {
+              nodes: [{ number: 42 }],
+            },
+          },
+        },
+      },
+    });
+    mockExecSync.mockReturnValue(graphqlResponse);
 
-  it("ignores issue references not preceded by blocker keywords", () => {
-    const body = "See #42 for context.\nRelated to #15.";
-    expect(extractBlockersFromBody(body)).toEqual([]);
-  });
-
-  it("handles mixed content with blocker and non-blocker references", () => {
-    const body = "See #99 for details.\n\nBlocked by #42\n\nRelated: #15, #20.";
-    expect(extractBlockersFromBody(body)).toEqual([42]);
+    const result = fetchBlockersViaGraphQL("org/repo", "100", "/tmp");
+    expect(result).toEqual([42]);
   });
 });
 
@@ -94,12 +161,13 @@ describe("issueDepSlug", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildIssuePlanContent", () => {
-  it("includes depends-on when body has blockers", () => {
+  it("includes depends-on when blockers are provided", () => {
     const content = buildIssuePlanContent({
       issueNumber: "100",
       title: "Implement feature X",
-      body: "Blocked by #42\n\nDetails here.",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
+      blockers: [42],
     });
     expect(content).toContain("depends-on: [gh-42]");
     expect(content).toContain("source: github");
@@ -110,25 +178,27 @@ describe("buildIssuePlanContent", () => {
     const content = buildIssuePlanContent({
       issueNumber: "100",
       title: "Implement feature X",
-      body: "Blocked by #10, #20\nDepends on #30",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
+      blockers: [10, 20, 30],
     });
     expect(content).toContain("depends-on: [gh-10, gh-20, gh-30]");
   });
 
-  it("omits depends-on when body has no blockers", () => {
+  it("omits depends-on when blockers array is empty", () => {
     const content = buildIssuePlanContent({
       issueNumber: "50",
       title: "Simple task",
       body: "No blockers here.",
       url: "https://github.com/org/repo/issues/50",
+      blockers: [],
     });
     expect(content).not.toContain("depends-on");
     expect(content).toContain("source: github");
     expect(content).toContain("issue: 50");
   });
 
-  it("omits depends-on when body is empty", () => {
+  it("omits depends-on when blockers is not provided", () => {
     const content = buildIssuePlanContent({
       issueNumber: "50",
       title: "Simple task",
@@ -136,6 +206,18 @@ describe("buildIssuePlanContent", () => {
       url: "https://github.com/org/repo/issues/50",
     });
     expect(content).not.toContain("depends-on");
+  });
+
+  it("body text with 'Blocked by #N' produces no depends-on without blockers param", () => {
+    const content = buildIssuePlanContent({
+      issueNumber: "100",
+      title: "Implement feature X",
+      body: "Blocked by #42\n\nDetails here.",
+      url: "https://github.com/org/repo/issues/100",
+    });
+    expect(content).not.toContain("depends-on");
+    // Body text is preserved but not parsed for blockers
+    expect(content).toContain("Blocked by #42");
   });
 
   it("preserves issue body after frontmatter", () => {
@@ -187,9 +269,10 @@ describe("buildIssuePlanContent", () => {
     const content = buildIssuePlanContent({
       issueNumber: "100",
       title: "Sub-issue with blockers",
-      body: "Blocked by #42\n\nDetails here.",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
       prd: 245,
+      blockers: [42],
     });
     expect(content).toContain("prd: 245");
     expect(content).toContain("depends-on: [gh-42]");

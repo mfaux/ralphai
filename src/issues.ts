@@ -174,40 +174,61 @@ export function slugify(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Blocker extraction from GitHub issue bodies
+// Blocker discovery via GitHub GraphQL API (Issue.blockedBy)
 // ---------------------------------------------------------------------------
 
 /**
- * Pattern that matches "Blocked by" or "Depends on" followed by issue
- * references like "#42", "#10, #20", or "#10 and #20".
- * Case-insensitive. Captures the issue-number portion after the keyword.
- */
-const BLOCKER_LINE_RE =
-  /(?:blocked\s+by|depends\s+on)\s+(#\d+(?:\s*(?:,|and)\s*#\d+)*)/gi;
-
-/** Extracts individual issue numbers from a matched reference group. */
-const ISSUE_NUM_RE = /#(\d+)/g;
-
-/**
- * Parse blocker issue numbers from a GitHub issue body.
- * Recognises patterns like "Blocked by #42", "Depends on #15",
- * "Blocked by #10, #20", and "Blocked by #10 and #20".
+ * Query native GitHub blocking relationships for an issue via GraphQL.
  *
- * Returns a deduplicated, sorted array of issue numbers.
+ * Calls `gh api graphql` with the `Issue.blockedBy` connection to discover
+ * which issues block the given one. Returns a sorted array of blocker issue
+ * numbers.
+ *
+ * Fail-open: returns an empty array (with a console.warn) if the query
+ * fails for any reason — the plan will proceed without `depends-on` entries.
  */
-export function extractBlockersFromBody(body: string): number[] {
-  if (!body) return [];
+export function fetchBlockersViaGraphQL(
+  repo: string,
+  issueNumber: string,
+  cwd: string,
+): number[] {
+  const [owner, name] = repo.split("/");
+  if (!owner || !name) return [];
 
-  const numbers = new Set<number>();
+  const query = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){blockedBy(first:50){nodes{number}}}}}`;
 
-  for (const lineMatch of body.matchAll(BLOCKER_LINE_RE)) {
-    const refs = lineMatch[1]!;
-    for (const numMatch of refs.matchAll(ISSUE_NUM_RE)) {
-      numbers.add(parseInt(numMatch[1]!, 10));
-    }
+  const raw = execQuiet(
+    `gh api graphql -f query='${query}' -F owner='${owner}' -F name='${name}' -F number=${issueNumber}`,
+    cwd,
+  );
+
+  if (!raw) {
+    console.warn(
+      `Warning: GraphQL blockedBy query failed for issue #${issueNumber} — treating as no blockers`,
+    );
+    return [];
   }
 
-  return [...numbers].sort((a, b) => a - b);
+  let parsed: {
+    data?: {
+      repository?: {
+        issue?: { blockedBy?: { nodes?: Array<{ number: number }> } };
+      };
+    };
+  };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn(
+      `Warning: failed to parse GraphQL blockedBy response for issue #${issueNumber} — treating as no blockers`,
+    );
+    return [];
+  }
+
+  const nodes = parsed.data?.repository?.issue?.blockedBy?.nodes;
+  if (!nodes || nodes.length === 0) return [];
+
+  return nodes.map((n) => n.number).sort((a, b) => a - b);
 }
 
 /**
@@ -227,18 +248,19 @@ export interface BuildIssuePlanContentOptions {
   url: string;
   /** Parent PRD issue number (when the issue has a parent with `ralphai-prd` label). */
   prd?: number;
+  /** Blocker issue numbers from the GraphQL `blockedBy` query. */
+  blockers?: number[];
 }
 
 /**
  * Build the markdown content for a plan file from a GitHub issue.
- * If the issue body contains blocker references (e.g. "Blocked by #42"),
+ * If `blockers` contains issue numbers (from the GraphQL `blockedBy` query),
  * a `depends-on` field is included in the frontmatter.
  */
 export function buildIssuePlanContent(
   opts: BuildIssuePlanContentOptions,
 ): string {
-  const { issueNumber, title, body, url, prd } = opts;
-  const blockers = extractBlockersFromBody(body);
+  const { issueNumber, title, body, url, prd, blockers = [] } = opts;
 
   let frontmatter = `source: github\nissue: ${issueNumber}\nissue-url: ${url}`;
   if (prd !== undefined) {
@@ -515,6 +537,9 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   // Discover parent PRD (non-fatal — plan is still usable without it)
   const prd = discoverParentPrd(repo, issueNumber, cwd);
 
+  // Query native GitHub blocking relationships via GraphQL (fail-open)
+  const blockers = fetchBlockersViaGraphQL(repo, issueNumber, cwd);
+
   const slug = slugify(title);
   const filename = `gh-${issueNumber}-${slug}.md`;
   const planPath = join(backlogDir, filename);
@@ -529,6 +554,7 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     body: body ?? "",
     url: url ?? "",
     prd,
+    blockers,
   });
   writeFileSync(planPath, planContent, "utf-8");
 

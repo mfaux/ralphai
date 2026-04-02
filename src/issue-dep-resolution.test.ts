@@ -91,8 +91,9 @@ describe("planReadiness with GitHub issue blockers", () => {
     const planContent = buildIssuePlanContent({
       issueNumber: "100",
       title: "Implement feature X",
-      body: "Blocked by #42\n\nDetails here.",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
+      blockers: [42],
     });
     const planPath = join(dirs.backlogDir, "gh-100-implement-feature-x.md");
     writeFileSync(planPath, planContent);
@@ -114,8 +115,9 @@ describe("planReadiness with GitHub issue blockers", () => {
     const planContent = buildIssuePlanContent({
       issueNumber: "100",
       title: "Implement feature X",
-      body: "Blocked by #42\n\nDetails here.",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
+      blockers: [42],
     });
     const planPath = join(dirs.backlogDir, "gh-100-implement-feature-x.md");
     writeFileSync(planPath, planContent);
@@ -131,8 +133,9 @@ describe("planReadiness with GitHub issue blockers", () => {
     const planContent = buildIssuePlanContent({
       issueNumber: "100",
       title: "Implement feature X",
-      body: "Blocked by #10, #20",
+      body: "Details here.",
       url: "https://github.com/org/repo/issues/100",
+      blockers: [10, 20],
     });
     const planPath = join(dirs.backlogDir, "gh-100-implement-feature-x.md");
     writeFileSync(planPath, planContent);
