@@ -1,15 +1,21 @@
 /**
  * Pipeline management action handlers for the interactive menu.
  *
- * Provides "Resume stalled plan", "Stop running plan", and "Reset plan"
- * actions. Each has a menu item helper (label/hint/disabled) and an
- * action handler that uses `@clack/prompts` for sub-selections.
+ * Provides "Resume stalled plan", "Stop running plan", "Reset plan",
+ * and "Recent activity" actions. Each has a menu item helper
+ * (label/hint/disabled) and an action handler that uses `@clack/prompts`
+ * for sub-selections.
  */
 
 import * as clack from "@clack/prompts";
+import { existsSync, readdirSync, statSync } from "fs";
+import { join } from "path";
 import type { PipelineState, InProgressPlan } from "../pipeline-state.ts";
 import { runRalphai, resetPlanBySlug } from "../ralphai.ts";
 import { runRalphaiStop } from "../stop.ts";
+import { parseReceipt } from "../receipt.ts";
+import { getRepoPipelineDirs } from "../global-state.ts";
+import { DIM, RESET, TEXT } from "../utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers — filter in-progress plans by liveness
@@ -308,5 +314,126 @@ export async function handleResetPlan(
 
   // Delegate to the simplified reset function
   resetPlanBySlug(cwd, slug);
+  return "continue";
+}
+
+// ---------------------------------------------------------------------------
+// Recent activity
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the label, hint, and disabled state for "Recent activity".
+ */
+export function recentActivityMenuItem(state: PipelineState): {
+  label: string;
+  hint?: string;
+  disabled: boolean;
+} {
+  if (state.completedSlugs.length === 0) {
+    return {
+      label: "Recent activity",
+      hint: "(none)",
+      disabled: true,
+    };
+  }
+
+  return {
+    label: `Recent activity (${state.completedSlugs.length} completed)`,
+    disabled: false,
+  };
+}
+
+/** Entry from an archived receipt for display. */
+export interface ArchivedPlan {
+  slug: string;
+  prUrl?: string;
+  startedAt?: string;
+}
+
+/**
+ * Read the most recent archived plans (up to `limit`) from the archive
+ * directory. Sorts by directory mtime (most recent first).
+ */
+export function readArchivedPlans(
+  archiveDir: string,
+  limit = 10,
+): ArchivedPlan[] {
+  if (!existsSync(archiveDir)) return [];
+
+  let entries: string[];
+  try {
+    entries = readdirSync(archiveDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+
+  // Sort by mtime descending (most recent first)
+  const withMtime = entries
+    .map((name) => {
+      const dir = join(archiveDir, name);
+      try {
+        return { name, mtime: statSync(dir).mtimeMs };
+      } catch {
+        return { name, mtime: 0 };
+      }
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+
+  const result: ArchivedPlan[] = [];
+  for (const { name } of withMtime.slice(0, limit)) {
+    const receiptPath = join(archiveDir, name, "receipt.txt");
+    const receipt = parseReceipt(receiptPath);
+    result.push({
+      slug: name,
+      prUrl: receipt?.pr_url,
+      startedAt: receipt?.started_at,
+    });
+  }
+  return result;
+}
+
+/**
+ * Format a single archived plan for display.
+ */
+export function formatArchivedPlan(plan: ArchivedPlan): string {
+  const check = `${TEXT}✓${RESET}`;
+  if (plan.prUrl) {
+    return `  ${check} ${plan.slug}  ${DIM}${plan.prUrl}${RESET}`;
+  }
+  return `  ${check} ${plan.slug}`;
+}
+
+/**
+ * Handle the "Recent activity" action.
+ *
+ * Reads up to 10 most recently archived plans and displays them with
+ * slug and PR URL (if present). Waits for a keypress to return to menu.
+ *
+ * @returns `"continue"` — always returns to the menu.
+ */
+export async function handleRecentActivity(cwd: string): Promise<"continue"> {
+  const { archiveDir } = getRepoPipelineDirs(cwd);
+  const plans = readArchivedPlans(archiveDir);
+
+  if (plans.length === 0) {
+    console.log(`\n${DIM}No completed plans found.${RESET}`);
+    return "continue";
+  }
+
+  console.log();
+  console.log(`${TEXT}Recent activity:${RESET}`);
+  for (const plan of plans) {
+    console.log(formatArchivedPlan(plan));
+  }
+  console.log();
+
+  // Wait for user to acknowledge before returning to menu
+  await clack.text({
+    message: `${DIM}Press Enter to return to menu${RESET}`,
+    defaultValue: "",
+  });
+
   return "continue";
 }

@@ -8,7 +8,11 @@
  */
 
 import { describe, it, expect } from "bun:test";
+import { writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
 import type { PipelineState, InProgressPlan } from "../pipeline-state.ts";
+import { useTempDir } from "../test-utils.ts";
+import { stripAnsi } from "../utils.ts";
 import {
   stalledPlans,
   runningPlans,
@@ -17,6 +21,9 @@ import {
   resumeStalledMenuItem,
   stopRunningMenuItem,
   resetPlanMenuItem,
+  recentActivityMenuItem,
+  readArchivedPlans,
+  formatArchivedPlan,
 } from "./pipeline-actions.ts";
 
 // ---------------------------------------------------------------------------
@@ -308,5 +315,148 @@ describe("resetPlanMenuItem", () => {
 
     expect(item.disabled).toBe(true);
     expect(item.hint).toBe("(none)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// recentActivityMenuItem
+// ---------------------------------------------------------------------------
+
+describe("recentActivityMenuItem", () => {
+  it("is disabled with (none) when no completed plans", () => {
+    const state = makeState();
+    const item = recentActivityMenuItem(state);
+
+    expect(item.label).toBe("Recent activity");
+    expect(item.hint).toBe("(none)");
+    expect(item.disabled).toBe(true);
+  });
+
+  it("shows count when completed plans exist", () => {
+    const state = makeState({
+      completedSlugs: ["done-a", "done-b"],
+    });
+    const item = recentActivityMenuItem(state);
+
+    expect(item.label).toBe("Recent activity (2 completed)");
+    expect(item.disabled).toBe(false);
+  });
+
+  it("shows singular count for 1 completed plan", () => {
+    const state = makeState({
+      completedSlugs: ["done-a"],
+    });
+    const item = recentActivityMenuItem(state);
+
+    expect(item.label).toBe("Recent activity (1 completed)");
+    expect(item.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readArchivedPlans
+// ---------------------------------------------------------------------------
+
+describe("readArchivedPlans", () => {
+  const ctx = useTempDir();
+
+  it("returns empty array when archive dir does not exist", () => {
+    const result = readArchivedPlans(join(ctx.dir, "nonexistent"));
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when archive dir is empty", () => {
+    const archiveDir = join(ctx.dir, "out");
+    mkdirSync(archiveDir, { recursive: true });
+
+    const result = readArchivedPlans(archiveDir);
+    expect(result).toEqual([]);
+  });
+
+  it("reads slug and pr_url from archived receipt", () => {
+    const archiveDir = join(ctx.dir, "out");
+    const slugDir = join(archiveDir, "my-plan");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(
+      join(slugDir, "receipt.txt"),
+      [
+        "started_at=2025-06-15T10:30:00Z",
+        "branch=feat/my-plan",
+        "slug=my-plan",
+        "tasks_completed=3",
+        "pr_url=https://github.com/user/repo/pull/42",
+      ].join("\n") + "\n",
+    );
+
+    const result = readArchivedPlans(archiveDir);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.slug).toBe("my-plan");
+    expect(result[0]!.prUrl).toBe("https://github.com/user/repo/pull/42");
+  });
+
+  it("returns slug without pr_url for old receipts", () => {
+    const archiveDir = join(ctx.dir, "out");
+    const slugDir = join(archiveDir, "old-plan");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(
+      join(slugDir, "receipt.txt"),
+      "started_at=2025-01-01T00:00:00Z\nslug=old-plan\ntasks_completed=1\n",
+    );
+
+    const result = readArchivedPlans(archiveDir);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.slug).toBe("old-plan");
+    expect(result[0]!.prUrl).toBeUndefined();
+  });
+
+  it("returns slug when receipt is missing", () => {
+    const archiveDir = join(ctx.dir, "out");
+    const slugDir = join(archiveDir, "no-receipt");
+    mkdirSync(slugDir, { recursive: true });
+
+    const result = readArchivedPlans(archiveDir);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.slug).toBe("no-receipt");
+    expect(result[0]!.prUrl).toBeUndefined();
+  });
+
+  it("limits results to requested count", () => {
+    const archiveDir = join(ctx.dir, "out");
+    for (let i = 0; i < 15; i++) {
+      const slugDir = join(archiveDir, `plan-${i}`);
+      mkdirSync(slugDir, { recursive: true });
+      writeFileSync(
+        join(slugDir, "receipt.txt"),
+        `slug=plan-${i}\ntasks_completed=1\n`,
+      );
+    }
+
+    const result = readArchivedPlans(archiveDir, 10);
+    expect(result).toHaveLength(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatArchivedPlan
+// ---------------------------------------------------------------------------
+
+describe("formatArchivedPlan", () => {
+  it("shows slug with checkmark for plan without pr_url", () => {
+    const output = stripAnsi(formatArchivedPlan({ slug: "my-plan" }));
+    expect(output).toContain("✓");
+    expect(output).toContain("my-plan");
+    expect(output).not.toContain("http");
+  });
+
+  it("shows slug and PR URL when pr_url is present", () => {
+    const output = stripAnsi(
+      formatArchivedPlan({
+        slug: "my-plan",
+        prUrl: "https://github.com/user/repo/pull/42",
+      }),
+    );
+    expect(output).toContain("✓");
+    expect(output).toContain("my-plan");
+    expect(output).toContain("https://github.com/user/repo/pull/42");
   });
 });

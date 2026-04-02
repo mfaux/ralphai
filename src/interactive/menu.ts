@@ -26,9 +26,11 @@ import {
   resumeStalledMenuItem,
   stopRunningMenuItem,
   resetPlanMenuItem,
+  recentActivityMenuItem,
   handleResumeStalled,
   handleStopRunning,
   handleResetPlan,
+  handleRecentActivity,
 } from "./pipeline-actions.ts";
 
 // ---------------------------------------------------------------------------
@@ -188,6 +190,15 @@ export function buildMenuItems(
     group: "pipeline",
   });
 
+  const recentActivity = recentActivityMenuItem(state);
+  items.push({
+    value: "recent-activity",
+    label: recentActivity.label,
+    hint: recentActivity.hint,
+    group: "pipeline",
+    disabled: recentActivity.disabled,
+  });
+
   // --- Maintenance group ---
   items.push({
     value: "quit",
@@ -241,6 +252,9 @@ async function dispatchAction(
       console.log();
       printStatusOnce(_cwd);
       return "continue";
+
+    case "recent-activity":
+      return handleRecentActivity(_cwd);
 
     case "quit":
       return "exit";

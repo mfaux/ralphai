@@ -136,6 +136,7 @@ describe("buildMenuItems", () => {
     expect(values).toContain("stop-running");
     expect(values).toContain("reset-plan");
     expect(values).toContain("view-status");
+    expect(values).toContain("recent-activity");
     expect(values).toContain("quit");
   });
 
@@ -441,6 +442,52 @@ describe("buildMenuItems — stalled promotion", () => {
     const runNextIdx = items.findIndex((i) => i.value === "run-next");
 
     expect(resumeIdx).toBeGreaterThan(runNextIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — recent activity item
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — Recent activity", () => {
+  it("is disabled with (none) when no completed plans", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const recent = items.find((i) => i.value === "recent-activity")!;
+
+    expect(recent.label).toBe("Recent activity");
+    expect(recent.hint).toBe("(none)");
+    expect(recent.disabled).toBe(true);
+  });
+
+  it("shows count when completed plans exist", () => {
+    const state = makeState({
+      completedSlugs: ["done-a", "done-b", "done-c"],
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const recent = items.find((i) => i.value === "recent-activity")!;
+
+    expect(recent.label).toBe("Recent activity (3 completed)");
+    expect(recent.disabled).toBe(false);
+  });
+
+  it("is in the pipeline group", () => {
+    const state = makeState({ completedSlugs: ["done"] });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const recent = items.find((i) => i.value === "recent-activity")!;
+
+    expect(recent.group).toBe("pipeline");
+  });
+
+  it("appears after view-status but before quit", () => {
+    const state = makeState({ completedSlugs: ["done"] });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const statusIdx = items.findIndex((i) => i.value === "view-status");
+    const recentIdx = items.findIndex((i) => i.value === "recent-activity");
+    const quitIdx = items.findIndex((i) => i.value === "quit");
+
+    expect(recentIdx).toBeGreaterThan(statusIdx);
+    expect(recentIdx).toBeLessThan(quitIdx);
   });
 });
 
