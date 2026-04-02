@@ -72,6 +72,7 @@ import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import { detectRunTarget, type RunTarget } from "./target-detection.ts";
+import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
@@ -993,12 +994,45 @@ async function runRalphaiReset(
 
   let actions = 0;
 
+  // Load config to get label names for GitHub issue restoration.
+  // Best-effort: if config resolution fails we skip label restoration.
+  let issueLabel = "";
+  let issueInProgressLabel = "";
+  let issueRepo = "";
+  try {
+    const cfgResult = resolveConfig({
+      cwd,
+      envVars: process.env,
+      cliArgs: [],
+    });
+    issueLabel = cfgResult.config.issueLabel.value;
+    issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+    issueRepo = cfgResult.config.issueRepo.value;
+  } catch {
+    // Config resolution failure is not critical — skip label restoration.
+  }
+
   // 1. Extract plan files from in-progress slug-folders back to backlog as flat files
   for (const slug of planSlugs) {
     const src = join(inProgressDir, slug);
     const planFile = join(src, `${slug}.md`);
     const dest = join(backlogDir, `${slug}.md`);
     mkdirSync(backlogDir, { recursive: true });
+
+    // Restore GitHub issue labels before moving the file (needs frontmatter).
+    if (issueLabel && issueInProgressLabel && existsSync(planFile)) {
+      const labelResult = restoreIssueLabels({
+        planPath: planFile,
+        issueLabel,
+        issueInProgressLabel,
+        issueRepo,
+        cwd,
+      });
+      if (labelResult.restored) {
+        console.log(`  ${DIM}${labelResult.message}${RESET}`);
+      }
+    }
+
     rmSync(join(src, "progress.md"), { force: true });
     rmSync(join(src, "receipt.txt"), { force: true });
     if (existsSync(planFile)) {
@@ -1093,6 +1127,35 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
   const planFile = join(slugDir, `${slug}.md`);
   const dest = join(backlogDir, `${slug}.md`);
   mkdirSync(backlogDir, { recursive: true });
+
+  // Restore GitHub issue labels before moving the file (needs frontmatter).
+  if (existsSync(planFile)) {
+    try {
+      const cfgResult = resolveConfig({
+        cwd,
+        envVars: process.env,
+        cliArgs: [],
+      });
+      const issueLabel = cfgResult.config.issueLabel.value;
+      const issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+      const issueRepo = cfgResult.config.issueRepo.value;
+      if (issueLabel && issueInProgressLabel) {
+        const labelResult = restoreIssueLabels({
+          planPath: planFile,
+          issueLabel,
+          issueInProgressLabel,
+          issueRepo,
+          cwd,
+        });
+        if (labelResult.restored) {
+          console.log(`  ${DIM}${labelResult.message}${RESET}`);
+        }
+      }
+    } catch {
+      // Config resolution failure is not critical — skip label restoration.
+    }
+  }
+
   rmSync(join(slugDir, "progress.md"), { force: true });
   rmSync(join(slugDir, "receipt.txt"), { force: true });
   rmSync(join(slugDir, "runner.pid"), { force: true });

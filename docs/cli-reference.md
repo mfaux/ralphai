@@ -223,6 +223,7 @@ Resets pipeline state so you can start fresh:
 - **Plans** -> moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
 - **Artifacts** -> deletes `progress.md` and `receipt.txt` for each in-progress plan
 - **Worktrees** -> removes Ralphai-managed worktrees and force-deletes their branches
+- **GitHub labels** -> for plans sourced from GitHub issues, restores the intake label and removes the in-progress label (best-effort)
 
 Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
 
