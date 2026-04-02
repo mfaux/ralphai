@@ -1065,6 +1065,72 @@ async function runRalphaiReset(
 }
 
 // ---------------------------------------------------------------------------
+// Reset single plan — exported for interactive mode
+// ---------------------------------------------------------------------------
+
+/**
+ * Reset a single in-progress plan back to the backlog.
+ *
+ * Moves the plan file from the in-progress slug-folder to the backlog
+ * directory, deletes progress.md and receipt.txt, removes the slug
+ * folder, and cleans up any associated worktree.
+ *
+ * Skips confirmation — callers are expected to confirm before calling.
+ */
+export function resetPlanBySlug(cwd: string, slug: string): void {
+  const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
+  const slugDir = join(wipDir, slug);
+
+  if (!existsSync(slugDir)) {
+    console.log(`Plan '${slug}' not found in in-progress.`);
+    return;
+  }
+
+  // Move plan file back to backlog
+  const planFile = join(slugDir, `${slug}.md`);
+  const dest = join(backlogDir, `${slug}.md`);
+  mkdirSync(backlogDir, { recursive: true });
+  rmSync(join(slugDir, "progress.md"), { force: true });
+  rmSync(join(slugDir, "receipt.txt"), { force: true });
+  rmSync(join(slugDir, "runner.pid"), { force: true });
+  if (existsSync(planFile)) {
+    renameSync(planFile, dest);
+  }
+  rmSync(slugDir, { recursive: true, force: true });
+
+  // Clean associated worktree
+  let worktrees: WorktreeEntry[] = [];
+  try {
+    worktrees = listRalphaiWorktrees(cwd);
+  } catch {
+    // Not in a git repo or git not available
+  }
+
+  for (const wt of worktrees) {
+    // Match worktrees whose branch contains the slug
+    if (wt.branch.includes(slug)) {
+      try {
+        execSync(`git worktree remove --force "${wt.path}"`, {
+          cwd,
+          stdio: "pipe",
+        });
+        try {
+          execSync(`git branch -D "${wt.branch}"`, { cwd, stdio: "pipe" });
+        } catch {
+          // Branch deletion failure is not critical
+        }
+      } catch {
+        console.log(
+          `  ${DIM}Warning: Could not remove worktree ${wt.path}. Remove manually.${RESET}`,
+        );
+      }
+    }
+  }
+
+  console.log(`Reset '${slug}' — plan moved back to backlog.`);
+}
+
+// ---------------------------------------------------------------------------
 // purge — delete all archived artifacts from pipeline/out/
 // ---------------------------------------------------------------------------
 

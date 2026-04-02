@@ -21,6 +21,15 @@ import {
   handlePickFromBacklog,
   handlePickFromGitHub,
 } from "./run-actions.ts";
+import {
+  stalledWarning,
+  resumeStalledMenuItem,
+  stopRunningMenuItem,
+  resetPlanMenuItem,
+  handleResumeStalled,
+  handleStopRunning,
+  handleResetPlan,
+} from "./pipeline-actions.ts";
 
 // ---------------------------------------------------------------------------
 // Menu item types
@@ -60,9 +69,10 @@ export interface MenuContext {
  * Build the pipeline summary header string.
  *
  * Examples:
- * - "Pipeline: 3 backlog \u00b7 1 running \u00b7 5 completed"
+ * - "Pipeline: 3 backlog · 1 running · 5 completed"
+ * - "Pipeline: 3 backlog · 1 running · 5 completed · ⚠ 1 plan stalled"
  * - "Pipeline: empty"
- * - "Pipeline: 0 backlog \u00b7 0 running \u00b7 2 completed"
+ * - "Pipeline: 0 backlog · 0 running · 2 completed"
  */
 export function buildHeaderLine(state: PipelineState): string {
   const backlogCount = state.backlog.length;
@@ -78,6 +88,11 @@ export function buildHeaderLine(state: PipelineState): string {
     `${runningCount} running`,
     `${completedCount} completed`,
   ];
+
+  const warning = stalledWarning(state);
+  if (warning) {
+    parts.push(warning);
+  }
 
   return `${TEXT}Pipeline: ${DIM}${parts.join(" \u00b7 ")}${RESET}`;
 }
@@ -99,12 +114,26 @@ const GROUP_ORDER: Record<MenuGroup, number> = {
  * Returns an ordered array of `MenuItem` descriptors. Items are sorted
  * by group (run → pipeline → maintenance) with insertion order preserved
  * within each group.
+ *
+ * When stalled plans exist, "Resume stalled plan" is promoted to the
+ * top of the run group (before "Run next plan").
  */
 export function buildMenuItems(
   state: PipelineState,
   ctx: MenuContext = { hasGitHubIssues: false },
 ): MenuItem[] {
   const items: MenuItem[] = [];
+
+  // --- Resume stalled (promoted to run group when stalled plans exist) ---
+  const resume = resumeStalledMenuItem(state);
+  const hasStalledPlans = !resume.disabled;
+  items.push({
+    value: "resume-stalled",
+    label: resume.label,
+    hint: resume.hint,
+    group: hasStalledPlans ? "run" : "pipeline",
+    disabled: resume.disabled,
+  });
 
   // --- Run group ---
   const runNext = runNextMenuItem(state, ctx.hasGitHubIssues);
@@ -135,6 +164,24 @@ export function buildMenuItems(
   });
 
   // --- Pipeline group ---
+  const stop = stopRunningMenuItem(state);
+  items.push({
+    value: "stop-running",
+    label: stop.label,
+    hint: stop.hint,
+    group: "pipeline",
+    disabled: stop.disabled,
+  });
+
+  const reset = resetPlanMenuItem(state);
+  items.push({
+    value: "reset-plan",
+    label: reset.label,
+    hint: reset.hint,
+    group: "pipeline",
+    disabled: reset.disabled,
+  });
+
   items.push({
     value: "view-status",
     label: "View pipeline status",
@@ -168,6 +215,9 @@ async function dispatchAction(
   ctx: MenuContext,
 ): Promise<DispatchResult> {
   switch (action) {
+    case "resume-stalled":
+      return handleResumeStalled(state);
+
     case "run-next":
       await handleRunNext();
       return "exit";
@@ -180,6 +230,12 @@ async function dispatchAction(
         return handlePickFromGitHub(ctx.githubConfig);
       }
       return "continue";
+
+    case "stop-running":
+      return handleStopRunning(state, _cwd);
+
+    case "reset-plan":
+      return handleResetPlan(state, _cwd);
 
     case "view-status":
       console.log();

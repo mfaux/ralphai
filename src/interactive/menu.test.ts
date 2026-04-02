@@ -43,8 +43,12 @@ function makeBacklog(
   }));
 }
 
-/** Create N in-progress plan stubs. */
-function makeInProgress(count: number) {
+/** Create N in-progress plan stubs with optional liveness tag. */
+function makeInProgress(
+  count: number,
+  liveness?: "in_progress" | "stalled" | "running",
+) {
+  const tag = liveness ?? "in_progress";
   return Array.from({ length: count }, (_, i) => ({
     filename: `wip-${i + 1}.md`,
     slug: `wip-${i + 1}`,
@@ -52,7 +56,10 @@ function makeInProgress(count: number) {
     totalTasks: 3 as number | undefined,
     tasksCompleted: 1,
     hasWorktree: false,
-    liveness: { tag: "in_progress" as const },
+    liveness:
+      tag === "running"
+        ? { tag: "running" as const, pid: 10000 + i }
+        : ({ tag } as { tag: "in_progress" } | { tag: "stalled" }),
   }));
 }
 
@@ -123,8 +130,11 @@ describe("buildMenuItems", () => {
     const items = buildMenuItems(state, NO_GITHUB);
 
     const values = items.map((i) => i.value);
+    expect(values).toContain("resume-stalled");
     expect(values).toContain("run-next");
     expect(values).toContain("pick-from-backlog");
+    expect(values).toContain("stop-running");
+    expect(values).toContain("reset-plan");
     expect(values).toContain("view-status");
     expect(values).toContain("quit");
   });
@@ -350,5 +360,148 @@ describe("buildMenuItems — Pick from GitHub", () => {
     const statusIdx = items.findIndex((i) => i.value === "view-status");
 
     expect(pickIdx).toBeLessThan(statusIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHeaderLine — stalled warning
+// ---------------------------------------------------------------------------
+
+describe("buildHeaderLine — stalled warning", () => {
+  it("appends singular stalled warning when 1 plan is stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1, "stalled"),
+      backlog: makeBacklog(2),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).toBe(
+      "Pipeline: 2 backlog \u00b7 1 running \u00b7 0 completed \u00b7 \u26a0 1 plan stalled",
+    );
+  });
+
+  it("appends plural stalled warning when multiple plans are stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(2, "stalled"),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).toContain("\u26a0 2 plans stalled");
+  });
+
+  it("does not include stalled warning when no plans are stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).not.toContain("\u26a0");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — stalled promotion
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — stalled promotion", () => {
+  it("promotes resume-stalled to top of menu when stalled plans exist", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1, "stalled"),
+      backlog: makeBacklog(2),
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+
+    // resume-stalled should be the first item (promoted to run group)
+    expect(items[0]!.value).toBe("resume-stalled");
+    expect(items[0]!.group).toBe("run");
+  });
+
+  it("resume-stalled is in pipeline group when no stalled plans", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const resume = items.find((i) => i.value === "resume-stalled")!;
+
+    expect(resume.group).toBe("pipeline");
+    expect(resume.disabled).toBe(true);
+  });
+
+  it("resume-stalled appears before run-next when stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1, "stalled"),
+      backlog: makeBacklog(1),
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const resumeIdx = items.findIndex((i) => i.value === "resume-stalled");
+    const runNextIdx = items.findIndex((i) => i.value === "run-next");
+
+    expect(resumeIdx).toBeLessThan(runNextIdx);
+  });
+
+  it("resume-stalled appears after run group when not stalled", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const resumeIdx = items.findIndex((i) => i.value === "resume-stalled");
+    const runNextIdx = items.findIndex((i) => i.value === "run-next");
+
+    expect(resumeIdx).toBeGreaterThan(runNextIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — pipeline management items
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — pipeline management items", () => {
+  it("includes stop-running in pipeline group", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const stop = items.find((i) => i.value === "stop-running")!;
+
+    expect(stop.group).toBe("pipeline");
+  });
+
+  it("includes reset-plan in pipeline group", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const reset = items.find((i) => i.value === "reset-plan")!;
+
+    expect(reset.group).toBe("pipeline");
+  });
+
+  it("stop-running shows count when plans are running", () => {
+    const state = makeState({
+      inProgress: makeInProgress(2, "running"),
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const stop = items.find((i) => i.value === "stop-running")!;
+
+    expect(stop.label).toBe("Stop running plan (2 running)");
+    expect(stop.disabled).toBeFalsy();
+  });
+
+  it("stop-running is disabled when nothing running", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const stop = items.find((i) => i.value === "stop-running")!;
+
+    expect(stop.hint).toBe("(none)");
+    expect(stop.disabled).toBe(true);
+  });
+
+  it("reset-plan shows count when plans are in progress", () => {
+    const state = makeState({
+      inProgress: makeInProgress(3),
+    });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const reset = items.find((i) => i.value === "reset-plan")!;
+
+    expect(reset.label).toBe("Reset plan (3 in progress)");
+    expect(reset.disabled).toBeFalsy();
+  });
+
+  it("reset-plan is disabled when no in-progress plans", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const reset = items.find((i) => i.value === "reset-plan")!;
+
+    expect(reset.hint).toBe("(none)");
+    expect(reset.disabled).toBe(true);
   });
 });
