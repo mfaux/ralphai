@@ -225,6 +225,8 @@ export interface BuildIssuePlanContentOptions {
   title: string;
   body: string;
   url: string;
+  /** Parent PRD issue number (when the issue has a parent with `ralphai-prd` label). */
+  prd?: number;
 }
 
 /**
@@ -235,10 +237,13 @@ export interface BuildIssuePlanContentOptions {
 export function buildIssuePlanContent(
   opts: BuildIssuePlanContentOptions,
 ): string {
-  const { issueNumber, title, body, url } = opts;
+  const { issueNumber, title, body, url, prd } = opts;
   const blockers = extractBlockersFromBody(body);
 
   let frontmatter = `source: github\nissue: ${issueNumber}\nissue-url: ${url}`;
+  if (prd !== undefined) {
+    frontmatter += `\nprd: ${prd}`;
+  }
   if (blockers.length > 0) {
     const depSlugs = blockers.map(issueDepSlug).join(", ");
     frontmatter += `\ndepends-on: [${depSlugs}]`;
@@ -407,6 +412,57 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
 }
 
 // ---------------------------------------------------------------------------
+// Parent PRD discovery via REST API
+// ---------------------------------------------------------------------------
+
+/**
+ * Discover the parent PRD issue number for a given issue.
+ *
+ * Calls `gh api repos/{owner}/{repo}/issues/{N}/parent` which returns the
+ * parent issue object (including labels) or 404 if no parent exists.
+ *
+ * Returns the parent issue number only if the parent has the `ralphai-prd`
+ * label. Returns `undefined` when:
+ * - the issue has no parent (404)
+ * - the parent does not have the `ralphai-prd` label
+ * - the API call fails for any reason (non-fatal)
+ *
+ * Logs a warning to stderr on API failure so the plan is still usable.
+ */
+export function discoverParentPrd(
+  repo: string,
+  issueNumber: string,
+  cwd: string,
+): number | undefined {
+  const raw = execQuiet(
+    `gh api repos/${repo}/issues/${issueNumber}/parent`,
+    cwd,
+  );
+
+  if (!raw) {
+    // 404 (no parent) or network error — both non-fatal.
+    return undefined;
+  }
+
+  let parent: { number: number; labels: Array<{ name: string }> };
+  try {
+    parent = JSON.parse(raw);
+  } catch {
+    console.warn(
+      `Warning: failed to parse parent response for issue #${issueNumber} — skipping PRD discovery`,
+    );
+    return undefined;
+  }
+
+  const hasPrdLabel = parent.labels?.some((l) => l.name === PRD_LABEL);
+  if (!hasPrdLabel) {
+    return undefined;
+  }
+
+  return parent.number;
+}
+
+// ---------------------------------------------------------------------------
 // Internal: shared pull logic
 // ---------------------------------------------------------------------------
 
@@ -456,6 +512,9 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     };
   }
 
+  // Discover parent PRD (non-fatal — plan is still usable without it)
+  const prd = discoverParentPrd(repo, issueNumber, cwd);
+
   const slug = slugify(title);
   const filename = `gh-${issueNumber}-${slug}.md`;
   const planPath = join(backlogDir, filename);
@@ -469,6 +528,7 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     title,
     body: body ?? "",
     url: url ?? "",
+    prd,
   });
   writeFileSync(planPath, planContent, "utf-8");
 

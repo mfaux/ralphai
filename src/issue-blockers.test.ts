@@ -148,4 +148,54 @@ describe("buildIssuePlanContent", () => {
     expect(content).toContain("# My task");
     expect(content).toContain("Some details\nMore info");
   });
+
+  it("includes prd field when prd number is provided", () => {
+    const content = buildIssuePlanContent({
+      issueNumber: "100",
+      title: "Sub-issue of PRD",
+      body: "Implement feature.",
+      url: "https://github.com/org/repo/issues/100",
+      prd: 245,
+    });
+    expect(content).toContain("prd: 245");
+    expect(content).toContain("source: github");
+    expect(content).toContain("issue: 100");
+  });
+
+  it("omits prd field when prd is not provided", () => {
+    const content = buildIssuePlanContent({
+      issueNumber: "50",
+      title: "Regular issue",
+      body: "No parent PRD.",
+      url: "https://github.com/org/repo/issues/50",
+    });
+    expect(content).not.toContain("prd:");
+  });
+
+  it("omits prd field when prd is undefined", () => {
+    const content = buildIssuePlanContent({
+      issueNumber: "50",
+      title: "Regular issue",
+      body: "No parent PRD.",
+      url: "https://github.com/org/repo/issues/50",
+      prd: undefined,
+    });
+    expect(content).not.toContain("prd:");
+  });
+
+  it("includes both prd and depends-on when both are present", () => {
+    const content = buildIssuePlanContent({
+      issueNumber: "100",
+      title: "Sub-issue with blockers",
+      body: "Blocked by #42\n\nDetails here.",
+      url: "https://github.com/org/repo/issues/100",
+      prd: 245,
+    });
+    expect(content).toContain("prd: 245");
+    expect(content).toContain("depends-on: [gh-42]");
+    // prd should appear before depends-on in frontmatter
+    const prdIdx = content.indexOf("prd: 245");
+    const depsIdx = content.indexOf("depends-on:");
+    expect(prdIdx).toBeLessThan(depsIdx);
+  });
 });
