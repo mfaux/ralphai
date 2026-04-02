@@ -314,42 +314,6 @@ describe("countCompletedFromProgress", () => {
     expect(countCompletedFromProgress("", "tasks")).toBe(0);
   });
 
-  // --- Tasks format: deprecated batch headings ---
-
-  it("counts batch heading Tasks X-Y when no individual markers exist", () => {
-    const content = "### Tasks 1-3: Batch work\nDid things.\n";
-    expect(countCompletedFromProgress(content, "tasks")).toBe(3);
-  });
-
-  it("counts batch heading with en-dash", () => {
-    const content = "### Tasks 5\u20138: Later batch\n";
-    expect(countCompletedFromProgress(content, "tasks")).toBe(4);
-  });
-
-  // --- Double-counting fix: individual markers take precedence ---
-
-  it("individual markers take precedence over batch headings (no double-counting)", () => {
-    const content = [
-      "### Tasks 1-3: Batch heading",
-      "**Status:** Complete",
-      "",
-      "### Task 4: Individual",
-      "**Status:** Complete",
-    ].join("\n");
-
-    // Should count 2 individual markers, NOT 2 + 3 = 5
-    expect(countCompletedFromProgress(content, "tasks")).toBe(2);
-  });
-
-  it("batch headings used only when no individual markers exist", () => {
-    const content = [
-      "### Tasks 1-5: Legacy batch",
-      "Completed a bunch of work.",
-    ].join("\n");
-
-    expect(countCompletedFromProgress(content, "tasks")).toBe(5);
-  });
-
   // --- Format "none" falls back to tasks counting ---
 
   it("uses tasks counting strategy for 'none' format", () => {

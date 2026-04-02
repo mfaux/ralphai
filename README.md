@@ -83,18 +83,11 @@ Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>
 ```bash
 ralphai run              # drain the backlog: one branch/PR per plan
 ralphai run --once       # process a single plan then exit
-ralphai run --prd=42     # PRD-driven run from GitHub issue #42
-ralphai prd 42           # shorthand for run --prd=42
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
 
-Ralphai already uses [git worktrees](docs/worktrees.md) for every run. These commands help you inspect and clean them up:
-
-```bash
-ralphai worktree list               # show active worktrees
-ralphai worktree clean              # remove completed worktrees
-```
+Ralphai already uses [git worktrees](docs/worktrees.md) for every run. Use `ralphai clean --worktrees` to remove completed or orphaned worktrees.
 
 Use `ralphai run` when you want a non-interactive command, such as automation, quick terminal execution, or resuming work directly.
 
@@ -124,7 +117,6 @@ ralphai stop my-plan     # stop a specific plan runner by slug
 ralphai stop --all       # stop all running plan runners
 ralphai doctor           # validate your setup (agent, feedback commands, config)
 ralphai reset            # move in-progress plans back to backlog
-ralphai purge            # delete archived artifacts from pipeline/out/
 ralphai clean            # remove archived plans and orphaned worktrees
 ralphai clean --archive  # clean only archived plans
 ralphai clean --worktrees # clean only orphaned worktrees
@@ -137,11 +129,6 @@ Ralphai extracts learnings from the agent's output during each run and surfaces 
 ## GitHub Issues Integration
 
 Ralphai can pull plans from GitHub issues when the backlog is empty. Label issues with `ralphai` (configurable), and Ralphai converts them into plan files, runs them, and comments progress back on the issue.
-
-```bash
-ralphai run --issue-source=github              # pull labeled issues
-ralphai run --issue-label=ai-task              # custom label filter
-```
 
 Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `config.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
 
@@ -156,7 +143,7 @@ ralphai status --repo=my-app            # check status of a different repo
 ralphai config backlog-dir --repo=~/work/api  # get backlog path by repo path
 ```
 
-The `--repo` flag works with `status`, `reset`, `purge`, `clean`, `uninstall`, `backlog-dir`, `doctor`, `check`, and `config`. It is blocked for `run`, `prd`, `worktree`, and `init`, which must be run inside the target repo.
+The `--repo` flag works with `status`, `reset`, `clean`, `uninstall`, `doctor`, `config`. It is blocked for `run` and `init`, which must be run inside the target repo.
 
 ## Interactive Menu
 

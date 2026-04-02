@@ -98,7 +98,7 @@ ralphai status --repo=my-app            # check a repo without cd-ing
 ralphai reset --repo=~/work/api --yes   # reset a stuck plan remotely
 ```
 
-Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `purge`, `uninstall`, and `backlog-dir`.
+Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `uninstall`, and `config`.
 
 To clean up stale entries (from deleted temp dirs or old projects):
 

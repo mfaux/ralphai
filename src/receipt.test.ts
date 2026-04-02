@@ -267,40 +267,6 @@ describe("updateReceiptTasks", () => {
     expect(content).toContain("tasks_completed=2");
   });
 
-  it("individual Status Complete markers take precedence over batch headings", () => {
-    const receiptPath = join(ctx.dir, "receipt.txt");
-    const progressPath = join(ctx.dir, "progress.md");
-    writeFileSync(receiptPath, "tasks_completed=0\n");
-    writeFileSync(
-      progressPath,
-      ["## Progress", "", "### Tasks 1-3: Batch", "**Status:** Complete"].join(
-        "\n",
-      ),
-    );
-
-    updateReceiptTasks(receiptPath, progressPath);
-
-    const content = readFileSync(receiptPath, "utf-8");
-    // Individual markers take precedence: 1 Status Complete, batch ignored
-    expect(content).toContain("tasks_completed=1");
-  });
-
-  it("counts batch heading with en-dash", () => {
-    const receiptPath = join(ctx.dir, "receipt.txt");
-    const progressPath = join(ctx.dir, "progress.md");
-    writeFileSync(receiptPath, "tasks_completed=0\n");
-    writeFileSync(
-      progressPath,
-      "## Progress\n\n### Tasks 5\u20138: Later batch\n",
-    );
-
-    updateReceiptTasks(receiptPath, progressPath);
-
-    const content = readFileSync(receiptPath, "utf-8");
-    // 8 - 5 + 1 = 4 from batch, no Status Complete
-    expect(content).toContain("tasks_completed=4");
-  });
-
   it("does not count Tasks X-Y in prose body text", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     const progressPath = join(ctx.dir, "progress.md");
