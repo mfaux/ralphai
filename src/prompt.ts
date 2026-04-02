@@ -164,7 +164,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.
 6. ${commitInstruction}
-Work on the next incomplete task. Complete it fully (including all its subtasks) before ending your response.
+Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
 If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
 When you output COMPLETE, also include a <pr-summary> block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 <pr-summary>

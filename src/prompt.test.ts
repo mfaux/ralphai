@@ -272,6 +272,15 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("2. Find the highest-priority incomplete task");
   });
 
+  it("instructs agent to complete only one task per iteration", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("Complete ONLY the task identified in step 2");
+    expect(prompt).toContain("you will be re-invoked with updated progress");
+    expect(prompt).toContain(
+      "do not attempt to complete the entire plan in one pass",
+    );
+  });
+
   it("references 'all tasks complete' for tasks format", () => {
     const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
     expect(prompt).toContain("all tasks complete");
