@@ -542,6 +542,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   let activePidFile: string | null = null;
   let activeIpcServer: IpcServer | null = null;
 
+  // When a regular (non-PRD) GitHub issue is pulled, the runner should
+  // process exactly that one issue and then stop. PRD sub-issues are
+  // different — the runner continues draining all sub-issues.
+  let pulledRegularGithubIssue = false;
+
   while (!interrupted) {
     console.log();
     console.log("========================================");
@@ -581,7 +586,10 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
         const issueResult = pullGithubIssues(pullOpts);
         if (issueResult.pulled) {
-          // Re-run detection (loop back to the top)
+          // Regular GitHub issue pulled — process it, then stop the drain
+          // loop after completion. (PRD sub-issues use `continue` above
+          // without setting this flag, so they keep draining.)
+          pulledRegularGithubIssue = true;
           continue;
         }
 
@@ -973,6 +981,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
 
     // --- --once: stop after a single completed (or stuck) plan ---
     if (once) {
+      break;
+    }
+
+    // --- Stop after a pulled regular GitHub issue (not PRD sub-issues) ---
+    if (pulledRegularGithubIssue) {
       break;
     }
 

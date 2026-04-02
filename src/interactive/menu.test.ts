@@ -252,6 +252,28 @@ describe("buildMenuItems — Run next plan", () => {
     expect(runNext.disabled).toBe(false);
   });
 
+  it("is disabled with '(no GitHub issues)' when backlog empty and GitHub count is 0", () => {
+    const state = makeState();
+    const ctx: MenuContext = { hasGitHubIssues: true, githubIssueCount: 0 };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan");
+    expect(runNext.hint).toBe("(no GitHub issues)");
+    expect(runNext.disabled).toBe(true);
+  });
+
+  it("shows issue count in hint when backlog empty and GitHub issues available", () => {
+    const state = makeState();
+    const ctx: MenuContext = { hasGitHubIssues: true, githubIssueCount: 7 };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    expect(runNext.label).toBe("Run next plan");
+    expect(runNext.hint).toBe("will pull oldest of 7 from GitHub");
+    expect(runNext.disabled).toBe(false);
+  });
+
   it("recognizes completed dependencies and shows plan as next", () => {
     const state = makeState({
       backlog: [

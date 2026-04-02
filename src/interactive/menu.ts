@@ -144,7 +144,11 @@ export function buildMenuItems(
   });
 
   // --- Run group ---
-  const runNext = runNextMenuItem(state, ctx.hasGitHubIssues);
+  const runNext = runNextMenuItem(
+    state,
+    ctx.hasGitHubIssues,
+    ctx.githubIssueCount,
+  );
   items.push({
     value: "run-next",
     label: runNext.label,
