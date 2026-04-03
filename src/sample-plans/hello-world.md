@@ -4,10 +4,11 @@
 
 ## Acceptance Criteria
 
-- [ ] Running a single command prints `Hello world` to the console
+- [ ] Running `echo 'Hello world'` prints `Hello world` to the console
+- [ ] No files are created, modified, or committed
 
 ## Implementation Tasks
 
 ### Task 1: Print Hello world
 
-- Run a console command that prints `Hello world`
+- Run `echo 'Hello world'` in the terminal — do not create any files
