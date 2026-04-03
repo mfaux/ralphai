@@ -46,6 +46,14 @@ describe("run --help wizard flag", () => {
   });
 });
 
+describe("ralphai --help mentions wizard", () => {
+  it("ralphai --help run description mentions wizard mode", () => {
+    const result = runCli(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("wizard");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // CLI integration: non-TTY error
 // ---------------------------------------------------------------------------

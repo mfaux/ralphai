@@ -15,6 +15,7 @@ import {
   runNextMenuItem,
   pickFromBacklogMenuItem,
   pickFromGithubMenuItem,
+  runWithOptionsMenuItem,
 } from "./run-actions.ts";
 
 // ---------------------------------------------------------------------------
@@ -301,5 +302,26 @@ describe("pickFromGithubMenuItem", () => {
     expect(item.label).toBe("Pick from GitHub");
     expect(item.hint).toBeUndefined();
     expect(item.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runWithOptionsMenuItem
+// ---------------------------------------------------------------------------
+
+describe("runWithOptionsMenuItem", () => {
+  it("returns 'Run with options...' label", () => {
+    const item = runWithOptionsMenuItem();
+    expect(item.label).toBe("Run with options...");
+  });
+
+  it("is always enabled", () => {
+    const item = runWithOptionsMenuItem();
+    expect(item.disabled).toBe(false);
+  });
+
+  it("has a hint about configuring", () => {
+    const item = runWithOptionsMenuItem();
+    expect(item.hint).toBe("configure before running");
   });
 });

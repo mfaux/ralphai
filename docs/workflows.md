@@ -109,3 +109,34 @@ ralphai repos --clean
 ## Run headlessly
 
 Use `ralphai run` when you want headless execution, such as automation, scripts, or quick terminal-driven runs.
+
+## Run with wizard mode
+
+**From the interactive menu:**
+
+```
+ralphai
+→ "Run with options..." → select a target → configure run options → launch
+```
+
+Select "Run with options..." from the interactive menu to combine target selection with an interactive config wizard. The flow:
+
+1. **Target sub-prompt** — choose auto-detect (next plan), pick from backlog, or pick from GitHub. Unavailable targets are greyed out with hints (e.g. "(empty)" for an empty backlog).
+2. **Config wizard** — a multiselect of run options (agent command, feedback commands, max-stuck threshold, etc.) with current values shown. Select which options to override and provide new values.
+3. **Launch** — Ralphai merges your wizard overrides with the selected target and starts the run.
+
+Cancel at any step to return to the main menu.
+
+**From the CLI:**
+
+```bash
+ralphai run --wizard
+ralphai run -w
+```
+
+The `--wizard` flag shows the same config wizard before launching. Combine with a target for full control:
+
+```bash
+ralphai run --wizard 42          # wizard + GitHub issue 42
+ralphai run -w --plan=dark-mode  # wizard + specific plan
+```

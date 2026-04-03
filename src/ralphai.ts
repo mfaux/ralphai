@@ -834,7 +834,7 @@ function showRalphaiHelp(): void {
   console.log();
   console.log(`${TEXT}Core${RESET}`);
   console.log(
-    `  ${TEXT}run${RESET}         ${DIM}Run a plan in an isolated worktree (or 'run <issue>' / 'run <plan.md>')${RESET}`,
+    `  ${TEXT}run${RESET}         ${DIM}Run a plan in an isolated worktree (use --wizard/-w to configure interactively)${RESET}`,
   );
   console.log(
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
