@@ -10,6 +10,7 @@ import * as clack from "@clack/prompts";
 import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { resolveConfig } from "../config.ts";
+import type { ResolvedConfig } from "../config.ts";
 import { listRalphaiWorktrees } from "../worktree/index.ts";
 import { printStatusOnce } from "../status.ts";
 import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
@@ -18,9 +19,11 @@ import {
   runNextMenuItem,
   pickFromBacklogMenuItem,
   pickFromGithubMenuItem,
+  runWithOptionsMenuItem,
   handleRunNext,
   handlePickFromBacklog,
   handlePickFromGitHub,
+  handleRunWithOptions,
 } from "./run-actions.ts";
 import {
   stalledWarning,
@@ -68,6 +71,8 @@ export interface MenuContext {
     issueLabel: string;
     issueRepo: string;
   };
+  /** Resolved config for the run wizard. */
+  resolvedConfig?: ResolvedConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +181,15 @@ export function buildMenuItems(
     disabled: pickGithub.disabled,
   });
 
+  const runWithOpts = runWithOptionsMenuItem();
+  items.push({
+    value: "run-with-options",
+    label: runWithOpts.label,
+    hint: runWithOpts.hint,
+    group: "run",
+    disabled: runWithOpts.disabled,
+  });
+
   // --- Pipeline group ---
   const stop = stopRunningMenuItem(state);
   items.push({
@@ -279,6 +293,9 @@ async function dispatchAction(
       }
       return "continue";
 
+    case "run-with-options":
+      return handleRunWithOptions(state, ctx);
+
     case "stop-running":
       return handleStopRunning(state, _cwd);
 
@@ -329,12 +346,14 @@ export async function runInteractive(cwd: string): Promise<void> {
   let hasGitHubIssues = false;
   let issueLabel = "ralphai";
   let issueRepo = "";
+  let resolvedConfig: ResolvedConfig | undefined;
   try {
     const { config } = resolveConfig({
       cwd,
       envVars: process.env,
       cliArgs: [],
     });
+    resolvedConfig = config;
     hasGitHubIssues = config.issueSource.value === "github";
     issueLabel = config.issueLabel.value;
     issueRepo = config.issueRepo.value;
@@ -366,6 +385,7 @@ export async function runInteractive(cwd: string): Promise<void> {
     hasGitHubIssues,
     githubIssueCount,
     githubConfig: hasGitHubIssues ? { cwd, issueLabel, issueRepo } : undefined,
+    resolvedConfig,
   };
 
   while (true) {

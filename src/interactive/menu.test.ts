@@ -133,6 +133,8 @@ describe("buildMenuItems", () => {
     expect(values).toContain("resume-stalled");
     expect(values).toContain("run-next");
     expect(values).toContain("pick-from-backlog");
+    expect(values).toContain("pick-from-github");
+    expect(values).toContain("run-with-options");
     expect(values).toContain("stop-running");
     expect(values).toContain("reset-plan");
     expect(values).toContain("view-status");
@@ -603,5 +605,57 @@ describe("buildMenuItems — maintenance items", () => {
 
     expect(doctorIdx).toBeGreaterThan(statusIdx);
     expect(items[items.length - 1]!.value).toBe("quit");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — "Run with options..." item
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — Run with options...", () => {
+  it("includes run-with-options in menu items", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const values = items.map((i) => i.value);
+    expect(values).toContain("run-with-options");
+  });
+
+  it("is in the run group", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const item = items.find((i) => i.value === "run-with-options")!;
+    expect(item.group).toBe("run");
+  });
+
+  it("is always enabled", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const item = items.find((i) => i.value === "run-with-options")!;
+    expect(item.disabled).toBeFalsy();
+  });
+
+  it("has hint 'configure before running'", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const item = items.find((i) => i.value === "run-with-options")!;
+    expect(item.hint).toBe("configure before running");
+  });
+
+  it("appears after pick-from-github in the run group", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const githubIdx = items.findIndex((i) => i.value === "pick-from-github");
+    const optionsIdx = items.findIndex((i) => i.value === "run-with-options");
+
+    expect(optionsIdx).toBeGreaterThan(githubIdx);
+  });
+
+  it("appears before pipeline group items", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const optionsIdx = items.findIndex((i) => i.value === "run-with-options");
+    const statusIdx = items.findIndex((i) => i.value === "view-status");
+
+    expect(optionsIdx).toBeLessThan(statusIdx);
   });
 });

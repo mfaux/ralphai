@@ -105,6 +105,7 @@ What it does:
 <issue-number>                    Target a GitHub issue or PRD by number
 --prd=<number>                    Explicitly target a PRD issue (alternative to positional arg)
 --dry-run, -n                     Preview what would happen without changing anything
+--wizard, -w                      Interactively configure run options before starting
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
 --plan=<file>                     Target a specific backlog plan (default: auto-detect)
@@ -119,6 +120,21 @@ What it does:
 --no-auto-commit                  Disable auto-commit recovery snapshots (default)
 --show-config                     Print resolved settings and exit
 ```
+
+### Wizard Mode
+
+`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 7 config options (agent command, setup command, feedback commands, base branch, max stuck, iteration timeout, auto-commit). Each option shows its current value and source (default, config file, env var, or CLI flag).
+
+Wizard overrides are injected as synthetic CLI flags. Explicit flags passed alongside `--wizard` take precedence (last-wins):
+
+```bash
+ralphai run --wizard                         # choose options interactively
+ralphai run -w 42                            # wizard + issue target
+ralphai run --wizard --agent-command='X'     # wizard, but --agent-command='X' wins
+ralphai run --wizard --dry-run               # wizard then dry-run preview
+```
+
+Requires an interactive terminal (TTY). In non-TTY contexts, prints an error with guidance and exits.
 
 ### Drain Mode
 

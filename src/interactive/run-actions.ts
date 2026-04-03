@@ -8,12 +8,14 @@
 
 import * as clack from "@clack/prompts";
 import type { PipelineState, BacklogPlan } from "../pipeline-state.ts";
+import type { ResolvedConfig } from "../config.ts";
 import { runRalphai } from "../ralphai.ts";
 import {
   listGithubIssues,
   buildGithubPickList,
   type ListGithubIssuesOptions,
 } from "./github-issues.ts";
+import { runConfigWizard } from "./run-wizard.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers — next-plan detection from PipelineState
@@ -181,6 +183,24 @@ export function pickFromGithubMenuItem(ctx: {
   };
 }
 
+/**
+ * Build the label and hint for the "Run with options..." menu item.
+ *
+ * Always enabled — the wizard handles unavailable targets via disabled
+ * options in its own sub-prompt.
+ */
+export function runWithOptionsMenuItem(): {
+  label: string;
+  hint?: string;
+  disabled: boolean;
+} {
+  return {
+    label: "Run with options...",
+    hint: "configure before running",
+    disabled: false,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Action handlers
 // ---------------------------------------------------------------------------
@@ -318,5 +338,195 @@ export async function handlePickFromGitHub(
   }
 
   await runRalphai(["run", String(issueNumber)]);
+  return "exit";
+}
+
+/**
+ * Target selection result from the "Run with options..." sub-prompt.
+ *
+ * `type` indicates which target was chosen:
+ * - `"auto-detect"` — use auto-detection (no extra args)
+ * - `"backlog"` — a specific backlog plan was selected
+ * - `"github"` — a specific GitHub issue was selected
+ *
+ * `args` contains the CLI args to pass for this target (e.g. `["--plan", "foo.md"]`).
+ */
+interface TargetSelection {
+  type: "auto-detect" | "backlog" | "github";
+  args: string[];
+}
+
+/**
+ * Show the target sub-prompt for "Run with options...".
+ *
+ * Returns the selected target and args, or `null` if the user cancels.
+ */
+async function selectTarget(
+  state: PipelineState,
+  ctx: {
+    hasGitHubIssues: boolean;
+    githubIssueCount?: number;
+    githubConfig?: ListGithubIssuesOptions;
+  },
+): Promise<TargetSelection | null> {
+  // Build sub-prompt options, reusing existing builders for availability/hints
+  const autoDetect = runNextMenuItem(
+    state,
+    ctx.hasGitHubIssues,
+    ctx.githubIssueCount,
+  );
+  const backlog = pickFromBacklogMenuItem(state);
+  const github = pickFromGithubMenuItem(ctx);
+
+  const options: {
+    value: string;
+    label: string;
+    hint?: string;
+    disabled?: boolean;
+  }[] = [
+    {
+      value: "auto-detect",
+      label: "Auto-detect (next plan)",
+      hint: autoDetect.hint,
+      disabled: autoDetect.disabled,
+    },
+    {
+      value: "pick-from-backlog",
+      label: "Pick from backlog",
+      hint: backlog.hint,
+      disabled: backlog.disabled,
+    },
+    {
+      value: "pick-from-github",
+      label: "Pick from GitHub",
+      hint: github.hint,
+      disabled: github.disabled,
+    },
+  ];
+
+  const selected = await clack.select({
+    message: "Select a target:",
+    options,
+  });
+
+  if (clack.isCancel(selected)) {
+    return null;
+  }
+
+  const action = selected as string;
+
+  if (action === "auto-detect") {
+    return { type: "auto-detect", args: [] };
+  }
+
+  if (action === "pick-from-backlog") {
+    // Delegate to backlog picker sub-list
+    const planOptions = state.backlog.map((plan) => {
+      const parts: string[] = [];
+      if (plan.scope) parts.push(`scope: ${plan.scope}`);
+      const unmet = unmetDependencies(plan, state.completedSlugs);
+      if (unmet.length > 0) {
+        const depNames = unmet.map((d) => d.replace(/\.md$/, "")).join(", ");
+        parts.push(`waiting on ${depNames}`);
+      }
+      return {
+        value: plan.filename,
+        label: plan.filename,
+        hint: parts.length > 0 ? parts.join(" · ") : undefined,
+      };
+    });
+
+    planOptions.push({ value: "__back__", label: "Back", hint: undefined });
+
+    const planSelected = await clack.select({
+      message: "Pick a plan to run:",
+      options: planOptions,
+    });
+
+    if (clack.isCancel(planSelected) || planSelected === "__back__") {
+      return null;
+    }
+
+    return {
+      type: "backlog",
+      args: ["--plan", planSelected as string],
+    };
+  }
+
+  if (action === "pick-from-github") {
+    if (!ctx.githubConfig) return null;
+
+    const result = listGithubIssues(ctx.githubConfig);
+    if (!result.ok) {
+      clack.log.error(result.error);
+      return null;
+    }
+    if (result.issues.length === 0) {
+      clack.log.warning(
+        `No issues labeled '${ctx.githubConfig.issueLabel}' found in ${result.repo}.`,
+      );
+      return null;
+    }
+
+    const pickList = buildGithubPickList(result.issues);
+    const issueSelected = await clack.select({
+      message: `Pick a GitHub issue to run (${result.issues.length} available):`,
+      options: pickList.map((item) => ({
+        value: item.value,
+        label: item.label,
+        hint: item.hint,
+      })),
+    });
+
+    if (clack.isCancel(issueSelected)) return null;
+    const value = issueSelected as string;
+    if (value === "__back__" || value.startsWith("__ctx__:")) return null;
+
+    const issueNumber = parseInt(value, 10);
+    if (isNaN(issueNumber)) return null;
+
+    return {
+      type: "github",
+      args: [String(issueNumber)],
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Handle the "Run with options..." action.
+ *
+ * 1. Show target sub-prompt (auto-detect, backlog, GitHub)
+ * 2. Show the config wizard
+ * 3. Merge wizard flags with target args and launch
+ *
+ * Returns `"continue"` on any cancellation, `"exit"` after launch.
+ */
+export async function handleRunWithOptions(
+  state: PipelineState,
+  ctx: {
+    hasGitHubIssues: boolean;
+    githubIssueCount?: number;
+    githubConfig?: ListGithubIssuesOptions;
+    resolvedConfig?: ResolvedConfig;
+  },
+): Promise<"continue" | "exit"> {
+  // --- Step 1: target selection ---
+  const target = await selectTarget(state, ctx);
+  if (!target) return "continue";
+
+  // --- Step 2: config wizard ---
+  if (!ctx.resolvedConfig) {
+    // Config not available — skip wizard and launch directly
+    await runRalphai(["run", ...target.args]);
+    return "exit";
+  }
+
+  const wizardFlags = await runConfigWizard(ctx.resolvedConfig);
+  if (wizardFlags === null) return "continue";
+
+  // --- Step 3: merge and launch ---
+  await runRalphai(["run", ...wizardFlags, ...target.args]);
   return "exit";
 }
