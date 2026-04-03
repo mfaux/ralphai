@@ -153,3 +153,65 @@ describe("discoverParentPrd", () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe("discoverParentPrd — custom prdLabel", () => {
+  it("returns parent when parent has the custom PRD label", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        return JSON.stringify({
+          number: 245,
+          labels: [{ name: "my-custom-prd" }, { name: "enhancement" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = discoverParentPrd(
+      "owner/repo",
+      "100",
+      "/tmp",
+      "my-custom-prd",
+    );
+    expect(result).toBe(245);
+  });
+
+  it("returns undefined when parent has default label but custom label is configured", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        return JSON.stringify({
+          number: 245,
+          labels: [{ name: "ralphai-prd" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = discoverParentPrd(
+      "owner/repo",
+      "100",
+      "/tmp",
+      "my-custom-prd",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when parent has no matching custom label", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh api")) {
+        return JSON.stringify({
+          number: 245,
+          labels: [{ name: "bug" }, { name: "enhancement" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = discoverParentPrd(
+      "owner/repo",
+      "100",
+      "/tmp",
+      "my-custom-prd",
+    );
+    expect(result).toBeUndefined();
+  });
+});

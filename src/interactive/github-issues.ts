@@ -14,7 +14,8 @@
  */
 
 import { execSync } from "child_process";
-import { checkGhAvailable, detectIssueRepo, PRD_LABEL } from "../issues.ts";
+import { checkGhAvailable, detectIssueRepo } from "../issues.ts";
+import { DEFAULTS } from "../config.ts";
 import type { PrdSubIssue } from "../prd-discovery.ts";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ export interface ListGithubIssuesOptions {
   cwd: string;
   issueLabel: string;
   issueRepo: string;
+  issuePrdLabel?: string;
 }
 
 /** Successful result with issues. */
@@ -134,6 +136,7 @@ export function listGithubIssues(
   options: ListGithubIssuesOptions,
 ): ListGithubIssuesResult {
   const { cwd, issueLabel, issueRepo } = options;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
 
   if (!checkGhAvailable()) {
     return {
@@ -161,9 +164,9 @@ export function listGithubIssues(
     cwd,
   );
 
-  // Fetch PRD issues (with the ralphai-prd label)
+  // Fetch PRD issues (with the configured PRD label)
   const prdRaw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
+    `gh issue list --repo "${repo}" --label "${prdLabel}" --state open ` +
       `--limit 100 --json number,title,labels`,
     cwd,
   );
@@ -198,7 +201,7 @@ export function listGithubIssues(
       if (seen.has(issue.number)) continue;
 
       const labelNames = issue.labels.map((l) => l.name);
-      const isPrd = labelNames.includes(PRD_LABEL);
+      const isPrd = labelNames.includes(prdLabel);
 
       // For PRDs, fetch sub-issues via the REST API (fail-open: empty on error)
       let subIssueDetails: PrdSubIssue[] = [];

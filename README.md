@@ -129,7 +129,7 @@ Ralphai extracts learnings from the agent's output during each run and surfaces 
 
 ## GitHub Issues & PRDs
 
-For multi-step features, **PRDs (Product Requirements Documents)** are the recommended way to work. Create a GitHub issue, label it `ralphai-prd`, and add sub-issues for each piece of work. Then point Ralphai at it:
+For multi-step features, **PRDs (Product Requirements Documents)** are the recommended way to work. Create a GitHub issue, label it with the PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`), and add sub-issues for each piece of work. Then point Ralphai at it:
 
 ```bash
 ralphai run 42           # run PRD #42: all sub-issues on one branch
@@ -137,7 +137,7 @@ ralphai run 42           # run PRD #42: all sub-issues on one branch
 
 Ralphai processes sub-issues sequentially on a single `feat/<prd-slug>` branch, skips any that get stuck, and opens one aggregate draft PR when done. Sub-issues support dependencies via GitHub's native blocking relationships.
 
-For **standalone issues** — one-off bugs, small tasks — label them with `ralphai` (configurable) and either target them directly or let the drain loop pick them up:
+For **standalone issues** — one-off bugs, small tasks — label them with `ralphai` (configurable via `issueLabel`) and either target them directly or let the drain loop pick them up:
 
 ```bash
 ralphai run 57           # run standalone issue #57
@@ -146,7 +146,7 @@ ralphai run              # auto-pulls from GitHub when the backlog is empty
 
 Each standalone issue gets its own branch and PR, the same as a local plan file.
 
-Both workflows require the `gh` CLI and `issueSource: "github"` in config. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
+Both workflows require the `gh` CLI and `issueSource: "github"` in config. All four GitHub labels (`issueLabel`, `issueInProgressLabel`, `issueDoneLabel`, `issuePrdLabel`) are configurable via `config.json` or environment variables. See the [CLI Reference](docs/cli-reference.md#config-keys) for all options.
 
 ## Multi-Repo Management
 

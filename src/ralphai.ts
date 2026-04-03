@@ -44,6 +44,7 @@ import {
   ConfigError,
   getConfigFilePath,
   writeConfigFile,
+  DEFAULTS,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
@@ -61,7 +62,6 @@ import {
 } from "./agents-md-template.ts";
 import {
   detectIssueRepo,
-  ensurePrdLabel,
   fetchPrdIssueByNumber,
   fetchIssueTitleByNumber,
   prdBranchName,
@@ -238,12 +238,70 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  let issueLabel: string | undefined;
+  let issueInProgressLabel: string | undefined;
+  let issueDoneLabel: string | undefined;
+  let issuePrdLabel: string | undefined;
+
   if (enableIssues) {
     clack.note(
       "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
-        'open issue labeled "ralphai" and convert it to a plan.',
+        `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.`,
       "GitHub Issues",
     );
+
+    // Label configuration prompts
+    const labelAnswer = await clack.text({
+      message: "Issue intake label:",
+      initialValue: DEFAULTS.issueLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(labelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueLabel = labelAnswer;
+
+    const inProgressLabelAnswer = await clack.text({
+      message: "Issue in-progress label:",
+      initialValue: DEFAULTS.issueInProgressLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(inProgressLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueInProgressLabel = inProgressLabelAnswer;
+
+    const doneLabelAnswer = await clack.text({
+      message: "Issue done label:",
+      initialValue: DEFAULTS.issueDoneLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(doneLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueDoneLabel = doneLabelAnswer;
+
+    const prdLabelAnswer = await clack.text({
+      message: "PRD label:",
+      initialValue: DEFAULTS.issuePrdLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(prdLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issuePrdLabel = prdLabelAnswer;
   }
 
   // 7. Update AGENTS.md
@@ -288,6 +346,10 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
+    issueLabel,
+    issueInProgressLabel,
+    issueDoneLabel,
+    issuePrdLabel,
     updateAgentsMd,
     createSamplePlan,
   };
@@ -306,6 +368,7 @@ interface LabelNames {
   intake: string;
   inProgress: string;
   done: string;
+  prd: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -338,7 +401,7 @@ function labelDefs(names: LabelNames) {
       color: "0e8a16",
     },
     {
-      name: "ralphai-prd",
+      name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
     },
@@ -349,8 +412,8 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates four labels: intake, in-progress, done, and prd. The first three use
- * the configured label names; the prd label is always `ralphai-prd`.
+ * Creates four labels: intake, in-progress, done, and prd. All four use
+ * the default label names from DEFAULTS.
  */
 function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
@@ -420,11 +483,13 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
-    issueLabel: "ralphai",
-    issueInProgressLabel: "ralphai:in-progress",
-    issueDoneLabel: "ralphai:done",
+    issueLabel: answers.issueLabel ?? DEFAULTS.issueLabel,
+    issueInProgressLabel:
+      answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel,
+    issueDoneLabel: answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel,
     issueRepo: "",
     issueCommentProgress: true,
+    issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -459,6 +524,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     intake: configObj.issueLabel as string,
     inProgress: configObj.issueInProgressLabel as string,
     done: configObj.issueDoneLabel as string,
+    prd: configObj.issuePrdLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -529,7 +595,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "ralphai" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${answers.issueLabel ?? DEFAULTS.issueLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();
@@ -1486,9 +1552,11 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
+    issuePrdLabel: string;
   },
 ): Promise<void> {
-  const { isDryRun, hasHelp, hasShowConfig, setupCommand } = flags;
+  const { isDryRun, hasHelp, hasShowConfig, setupCommand, issuePrdLabel } =
+    flags;
 
   // Pass through --help and --show-config unchanged
   if (hasHelp || hasShowConfig) {
@@ -1574,7 +1642,7 @@ async function runIssueTarget(
   // Discover whether this issue is a PRD or a standalone issue
   let discovery: PrdDiscoveryResult;
   try {
-    discovery = discoverPrdTarget(repo, issueNumber, cwd);
+    discovery = discoverPrdTarget(repo, issueNumber, cwd, issuePrdLabel);
   } catch (err: unknown) {
     console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
@@ -1991,9 +2059,10 @@ async function runRalphaiInManagedWorktree(
   // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
   let resolvedIssueSource = "none";
-  let resolvedIssueLabel = "ralphai";
-  let resolvedIssueInProgressLabel = "ralphai:in-progress";
-  let resolvedIssueDoneLabel = "ralphai:done";
+  let resolvedIssueLabel = DEFAULTS.issueLabel;
+  let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
+  let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
+  let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2009,6 +2078,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueLabel = cfgResult.config.issueLabel.value;
     resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
     resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
+    resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2054,6 +2124,7 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
+      issuePrdLabel: resolvedIssuePrdLabel,
     });
   }
 
@@ -2111,10 +2182,12 @@ async function runRalphaiInManagedWorktree(
       }
 
       try {
-        if (!isDryRun) {
-          ensurePrdLabel(cwd);
-        }
-        prdIssue = fetchPrdIssueByNumber(repo, prdNum, cwd);
+        prdIssue = fetchPrdIssueByNumber(
+          repo,
+          prdNum,
+          cwd,
+          resolvedIssuePrdLabel,
+        );
       } catch (err: unknown) {
         console.error(
           `ERROR: ${err instanceof Error ? err.message : String(err)}`,
@@ -2311,6 +2384,7 @@ async function runRalphaiInManagedWorktree(
               issueDoneLabel: resolvedIssueDoneLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
+              issuePrdLabel: resolvedIssuePrdLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2491,6 +2565,7 @@ async function runRalphaiRunner(
         intake: config.issueLabel.value,
         inProgress: config.issueInProgressLabel.value,
         done: config.issueDoneLabel.value,
+        prd: config.issuePrdLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

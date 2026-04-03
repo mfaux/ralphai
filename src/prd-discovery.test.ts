@@ -438,3 +438,49 @@ describe("discoverPrdTarget — passes correct arguments to gh", () => {
     expect(ghApiCall![0]).toContain("repos/myorg/myrepo/issues/42/sub_issues");
   });
 });
+
+describe("discoverPrdTarget — custom prdLabel", () => {
+  it("detects PRD when issue has the custom label", () => {
+    const issueData = {
+      title: "Custom PRD",
+      body: "PRD body",
+      labels: [{ name: "my-custom-prd" }],
+    };
+    const apiSubIssues = [subIssue(11, "Sub task")];
+    mockGhWithIssueAndSubIssues(
+      JSON.stringify(issueData),
+      JSON.stringify(apiSubIssues),
+    );
+
+    const result = discoverPrdTarget("owner/repo", 42, "/tmp", "my-custom-prd");
+    expect(result.isPrd).toBe(true);
+    if (result.isPrd) {
+      expect(result.prd).toEqual({ number: 42, title: "Custom PRD" });
+      expect(result.subIssues).toEqual([11]);
+    }
+  });
+
+  it("returns isPrd: false when issue has default label but custom label is configured", () => {
+    const issueData = {
+      title: "Has default label",
+      body: "Body",
+      labels: [{ name: "ralphai-prd" }],
+    };
+    mockGhWithIssue(JSON.stringify(issueData));
+
+    const result = discoverPrdTarget("owner/repo", 42, "/tmp", "my-custom-prd");
+    expect(result.isPrd).toBe(false);
+  });
+
+  it("returns isPrd: false when issue has no matching custom label", () => {
+    const issueData = {
+      title: "No match",
+      body: "Body",
+      labels: [{ name: "bug" }, { name: "enhancement" }],
+    };
+    mockGhWithIssue(JSON.stringify(issueData));
+
+    const result = discoverPrdTarget("owner/repo", 42, "/tmp", "my-custom-prd");
+    expect(result.isPrd).toBe(false);
+  });
+});

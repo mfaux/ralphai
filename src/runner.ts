@@ -399,6 +399,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
       issueSource: config.issueSource.value,
       issueLabel: config.issueLabel.value,
       issueRepo: config.issueRepo.value,
+      issuePrdLabel: config.issuePrdLabel.value,
     };
     const prdPeek = peekPrdIssues(peekOpts);
     if (prdPeek.found) {
@@ -536,6 +537,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
   const issueDoneLabel = config.issueDoneLabel.value;
+  const issuePrdLabel = config.issuePrdLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -602,6 +604,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           issueDoneLabel,
           issueRepo,
           issueCommentProgress,
+          issuePrdLabel,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues

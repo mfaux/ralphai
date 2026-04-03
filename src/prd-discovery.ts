@@ -11,7 +11,8 @@
  */
 import { execSync } from "child_process";
 
-import { PRD_LABEL, checkGhAvailable } from "./issues.ts";
+import { checkGhAvailable } from "./issues.ts";
+import { DEFAULTS } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,6 +89,7 @@ export function discoverPrdTarget(
   repo: string,
   issueNumber: number,
   cwd: string,
+  prdLabel?: string,
 ): PrdDiscoveryResult {
   if (!checkGhAvailable()) {
     throw new Error(
@@ -116,7 +118,9 @@ export function discoverPrdTarget(
     );
   }
 
-  const hasLabel = data.labels.some((l) => l.name === PRD_LABEL);
+  const hasLabel = data.labels.some(
+    (l) => l.name === (prdLabel ?? DEFAULTS.issuePrdLabel),
+  );
 
   if (!hasLabel) {
     return {

@@ -29,7 +29,7 @@ mock.module("child_process", () => ({
 }));
 
 // Import AFTER mocking so the module picks up the mock
-const { fetchPrdIssue } = await import("./issues.ts");
+const { fetchPrdIssue, fetchPrdIssueByNumber } = await import("./issues.ts");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -180,5 +180,116 @@ describe("fetchPrdIssue", () => {
     expect(ghListCall![0]).toContain('--label "ralphai-prd"');
     expect(ghListCall![0]).toContain("--state open");
     expect(ghListCall![0]).toContain("--json number,title");
+  });
+});
+
+describe("fetchPrdIssue — custom prdLabel", () => {
+  it("uses custom label in gh issue list query", () => {
+    mockGhAvailableWithIssues("[]");
+    fetchPrdIssue("myorg/myrepo", "/some/dir", "my-custom-prd");
+
+    const ghListCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh issue list"),
+    );
+    expect(ghListCall).toBeDefined();
+    expect(ghListCall![0]).toContain('--label "my-custom-prd"');
+    expect(ghListCall![0]).not.toContain('"ralphai-prd"');
+  });
+
+  it("returns the issue when exactly one exists with custom label", () => {
+    const issues = [{ number: 42, title: "Custom PRD" }];
+    mockGhAvailableWithIssues(JSON.stringify(issues));
+    const result = fetchPrdIssue("owner/repo", "/tmp", "my-custom-prd");
+    expect(result).toEqual({ number: 42, title: "Custom PRD" });
+  });
+
+  it("error message references custom label when multiple PRDs exist", () => {
+    const issues = [
+      { number: 10, title: "Feature A" },
+      { number: 20, title: "Feature B" },
+    ];
+    mockGhAvailableWithIssues(JSON.stringify(issues));
+
+    let errorMessage = "";
+    try {
+      fetchPrdIssue("owner/repo", "/tmp", "my-custom-prd");
+    } catch (e: unknown) {
+      errorMessage = (e as Error).message;
+    }
+
+    expect(errorMessage).toContain("my-custom-prd");
+    expect(errorMessage).not.toContain("ralphai-prd");
+    expect(errorMessage).toContain("#10");
+    expect(errorMessage).toContain("#20");
+  });
+});
+
+describe("fetchPrdIssueByNumber — custom prdLabel", () => {
+  it("validates against custom label", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "Custom PRD issue",
+          labels: [{ name: "my-custom-prd" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = fetchPrdIssueByNumber(
+      "owner/repo",
+      42,
+      "/tmp",
+      "my-custom-prd",
+    );
+    expect(result).toEqual({ number: 42, title: "Custom PRD issue" });
+  });
+
+  it("throws when issue has default label but custom label is configured", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "Has default label",
+          labels: [{ name: "ralphai-prd" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    expect(() =>
+      fetchPrdIssueByNumber("owner/repo", 42, "/tmp", "my-custom-prd"),
+    ).toThrow(/does not have the 'my-custom-prd' label/);
+  });
+
+  it("error message references custom label name", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue view")) {
+        return JSON.stringify({
+          title: "No PRD label",
+          labels: [{ name: "bug" }],
+        });
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    let errorMessage = "";
+    try {
+      fetchPrdIssueByNumber("owner/repo", 42, "/tmp", "my-custom-prd");
+    } catch (e: unknown) {
+      errorMessage = (e as Error).message;
+    }
+
+    expect(errorMessage).toContain("my-custom-prd");
+    expect(errorMessage).not.toContain("ralphai-prd");
   });
 });

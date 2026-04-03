@@ -26,7 +26,7 @@ Processes all dependency-ready plans sequentially, one branch and PR per plan. W
 
 For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 
-1. Create a GitHub issue for the feature. Label it `ralphai-prd`.
+1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`).
 2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
 3. Point Ralphai at the PRD:
 
@@ -168,3 +168,27 @@ The `--wizard` flag shows the same config wizard before launching. Combine with 
 ralphai run --wizard 42          # wizard + GitHub issue 42
 ralphai run -w --plan=dark-mode  # wizard + specific plan
 ```
+
+## Customize GitHub labels
+
+By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, and `ralphai-prd` as GitHub labels. Override any or all of them in `config.json`:
+
+```json
+{
+  "issueLabel": "ai-intake",
+  "issueInProgressLabel": "ai-wip",
+  "issueDoneLabel": "ai-done",
+  "issuePrdLabel": "ai-prd"
+}
+```
+
+Or via environment variables:
+
+```bash
+export RALPHAI_ISSUE_LABEL=ai-intake
+export RALPHAI_ISSUE_IN_PROGRESS_LABEL=ai-wip
+export RALPHAI_ISSUE_DONE_LABEL=ai-done
+export RALPHAI_ISSUE_PRD_LABEL=ai-prd
+```
+
+See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.

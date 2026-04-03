@@ -404,3 +404,144 @@ describe("listGithubIssues", () => {
     }
   });
 });
+
+describe("listGithubIssues — custom issuePrdLabel", () => {
+  it("uses custom label in PRD issue list query", () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("git remote get-url origin")
+      ) {
+        return "https://github.com/owner/repo.git";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue list")) {
+        return "[]";
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = listGithubIssues({
+      ...defaultOptions,
+      issuePrdLabel: "my-custom-prd",
+    });
+    expect(result.ok).toBe(true);
+
+    // Verify the PRD query used the custom label
+    const prdListCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        call[0].includes("gh issue list") &&
+        call[0].includes('"my-custom-prd"'),
+    );
+    expect(prdListCall).toBeDefined();
+
+    // Verify no call used the default label
+    const defaultLabelCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        call[0].includes("gh issue list") &&
+        call[0].includes('"ralphai-prd"'),
+    );
+    expect(defaultLabelCall).toBeUndefined();
+  });
+
+  it("classifies PRD issues using custom label", () => {
+    const prdIssues = [makeIssue(10, "Custom PRD", ["my-custom-prd"])];
+    const subIssues = [makeSubIssue(11, "Sub task")];
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("git remote get-url origin")
+      ) {
+        return "https://github.com/owner/repo.git";
+      }
+      // Sub-issues REST API
+      if (typeof cmd === "string" && cmd.includes("gh api repos/")) {
+        const match = cmd.match(/\/issues\/(\d+)\/sub_issues/);
+        if (match && Number(match[1]) === 10) {
+          return JSON.stringify(subIssues);
+        }
+        return "[]";
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"my-custom-prd"')
+      ) {
+        return JSON.stringify(prdIssues);
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"ralphai"')
+      ) {
+        return "[]";
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = listGithubIssues({
+      ...defaultOptions,
+      issuePrdLabel: "my-custom-prd",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.issues.length).toBe(1);
+      const prd = result.issues[0]!;
+      expect(prd.isPrd).toBe(true);
+      expect(prd.subIssues).toEqual([11]);
+    }
+  });
+
+  it("does not classify issues with default label as PRD when custom label is configured", () => {
+    // Issue has default "ralphai-prd" label, but custom label is configured
+    const regularIssues = [
+      makeIssue(10, "Has default label", ["ralphai", "ralphai-prd"]),
+    ];
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("git remote get-url origin")
+      ) {
+        return "https://github.com/owner/repo.git";
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"my-custom-prd"')
+      ) {
+        return "[]"; // No issues with custom PRD label
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"ralphai"')
+      ) {
+        return JSON.stringify(regularIssues);
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = listGithubIssues({
+      ...defaultOptions,
+      issuePrdLabel: "my-custom-prd",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.issues.length).toBe(1);
+      // Issue should NOT be classified as PRD since it doesn't have custom label
+      expect(result.issues[0]!.isPrd).toBe(false);
+    }
+  });
+});
