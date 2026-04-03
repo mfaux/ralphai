@@ -16,6 +16,11 @@ import { join, relative } from "path";
 const ISOLATED = [
   "src/fetch-prd-issue.test.ts",
   "src/interactive/github-issues.test.ts",
+  "src/issue-blockers.test.ts",
+  "src/parent-prd-discovery.test.ts",
+  "src/prd-discovery.test.ts",
+  "src/pull-prd-sub-issue.test.ts",
+  "src/runner-github-drain.test.ts",
 ];
 
 function findTestFiles(dir: string): string[] {
