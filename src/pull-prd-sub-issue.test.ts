@@ -581,3 +581,70 @@ describe("pullPrdSubIssue — no body parsing", () => {
     }
   });
 });
+
+describe("pullPrdSubIssue — custom issuePrdLabel", () => {
+  it("uses custom label in gh issue list query", () => {
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify([]),
+    });
+
+    const dir = makeTempDir();
+    const opts = {
+      ...defaultOptions(dir),
+      issuePrdLabel: "my-custom-prd",
+    };
+    pullPrdSubIssue(opts);
+
+    const listCalls = mockExecSync.mock.calls
+      .map((c: unknown[]) => c[0])
+      .filter(
+        (c: unknown) => typeof c === "string" && c.includes("gh issue list"),
+      );
+    expect(listCalls.length).toBeGreaterThan(0);
+    expect(listCalls[0]).toContain('"my-custom-prd"');
+    expect(listCalls[0]).not.toContain('"ralphai-prd"');
+  });
+
+  it("pulls sub-issue using custom PRD label and threads it to parent discovery", () => {
+    const prdIssues = [{ number: 100, title: "Custom PRD" }];
+    const subIssues = [{ number: 201, title: "Sub task", state: "open" }];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      'gh issue view 201 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 201 --repo "owner/repo" --json title --jq': () =>
+        "Sub task",
+      'gh issue view 201 --repo "owner/repo" --json body --jq': () =>
+        "Sub task body",
+      'gh issue view 201 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/201",
+      // Parent has the custom label (not the default)
+      "gh api repos/owner/repo/issues/201/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "my-custom-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const opts = {
+      ...defaultOptions(dir),
+      issuePrdLabel: "my-custom-prd",
+    };
+    const result = pullPrdSubIssue(opts);
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#201");
+
+    // Verify plan file has prd frontmatter (parent discovered via custom label)
+    const content = readFileSync(result.planPath!, "utf-8");
+    expect(content).toContain("prd: 100");
+    expect(content).toContain("issue: 201");
+  });
+});
