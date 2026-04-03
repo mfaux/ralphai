@@ -10,10 +10,8 @@ import {
   peekGithubIssues,
   pullGithubIssues,
   pullPrdSubIssue,
-  PRD_LABEL,
   fetchPrdIssueByNumber,
   prdBranchName,
-  ensurePrdLabel,
 } from "./issues.ts";
 import type { PullIssueOptions, PeekIssueOptions } from "./issues.ts";
 
@@ -313,16 +311,6 @@ describe("prdBranchName", () => {
 });
 
 // ---------------------------------------------------------------------------
-// PRD_LABEL constant
-// ---------------------------------------------------------------------------
-
-describe("PRD_LABEL", () => {
-  it("is the expected label string", () => {
-    expect(PRD_LABEL).toBe("ralphai-prd");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // fetchPrdIssueByNumber — guard clause tests (no gh required)
 // ---------------------------------------------------------------------------
 
@@ -374,23 +362,5 @@ describe("pullPrdSubIssue", () => {
       expect(result.pulled).toBe(false);
       expect(result.message).toContain("not available");
     }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ensurePrdLabel — guard clause tests (no gh required)
-// ---------------------------------------------------------------------------
-
-describe("ensurePrdLabel", () => {
-  const ctx = useTempDir();
-
-  it("throws when gh is not available", () => {
-    initRepo(ctx.dir);
-    const ghAvailable = checkGhAvailable();
-    if (!ghAvailable) {
-      expect(() => ensurePrdLabel(ctx.dir)).toThrow("gh CLI not available");
-    }
-    // When gh IS available, we can't easily test label creation without a real repo.
-    // The function is idempotent — safe to call, but we skip in that case.
   });
 });

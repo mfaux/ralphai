@@ -62,7 +62,6 @@ import {
 } from "./agents-md-template.ts";
 import {
   detectIssueRepo,
-  ensurePrdLabel,
   fetchPrdIssueByNumber,
   fetchIssueTitleByNumber,
   prdBranchName,
@@ -307,6 +306,7 @@ interface LabelNames {
   intake: string;
   inProgress: string;
   done: string;
+  prd: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -339,7 +339,7 @@ function labelDefs(names: LabelNames) {
       color: "0e8a16",
     },
     {
-      name: DEFAULTS.issuePrdLabel,
+      name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
     },
@@ -426,6 +426,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueDoneLabel: DEFAULTS.issueDoneLabel,
     issueRepo: "",
     issueCommentProgress: true,
+    issuePrdLabel: DEFAULTS.issuePrdLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -460,6 +461,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     intake: configObj.issueLabel as string,
     inProgress: configObj.issueInProgressLabel as string,
     done: configObj.issueDoneLabel as string,
+    prd: configObj.issuePrdLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -1487,9 +1489,11 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
+    issuePrdLabel: string;
   },
 ): Promise<void> {
-  const { isDryRun, hasHelp, hasShowConfig, setupCommand } = flags;
+  const { isDryRun, hasHelp, hasShowConfig, setupCommand, issuePrdLabel } =
+    flags;
 
   // Pass through --help and --show-config unchanged
   if (hasHelp || hasShowConfig) {
@@ -1575,7 +1579,7 @@ async function runIssueTarget(
   // Discover whether this issue is a PRD or a standalone issue
   let discovery: PrdDiscoveryResult;
   try {
-    discovery = discoverPrdTarget(repo, issueNumber, cwd);
+    discovery = discoverPrdTarget(repo, issueNumber, cwd, issuePrdLabel);
   } catch (err: unknown) {
     console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
@@ -1995,6 +1999,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueLabel = DEFAULTS.issueLabel;
   let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
   let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
+  let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2010,6 +2015,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueLabel = cfgResult.config.issueLabel.value;
     resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
     resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
+    resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2055,6 +2061,7 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
+      issuePrdLabel: resolvedIssuePrdLabel,
     });
   }
 
@@ -2112,10 +2119,12 @@ async function runRalphaiInManagedWorktree(
       }
 
       try {
-        if (!isDryRun) {
-          ensurePrdLabel(cwd);
-        }
-        prdIssue = fetchPrdIssueByNumber(repo, prdNum, cwd);
+        prdIssue = fetchPrdIssueByNumber(
+          repo,
+          prdNum,
+          cwd,
+          resolvedIssuePrdLabel,
+        );
       } catch (err: unknown) {
         console.error(
           `ERROR: ${err instanceof Error ? err.message : String(err)}`,
@@ -2312,6 +2321,7 @@ async function runRalphaiInManagedWorktree(
               issueDoneLabel: resolvedIssueDoneLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
+              issuePrdLabel: resolvedIssuePrdLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2492,6 +2502,7 @@ async function runRalphaiRunner(
         intake: config.issueLabel.value,
         inProgress: config.issueInProgressLabel.value,
         done: config.issueDoneLabel.value,
+        prd: config.issuePrdLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

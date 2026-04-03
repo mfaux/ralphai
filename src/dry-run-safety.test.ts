@@ -73,6 +73,7 @@ function makeResolvedConfig(
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueDoneLabel: "ralphai:done",
+    issuePrdLabel: "ralphai-prd",
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
@@ -303,11 +304,11 @@ describe("body-text verification — ## Parent PRD not parsed", () => {
     // and does not accept or parse body text.
     //
     // We verify this by inspecting the function signature: it takes
-    // (repo, issueNumber, cwd) — no body parameter.
+    // (repo, issueNumber, cwd, prdLabel?) — no body parameter.
     const { discoverParentPrd } = require("./issues.ts");
 
-    // discoverParentPrd has exactly 3 parameters (repo, issueNumber, cwd)
-    expect(discoverParentPrd.length).toBe(3);
+    // discoverParentPrd has exactly 4 parameters (repo, issueNumber, cwd, prdLabel?)
+    expect(discoverParentPrd.length).toBe(4);
   });
 
   it("fetchBlockersViaGraphQL uses GraphQL API, not body text", () => {

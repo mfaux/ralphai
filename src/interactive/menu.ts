@@ -70,6 +70,7 @@ export interface MenuContext {
     cwd: string;
     issueLabel: string;
     issueRepo: string;
+    issuePrdLabel?: string;
   };
   /** Resolved config for the run wizard. */
   resolvedConfig?: ResolvedConfig;
@@ -345,6 +346,7 @@ export async function runInteractive(cwd: string): Promise<void> {
   // Resolve config once for the session to check GitHub issue source
   let hasGitHubIssues = false;
   let issueLabel = DEFAULTS.issueLabel;
+  let issuePrdLabel = DEFAULTS.issuePrdLabel;
   let issueRepo = "";
   let resolvedConfig: ResolvedConfig | undefined;
   try {
@@ -356,6 +358,7 @@ export async function runInteractive(cwd: string): Promise<void> {
     resolvedConfig = config;
     hasGitHubIssues = config.issueSource.value === "github";
     issueLabel = config.issueLabel.value;
+    issuePrdLabel = config.issuePrdLabel.value;
     issueRepo = config.issueRepo.value;
   } catch {
     // Config resolution failure — proceed with defaults
@@ -370,12 +373,14 @@ export async function runInteractive(cwd: string): Promise<void> {
       issueSource: "github",
       issueLabel,
       issueRepo,
+      issuePrdLabel,
     });
     const prdPeek = peekPrdIssues({
       cwd,
       issueSource: "github",
       issueLabel,
       issueRepo,
+      issuePrdLabel,
     });
     // Sum but accept that some overlap may exist (close enough for a label)
     githubIssueCount = (regularPeek.count || 0) + (prdPeek.count || 0);
@@ -384,7 +389,9 @@ export async function runInteractive(cwd: string): Promise<void> {
   const ctx: MenuContext = {
     hasGitHubIssues,
     githubIssueCount,
-    githubConfig: hasGitHubIssues ? { cwd, issueLabel, issueRepo } : undefined,
+    githubConfig: hasGitHubIssues
+      ? { cwd, issueLabel, issueRepo, issuePrdLabel }
+      : undefined,
     resolvedConfig,
   };
 

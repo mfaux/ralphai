@@ -8,6 +8,7 @@
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { DEFAULTS } from "./config.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -30,6 +31,8 @@ export interface PullIssueOptions {
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
   issueCommentProgress: boolean;
+  /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
+  issuePrdLabel?: string;
 }
 
 /** Result of a pullGithubIssues() call. */
@@ -52,6 +55,8 @@ export interface PeekIssueOptions {
   issueLabel: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
+  /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
+  issuePrdLabel?: string;
 }
 
 /** Result of a peekGithubIssues() call. */
@@ -337,11 +342,12 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
 }
 
 /**
- * Read-only check for open PRD issues (`ralphai-prd` label).
+ * Read-only check for open PRD issues (configured PRD label).
  * Safe for dry-run mode.
  */
 export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
   const { cwd, issueSource, issueRepo } = options;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
@@ -365,7 +371,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
   }
 
   const raw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
+    `gh issue list --repo "${repo}" --label "${prdLabel}" --state open ` +
       `--limit 10 --json number,title`,
     cwd,
   );
@@ -396,7 +402,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
       found: false,
       count: 0,
       repo,
-      message: `No open PRD issues with label '${PRD_LABEL}' in ${repo}`,
+      message: `No open PRD issues with label '${prdLabel}' in ${repo}`,
     };
   }
 
@@ -407,7 +413,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
     oldest,
     repo,
     message:
-      `${issues.length} PRD issue(s) with label '${PRD_LABEL}' in ${repo}` +
+      `${issues.length} PRD issue(s) with label '${prdLabel}' in ${repo}` +
       ` (oldest: #${oldest.number} — ${oldest.title})`,
   };
 }
@@ -422,10 +428,10 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
  * Calls `gh api repos/{owner}/{repo}/issues/{N}/parent` which returns the
  * parent issue object (including labels) or 404 if no parent exists.
  *
- * Returns the parent issue number only if the parent has the `ralphai-prd`
+ * Returns the parent issue number only if the parent has the configured PRD
  * label. Returns `undefined` when:
  * - the issue has no parent (404)
- * - the parent does not have the `ralphai-prd` label
+ * - the parent does not have the PRD label
  * - the API call fails for any reason (non-fatal)
  *
  * Logs a warning to stderr on API failure so the plan is still usable.
@@ -434,7 +440,9 @@ export function discoverParentPrd(
   repo: string,
   issueNumber: string,
   cwd: string,
+  prdLabel?: string,
 ): number | undefined {
+  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -455,7 +463,7 @@ export function discoverParentPrd(
     return undefined;
   }
 
-  const hasPrdLabel = parent.labels?.some((l) => l.name === PRD_LABEL);
+  const hasPrdLabel = parent.labels?.some((l) => l.name === label);
   if (!hasPrdLabel) {
     return undefined;
   }
@@ -475,6 +483,7 @@ interface FetchAndWriteOptions {
   issueInProgressLabel: string;
   issueLabel: string;
   issueCommentProgress: boolean;
+  issuePrdLabel?: string;
 }
 
 /**
@@ -514,7 +523,7 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   }
 
   // Discover parent PRD (non-fatal — plan is still usable without it)
-  const prd = discoverParentPrd(repo, issueNumber, cwd);
+  const prd = discoverParentPrd(repo, issueNumber, cwd, opts.issuePrdLabel);
 
   // Query native GitHub blocking relationships via GraphQL (fail-open)
   const blockers = fetchBlockersViaGraphQL(repo, issueNumber, cwd);
@@ -623,6 +632,7 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     issueInProgressLabel,
     issueLabel,
     issueCommentProgress,
+    issuePrdLabel: options.issuePrdLabel,
   });
 }
 
@@ -650,6 +660,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueRepo,
     issueCommentProgress,
   } = options;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
 
   if (issueSource !== "github") {
     return { pulled: false, message: "Issue source is not 'github'" };
@@ -671,9 +682,9 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     };
   }
 
-  // Look for open issues with the ralphai-prd label (body no longer needed)
+  // Look for open issues with the configured PRD label (body no longer needed)
   const raw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
+    `gh issue list --repo "${repo}" --label "${prdLabel}" --state open ` +
       `--limit 10 --json number,title`,
     cwd,
   );
@@ -773,15 +784,13 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueInProgressLabel,
     issueLabel,
     issueCommentProgress,
+    issuePrdLabel: options.issuePrdLabel,
   });
 }
 
 // ---------------------------------------------------------------------------
 // PRD (Product Requirements Document) support
 // ---------------------------------------------------------------------------
-
-/** GitHub label that marks an issue as a PRD. */
-export const PRD_LABEL = "ralphai-prd";
 
 /** Minimal PRD data model threaded through the system. */
 export interface PrdIssue {
@@ -796,13 +805,15 @@ export interface PrdIssue {
  * Throws a descriptive error if:
  * - `gh` is not available or not authenticated
  * - the issue is not found
- * - the issue does not have the `ralphai-prd` label
+ * - the issue does not have the configured PRD label
  */
 export function fetchPrdIssueByNumber(
   repo: string,
   issueNumber: number,
   cwd: string,
+  prdLabel?: string,
 ): PrdIssue {
+  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot fetch PRD issue",
@@ -830,10 +841,10 @@ export function fetchPrdIssueByNumber(
     );
   }
 
-  const hasLabel = data.labels.some((l) => l.name === PRD_LABEL);
+  const hasLabel = data.labels.some((l) => l.name === label);
   if (!hasLabel) {
     throw new Error(
-      `Issue #${issueNumber} does not have the '${PRD_LABEL}' label. ` +
+      `Issue #${issueNumber} does not have the '${label}' label. ` +
         `Add the label to the issue and try again.`,
     );
   }
@@ -844,14 +855,19 @@ export function fetchPrdIssueByNumber(
 /**
  * Auto-detect a single open PRD issue in the repo.
  *
- * Uses `gh issue list --label ralphai-prd --state open --limit 10 --json number,title`.
+ * Uses `gh issue list --label <prdLabel> --state open --limit 10 --json number,title`.
  *
  * - Returns `{ number, title }` if exactly one result.
  * - Returns `null` if zero results (caller should fall back to default naming).
  * - Throws with a descriptive error listing all matches if multiple results,
  *   suggesting `--prd=<number>` or `ralphai prd <number>`.
  */
-export function fetchPrdIssue(repo: string, cwd: string): PrdIssue | null {
+export function fetchPrdIssue(
+  repo: string,
+  cwd: string,
+  prdLabel?: string,
+): PrdIssue | null {
+  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
@@ -859,7 +875,7 @@ export function fetchPrdIssue(repo: string, cwd: string): PrdIssue | null {
   }
 
   const raw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open --limit 10 --json number,title`,
+    `gh issue list --repo "${repo}" --label "${label}" --state open --limit 10 --json number,title`,
     cwd,
   );
 
@@ -885,7 +901,7 @@ export function fetchPrdIssue(repo: string, cwd: string): PrdIssue | null {
   // Multiple PRD issues found — throw a descriptive error
   const listing = issues.map((i) => `  #${i.number} — ${i.title}`).join("\n");
   throw new Error(
-    `Multiple open PRD issues found with label '${PRD_LABEL}':\n${listing}\n\n` +
+    `Multiple open PRD issues found with label '${label}':\n${listing}\n\n` +
       `Specify which PRD to use:\n` +
       `  ralphai run --prd=<number>\n` +
       `  ralphai prd <number>`,
@@ -897,25 +913,6 @@ export function fetchPrdIssue(repo: string, cwd: string): PrdIssue | null {
  */
 export function prdBranchName(title: string): string {
   return `feat/${slugify(title)}`;
-}
-
-/**
- * Ensure the `ralphai-prd` label exists in the repo. Uses `--force` so
- * the command is idempotent (creates or updates silently).
- */
-export function ensurePrdLabel(cwd: string): void {
-  if (!checkGhAvailable()) {
-    throw new Error(
-      "gh CLI not available or not authenticated — cannot ensure PRD label",
-    );
-  }
-
-  // gh label create with --force is idempotent: creates if missing,
-  // no-ops (updates) if already present.
-  execQuiet(
-    `gh label create "${PRD_LABEL}" --force --description "Ralphai PRD (Product Requirements Document)" --color 0052CC`,
-    cwd,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1020,5 +1017,6 @@ export function pullGithubIssueByNumber(
     issueInProgressLabel,
     issueLabel,
     issueCommentProgress,
+    issuePrdLabel: options.issuePrdLabel,
   });
 }
