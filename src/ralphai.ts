@@ -106,6 +106,7 @@ import type {
   SelectedWorktreePlan,
   GitHubFallbackOptions,
 } from "./worktree/index.ts";
+import { runConfigWizard } from "./interactive/run-wizard.ts";
 
 // ---------------------------------------------------------------------------
 // Agent presets
@@ -1351,6 +1352,8 @@ const KNOWN_RUN_FLAGS = new Set([
   "--allow-dirty",
   "--once",
   "--show-config",
+  "--wizard",
+  "-w",
   "--help",
   "-h",
 ]);
@@ -1401,6 +1404,7 @@ function showRunHelp(): void {
     "",
     "Options:",
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
+    "  --wizard, -w                     Interactively configure run options before starting",
     "  --once                           Run a single plan then exit (default: drain backlog)",
     "  --resume, -r                     Auto-commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
@@ -1978,6 +1982,7 @@ async function runRalphaiInManagedWorktree(
   let runArgs = [...options.runArgs];
   const hasHelp = runArgs.includes("--help") || runArgs.includes("-h");
   const hasShowConfig = runArgs.includes("--show-config");
+  const hasWizard = runArgs.includes("--wizard") || runArgs.includes("-w");
 
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
@@ -1991,12 +1996,14 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueDoneLabel = "ralphai:done";
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
+  let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
   try {
     const cfgResult = resolveConfig({
       cwd,
       envVars: process.env as Record<string, string | undefined>,
       cliArgs: runArgs,
     });
+    resolvedConfig = cfgResult.config;
     setupCommand = cfgResult.config.setupCommand.value;
     resolvedIssueSource = cfgResult.config.issueSource.value;
     resolvedIssueLabel = cfgResult.config.issueLabel.value;
@@ -2007,6 +2014,35 @@ async function runRalphaiInManagedWorktree(
       cfgResult.config.issueCommentProgress.value === "true";
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
+  }
+
+  // --- Interactive wizard: `--wizard` / `-w` ---
+  if (hasWizard && !hasHelp) {
+    if (!process.stdout.isTTY) {
+      console.error("ERROR: --wizard requires an interactive terminal (TTY).");
+      console.error(
+        `${DIM}Run without --wizard, or use explicit flags instead:${RESET}`,
+      );
+      console.error(
+        `  ${TEXT}ralphai run --agent-command='claude -p' --max-stuck=5${RESET}`,
+      );
+      process.exit(1);
+    }
+
+    if (resolvedConfig) {
+      const wizardFlags = await runConfigWizard(resolvedConfig);
+      if (wizardFlags === null) {
+        // User cancelled — abort the run
+        process.exit(0);
+      }
+
+      // Strip --wizard / -w from runArgs
+      runArgs = runArgs.filter((a) => a !== "--wizard" && a !== "-w");
+
+      // Prepend wizard flags so real CLI flags (later in array) take precedence
+      // via parseCLIArgs() last-wins semantics.
+      runArgs = [...wizardFlags, ...runArgs];
+    }
   }
 
   // --- Handle explicit positional target: `ralphai run 42` or `ralphai run my-feature.md` ---
