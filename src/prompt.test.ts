@@ -67,7 +67,9 @@ describe("assemblePrompt", () => {
 
   it("includes numbered instruction steps", () => {
     const prompt = assemblePrompt(baseOptions());
-    expect(prompt).toContain("1. Read the referenced files");
+    expect(prompt).toContain(
+      "1. Review the plan and progress content provided above",
+    );
     expect(prompt).toContain("2. Find the highest-priority incomplete task");
     expect(prompt).toContain("3. Implement it with small, focused changes");
   });

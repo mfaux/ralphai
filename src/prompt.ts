@@ -151,7 +151,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
 
   // --- Assemble the prompt ---
   return `${fileRefs}${scopeHint}${learningsSection}
-1. Read the referenced files and the progress file.${learningsHint}
+1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${learningsHint}
 2. ${step2}
 3. Implement it with small, focused changes. Testing strategy depends on task type:
    - Bug fix: Write a failing test FIRST that reproduces the bug, then fix the code to make it pass.
