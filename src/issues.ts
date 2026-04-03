@@ -9,27 +9,6 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 // ---------------------------------------------------------------------------
-// Inline sub-issue body parser (temporary — will be replaced by REST API in
-// a later slice). Only used by pullPrdSubIssue.
-// ---------------------------------------------------------------------------
-
-const UNCHECKED_ISSUE_RE =
-  /^- \[ \] (?:#(\d+)|https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+))(?:\s.*)?$/;
-
-function parseSubIssues(body: string | undefined | null): number[] {
-  if (!body) return [];
-  const issues: number[] = [];
-  for (const line of body.split("\n")) {
-    const match = UNCHECKED_ISSUE_RE.exec(line.trimEnd());
-    if (!match) continue;
-    const raw = match[1] ?? match[2];
-    if (!raw) continue;
-    issues.push(Number(raw));
-  }
-  return issues;
-}
-
-// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -652,11 +631,13 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Discover the oldest open `ralphai-prd` issue, extract its first unchecked
- * sub-issue, and pull that sub-issue into the backlog as a plan file.
+ * Discover the oldest open `ralphai-prd` issue, fetch its sub-issues via the
+ * native REST API, and pull the first eligible open sub-issue into the backlog
+ * as a plan file (with `prd` and `depends-on` frontmatter populated by the
+ * parent and blocker APIs inside `fetchAndWriteIssuePlan()`).
  *
  * Returns `{ pulled: true }` when a sub-issue was written to the backlog.
- * Returns `{ pulled: false }` when no PRD or no unchecked sub-issues exist.
+ * Returns `{ pulled: false }` when no PRD or no eligible sub-issues exist.
  */
 export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   const {
@@ -690,10 +671,10 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     };
   }
 
-  // Look for open issues with the ralphai-prd label
+  // Look for open issues with the ralphai-prd label (body no longer needed)
   const raw = execQuiet(
     `gh issue list --repo "${repo}" --label "${PRD_LABEL}" --state open ` +
-      `--limit 10 --json number,title,body`,
+      `--limit 10 --json number,title`,
     cwd,
   );
 
@@ -701,7 +682,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     return { pulled: false, message: "No open PRD issues found" };
   }
 
-  let prdIssues: Array<{ number: number; title: string; body: string }>;
+  let prdIssues: Array<{ number: number; title: string }>;
   try {
     prdIssues = JSON.parse(raw);
   } catch {
@@ -714,37 +695,69 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
 
   // Pick the oldest PRD (gh returns newest first, so last element)
   const prd = prdIssues[prdIssues.length - 1]!;
-  const subIssues = parseSubIssues(prd.body);
 
-  if (subIssues.length === 0) {
+  // Fetch sub-issues via the native REST API (replaces body-text parsing)
+  const subIssuesRaw = execQuiet(
+    `gh api repos/${repo}/issues/${prd.number}/sub_issues`,
+    cwd,
+  );
+
+  if (subIssuesRaw === null) {
     return {
       pulled: false,
-      message: `PRD #${prd.number} has no unchecked sub-issues`,
+      message: `PRD #${prd.number} — failed to fetch sub-issues via REST API`,
     };
   }
 
-  // Find the first unchecked sub-issue that hasn't already been picked up
-  // or completed. Without this check, the runner's drain loop re-pulls
-  // completed sub-issues because the PRD body checkboxes are never updated.
+  let allSubIssues: Array<{ number: number; state: string }>;
+  try {
+    allSubIssues = JSON.parse(subIssuesRaw);
+  } catch {
+    return {
+      pulled: false,
+      message: `PRD #${prd.number} — failed to parse sub-issues response`,
+    };
+  }
+
+  if (!Array.isArray(allSubIssues)) {
+    return {
+      pulled: false,
+      message: `PRD #${prd.number} — unexpected sub-issues response (expected an array)`,
+    };
+  }
+
+  // Filter to open sub-issues only (the API returns both open and closed)
+  const openSubIssues = allSubIssues.filter((si) => si.state === "open");
+
+  if (openSubIssues.length === 0) {
+    return {
+      pulled: false,
+      message: `PRD #${prd.number} has no open sub-issues`,
+    };
+  }
+
+  // Find the first open sub-issue that hasn't already been picked up
+  // or completed (label check prevents re-pulling issues that were
+  // already processed by a prior drain iteration).
   const skipLabels = [issueInProgressLabel, issueDoneLabel];
   let subIssueNumber: number | undefined;
-  for (const candidate of subIssues) {
+  for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(
-      `gh issue view ${candidate} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      `gh issue view ${candidate.number} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
       cwd,
     );
     const labels = labelsRaw ? labelsRaw.split(",") : [];
     if (skipLabels.some((skip) => labels.includes(skip))) {
       continue;
     }
-    subIssueNumber = candidate;
+    subIssueNumber = candidate.number;
     break;
   }
 
   if (subIssueNumber === undefined) {
     return {
       pulled: false,
-      message: `PRD #${prd.number} — all unchecked sub-issues already in-progress or done`,
+      message: `PRD #${prd.number} — all open sub-issues already in-progress or done`,
     };
   }
 
