@@ -11,22 +11,40 @@ import {
   buildGithubPickList,
   type GithubIssueListItem,
 } from "./github-issues.ts";
+import type { PrdSubIssue } from "../prd-discovery.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function makeSubIssue(
+  number: number,
+  title: string,
+  state: string = "open",
+): PrdSubIssue {
+  return { number, title, state, node_id: `node_${number}` };
+}
+
 function makeIssue(
   number: number,
   title: string,
-  opts?: { isPrd?: boolean; subIssues?: number[] },
+  opts?: {
+    isPrd?: boolean;
+    subIssues?: number[];
+    subIssueDetails?: PrdSubIssue[];
+  },
 ): GithubIssueListItem {
+  const subIssues = opts?.subIssues ?? [];
+  // Auto-generate subIssueDetails from subIssues if not explicitly provided
+  const subIssueDetails =
+    opts?.subIssueDetails ?? subIssues.map((n) => makeSubIssue(n, ""));
   return {
     number,
     title,
     labels: opts?.isPrd ? ["ralphai-prd"] : ["ralphai"],
     isPrd: opts?.isPrd ?? false,
-    subIssues: opts?.subIssues ?? [],
+    subIssues,
+    subIssueDetails,
   };
 }
 
@@ -146,28 +164,35 @@ describe("buildGithubPickList", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Sub-issue title resolution
+  // Sub-issue title resolution (from subIssueDetails)
   // ---------------------------------------------------------------------------
 
-  it("includes sub-issue titles from the title map", () => {
+  it("includes sub-issue titles from subIssueDetails", () => {
     const issues = [
-      makeIssue(10, "Auth PRD", { isPrd: true, subIssues: [11, 12] }),
+      makeIssue(10, "Auth PRD", {
+        isPrd: true,
+        subIssues: [11, 12],
+        subIssueDetails: [
+          makeSubIssue(11, "Add login endpoint"),
+          makeSubIssue(12, "Add signup endpoint"),
+        ],
+      }),
     ];
-    const titleMap = new Map([
-      [11, "Add login endpoint"],
-      [12, "Add signup endpoint"],
-    ]);
-    const items = buildGithubPickList(issues, titleMap);
+    const items = buildGithubPickList(issues);
 
     expect(items[1]!.label).toContain("Add login endpoint");
     expect(items[2]!.label).toContain("Add signup endpoint");
   });
 
-  it("shows only issue number when title is not in the map", () => {
+  it("shows only issue number when subIssueDetails has no title", () => {
     const issues = [
-      makeIssue(10, "Auth PRD", { isPrd: true, subIssues: [11] }),
+      makeIssue(10, "Auth PRD", {
+        isPrd: true,
+        subIssues: [11],
+        subIssueDetails: [makeSubIssue(11, "")],
+      }),
     ];
-    const items = buildGithubPickList(issues, new Map());
+    const items = buildGithubPickList(issues);
 
     // Should have #11 but no title text after it (besides next up)
     expect(items[1]!.label).toMatch(/#11/);

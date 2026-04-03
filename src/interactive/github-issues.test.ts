@@ -45,24 +45,52 @@ function makeIssue(
   number: number,
   title: string,
   labels: string[] = ["ralphai"],
-  body = "",
 ) {
   return {
     number,
     title,
     labels: labels.map((name) => ({ name })),
-    body,
   };
 }
 
-/** Set up mockExecSync so gh is available and returns the given JSON for each label query. */
-function mockGhWithIssues(regularJson: string, prdJson: string = "[]"): void {
+/** A sub-issue object as returned by the REST API. */
+function makeSubIssue(
+  number: number,
+  title: string,
+  state: string = "open",
+  node_id: string = `node_${number}`,
+) {
+  return { number, title, state, node_id };
+}
+
+/**
+ * Set up mockExecSync so gh is available and returns the given JSON for
+ * each label query. For PRDs, also handles sub-issues API calls.
+ *
+ * @param subIssuesMap - Map from PRD issue number to sub-issues API response JSON.
+ */
+function mockGhWithIssues(
+  regularJson: string,
+  prdJson: string = "[]",
+  subIssuesMap: Record<number, string> = {},
+): void {
   mockExecSync.mockImplementation((cmd: string) => {
     if (cmd === "gh --version" || cmd === "gh auth status") {
       return Buffer.from("ok");
     }
     if (typeof cmd === "string" && cmd.includes("git remote get-url origin")) {
       return "https://github.com/owner/repo.git";
+    }
+    // Sub-issues REST API
+    if (typeof cmd === "string" && cmd.includes("gh api repos/")) {
+      const match = cmd.match(/\/issues\/(\d+)\/sub_issues/);
+      if (match) {
+        const issueNum = Number(match[1]);
+        if (issueNum in subIssuesMap) {
+          return subIssuesMap[issueNum];
+        }
+        return "[]";
+      }
     }
     if (
       typeof cmd === "string" &&
@@ -166,16 +194,20 @@ describe("listGithubIssues", () => {
       expect(result.issues[0]!.title).toBe("Fix dashboard bug");
       expect(result.issues[0]!.isPrd).toBe(false);
       expect(result.issues[0]!.subIssues).toEqual([]);
+      expect(result.issues[0]!.subIssueDetails).toEqual([]);
     }
   });
 
-  it("classifies PRD issues and parses sub-issues", () => {
-    const prdBody =
-      "## Sub-issues\n- [ ] #11 Add login\n- [ ] #12 Add signup\n- [x] #13 Done";
-    const prdIssues = [
-      makeIssue(10, "Auth Redesign", ["ralphai-prd"], prdBody),
+  it("classifies PRD issues and fetches sub-issues via REST API", () => {
+    const prdIssues = [makeIssue(10, "Auth Redesign", ["ralphai-prd"])];
+    const subIssues = [
+      makeSubIssue(11, "Add login", "open"),
+      makeSubIssue(12, "Add signup", "open"),
+      makeSubIssue(13, "Done task", "closed"),
     ];
-    mockGhWithIssues("[]", JSON.stringify(prdIssues));
+    mockGhWithIssues("[]", JSON.stringify(prdIssues), {
+      10: JSON.stringify(subIssues),
+    });
 
     const result = listGithubIssues(defaultOptions);
     expect(result.ok).toBe(true);
@@ -183,14 +215,22 @@ describe("listGithubIssues", () => {
       expect(result.issues.length).toBe(1);
       const prd = result.issues[0]!;
       expect(prd.isPrd).toBe(true);
-      expect(prd.subIssues).toEqual([11, 12]); // #13 is checked, excluded
+      // Only open sub-issues are included
+      expect(prd.subIssues).toEqual([11, 12]);
+      expect(prd.subIssueDetails).toEqual([
+        { number: 11, title: "Add login", state: "open", node_id: "node_11" },
+        { number: 12, title: "Add signup", state: "open", node_id: "node_12" },
+      ]);
     }
   });
 
   it("combines regular and PRD issues, PRDs sorted first", () => {
     const regular = [makeIssue(14, "Fix bug")];
-    const prd = [makeIssue(10, "Auth Redesign", ["ralphai-prd"], "- [ ] #11")];
-    mockGhWithIssues(JSON.stringify(regular), JSON.stringify(prd));
+    const prd = [makeIssue(10, "Auth Redesign", ["ralphai-prd"])];
+    const subIssues = [makeSubIssue(11, "Add login")];
+    mockGhWithIssues(JSON.stringify(regular), JSON.stringify(prd), {
+      10: JSON.stringify(subIssues),
+    });
 
     const result = listGithubIssues(defaultOptions);
     expect(result.ok).toBe(true);
@@ -205,15 +245,13 @@ describe("listGithubIssues", () => {
 
   it("deduplicates issues that appear in both queries", () => {
     // Issue #10 has both ralphai and ralphai-prd labels
-    const issue10 = makeIssue(
-      10,
-      "Auth Redesign",
-      ["ralphai", "ralphai-prd"],
-      "- [ ] #11",
-    );
+    const issue10 = makeIssue(10, "Auth Redesign", ["ralphai", "ralphai-prd"]);
     const regular = [issue10, makeIssue(14, "Fix bug")];
     const prd = [issue10];
-    mockGhWithIssues(JSON.stringify(regular), JSON.stringify(prd));
+    const subIssues = [makeSubIssue(11, "Add login")];
+    mockGhWithIssues(JSON.stringify(regular), JSON.stringify(prd), {
+      10: JSON.stringify(subIssues),
+    });
 
     const result = listGithubIssues(defaultOptions);
     expect(result.ok).toBe(true);
@@ -224,15 +262,18 @@ describe("listGithubIssues", () => {
     }
   });
 
-  it("handles PRD with no sub-issues (empty body)", () => {
-    const prd = [makeIssue(10, "Empty PRD", ["ralphai-prd"], "")];
-    mockGhWithIssues("[]", JSON.stringify(prd));
+  it("handles PRD with no sub-issues (API returns empty array)", () => {
+    const prd = [makeIssue(10, "Empty PRD", ["ralphai-prd"])];
+    mockGhWithIssues("[]", JSON.stringify(prd), {
+      10: "[]",
+    });
 
     const result = listGithubIssues(defaultOptions);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.issues[0]!.isPrd).toBe(true);
       expect(result.issues[0]!.subIssues).toEqual([]);
+      expect(result.issues[0]!.subIssueDetails).toEqual([]);
     }
   });
 
@@ -285,8 +326,8 @@ describe("listGithubIssues", () => {
   it("sorts multiple PRDs and regular issues by number within group", () => {
     const regular = [makeIssue(20, "Bug B"), makeIssue(15, "Bug A")];
     const prd = [
-      makeIssue(10, "PRD B", ["ralphai-prd"], ""),
-      makeIssue(5, "PRD A", ["ralphai-prd"], ""),
+      makeIssue(10, "PRD B", ["ralphai-prd"]),
+      makeIssue(5, "PRD A", ["ralphai-prd"]),
     ];
     mockGhWithIssues(JSON.stringify(regular), JSON.stringify(prd));
 
@@ -296,6 +337,70 @@ describe("listGithubIssues", () => {
       const numbers = result.issues.map((i) => i.number);
       // PRDs first sorted by number, then regular sorted by number
       expect(numbers).toEqual([5, 10, 15, 20]);
+    }
+  });
+
+  it("handles sub-issues API failure gracefully (fail-open)", () => {
+    const prd = [makeIssue(10, "Flaky PRD", ["ralphai-prd"])];
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return Buffer.from("ok");
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("git remote get-url origin")
+      ) {
+        return "https://github.com/owner/repo.git";
+      }
+      // Sub-issues API call fails
+      if (typeof cmd === "string" && cmd.includes("gh api repos/")) {
+        throw new Error("API rate limit exceeded");
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"ralphai-prd"')
+      ) {
+        return JSON.stringify(prd);
+      }
+      if (
+        typeof cmd === "string" &&
+        cmd.includes("gh issue list") &&
+        cmd.includes('"ralphai"')
+      ) {
+        return "[]";
+      }
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const result = listGithubIssues(defaultOptions);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.issues.length).toBe(1);
+      const issue = result.issues[0]!;
+      expect(issue.isPrd).toBe(true);
+      // Fail-open: no sub-issues when API fails
+      expect(issue.subIssues).toEqual([]);
+      expect(issue.subIssueDetails).toEqual([]);
+    }
+  });
+
+  it("includes sub-issue titles from REST API response", () => {
+    const prd = [makeIssue(10, "Auth Redesign", ["ralphai-prd"])];
+    const subIssues = [
+      makeSubIssue(11, "Add login endpoint"),
+      makeSubIssue(12, "Add signup endpoint"),
+    ];
+    mockGhWithIssues("[]", JSON.stringify(prd), {
+      10: JSON.stringify(subIssues),
+    });
+
+    const result = listGithubIssues(defaultOptions);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const details = result.issues[0]!.subIssueDetails;
+      expect(details[0]!.title).toBe("Add login endpoint");
+      expect(details[1]!.title).toBe("Add signup endpoint");
     }
   });
 });

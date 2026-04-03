@@ -43,7 +43,7 @@ CI runs on both Ubuntu and Windows. Don't hardcode Unix paths or assume Linux-sp
 
 ## GitHub Issue Dependencies
 
-When pulling GitHub issues into plan files, blocking references in the issue body (e.g. "Blocked by #42", "Depends on #15") are translated to `depends-on` frontmatter using issue-based slugs like `gh-42`. The dependency checker in `plan-detection.ts` supports these slugs via prefix matching: `gh-42` matches any file/directory starting with `gh-42-` in the pipeline directories.
+When pulling GitHub issues into plan files, native GitHub blocking relationships are queried via `Issue.blockedBy` GraphQL API (`gh api graphql`). The returned blocker issue numbers are written to `depends-on` frontmatter using issue-based slugs like `gh-42`. The GraphQL query is fail-open: if it fails, the plan proceeds with no `depends-on` entries. The dependency checker in `plan-detection.ts` supports these slugs via prefix matching: `gh-42` matches any file/directory starting with `gh-42-` in the pipeline directories.
 
 ## Package Manager
 

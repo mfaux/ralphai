@@ -137,7 +137,7 @@ depends-on: [foundation.md, wiring.md]
 ---
 ```
 
-When a GitHub issue body contains blocking references like "Blocked by #42" or "Depends on #15", the generated plan file automatically includes a `depends-on` field using issue-based dependency slugs (e.g. `gh-42`). These slugs are matched against plan files by issue number prefix, so `gh-42` resolves to any plan file like `gh-42-add-dark-mode.md`.
+When a GitHub issue has native blocking relationships (configured via GitHub's "Blocked by" feature), the generated plan file automatically includes a `depends-on` field using issue-based dependency slugs (e.g. `gh-42`). These blocking relationships are queried via the `Issue.blockedBy` GraphQL API. The slugs are matched against plan files by issue number prefix, so `gh-42` resolves to any plan file like `gh-42-add-dark-mode.md`.
 
 ### Plan Selection
 
