@@ -151,7 +151,7 @@ Issue tracking is configured via `config.json` or environment variables (see [Co
 
 #### PRDs (Product Requirements Documents)
 
-For multi-step features, create a GitHub issue labeled `ralphai-prd` with sub-issues. The label is hardcoded and not configurable.
+For multi-step features, create a GitHub issue labeled with the PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`) with sub-issues.
 
 ```bash
 ralphai run 42           # auto-detects PRD label, processes sub-issues sequentially
@@ -166,7 +166,7 @@ PRD behavior:
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
 - The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck checklists
 
-The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the `ralphai-prd` label and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
+The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the configured PRD label (`ralphai-prd` by default) and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
 
 #### Standalone Issues
 

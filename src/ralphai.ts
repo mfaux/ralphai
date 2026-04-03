@@ -238,12 +238,70 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  let issueLabel: string | undefined;
+  let issueInProgressLabel: string | undefined;
+  let issueDoneLabel: string | undefined;
+  let issuePrdLabel: string | undefined;
+
   if (enableIssues) {
     clack.note(
       "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
         `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.`,
       "GitHub Issues",
     );
+
+    // Label configuration prompts
+    const labelAnswer = await clack.text({
+      message: "Issue intake label:",
+      initialValue: DEFAULTS.issueLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(labelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueLabel = labelAnswer;
+
+    const inProgressLabelAnswer = await clack.text({
+      message: "Issue in-progress label:",
+      initialValue: DEFAULTS.issueInProgressLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(inProgressLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueInProgressLabel = inProgressLabelAnswer;
+
+    const doneLabelAnswer = await clack.text({
+      message: "Issue done label:",
+      initialValue: DEFAULTS.issueDoneLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(doneLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issueDoneLabel = doneLabelAnswer;
+
+    const prdLabelAnswer = await clack.text({
+      message: "PRD label:",
+      initialValue: DEFAULTS.issuePrdLabel,
+      validate: (value) => {
+        if (!value.trim()) return "Label cannot be empty";
+      },
+    });
+    if (clack.isCancel(prdLabelAnswer)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+    issuePrdLabel = prdLabelAnswer;
   }
 
   // 7. Update AGENTS.md
@@ -288,6 +346,10 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
+    issueLabel,
+    issueInProgressLabel,
+    issueDoneLabel,
+    issuePrdLabel,
     updateAgentsMd,
     createSamplePlan,
   };
@@ -421,12 +483,13 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
-    issueLabel: DEFAULTS.issueLabel,
-    issueInProgressLabel: DEFAULTS.issueInProgressLabel,
-    issueDoneLabel: DEFAULTS.issueDoneLabel,
+    issueLabel: answers.issueLabel ?? DEFAULTS.issueLabel,
+    issueInProgressLabel:
+      answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel,
+    issueDoneLabel: answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel,
     issueRepo: "",
     issueCommentProgress: true,
-    issuePrdLabel: DEFAULTS.issuePrdLabel,
+    issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -532,7 +595,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "${DEFAULTS.issueLabel}" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${answers.issueLabel ?? DEFAULTS.issueLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();

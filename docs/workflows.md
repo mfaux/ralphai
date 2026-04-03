@@ -26,7 +26,7 @@ Processes all dependency-ready plans sequentially, one branch and PR per plan. W
 
 For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 
-1. Create a GitHub issue for the feature. Label it `ralphai-prd`.
+1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default).
 2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
 3. Point Ralphai at the PRD:
 

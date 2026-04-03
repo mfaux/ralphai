@@ -116,7 +116,7 @@ Use `--once` to process a single work unit and exit instead of draining.
 
 ## PRD Execution Model
 
-PRDs (Product Requirements Documents) are the recommended way to drive multi-step features. A PRD is a GitHub issue labeled `ralphai-prd` with sub-issues representing each piece of work.
+PRDs (Product Requirements Documents) are the recommended way to drive multi-step features. A PRD is a GitHub issue labeled with the configured PRD label (`ralphai-prd` by default) with sub-issues representing each piece of work.
 
 ```bash
 ralphai run 42           # target PRD #42

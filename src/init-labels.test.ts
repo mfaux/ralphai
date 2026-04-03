@@ -130,8 +130,12 @@ describe("init label creation", () => {
   // ---------------------------------------------------------------------------
 
   it("scaffold config includes issueDoneLabel and issuePrdLabel", () => {
-    expect(ralphaiSrc).toContain("issueDoneLabel: DEFAULTS.issueDoneLabel");
-    expect(ralphaiSrc).toContain("issuePrdLabel: DEFAULTS.issuePrdLabel");
+    expect(ralphaiSrc).toContain(
+      "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
+    );
+    expect(ralphaiSrc).toContain(
+      "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
+    );
   });
 
   // ---------------------------------------------------------------------------
