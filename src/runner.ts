@@ -404,6 +404,15 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     if (prdPeek.found) {
       console.log(`[dry-run] No local plans found, but ${prdPeek.message}`);
       console.log(
+        "[dry-run] Would fetch sub-issues via REST API (skipped in dry-run)",
+      );
+      console.log(
+        "[dry-run] Would discover parent PRD via REST API (skipped in dry-run)",
+      );
+      console.log(
+        "[dry-run] Would query blockers via GraphQL API (skipped in dry-run)",
+      );
+      console.log(
         "[dry-run] Run without --dry-run to pull the oldest PRD sub-issue into the backlog.",
       );
       return;
@@ -411,6 +420,12 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     const peek = peekGithubIssues(peekOpts);
     if (peek.found) {
       console.log(`[dry-run] No local plans found, but ${peek.message}`);
+      console.log(
+        "[dry-run] Would discover parent PRD via REST API (skipped in dry-run)",
+      );
+      console.log(
+        "[dry-run] Would query blockers via GraphQL API (skipped in dry-run)",
+      );
       console.log(
         "[dry-run] Run without --dry-run to pull the oldest issue into the backlog.",
       );

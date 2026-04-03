@@ -1524,6 +1524,49 @@ async function runIssueTarget(
     process.exit(1);
   }
 
+  // --- Dry-run: skip sub-issue, parent, and blocker API calls ---
+  if (isDryRun) {
+    // Only fetch the issue title (lightweight read — no sub-issues, parent,
+    // or blocker queries). fetchIssueTitleByNumber is safe for dry-run.
+    let issueTitle: string;
+    try {
+      const info = fetchIssueTitleByNumber(repo, issueNumber, cwd);
+      issueTitle = info.title;
+    } catch (err: unknown) {
+      console.error(
+        `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      console.error(
+        `\nCheck that issue #${issueNumber} exists and you have access to ${repo}.`,
+      );
+      process.exit(1);
+    }
+
+    const issueSlug = slugify(issueTitle);
+    const branch = `feat/${issueSlug}`;
+
+    console.log();
+    console.log("========================================");
+    console.log("  Ralphai dry-run — issue target");
+    console.log("========================================");
+    console.log(`[dry-run] Issue: #${issueNumber} — ${issueTitle}`);
+    console.log(`[dry-run] Branch: ${branch}`);
+    console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${issueSlug}/`);
+    console.log(
+      "[dry-run] Would fetch sub-issues via REST API (skipped in dry-run)",
+    );
+    console.log(
+      "[dry-run] Would discover parent PRD via REST API (skipped in dry-run)",
+    );
+    console.log(
+      "[dry-run] Would query blockers via GraphQL API (skipped in dry-run)",
+    );
+    console.log(
+      "[dry-run] No plan files created, no worktrees created, no agent run executed.",
+    );
+    return;
+  }
+
   // Discover whether this issue is a PRD or a standalone issue
   let discovery: PrdDiscoveryResult;
   try {
@@ -1545,22 +1588,6 @@ async function runIssueTarget(
   const issueTitle = issue.title;
   const issueSlug = slugify(issueTitle);
   const branch = `feat/${issueSlug}`;
-
-  // Dry-run: preview and exit
-  if (isDryRun) {
-    console.log();
-    console.log("========================================");
-    console.log("  Ralphai dry-run — issue target");
-    console.log("========================================");
-    console.log(`[dry-run] Issue: #${issueNumber} — ${issueTitle}`);
-    console.log(`[dry-run] Branch: ${branch}`);
-    console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${issueSlug}/`);
-    console.log("[dry-run] Mode: single target (no drain)");
-    console.log(
-      "[dry-run] No files moved, no worktrees created, no agent run executed.",
-    );
-    return;
-  }
 
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
@@ -1688,7 +1715,13 @@ async function runPrdIssueTarget(
     );
     console.log("[dry-run] Mode: PRD sequential (one branch, one PR)");
     console.log(
-      "[dry-run] No files moved, no worktrees created, no agent run executed.",
+      "[dry-run] Would discover parent PRD via REST API for each sub-issue (skipped in dry-run)",
+    );
+    console.log(
+      "[dry-run] Would query blockers via GraphQL API for each sub-issue (skipped in dry-run)",
+    );
+    console.log(
+      "[dry-run] No plan files created, no worktrees created, no agent run executed.",
     );
     return;
   }
@@ -2066,7 +2099,16 @@ async function runRalphaiInManagedWorktree(
         console.log(`[dry-run] Worktree: ../.ralphai-worktrees/${prdSlug}/`);
         console.log("[dry-run] Mode: drain (PRD sub-issues)");
         console.log(
-          "[dry-run] No files moved, no worktrees created, no agent run executed.",
+          "[dry-run] Would fetch sub-issues via REST API (skipped in dry-run)",
+        );
+        console.log(
+          "[dry-run] Would discover parent PRD via REST API for each sub-issue (skipped in dry-run)",
+        );
+        console.log(
+          "[dry-run] Would query blockers via GraphQL API for each sub-issue (skipped in dry-run)",
+        );
+        console.log(
+          "[dry-run] No plan files created, no worktrees created, no agent run executed.",
         );
         return;
       }
