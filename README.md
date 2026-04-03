@@ -72,7 +72,7 @@ This shows a pipeline summary header and an interactive menu. From here you can 
 
 ### 3. Run headlessly
 
-Ralphai always creates or reuses a managed worktree on **`ralphai/<plan-slug>`**, so there is no need to create a feature branch yourself.
+Ralphai always creates or reuses a managed worktree on **`ralphai/<plan-slug>`** (or **`feat/<prd-slug>`** for PRD runs), so there is no need to create a feature branch yourself.
 
 ```bash
 ralphai run
@@ -82,6 +82,7 @@ Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>
 
 ```bash
 ralphai run              # drain the backlog: one branch/PR per plan
+ralphai run 42           # run GitHub issue #42 (PRD or standalone)
 ralphai run --once       # process a single plan then exit
 ralphai run --resume     # auto-commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
@@ -126,11 +127,26 @@ ralphai clean --worktrees # clean only orphaned worktrees
 
 Ralphai extracts learnings from the agent's output during each run and surfaces them in the **Learnings** section of the draft PR. Review them when reviewing the PR and promote useful lessons to `AGENTS.md` or skill docs. [More on learnings ->](docs/how-ralphai-works.md#learnings-system)
 
-## GitHub Issues Integration
+## GitHub Issues & PRDs
 
-Ralphai can pull plans from GitHub issues when the backlog is empty. Label issues with `ralphai` (configurable), and Ralphai converts them into plan files, runs them, and comments progress back on the issue.
+For multi-step features, **PRDs (Product Requirements Documents)** are the recommended way to work. Create a GitHub issue, label it `ralphai-prd`, and add sub-issues for each piece of work. Then point Ralphai at it:
 
-Requires the `gh` CLI. Configure via `issueSource`, `issueLabel`, and related keys in `config.json`. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
+```bash
+ralphai run 42           # run PRD #42: all sub-issues on one branch
+```
+
+Ralphai processes sub-issues sequentially on a single `feat/<prd-slug>` branch, skips any that get stuck, and opens one aggregate draft PR when done. Sub-issues support dependencies via GitHub's native blocking relationships.
+
+For **standalone issues** — one-off bugs, small tasks — label them with `ralphai` (configurable) and either target them directly or let the drain loop pick them up:
+
+```bash
+ralphai run 57           # run standalone issue #57
+ralphai run              # auto-pulls from GitHub when the backlog is empty
+```
+
+Each standalone issue gets its own branch and PR, the same as a local plan file.
+
+Both workflows require the `gh` CLI and `issueSource: "github"` in config. See the [CLI Reference](docs/cli-reference.md#issue-tracking) for all options.
 
 ## Multi-Repo Management
 

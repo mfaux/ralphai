@@ -110,3 +110,24 @@ ERROR: <command> must be run inside a git repository.
 - `cd` into your repo first, then run the command
 - Use `ralphai repos` to see all known repos and their paths
 - Use `--repo=<name-or-path>` with read-only commands (`status`, `doctor`, `backlog-dir`, etc.) to inspect a repo from anywhere
+
+## "Sub-issue stuck during PRD run"
+
+When a sub-issue hits the stuck threshold during a PRD run, Ralphai skips it and moves to the next sub-issue. The PRD continues — it does not abort.
+
+**Steps:**
+
+1. Check the aggregate draft PR body for the stuck sub-issue checklist.
+2. Inspect `progress.md` in `in-progress/<slug>/` for the stuck sub-issue to see what the agent attempted.
+3. Edit the sub-issue's plan file or add hints, then re-run the PRD: `ralphai run <prd-number>`. Already-completed sub-issues are skipped on re-run.
+
+## "PRD not detected from GitHub issue"
+
+When `ralphai run <number>` treats your PRD as a standalone issue, the issue is missing the required label or has no sub-issues.
+
+**Check:**
+
+1. The issue must have the exact label `ralphai-prd`. This label is hardcoded and not configurable (unlike the intake label `ralphai`).
+2. The issue must have at least one **open** sub-issue. If all sub-issues are closed, Ralphai reports "all sub-issues are already completed."
+3. Run `gh issue view <number> --json labels` to verify the label is present.
+4. If the label doesn't exist in your repo yet, `ralphai run --prd=<number>` auto-creates it. The positional `ralphai run <number>` form does not.
