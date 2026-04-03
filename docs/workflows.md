@@ -22,6 +22,34 @@ ralphai run
 
 Processes all dependency-ready plans sequentially, one branch and PR per plan. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. Use `--once` to process a single plan and exit.
 
+## Work from a PRD (recommended for features)
+
+For multi-step features, create a PRD (Product Requirements Document) on GitHub:
+
+1. Create a GitHub issue for the feature. Label it `ralphai-prd`.
+2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
+3. Point Ralphai at the PRD:
+
+```bash
+ralphai run 42           # PRD #42: all sub-issues sequentially on one branch
+```
+
+Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed and stuck items.
+
+The TUI also supports PRDs: select "Pick from GitHub" and PRD issues appear with their sub-issue tree.
+
+## Run a single GitHub issue
+
+For one-off bugs or small tasks, label a GitHub issue with `ralphai` (configurable via `issueLabel`) and target it directly:
+
+```bash
+ralphai run 57           # run standalone issue #57: one branch, one PR
+```
+
+Or let the drain loop auto-pull when the local backlog is empty — Ralphai checks for PRD sub-issues first, then standalone issues. Each standalone issue gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
+
+Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
+
 ## Parallel runs
 
 ```bash

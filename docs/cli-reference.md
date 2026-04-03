@@ -87,7 +87,9 @@ In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yam
 
 ## Run
 
-`ralphai run` is the only execution entrypoint. It always works through a managed git worktree.
+`ralphai run [<issue-number>]` is the only execution entrypoint. It always works through a managed git worktree.
+
+Pass a GitHub issue number to target a specific issue or PRD directly. Without an argument, Ralphai picks from the local backlog (or pulls from GitHub when the backlog is empty).
 
 Use it for headless execution, automation, or when you want to kick off work directly from the terminal without opening the dashboard.
 
@@ -100,6 +102,8 @@ What it does:
 5. Opens or updates a draft PR when `gh` is available
 
 ```
+<issue-number>                    Target a GitHub issue or PRD by number
+--prd=<number>                    Explicitly target a PRD issue (alternative to positional arg)
 --dry-run, -n                     Preview what would happen without changing anything
 --resume, -r                      Auto-commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
@@ -128,6 +132,29 @@ By default, `ralphai run` drains the backlog — processing plans sequentially, 
 ### Issue Tracking
 
 Issue tracking is configured via `config.json` or environment variables (see [Configuration](#configuration)). Set `issueSource` to `"github"` to enable pulling plans from GitHub issues when the backlog is empty.
+
+#### PRDs (Product Requirements Documents)
+
+For multi-step features, create a GitHub issue labeled `ralphai-prd` with sub-issues. The label is hardcoded and not configurable.
+
+```bash
+ralphai run 42           # auto-detects PRD label, processes sub-issues sequentially
+ralphai run --prd=42     # explicitly target a PRD (errors if label is missing)
+```
+
+PRD behavior:
+
+- All sub-issues run on a single `feat/<prd-slug>` branch in one worktree
+- Sub-issues are processed in GitHub API order; dependencies via blocking relationships are respected
+- Per-sub-issue PRs are suppressed; one aggregate draft PR is opened at the end
+- Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
+- The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck checklists
+
+The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the `ralphai-prd` label and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
+
+#### Standalone Issues
+
+Label issues with the configured intake label (`ralphai` by default). Each gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
 
 ## Clean
 

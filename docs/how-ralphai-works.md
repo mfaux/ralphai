@@ -114,6 +114,39 @@ By default, `ralphai run` drains the backlog — processing plans sequentially u
 
 Use `--once` to process a single work unit and exit instead of draining.
 
+## PRD Execution Model
+
+PRDs (Product Requirements Documents) are the recommended way to drive multi-step features. A PRD is a GitHub issue labeled `ralphai-prd` with sub-issues representing each piece of work.
+
+```bash
+ralphai run 42           # target PRD #42
+```
+
+### How it differs from standalone plans
+
+| Aspect         | Standalone plan / issue          | PRD                                         |
+| -------------- | -------------------------------- | ------------------------------------------- |
+| Branch         | `ralphai/<slug>` per plan        | `feat/<prd-slug>` for the whole PRD         |
+| PR             | One draft PR per plan            | One aggregate draft PR for all sub-issues   |
+| Stuck handling | Plan is skipped, drain continues | Sub-issue is skipped, PRD continues to next |
+
+### Sequencing
+
+Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-issues can declare dependencies on each other via GitHub's native blocking relationships — Ralphai writes these as `depends-on` frontmatter and respects them during plan selection.
+
+### Aggregate PR
+
+Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped), Ralphai opens a single draft PR with:
+
+- A `Closes #N` block for the PRD and each completed sub-issue
+- A checklist of completed sub-issues
+- A checklist of stuck sub-issues (if any)
+- A categorized commit log covering all changes on the branch
+
+### Stuck sub-issues
+
+When a sub-issue hits the stuck threshold (default 3 consecutive no-commit iterations), Ralphai skips it and moves to the next sub-issue. The stuck sub-issue is listed in the aggregate PR body so you can address it manually.
+
 ## Iteration Timeout
 
 Use `--iteration-timeout=<seconds>` or `iterationTimeout` in `config.json` to set a per-invocation timeout. If the agent exceeds the limit, Ralphai kills it and the iteration counts toward the stuck budget. The default is `0`, which means no timeout.
