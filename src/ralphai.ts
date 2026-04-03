@@ -44,6 +44,7 @@ import {
   ConfigError,
   getConfigFilePath,
   writeConfigFile,
+  DEFAULTS,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
@@ -241,7 +242,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   if (enableIssues) {
     clack.note(
       "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
-        'open issue labeled "ralphai" and convert it to a plan.',
+        `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.`,
       "GitHub Issues",
     );
   }
@@ -338,7 +339,7 @@ function labelDefs(names: LabelNames) {
       color: "0e8a16",
     },
     {
-      name: "ralphai-prd",
+      name: DEFAULTS.issuePrdLabel,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
     },
@@ -349,8 +350,8 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates four labels: intake, in-progress, done, and prd. The first three use
- * the configured label names; the prd label is always `ralphai-prd`.
+ * Creates four labels: intake, in-progress, done, and prd. All four use
+ * the default label names from DEFAULTS.
  */
 function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
@@ -420,9 +421,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
-    issueLabel: "ralphai",
-    issueInProgressLabel: "ralphai:in-progress",
-    issueDoneLabel: "ralphai:done",
+    issueLabel: DEFAULTS.issueLabel,
+    issueInProgressLabel: DEFAULTS.issueInProgressLabel,
+    issueDoneLabel: DEFAULTS.issueDoneLabel,
     issueRepo: "",
     issueCommentProgress: true,
   };
@@ -529,7 +530,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "ralphai" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${DEFAULTS.issueLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();
@@ -1991,9 +1992,9 @@ async function runRalphaiInManagedWorktree(
   // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
   let resolvedIssueSource = "none";
-  let resolvedIssueLabel = "ralphai";
-  let resolvedIssueInProgressLabel = "ralphai:in-progress";
-  let resolvedIssueDoneLabel = "ralphai:done";
+  let resolvedIssueLabel = DEFAULTS.issueLabel;
+  let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
+  let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;

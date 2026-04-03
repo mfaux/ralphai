@@ -9,7 +9,7 @@
 import * as clack from "@clack/prompts";
 import type { PipelineState } from "../pipeline-state.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
-import { resolveConfig } from "../config.ts";
+import { resolveConfig, DEFAULTS } from "../config.ts";
 import type { ResolvedConfig } from "../config.ts";
 import { listRalphaiWorktrees } from "../worktree/index.ts";
 import { printStatusOnce } from "../status.ts";
@@ -344,7 +344,7 @@ async function dispatchAction(
 export async function runInteractive(cwd: string): Promise<void> {
   // Resolve config once for the session to check GitHub issue source
   let hasGitHubIssues = false;
-  let issueLabel = "ralphai";
+  let issueLabel = DEFAULTS.issueLabel;
   let issueRepo = "";
   let resolvedConfig: ResolvedConfig | undefined;
   try {

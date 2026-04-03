@@ -350,6 +350,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
 | `RALPHAI_ISSUE_DONE_LABEL`        | `issueDoneLabel`       |
+| `RALPHAI_ISSUE_PRD_LABEL`         | `issuePrdLabel`        |
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
 

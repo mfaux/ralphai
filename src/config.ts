@@ -25,6 +25,7 @@ export interface RalphaiConfig {
   issueLabel: string;
   issueInProgressLabel: string;
   issueDoneLabel: string;
+  issuePrdLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
@@ -65,6 +66,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueLabel: "ralphai",
   issueInProgressLabel: "ralphai:in-progress",
   issueDoneLabel: "ralphai:done",
+  issuePrdLabel: "ralphai-prd",
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
@@ -172,6 +174,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueLabel",
   "issueInProgressLabel",
   "issueDoneLabel",
+  "issuePrdLabel",
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
@@ -309,6 +312,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueDoneLabel = v;
   }
 
+  // issuePrdLabel (string, non-empty)
+  if ("issuePrdLabel" in obj) {
+    const v = String(obj.issuePrdLabel || "");
+    if (v === "") err("'issuePrdLabel' must be a non-empty label name");
+    values.issuePrdLabel = v;
+  }
+
   // issueRepo (string, can be empty)
   if ("issueRepo" in obj) {
     values.issueRepo = String(obj.issueRepo || "");
@@ -424,6 +434,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
   ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
+  ["RALPHAI_ISSUE_PRD_LABEL", "issuePrdLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
@@ -498,6 +509,10 @@ export function applyEnvOverrides(
   // issueDoneLabel
   const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
   if (issueDoneLabel !== undefined) overrides.issueDoneLabel = issueDoneLabel;
+
+  // issuePrdLabel
+  const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");
+  if (issuePrdLabel !== undefined) overrides.issuePrdLabel = issuePrdLabel;
 
   // issueRepo
   const issueRepo = get("RALPHAI_ISSUE_REPO");
