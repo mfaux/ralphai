@@ -9,6 +9,8 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DEFAULTS } from "./config.ts";
+import { deriveLabels } from "./labels.ts";
+import { transitionPull, prdTransitionInProgress } from "./label-lifecycle.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -21,14 +23,22 @@ export interface PullIssueOptions {
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
   issueSource: string;
-  /** Label to filter open issues by (e.g. "ralphai"). */
-  issueLabel: string;
-  /** Label applied when an issue is picked up (e.g. "ralphai:in-progress"). */
-  issueInProgressLabel: string;
-  /** Label applied when an issue is completed (e.g. "ralphai:done"). */
-  issueDoneLabel: string;
-  /** Label applied when an issue is stuck (e.g. "ralphai:stuck"). */
-  issueStuckLabel?: string;
+  /** Label to filter open issues by (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
+  /** Label applied when an issue is picked up (e.g. "ralphai-standalone:in-progress"). */
+  standaloneInProgressLabel: string;
+  /** Label applied when an issue is completed (e.g. "ralphai-standalone:done"). */
+  standaloneDoneLabel: string;
+  /** Label applied when an issue is stuck (e.g. "ralphai-standalone:stuck"). */
+  standaloneStuckLabel?: string;
+  /** Sub-issue intake label (e.g. "ralphai-subissue"). Used by pullPrdSubIssue(). */
+  subissueLabel?: string;
+  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
+  /** Sub-issue done label (e.g. "ralphai-subissue:done"). */
+  subissueDoneLabel?: string;
+  /** Sub-issue stuck label (e.g. "ralphai-subissue:stuck"). */
+  subissueStuckLabel?: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
@@ -55,8 +65,8 @@ export interface PeekIssueOptions {
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
   issueSource: string;
-  /** Label to filter open issues by (e.g. "ralphai"). */
-  issueLabel: string;
+  /** Label to filter open issues by (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
@@ -269,7 +279,7 @@ export function buildIssuePlanContent(
  * files, edits labels, or posts comments.
  */
 export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
-  const { cwd, issueSource, issueLabel, issueRepo } = options;
+  const { cwd, issueSource, standaloneLabel: issueLabel, issueRepo } = options;
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
@@ -351,7 +361,7 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
  */
 export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
   const { cwd, issueSource, issueRepo } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
@@ -446,7 +456,7 @@ export function discoverParentPrd(
   cwd: string,
   prdLabel?: string,
 ): number | undefined {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -476,6 +486,142 @@ export function discoverParentPrd(
 }
 
 // ---------------------------------------------------------------------------
+// Fetch issue with labels (for label-driven dispatch)
+// ---------------------------------------------------------------------------
+
+/** Result of fetching an issue with its labels. */
+export interface IssueWithLabels {
+  number: number;
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+/**
+ * Fetch a GitHub issue by number, returning title, body, and labels.
+ *
+ * Used by label-driven dispatch to classify which dispatch path to take.
+ * Read-only — does not write files or mutate labels.
+ *
+ * Throws a descriptive error if:
+ * - `gh` is not available or not authenticated
+ * - the issue is not found or is inaccessible
+ */
+export function fetchIssueWithLabels(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): IssueWithLabels {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot fetch issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title,body,labels`,
+    cwd,
+  );
+
+  if (!raw) {
+    throw new Error(
+      `Could not fetch issue #${issueNumber} from ${repo}. ` +
+        `Check that the issue exists and you have access.`,
+    );
+  }
+
+  let data: { title: string; body: string; labels: Array<{ name: string }> };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Failed to parse response for issue #${issueNumber} from ${repo}`,
+    );
+  }
+
+  return {
+    number: issueNumber,
+    title: data.title,
+    body: data.body ?? "",
+    labels: data.labels.map((l) => l.name),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Discover parent issue (richer than discoverParentPrd)
+// ---------------------------------------------------------------------------
+
+/** Result of parent issue discovery. */
+export interface ParentIssueResult {
+  /** Whether a parent issue exists. */
+  hasParent: boolean;
+  /** The parent issue number, if it exists. */
+  parentNumber: number | undefined;
+  /** Whether the parent has the PRD label. Only meaningful when hasParent is true. */
+  parentHasPrdLabel: boolean;
+  /** The parent issue title, if it exists. */
+  parentTitle: string | undefined;
+}
+
+/**
+ * Discover the parent issue for a given issue, returning both the parent
+ * number and whether it has the PRD label.
+ *
+ * Unlike `discoverParentPrd()`, this function distinguishes between:
+ * - no parent (404)
+ * - parent exists but lacks PRD label
+ * - parent exists with PRD label
+ *
+ * Used for label-driven dispatch validation where we need to differentiate
+ * these cases to provide appropriate warnings.
+ */
+export function discoverParentIssue(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+  prdLabel?: string,
+): ParentIssueResult {
+  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const raw = execQuiet(
+    `gh api repos/${repo}/issues/${issueNumber}/parent`,
+    cwd,
+  );
+
+  if (!raw) {
+    return {
+      hasParent: false,
+      parentNumber: undefined,
+      parentHasPrdLabel: false,
+      parentTitle: undefined,
+    };
+  }
+
+  let parent: {
+    number: number;
+    title?: string;
+    labels: Array<{ name: string }>;
+  };
+  try {
+    parent = JSON.parse(raw);
+  } catch {
+    return {
+      hasParent: false,
+      parentNumber: undefined,
+      parentHasPrdLabel: false,
+      parentTitle: undefined,
+    };
+  }
+
+  const hasPrdLabel = parent.labels?.some((l) => l.name === label) ?? false;
+  return {
+    hasParent: true,
+    parentNumber: parent.number,
+    parentHasPrdLabel: hasPrdLabel,
+    parentTitle: parent.title,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internal: shared pull logic
 // ---------------------------------------------------------------------------
 
@@ -484,8 +630,8 @@ interface FetchAndWriteOptions {
   issueNumber: string;
   backlogDir: string;
   cwd: string;
-  issueInProgressLabel: string;
-  issueLabel: string;
+  standaloneInProgressLabel: string;
+  standaloneLabel: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
 }
@@ -501,8 +647,8 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     issueNumber,
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
   } = opts;
 
@@ -551,9 +697,10 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   writeFileSync(planPath, planContent, "utf-8");
 
   // Update issue labels: add in-progress, remove intake label
-  execQuiet(
-    `gh issue edit ${issueNumber} --repo "${repo}" ` +
-      `--add-label "${issueInProgressLabel}" --remove-label "${issueLabel}"`,
+  transitionPull(
+    { number: Number(issueNumber), repo },
+    issueLabel,
+    issueInProgressLabel,
     cwd,
   );
 
@@ -587,8 +734,8 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     backlogDir,
     cwd,
     issueSource,
-    issueLabel,
-    issueInProgressLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
   } = options;
@@ -633,8 +780,8 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     issueNumber: number,
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
@@ -654,17 +801,21 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
  * Returns `{ pulled: false }` when no PRD or no eligible sub-issues exist.
  */
 export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
-  const {
-    backlogDir,
-    cwd,
-    issueSource,
-    issueLabel,
-    issueInProgressLabel,
-    issueDoneLabel,
-    issueRepo,
-    issueCommentProgress,
-  } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
+  const { backlogDir, cwd, issueSource, issueRepo, issueCommentProgress } =
+    options;
+
+  // Sub-issues use the subissue label family when provided, falling back
+  // to the standalone labels for backward compatibility.
+  const subissueLabels = options.subissueLabel
+    ? deriveLabels(options.subissueLabel)
+    : null;
+  const issueLabel = subissueLabels?.intake ?? options.standaloneLabel;
+  const issueInProgressLabel =
+    subissueLabels?.inProgress ?? options.standaloneInProgressLabel;
+  const issueDoneLabel = subissueLabels?.done ?? options.standaloneDoneLabel;
+  const issueStuckLabel = subissueLabels?.stuck ?? options.standaloneStuckLabel;
+
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (issueSource !== "github") {
     return { pulled: false, message: "Issue source is not 'github'" };
@@ -755,7 +906,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
   const skipLabels = [issueInProgressLabel, issueDoneLabel];
-  if (options.issueStuckLabel) skipLabels.push(options.issueStuckLabel);
+  if (issueStuckLabel) skipLabels.push(issueStuckLabel);
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(
@@ -783,9 +934,11 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
 
   // Best-effort: mark the PRD parent as in-progress when we first pull a sub-issue.
   const prdInProgressLabel =
-    options.issuePrdInProgressLabel ?? DEFAULTS.issuePrdInProgressLabel;
-  execQuiet(
-    `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
+    options.issuePrdInProgressLabel ??
+    deriveLabels(DEFAULTS.prdLabel).inProgress;
+  prdTransitionInProgress(
+    { number: prd.number, repo },
+    prdInProgressLabel,
     cwd,
   );
 
@@ -794,8 +947,8 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueNumber: String(subIssueNumber),
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
@@ -826,7 +979,7 @@ export function fetchPrdIssueByNumber(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot fetch PRD issue",
@@ -880,7 +1033,7 @@ export function fetchPrdIssue(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue | null {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
@@ -995,8 +1148,8 @@ export function pullGithubIssueByNumber(
     backlogDir,
     cwd,
     issueSource,
-    issueLabel,
-    issueInProgressLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
     issueNumber,
@@ -1027,9 +1180,64 @@ export function pullGithubIssueByNumber(
     issueNumber: String(issueNumber),
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
+}
+
+// ---------------------------------------------------------------------------
+// PRD done detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether ALL sub-issues of a PRD parent have reached the done state.
+ *
+ * Queries the native sub_issues REST API to get all sub-issues, then
+ * checks each open sub-issue's labels. Returns true only when every
+ * sub-issue is either closed OR has the done label.
+ *
+ * Best-effort: returns false on any API failure (fail-closed — we
+ * won't prematurely mark a PRD as done).
+ */
+export function checkAllPrdSubIssuesDone(
+  repo: string,
+  prdNumber: number,
+  subissueDoneLabel: string,
+  cwd: string,
+): boolean {
+  // Fetch all sub-issues via the native REST API
+  const subIssuesRaw = execQuiet(
+    `gh api repos/${repo}/issues/${prdNumber}/sub_issues`,
+    cwd,
+  );
+
+  if (subIssuesRaw === null) return false;
+
+  let allSubIssues: Array<{ number: number; state: string }>;
+  try {
+    allSubIssues = JSON.parse(subIssuesRaw);
+  } catch {
+    return false;
+  }
+
+  if (!Array.isArray(allSubIssues) || allSubIssues.length === 0) return false;
+
+  // Check each open sub-issue for the done label
+  for (const si of allSubIssues) {
+    // Closed sub-issues are considered done regardless of labels
+    if (si.state !== "open") continue;
+
+    const labelsRaw = execQuiet(
+      `gh issue view ${si.number} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (!labels.includes(subissueDoneLabel)) {
+      return false;
+    }
+  }
+
+  return true;
 }

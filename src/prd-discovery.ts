@@ -119,7 +119,7 @@ export function discoverPrdTarget(
   }
 
   const hasLabel = data.labels.some(
-    (l) => l.name === (prdLabel ?? DEFAULTS.issuePrdLabel),
+    (l) => l.name === (prdLabel ?? DEFAULTS.prdLabel),
   );
 
   if (!hasLabel) {

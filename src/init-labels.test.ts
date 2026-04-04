@@ -16,53 +16,113 @@ describe("init label creation", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Source-level: labelDefs includes all five labels
+  // Source-level: labelDefs produces 12 labels (3 families × 4 states)
   // ---------------------------------------------------------------------------
 
-  it("labelDefs includes the intake label with color 7057ff", () => {
-    expect(ralphaiSrc).toContain('description: "Ralphai picks up this issue"');
-    expect(ralphaiSrc).toContain('color: "7057ff"');
-  });
-
-  it("labelDefs includes the in-progress label with color fbca04", () => {
+  it("labelDefs includes standalone intake label with color 7057ff", () => {
     expect(ralphaiSrc).toContain(
-      'description: "Ralphai is working on this issue"',
+      'description: "Ralphai picks up this standalone issue"',
     );
-    expect(ralphaiSrc).toContain('color: "fbca04"');
+    expect(ralphaiSrc).toContain('const STANDALONE_INTAKE_COLOR = "7057ff"');
   });
 
-  it("labelDefs includes the done label with color 0e8a16", () => {
-    expect(ralphaiSrc).toContain('description: "Ralphai finished this issue"');
-    expect(ralphaiSrc).toContain('color: "0e8a16"');
-  });
-
-  it("labelDefs includes the stuck label with color d93f0b", () => {
+  it("labelDefs includes standalone in-progress label with shared yellow color", () => {
     expect(ralphaiSrc).toContain(
-      'description: "Ralphai is stuck on this issue"',
+      'description: "Ralphai is working on this standalone issue"',
     );
-    expect(ralphaiSrc).toContain('color: "d93f0b"');
   });
 
-  it("labelDefs includes the PRD label entry using names.prd with color 1d76db", () => {
-    expect(ralphaiSrc).toContain("name: names.prd");
+  it("labelDefs includes standalone done label with shared green color", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai finished this standalone issue"',
+    );
+  });
+
+  it("labelDefs includes standalone stuck label with shared red color", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is stuck on this standalone issue"',
+    );
+  });
+
+  it("labelDefs includes subissue intake label with color c5def5", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai picks up this PRD sub-issue"',
+    );
+    expect(ralphaiSrc).toContain('const SUBISSUE_INTAKE_COLOR = "c5def5"');
+  });
+
+  it("labelDefs includes subissue in-progress label", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is working on this PRD sub-issue"',
+    );
+  });
+
+  it("labelDefs includes subissue done label", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai finished this PRD sub-issue"',
+    );
+  });
+
+  it("labelDefs includes subissue stuck label", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is stuck on this PRD sub-issue"',
+    );
+  });
+
+  it("labelDefs includes PRD intake label with color 1d76db", () => {
     expect(ralphaiSrc).toContain(
       'description: "Ralphai PRD — groups sub-issues for drain runs"',
     );
-    expect(ralphaiSrc).toContain('color: "1d76db"');
+    expect(ralphaiSrc).toContain('const PRD_INTAKE_COLOR = "1d76db"');
   });
 
-  it("labelDefs includes the PRD in-progress label entry using names.prdInProgress with color fbca04", () => {
-    expect(ralphaiSrc).toContain("name: names.prdInProgress");
+  it("labelDefs includes PRD in-progress label", () => {
     expect(ralphaiSrc).toContain(
       'description: "Ralphai is processing this PRD\'s sub-issues"',
     );
   });
 
-  it("labelDefs includes the PRD done label entry using names.prdDone with color 0e8a16", () => {
-    expect(ralphaiSrc).toContain("name: names.prdDone");
+  it("labelDefs includes PRD done label", () => {
     expect(ralphaiSrc).toContain(
       'description: "Ralphai finished all sub-issues for this PRD"',
     );
+  });
+
+  it("labelDefs includes PRD stuck label", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is stuck processing this PRD"',
+    );
+  });
+
+  it("labelDefs uses shared state colors across families", () => {
+    expect(ralphaiSrc).toContain('const IN_PROGRESS_COLOR = "fbca04"');
+    expect(ralphaiSrc).toContain('const DONE_COLOR = "0e8a16"');
+    expect(ralphaiSrc).toContain('const STUCK_COLOR = "d93f0b"');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Source-level: LabelNames uses 3 families with DerivedLabels
+  // ---------------------------------------------------------------------------
+
+  it("LabelNames interface has standalone, subissue, and prd families", () => {
+    expect(ralphaiSrc).toContain("standalone: DerivedLabels");
+    expect(ralphaiSrc).toContain("subissue: DerivedLabels");
+    expect(ralphaiSrc).toContain("prd: DerivedLabels");
+  });
+
+  it("labelDefs references names.standalone, names.subissue, and names.prd", () => {
+    expect(ralphaiSrc).toContain("names.standalone.intake");
+    expect(ralphaiSrc).toContain("names.standalone.inProgress");
+    expect(ralphaiSrc).toContain("names.standalone.done");
+    expect(ralphaiSrc).toContain("names.standalone.stuck");
+    expect(ralphaiSrc).toContain("names.subissue.intake");
+    expect(ralphaiSrc).toContain("names.subissue.inProgress");
+    expect(ralphaiSrc).toContain("names.subissue.done");
+    expect(ralphaiSrc).toContain("names.subissue.stuck");
+    expect(ralphaiSrc).toContain("names.prd.intake");
+    expect(ralphaiSrc).toContain("names.prd.inProgress");
+    expect(ralphaiSrc).toContain("names.prd.done");
+    expect(ralphaiSrc).toContain("names.prd.stuck");
   });
 
   // ---------------------------------------------------------------------------
@@ -79,10 +139,10 @@ describe("init label creation", () => {
   // Source-level: ensureGitHubLabels uses configured names (LabelNames)
   // ---------------------------------------------------------------------------
 
-  it("ensureGitHubLabels accepts LabelNames parameter", () => {
-    expect(ralphaiSrc).toContain(
-      "function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult",
-    );
+  it("ensureGitHubLabels accepts LabelNames and dryRun parameters", () => {
+    expect(ralphaiSrc).toContain("function ensureGitHubLabels(");
+    expect(ralphaiSrc).toContain("names: LabelNames,");
+    expect(ralphaiSrc).toContain("dryRun = false,");
   });
 
   it("scaffold passes configured label names to ensureGitHubLabels", () => {
@@ -92,23 +152,17 @@ describe("init label creation", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Source-level: scaffold builds LabelNames from config object
+  // Source-level: scaffold builds LabelNames from deriveLabels for all 3 families
   // ---------------------------------------------------------------------------
 
-  it("scaffold builds initLabelNames from config values", () => {
-    expect(ralphaiSrc).toContain("intake: configObj.issueLabel as string");
+  it("scaffold builds initLabelNames using deriveLabels for all 3 base config values", () => {
     expect(ralphaiSrc).toContain(
-      "inProgress: configObj.issueInProgressLabel as string",
-    );
-    expect(ralphaiSrc).toContain("done: configObj.issueDoneLabel as string");
-    expect(ralphaiSrc).toContain("stuck: configObj.issueStuckLabel as string");
-    expect(ralphaiSrc).toContain("prd: configObj.issuePrdLabel as string");
-    expect(ralphaiSrc).toContain(
-      "prdInProgress: configObj.issuePrdInProgressLabel as string",
+      "deriveLabels(configObj.standaloneLabel as string)",
     );
     expect(ralphaiSrc).toContain(
-      "prdDone: configObj.issuePrdDoneLabel as string",
+      "deriveLabels(configObj.subissueLabel as string)",
     );
+    expect(ralphaiSrc).toContain("deriveLabels(configObj.prdLabel as string)");
   });
 
   // ---------------------------------------------------------------------------
@@ -124,7 +178,7 @@ describe("init label creation", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Source-level: success message lists all four labels dynamically
+  // Source-level: success message lists all labels dynamically
   // ---------------------------------------------------------------------------
 
   it("success message is built from labelDefs", () => {
@@ -137,41 +191,47 @@ describe("init label creation", () => {
 
   it("runRalphaiRunner ensures labels when issueSource is github", () => {
     expect(ralphaiSrc).toContain('config.issueSource.value === "github"');
-    // Verify the ensure call uses config values for all labels
-    expect(ralphaiSrc).toContain("intake: config.issueLabel.value");
-    expect(ralphaiSrc).toContain(
-      "inProgress: config.issueInProgressLabel.value",
+    // Verify the ensure call derives labels from 3 base config keys
+    expect(ralphaiSrc).toContain("deriveLabels(config.standaloneLabel.value)");
+    expect(ralphaiSrc).toContain("deriveLabels(config.subissueLabel.value)");
+    expect(ralphaiSrc).toContain("deriveLabels(config.prdLabel.value)");
+  });
+
+  it("runRalphaiRunner creates all 12 labels in a single ensureGitHubLabels call", () => {
+    // After the refactor, run should call ensureGitHubLabels once (not twice)
+    // with all 3 families in one LabelNames object
+    const runBlock = ralphaiSrc.slice(
+      ralphaiSrc.indexOf("// Best-effort: ensure all issue-tracking labels"),
+      ralphaiSrc.indexOf("// --- Pre-flight: interactive dirty-state check"),
     );
-    expect(ralphaiSrc).toContain("done: config.issueDoneLabel.value");
-    expect(ralphaiSrc).toContain("stuck: config.issueStuckLabel.value");
-    expect(ralphaiSrc).toContain("prd: config.issuePrdLabel.value");
-    expect(ralphaiSrc).toContain(
-      "prdInProgress: config.issuePrdInProgressLabel.value",
+    // Should have standalone, subissue, and prd in the same call
+    expect(runBlock).toContain(
+      "standalone: deriveLabels(config.standaloneLabel.value)",
     );
-    expect(ralphaiSrc).toContain("prdDone: config.issuePrdDoneLabel.value");
+    expect(runBlock).toContain(
+      "subissue: deriveLabels(config.subissueLabel.value)",
+    );
+    expect(runBlock).toContain("prd: deriveLabels(config.prdLabel.value)");
   });
 
   it("run-start label ensure is skipped in dry-run mode", () => {
-    // The ensure block is inside `if (!isDryRun && config.issueSource.value === "github")`
     expect(ralphaiSrc).toContain(
       '!isDryRun && config.issueSource.value === "github"',
     );
   });
 
   // ---------------------------------------------------------------------------
-  // Source-level: init config includes issueDoneLabel
+  // Source-level: init config uses 3 base label keys
   // ---------------------------------------------------------------------------
 
-  it("scaffold config includes issueDoneLabel, issueStuckLabel, issuePrdLabel, issuePrdInProgressLabel, and issuePrdDoneLabel", () => {
+  it("scaffold config includes standaloneLabel, subissueLabel, and prdLabel", () => {
     expect(ralphaiSrc).toContain(
-      "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
+      "answers.standaloneLabel ?? DEFAULTS.standaloneLabel",
     );
-    expect(ralphaiSrc).toContain("DEFAULTS.issueStuckLabel");
     expect(ralphaiSrc).toContain(
-      "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
+      "answers.subissueLabel ?? DEFAULTS.subissueLabel",
     );
-    expect(ralphaiSrc).toContain("DEFAULTS.issuePrdInProgressLabel");
-    expect(ralphaiSrc).toContain("DEFAULTS.issuePrdDoneLabel");
+    expect(ralphaiSrc).toContain("answers.prdLabel ?? DEFAULTS.prdLabel");
   });
 
   // ---------------------------------------------------------------------------

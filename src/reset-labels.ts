@@ -11,6 +11,7 @@
  */
 import { execSync } from "child_process";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { transitionReset } from "./label-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,12 +20,18 @@ import { extractIssueFrontmatter } from "./frontmatter.ts";
 export interface RestoreIssueLabelsOptions {
   /** Path to the plan .md file (must still exist on disk). */
   planPath: string;
-  /** The intake label to restore (e.g. "ralphai"). */
-  issueLabel: string;
-  /** The in-progress label to remove (e.g. "ralphai:in-progress"). */
-  issueInProgressLabel: string;
-  /** The stuck label to remove (e.g. "ralphai:stuck"). */
-  issueStuckLabel: string;
+  /** The intake label to restore (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
+  /** The in-progress label to remove (e.g. "ralphai-standalone:in-progress"). */
+  standaloneInProgressLabel: string;
+  /** The stuck label to remove (e.g. "ralphai-standalone:stuck"). */
+  standaloneStuckLabel: string;
+  /** Sub-issue intake label (e.g. "ralphai-subissue"). */
+  subissueLabel?: string;
+  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
+  /** Sub-issue stuck label (e.g. "ralphai-subissue:stuck"). */
+  subissueStuckLabel?: string;
   /** Configured issue repo (owner/repo), or "" to auto-detect from issue-url. */
   issueRepo: string;
   /** Working directory for gh CLI calls. */
@@ -39,18 +46,6 @@ export interface RestoreIssueLabelsResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Check whether the `gh` CLI is installed and authenticated.
@@ -96,14 +91,7 @@ function repoFromUrl(issueUrl: string): string | null {
 export function restoreIssueLabels(
   options: RestoreIssueLabelsOptions,
 ): RestoreIssueLabelsResult {
-  const {
-    planPath,
-    issueLabel,
-    issueInProgressLabel,
-    issueStuckLabel,
-    issueRepo,
-    cwd,
-  } = options;
+  const { planPath, issueRepo, cwd } = options;
 
   // Read frontmatter to check if this is a GitHub-sourced plan
   const fm = extractIssueFrontmatter(planPath);
@@ -111,6 +99,22 @@ export function restoreIssueLabels(
   if (fm.source !== "github" || !fm.issue) {
     return { restored: false, message: "not a GitHub-sourced plan" };
   }
+
+  // Choose the correct label family: sub-issues (prd present in frontmatter)
+  // use subissue labels when available, standalone issues use standalone labels.
+  const isSubIssue = fm.prd !== undefined;
+  const issueLabel =
+    isSubIssue && options.subissueLabel
+      ? options.subissueLabel
+      : options.standaloneLabel;
+  const issueInProgressLabel =
+    isSubIssue && options.subissueInProgressLabel
+      ? options.subissueInProgressLabel
+      : options.standaloneInProgressLabel;
+  const issueStuckLabel =
+    isSubIssue && options.subissueStuckLabel
+      ? options.subissueStuckLabel
+      : options.standaloneStuckLabel;
 
   // Check gh CLI availability
   if (!isGhAvailable()) {
@@ -133,20 +137,16 @@ export function restoreIssueLabels(
   }
 
   // Reverse the label transition: remove in-progress and stuck, add intake
-  const cmd =
-    `gh issue edit ${fm.issue} --repo "${repo}" ` +
-    `--add-label "${issueLabel}" --remove-label "${issueInProgressLabel}" --remove-label "${issueStuckLabel}"`;
-
-  const result = execQuiet(cmd, cwd);
-  if (result === null) {
-    return {
-      restored: false,
-      message: `Label restoration failed for issue #${fm.issue}`,
-    };
-  }
+  const transitionResult = transitionReset(
+    { number: fm.issue, repo },
+    issueLabel,
+    issueInProgressLabel,
+    issueStuckLabel,
+    cwd,
+  );
 
   return {
-    restored: true,
-    message: `Restored labels on issue #${fm.issue} (${repo})`,
+    restored: transitionResult.ok,
+    message: transitionResult.message,
   };
 }

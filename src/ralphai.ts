@@ -47,6 +47,11 @@ import {
   DEFAULTS,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
+import { deriveLabels, type DerivedLabels } from "./labels.ts";
+import {
+  prdTransitionInProgress,
+  prdTransitionDone,
+} from "./label-lifecycle.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -65,6 +70,8 @@ import {
   detectIssueRepo,
   fetchPrdIssueByNumber,
   fetchIssueTitleByNumber,
+  fetchIssueWithLabels,
+  discoverParentIssue,
   prdBranchName,
   pullGithubIssueByNumber,
   pullGithubIssues,
@@ -74,6 +81,11 @@ import {
 import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
+import {
+  classifyIssue,
+  validateStandalone,
+  validateSubissue,
+} from "./issue-dispatch.ts";
 import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
 import {
@@ -231,7 +243,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   // 6. GitHub Issues integration (enabled by default)
   clack.note(
     "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
-      `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.\n` +
+      `open issue labeled "${DEFAULTS.standaloneLabel}" and convert it to a plan.\n` +
       "Disable this if you use a different issue tracker.",
     "GitHub Issues",
   );
@@ -247,55 +259,41 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   }
 
   const enableIssues = disableIssues;
-  let issueLabel: string | undefined;
-  let issueInProgressLabel: string | undefined;
-  let issueDoneLabel: string | undefined;
-  let issuePrdLabel: string | undefined;
+  let standaloneLabel: string | undefined;
+  let subissueLabel: string | undefined;
+  let prdLabel: string | undefined;
 
   if (enableIssues) {
     // Label configuration prompts
-    const labelAnswer = await clack.text({
-      message: "Issue intake label:",
-      initialValue: DEFAULTS.issueLabel,
+    const standaloneLabelAnswer = await clack.text({
+      message: "Standalone issue label (base name):",
+      initialValue: DEFAULTS.standaloneLabel,
       validate: (value) => {
         if (!value.trim()) return "Label cannot be empty";
       },
     });
-    if (clack.isCancel(labelAnswer)) {
+    if (clack.isCancel(standaloneLabelAnswer)) {
       clack.cancel("Setup cancelled.");
       return null;
     }
-    issueLabel = labelAnswer;
+    standaloneLabel = standaloneLabelAnswer;
 
-    const inProgressLabelAnswer = await clack.text({
-      message: "Issue in-progress label:",
-      initialValue: DEFAULTS.issueInProgressLabel,
+    const subissueLabelAnswer = await clack.text({
+      message: "Sub-issue label (base name):",
+      initialValue: DEFAULTS.subissueLabel,
       validate: (value) => {
         if (!value.trim()) return "Label cannot be empty";
       },
     });
-    if (clack.isCancel(inProgressLabelAnswer)) {
+    if (clack.isCancel(subissueLabelAnswer)) {
       clack.cancel("Setup cancelled.");
       return null;
     }
-    issueInProgressLabel = inProgressLabelAnswer;
-
-    const doneLabelAnswer = await clack.text({
-      message: "Issue done label:",
-      initialValue: DEFAULTS.issueDoneLabel,
-      validate: (value) => {
-        if (!value.trim()) return "Label cannot be empty";
-      },
-    });
-    if (clack.isCancel(doneLabelAnswer)) {
-      clack.cancel("Setup cancelled.");
-      return null;
-    }
-    issueDoneLabel = doneLabelAnswer;
+    subissueLabel = subissueLabelAnswer;
 
     const prdLabelAnswer = await clack.text({
-      message: "PRD label:",
-      initialValue: DEFAULTS.issuePrdLabel,
+      message: "PRD label (base name):",
+      initialValue: DEFAULTS.prdLabel,
       validate: (value) => {
         if (!value.trim()) return "Label cannot be empty";
       },
@@ -304,7 +302,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
       clack.cancel("Setup cancelled.");
       return null;
     }
-    issuePrdLabel = prdLabelAnswer;
+    prdLabel = prdLabelAnswer;
   }
 
   // 7. Update AGENTS.md
@@ -349,10 +347,9 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
-    issueLabel,
-    issueInProgressLabel,
-    issueDoneLabel,
-    issuePrdLabel,
+    standaloneLabel,
+    subissueLabel,
+    prdLabel,
     updateAgentsMd,
     createSamplePlan,
   };
@@ -368,13 +365,9 @@ interface LabelResult {
 }
 
 interface LabelNames {
-  intake: string;
-  inProgress: string;
-  done: string;
-  stuck: string;
-  prd: string;
-  prdInProgress: string;
-  prdDone: string;
+  standalone: DerivedLabels;
+  subissue: DerivedLabels;
+  prd: DerivedLabels;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -388,43 +381,86 @@ function ghLabelCreateCmd(
   return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
 }
 
-/** The label definitions with their descriptions and colors. */
+/** The label definitions with their descriptions and colors.
+ *
+ * Produces 12 labels: 3 families (standalone, subissue, prd) × 4 states
+ * (intake, in-progress, done, stuck). Each family has a distinct intake
+ * color; state colors (yellow, green, red) are shared across families.
+ */
 function labelDefs(names: LabelNames) {
+  // Intake colors — one per family
+  const STANDALONE_INTAKE_COLOR = "7057ff"; // purple
+  const SUBISSUE_INTAKE_COLOR = "c5def5"; // light blue
+  const PRD_INTAKE_COLOR = "1d76db"; // blue
+
+  // Shared state colors
+  const IN_PROGRESS_COLOR = "fbca04"; // yellow
+  const DONE_COLOR = "0e8a16"; // green
+  const STUCK_COLOR = "d93f0b"; // red
+
   return [
+    // Standalone family
     {
-      name: names.intake,
-      description: "Ralphai picks up this issue",
-      color: "7057ff",
+      name: names.standalone.intake,
+      description: "Ralphai picks up this standalone issue",
+      color: STANDALONE_INTAKE_COLOR,
     },
     {
-      name: names.inProgress,
-      description: "Ralphai is working on this issue",
-      color: "fbca04",
+      name: names.standalone.inProgress,
+      description: "Ralphai is working on this standalone issue",
+      color: IN_PROGRESS_COLOR,
     },
     {
-      name: names.done,
-      description: "Ralphai finished this issue",
-      color: "0e8a16",
+      name: names.standalone.done,
+      description: "Ralphai finished this standalone issue",
+      color: DONE_COLOR,
     },
     {
-      name: names.stuck,
-      description: "Ralphai is stuck on this issue",
-      color: "d93f0b",
+      name: names.standalone.stuck,
+      description: "Ralphai is stuck on this standalone issue",
+      color: STUCK_COLOR,
+    },
+    // Subissue family
+    {
+      name: names.subissue.intake,
+      description: "Ralphai picks up this PRD sub-issue",
+      color: SUBISSUE_INTAKE_COLOR,
     },
     {
-      name: names.prd,
+      name: names.subissue.inProgress,
+      description: "Ralphai is working on this PRD sub-issue",
+      color: IN_PROGRESS_COLOR,
+    },
+    {
+      name: names.subissue.done,
+      description: "Ralphai finished this PRD sub-issue",
+      color: DONE_COLOR,
+    },
+    {
+      name: names.subissue.stuck,
+      description: "Ralphai is stuck on this PRD sub-issue",
+      color: STUCK_COLOR,
+    },
+    // PRD family
+    {
+      name: names.prd.intake,
       description: "Ralphai PRD — groups sub-issues for drain runs",
-      color: "1d76db",
+      color: PRD_INTAKE_COLOR,
     },
     {
-      name: names.prdInProgress,
+      name: names.prd.inProgress,
       description: "Ralphai is processing this PRD's sub-issues",
-      color: "fbca04",
+      color: IN_PROGRESS_COLOR,
     },
     {
-      name: names.prdDone,
+      name: names.prd.done,
       description: "Ralphai finished all sub-issues for this PRD",
-      color: "0e8a16",
+      color: DONE_COLOR,
+    },
+    {
+      name: names.prd.stuck,
+      description: "Ralphai is stuck processing this PRD",
+      color: STUCK_COLOR,
     },
   ];
 }
@@ -433,10 +469,21 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates five labels: intake, in-progress, done, stuck, and prd. All five
- * use the default label names from DEFAULTS.
+ * Creates 12 labels: 3 families (standalone, subissue, prd) × 4 states.
  */
-function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
+function ensureGitHubLabels(
+  cwd: string,
+  names: LabelNames,
+  dryRun = false,
+): LabelResult {
+  if (dryRun) {
+    const defs = labelDefs(names);
+    for (const label of defs) {
+      console.log(`[dry-run] Would create label: ${label.name}`);
+    }
+    return { success: true };
+  }
+
   try {
     // Check gh is available
     execSync("gh --version", { cwd, stdio: "pipe" });
@@ -504,16 +551,11 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
-    issueLabel: answers.issueLabel ?? DEFAULTS.issueLabel,
-    issueInProgressLabel:
-      answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel,
-    issueDoneLabel: answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel,
-    issueStuckLabel: DEFAULTS.issueStuckLabel,
+    standaloneLabel: answers.standaloneLabel ?? DEFAULTS.standaloneLabel,
+    subissueLabel: answers.subissueLabel ?? DEFAULTS.subissueLabel,
+    prdLabel: answers.prdLabel ?? DEFAULTS.prdLabel,
     issueRepo: "",
     issueCommentProgress: true,
-    issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
-    issuePrdInProgressLabel: DEFAULTS.issuePrdInProgressLabel,
-    issuePrdDoneLabel: DEFAULTS.issuePrdDoneLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -545,13 +587,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
 
   // Create GitHub labels if issues integration is enabled
   const initLabelNames: LabelNames = {
-    intake: configObj.issueLabel as string,
-    inProgress: configObj.issueInProgressLabel as string,
-    done: configObj.issueDoneLabel as string,
-    stuck: configObj.issueStuckLabel as string,
-    prd: configObj.issuePrdLabel as string,
-    prdInProgress: configObj.issuePrdInProgressLabel as string,
-    prdDone: configObj.issuePrdDoneLabel as string,
+    standalone: deriveLabels(configObj.standaloneLabel as string),
+    subissue: deriveLabels(configObj.subissueLabel as string),
+    prd: deriveLabels(configObj.prdLabel as string),
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -622,7 +660,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "${answers.issueLabel ?? DEFAULTS.issueLabel}" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${answers.standaloneLabel ?? DEFAULTS.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();
@@ -716,9 +754,12 @@ async function runRalphaiReset(
 
   // Load config to get label names for GitHub issue restoration.
   // Best-effort: if config resolution fails we skip label restoration.
-  let issueLabel = "";
-  let issueInProgressLabel = "";
-  let issueStuckLabel = "";
+  let standaloneLabel = "";
+  let standaloneInProgressLabel = "";
+  let standaloneStuckLabel = "";
+  let subissueLabel = "";
+  let subissueInProgressLabel = "";
+  let subissueStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -726,9 +767,18 @@ async function runRalphaiReset(
       envVars: process.env,
       cliArgs: [],
     });
-    issueLabel = cfgResult.config.issueLabel.value;
-    issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
-    issueStuckLabel = cfgResult.config.issueStuckLabel.value;
+    const standaloneLabelsResolved = deriveLabels(
+      cfgResult.config.standaloneLabel.value,
+    );
+    standaloneLabel = standaloneLabelsResolved.intake;
+    standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
+    standaloneStuckLabel = standaloneLabelsResolved.stuck;
+    const subissueLabelsResolved = deriveLabels(
+      cfgResult.config.subissueLabel.value,
+    );
+    subissueLabel = subissueLabelsResolved.intake;
+    subissueInProgressLabel = subissueLabelsResolved.inProgress;
+    subissueStuckLabel = subissueLabelsResolved.stuck;
     issueRepo = cfgResult.config.issueRepo.value;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
@@ -742,12 +792,15 @@ async function runRalphaiReset(
     mkdirSync(backlogDir, { recursive: true });
 
     // Restore GitHub issue labels before moving the file (needs frontmatter).
-    if (issueLabel && issueInProgressLabel && existsSync(planFile)) {
+    if (standaloneLabel && standaloneInProgressLabel && existsSync(planFile)) {
       const labelResult = restoreIssueLabels({
         planPath: planFile,
-        issueLabel,
-        issueInProgressLabel,
-        issueStuckLabel,
+        standaloneLabel,
+        standaloneInProgressLabel,
+        standaloneStuckLabel,
+        subissueLabel,
+        subissueInProgressLabel,
+        subissueStuckLabel,
         issueRepo,
         cwd,
       });
@@ -859,16 +912,28 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
         envVars: process.env,
         cliArgs: [],
       });
-      const issueLabel = cfgResult.config.issueLabel.value;
-      const issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
-      const issueStuckLabel = cfgResult.config.issueStuckLabel.value;
+      const standaloneLabelsResolved = deriveLabels(
+        cfgResult.config.standaloneLabel.value,
+      );
+      const standaloneLabel = standaloneLabelsResolved.intake;
+      const standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
+      const standaloneStuckLabel = standaloneLabelsResolved.stuck;
+      const subissueLabelsResolved = deriveLabels(
+        cfgResult.config.subissueLabel.value,
+      );
+      const subissueLabel = subissueLabelsResolved.intake;
+      const subissueInProgressLabel = subissueLabelsResolved.inProgress;
+      const subissueStuckLabel = subissueLabelsResolved.stuck;
       const issueRepo = cfgResult.config.issueRepo.value;
-      if (issueLabel && issueInProgressLabel) {
+      if (standaloneLabel && standaloneInProgressLabel) {
         const labelResult = restoreIssueLabels({
           planPath: planFile,
-          issueLabel,
-          issueInProgressLabel,
-          issueStuckLabel,
+          standaloneLabel,
+          standaloneInProgressLabel,
+          standaloneStuckLabel,
+          subissueLabel,
+          subissueInProgressLabel,
+          subissueStuckLabel,
           issueRepo,
           cwd,
         });
@@ -1525,9 +1590,8 @@ function showRunHelp(): void {
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, baseBranch, maxStuck,",
     "                  autoCommit, iterationTimeout, promptMode,",
-    "                  issueSource, issueLabel,",
-    "                  issueInProgressLabel, issueDoneLabel, issueRepo,",
-    "                  issueCommentProgress",
+    "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
+    "                  issueRepo, issueCommentProgress",
     "",
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
     "                   RALPHAI_FEEDBACK_COMMANDS,",
@@ -1536,8 +1600,8 @@ function showRunHelp(): void {
     "                   RALPHAI_ITERATION_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
-    "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,",
-    "                   RALPHAI_ISSUE_DONE_LABEL,",
+    "                   RALPHAI_STANDALONE_LABEL, RALPHAI_SUBISSUE_LABEL,",
+    "                   RALPHAI_PRD_LABEL,",
     "                   RALPHAI_ISSUE_REPO,",
     "                   RALPHAI_ISSUE_COMMENT_PROGRESS",
     "",
@@ -1570,12 +1634,16 @@ function showRunHelp(): void {
  * Handle `ralphai run <issue-number>` — fetch the GitHub issue, determine
  * whether it is a PRD (has `ralphai-prd` label), and either:
  *
- * 1. **Non-PRD** — pull the issue into a plan file, create a `feat/<slug>`
+ * Label-driven dispatch: fetches the issue's labels, classifies the
+ * dispatch family, validates, and routes to the appropriate handler:
+ *
+ * 1. **standalone** — pull the issue into a plan file, create a `feat/<slug>`
  *    branch and worktree, run the agent once, open a PR on completion.
- * 2. **PRD with unchecked sub-issues** — create a single `feat/<slug>`
- *    worktree and work through each sub-issue sequentially.
- * 3. **PRD all completed** — report and exit.
- * 4. **PRD no task list** — error with guidance to add sub-issues.
+ * 2. **subissue** — discover parent PRD, delegate to `runPrdIssueTarget()`
+ *    which creates a shared `feat/<prd-slug>` branch.
+ * 3. **prd** — discover sub-issues via `discoverPrdTarget()`, process
+ *    sequentially on a shared branch.
+ * 4. **No recognized label** — error with guidance.
  */
 async function runIssueTarget(
   issueNumber: number,
@@ -1587,11 +1655,20 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
-    issuePrdLabel: string;
+    standaloneLabel: string;
+    subissueLabel: string;
+    prdLabel: string;
   },
 ): Promise<void> {
-  const { isDryRun, hasHelp, hasShowConfig, setupCommand, issuePrdLabel } =
-    flags;
+  const {
+    isDryRun,
+    hasHelp,
+    hasShowConfig,
+    setupCommand,
+    standaloneLabel,
+    subissueLabel,
+    prdLabel,
+  } = flags;
 
   // Pass through --help and --show-config unchanged
   if (hasHelp || hasShowConfig) {
@@ -1674,10 +1751,11 @@ async function runIssueTarget(
     return;
   }
 
-  // Discover whether this issue is a PRD or a standalone issue
-  let discovery: PrdDiscoveryResult;
+  // --- Label-driven dispatch ---
+  // Fetch the issue with labels for classification.
+  let issueInfo: import("./issues.ts").IssueWithLabels;
   try {
-    discovery = discoverPrdTarget(repo, issueNumber, cwd, issuePrdLabel);
+    issueInfo = fetchIssueWithLabels(repo, issueNumber, cwd);
   } catch (err: unknown) {
     console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
@@ -1686,13 +1764,107 @@ async function runIssueTarget(
     process.exit(1);
   }
 
-  if (discovery.isPrd) {
-    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, flags);
+  // Classify the issue into a dispatch family based on its labels.
+  const classification = classifyIssue(issueInfo.labels, {
+    standaloneLabel,
+    subissueLabel,
+    prdLabel,
+  });
+
+  if (!classification.ok) {
+    console.error(`ERROR: ${classification.message}`);
+    process.exit(1);
   }
 
-  // --- Non-PRD: standalone issue flow (unchanged) ---
-  const { issue } = discovery;
-  const issueTitle = issue.title;
+  // --- Dispatch: PRD ---
+  if (classification.family === "prd") {
+    // Use discoverPrdTarget to get sub-issues (it already handles PRD label check)
+    let discovery: PrdDiscoveryResult;
+    try {
+      discovery = discoverPrdTarget(repo, issueNumber, cwd, prdLabel);
+    } catch (err: unknown) {
+      console.error(
+        `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+
+    if (!discovery.isPrd) {
+      // Should not happen since we already classified via label, but guard anyway
+      console.error(
+        `ERROR: Issue #${issueNumber} has the PRD label but discoverPrdTarget did not confirm it as a PRD.`,
+      );
+      process.exit(1);
+    }
+
+    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+      setupCommand,
+    });
+  }
+
+  // --- Dispatch: Sub-issue ---
+  if (classification.family === "subissue") {
+    // Discover the parent PRD to validate and fold into its shared branch.
+    const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
+
+    // Validate sub-issue before processing
+    const validation = validateSubissue(
+      issueNumber,
+      parentResult.hasParent ? parentResult.parentNumber : undefined,
+      parentResult.parentHasPrdLabel,
+    );
+    if (!validation.valid) {
+      console.warn(`WARNING: ${validation.message}`);
+      return;
+    }
+
+    // Parent is valid — discover it as a PRD target to get sub-issues
+    let discovery: PrdDiscoveryResult;
+    try {
+      discovery = discoverPrdTarget(
+        repo,
+        parentResult.parentNumber!,
+        cwd,
+        prdLabel,
+      );
+    } catch (err: unknown) {
+      console.error(
+        `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+
+    if (!discovery.isPrd) {
+      console.error(
+        `ERROR: Parent issue #${parentResult.parentNumber} was expected to be a PRD but was not confirmed.`,
+      );
+      process.exit(1);
+    }
+
+    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+      setupCommand,
+    });
+  }
+
+  // --- Dispatch: Standalone ---
+  // Validate standalone: check if it has a parent PRD (misconfiguration)
+  const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
+  const standaloneValidation = validateStandalone(
+    issueNumber,
+    parentResult.hasParent ? parentResult.parentNumber : undefined,
+  );
+  if (!standaloneValidation.valid) {
+    console.warn(`WARNING: ${standaloneValidation.message}`);
+    return;
+  }
+
+  const issueTitle = issueInfo.title;
   const issueSlug = slugify(issueTitle);
   const branch = `feat/${issueSlug}`;
 
@@ -1720,9 +1892,12 @@ async function runIssueTarget(
     backlogDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
-    issueLabel: worktreeConfig.issueLabel.value,
-    issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
-    issueDoneLabel: worktreeConfig.issueDoneLabel.value,
+    standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value).intake,
+    standaloneInProgressLabel: deriveLabels(
+      worktreeConfig.standaloneLabel.value,
+    ).inProgress,
+    standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
+      .done,
     issueRepo: worktreeConfig.issueRepo.value || repo,
     issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
     issueNumber,
@@ -1854,17 +2029,14 @@ async function runPrdIssueTarget(
   // --- PRD with unchecked sub-issues: work through sequentially ---
 
   // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
-  const prdInProgressLabel =
-    worktreeConfig.issuePrdInProgressLabel?.value ??
-    DEFAULTS.issuePrdInProgressLabel;
-  try {
-    execSync(
-      `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
-      { cwd, stdio: ["pipe", "pipe", "pipe"] },
-    );
-  } catch {
-    // Best-effort: label application failure is not fatal
-  }
+  const prdInProgressLabel = deriveLabels(
+    worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
+  ).inProgress;
+  prdTransitionInProgress(
+    { number: prd.number, repo },
+    prdInProgressLabel,
+    cwd,
+  );
 
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
@@ -1890,9 +2062,19 @@ async function runPrdIssueTarget(
       backlogDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      issueLabel: worktreeConfig.issueLabel.value,
-      issueInProgressLabel: worktreeConfig.issueInProgressLabel.value,
-      issueDoneLabel: worktreeConfig.issueDoneLabel.value,
+      standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
+        .intake,
+      standaloneInProgressLabel: deriveLabels(
+        worktreeConfig.standaloneLabel.value,
+      ).inProgress,
+      standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
+        .done,
+      subissueLabel: worktreeConfig.subissueLabel.value,
+      subissueInProgressLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+        .inProgress,
+      subissueDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value).done,
+      subissueStuckLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+        .stuck,
       issueRepo: worktreeConfig.issueRepo.value || repo,
       issueCommentProgress:
         worktreeConfig.issueCommentProgress.value === "true",
@@ -1977,6 +2159,28 @@ async function runPrdIssueTarget(
   if (stuckSubIssues.length > 0) {
     console.log(
       `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
+
+  // --- PRD done transition ---
+  // When all sub-issues completed successfully (none stuck), mark the
+  // PRD parent as done.
+  if (
+    completedCount === subIssues.length &&
+    stuckSubIssues.length === 0 &&
+    subIssues.length > 0
+  ) {
+    const prdLabels = deriveLabels(
+      worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
+    );
+    console.log(
+      `All sub-issues of PRD #${prd.number} are done — transitioning PRD to done.`,
+    );
+    prdTransitionDone(
+      { number: prd.number, repo },
+      prdLabels.inProgress,
+      prdLabels.done,
+      cwd,
     );
   }
 
@@ -2116,12 +2320,15 @@ async function runRalphaiInManagedWorktree(
   // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
   let resolvedIssueSource = "none";
-  let resolvedIssueLabel = DEFAULTS.issueLabel;
-  let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
-  let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
-  let resolvedIssueStuckLabel = DEFAULTS.issueStuckLabel;
-  let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
-  let resolvedIssuePrdInProgressLabel = DEFAULTS.issuePrdInProgressLabel;
+  const defaultStandaloneLabels = deriveLabels(DEFAULTS.standaloneLabel);
+  const defaultPrdLabels = deriveLabels(DEFAULTS.prdLabel);
+  let resolvedIssueLabel = DEFAULTS.standaloneLabel;
+  let resolvedIssueInProgressLabel = defaultStandaloneLabels.inProgress;
+  let resolvedIssueDoneLabel = defaultStandaloneLabels.done;
+  let resolvedIssueStuckLabel = defaultStandaloneLabels.stuck;
+  let resolvedIssuePrdLabel = DEFAULTS.prdLabel;
+  let resolvedIssuePrdInProgressLabel = defaultPrdLabels.inProgress;
+  let resolvedSubissueLabel = DEFAULTS.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2134,13 +2341,17 @@ async function runRalphaiInManagedWorktree(
     resolvedConfig = cfgResult.config;
     setupCommand = cfgResult.config.setupCommand.value;
     resolvedIssueSource = cfgResult.config.issueSource.value;
-    resolvedIssueLabel = cfgResult.config.issueLabel.value;
-    resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
-    resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
-    resolvedIssueStuckLabel = cfgResult.config.issueStuckLabel.value;
-    resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
-    resolvedIssuePrdInProgressLabel =
-      cfgResult.config.issuePrdInProgressLabel.value;
+    const standaloneLabels = deriveLabels(
+      cfgResult.config.standaloneLabel.value,
+    );
+    const prdLabels = deriveLabels(cfgResult.config.prdLabel.value);
+    resolvedIssueLabel = cfgResult.config.standaloneLabel.value;
+    resolvedIssueInProgressLabel = standaloneLabels.inProgress;
+    resolvedIssueDoneLabel = standaloneLabels.done;
+    resolvedIssueStuckLabel = standaloneLabels.stuck;
+    resolvedIssuePrdLabel = cfgResult.config.prdLabel.value;
+    resolvedIssuePrdInProgressLabel = prdLabels.inProgress;
+    resolvedSubissueLabel = cfgResult.config.subissueLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2186,7 +2397,9 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
-      issuePrdLabel: resolvedIssuePrdLabel,
+      standaloneLabel: resolvedIssueLabel,
+      subissueLabel: resolvedSubissueLabel,
+      prdLabel: resolvedIssuePrdLabel,
     });
   }
 
@@ -2441,10 +2654,10 @@ async function runRalphaiInManagedWorktree(
               backlogDir,
               cwd,
               issueSource: resolvedIssueSource,
-              issueLabel: resolvedIssueLabel,
-              issueInProgressLabel: resolvedIssueInProgressLabel,
-              issueDoneLabel: resolvedIssueDoneLabel,
-              issueStuckLabel: resolvedIssueStuckLabel,
+              standaloneLabel: resolvedIssueLabel,
+              standaloneInProgressLabel: resolvedIssueInProgressLabel,
+              standaloneDoneLabel: resolvedIssueDoneLabel,
+              standaloneStuckLabel: resolvedIssueStuckLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
@@ -2687,13 +2900,9 @@ async function runRalphaiRunner(
   if (!isDryRun && config.issueSource.value === "github") {
     try {
       ensureGitHubLabels(cwd, {
-        intake: config.issueLabel.value,
-        inProgress: config.issueInProgressLabel.value,
-        done: config.issueDoneLabel.value,
-        stuck: config.issueStuckLabel.value,
-        prd: config.issuePrdLabel.value,
-        prdInProgress: config.issuePrdInProgressLabel.value,
-        prdDone: config.issuePrdDoneLabel.value,
+        standalone: deriveLabels(config.standaloneLabel.value),
+        subissue: deriveLabels(config.subissueLabel.value),
+        prd: deriveLabels(config.prdLabel.value),
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

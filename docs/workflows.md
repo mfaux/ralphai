@@ -26,12 +26,12 @@ Processes all dependency-ready plans sequentially, one branch and PR per plan. W
 
 For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 
-1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`).
+1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `prdLabel`).
 2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
 3. Point Ralphai at the PRD:
 
 ```bash
-ralphai run 42           # PRD #42: all sub-issues sequentially on one branch
+ralphai run 42           # issue #42: detected as PRD via label, processes sub-issues
 ```
 
 Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed and stuck items.
@@ -40,13 +40,15 @@ The TUI also supports PRDs: select "Pick from GitHub" and PRD issues appear with
 
 ## Run a single GitHub issue
 
-For one-off bugs or small tasks, label a GitHub issue with `ralphai` (configurable via `issueLabel`) and target it directly:
+For one-off bugs or small tasks, label a GitHub issue with `ralphai-standalone` (configurable via `standaloneLabel`) and target it directly:
 
 ```bash
 ralphai run 57           # run standalone issue #57: one branch, one PR
 ```
 
-Or let the drain loop auto-pull when the local backlog is empty — Ralphai checks for PRD sub-issues first, then standalone issues. Each standalone issue gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
+Or let the drain loop auto-pull when the local backlog is empty — Ralphai checks for PRD sub-issues first, then standalone issues. Each standalone issue gets its own `feat/<slug>` branch and draft PR, the same as a local plan file.
+
+`ralphai run <number>` uses label-driven dispatch: it reads the issue's labels to classify it as standalone, sub-issue, or PRD. Targeting a sub-issue (labeled `ralphai-subissue`) automatically discovers its parent PRD and processes through the PRD flow.
 
 Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
 
@@ -171,30 +173,22 @@ ralphai run -w --plan=dark-mode  # wizard + specific plan
 
 ## Customize GitHub labels
 
-By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, `ralphai:stuck`, `ralphai-prd`, and `ralphai-prd:in-progress` as GitHub labels. Override any or all of them in `config.json`:
+By default, Ralphai creates 12 GitHub labels from 3 base names — `ralphai-standalone`, `ralphai-subissue`, and `ralphai-prd` — each with 4 state suffixes (intake, `:in-progress`, `:done`, `:stuck`). Override the base names in `config.json`:
 
 ```json
 {
-  "issueLabel": "ai-intake",
-  "issueInProgressLabel": "ai-wip",
-  "issueDoneLabel": "ai-done",
-  "issueStuckLabel": "ai-stuck",
-  "issuePrdLabel": "ai-prd",
-  "issuePrdInProgressLabel": "ai-prd-wip",
-  "issuePrdDoneLabel": "ai-prd-done"
+  "standaloneLabel": "ai-standalone",
+  "subissueLabel": "ai-subissue",
+  "prdLabel": "ai-prd"
 }
 ```
 
 Or via environment variables:
 
 ```bash
-export RALPHAI_ISSUE_LABEL=ai-intake
-export RALPHAI_ISSUE_IN_PROGRESS_LABEL=ai-wip
-export RALPHAI_ISSUE_DONE_LABEL=ai-done
-export RALPHAI_ISSUE_STUCK_LABEL=ai-stuck
-export RALPHAI_ISSUE_PRD_LABEL=ai-prd
-export RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL=ai-prd-wip
-export RALPHAI_ISSUE_PRD_DONE_LABEL=ai-prd-done
+export RALPHAI_STANDALONE_LABEL=ai-standalone
+export RALPHAI_SUBISSUE_LABEL=ai-subissue
+export RALPHAI_PRD_LABEL=ai-prd
 ```
 
 See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.

@@ -22,13 +22,9 @@ export interface RalphaiConfig {
   baseBranch: string;
   maxStuck: number;
   issueSource: "none" | "github";
-  issueLabel: string;
-  issueInProgressLabel: string;
-  issueDoneLabel: string;
-  issueStuckLabel: string;
-  issuePrdLabel: string;
-  issuePrdInProgressLabel: string;
-  issuePrdDoneLabel: string;
+  standaloneLabel: string;
+  subissueLabel: string;
+  prdLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
@@ -66,13 +62,9 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   baseBranch: "main",
   maxStuck: 3,
   issueSource: "none",
-  issueLabel: "ralphai",
-  issueInProgressLabel: "ralphai:in-progress",
-  issueDoneLabel: "ralphai:done",
-  issueStuckLabel: "ralphai:stuck",
-  issuePrdLabel: "ralphai-prd",
-  issuePrdInProgressLabel: "ralphai-prd:in-progress",
-  issuePrdDoneLabel: "ralphai-prd:done",
+  standaloneLabel: "ralphai-standalone",
+  subissueLabel: "ralphai-subissue",
+  prdLabel: "ralphai-prd",
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
@@ -177,13 +169,9 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "baseBranch",
   "maxStuck",
   "issueSource",
-  "issueLabel",
-  "issueInProgressLabel",
-  "issueDoneLabel",
-  "issueStuckLabel",
-  "issuePrdLabel",
-  "issuePrdInProgressLabel",
-  "issuePrdDoneLabel",
+  "standaloneLabel",
+  "subissueLabel",
+  "prdLabel",
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
@@ -300,54 +288,25 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueSource = v as RalphaiConfig["issueSource"];
   }
 
-  // issueLabel (string, non-empty)
-  if ("issueLabel" in obj) {
-    const v = String(obj.issueLabel || "");
-    if (v === "") err("'issueLabel' must be a non-empty label name");
-    values.issueLabel = v;
+  // standaloneLabel (string, non-empty)
+  if ("standaloneLabel" in obj) {
+    const v = String(obj.standaloneLabel || "");
+    if (v === "") err("'standaloneLabel' must be a non-empty label name");
+    values.standaloneLabel = v;
   }
 
-  // issueInProgressLabel (string, non-empty)
-  if ("issueInProgressLabel" in obj) {
-    const v = String(obj.issueInProgressLabel || "");
-    if (v === "") err("'issueInProgressLabel' must be a non-empty label name");
-    values.issueInProgressLabel = v;
+  // subissueLabel (string, non-empty)
+  if ("subissueLabel" in obj) {
+    const v = String(obj.subissueLabel || "");
+    if (v === "") err("'subissueLabel' must be a non-empty label name");
+    values.subissueLabel = v;
   }
 
-  // issueDoneLabel (string, non-empty)
-  if ("issueDoneLabel" in obj) {
-    const v = String(obj.issueDoneLabel || "");
-    if (v === "") err("'issueDoneLabel' must be a non-empty label name");
-    values.issueDoneLabel = v;
-  }
-
-  // issueStuckLabel (string, non-empty)
-  if ("issueStuckLabel" in obj) {
-    const v = String(obj.issueStuckLabel || "");
-    if (v === "") err("'issueStuckLabel' must be a non-empty label name");
-    values.issueStuckLabel = v;
-  }
-
-  // issuePrdLabel (string, non-empty)
-  if ("issuePrdLabel" in obj) {
-    const v = String(obj.issuePrdLabel || "");
-    if (v === "") err("'issuePrdLabel' must be a non-empty label name");
-    values.issuePrdLabel = v;
-  }
-
-  // issuePrdInProgressLabel (string, non-empty)
-  if ("issuePrdInProgressLabel" in obj) {
-    const v = String(obj.issuePrdInProgressLabel || "");
-    if (v === "")
-      err("'issuePrdInProgressLabel' must be a non-empty label name");
-    values.issuePrdInProgressLabel = v;
-  }
-
-  // issuePrdDoneLabel (string, non-empty)
-  if ("issuePrdDoneLabel" in obj) {
-    const v = String(obj.issuePrdDoneLabel || "");
-    if (v === "") err("'issuePrdDoneLabel' must be a non-empty label name");
-    values.issuePrdDoneLabel = v;
+  // prdLabel (string, non-empty)
+  if ("prdLabel" in obj) {
+    const v = String(obj.prdLabel || "");
+    if (v === "") err("'prdLabel' must be a non-empty label name");
+    values.prdLabel = v;
   }
 
   // issueRepo (string, can be empty)
@@ -462,13 +421,9 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_MAX_STUCK", "maxStuck"],
   ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
   ["RALPHAI_ISSUE_SOURCE", "issueSource"],
-  ["RALPHAI_ISSUE_LABEL", "issueLabel"],
-  ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
-  ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
-  ["RALPHAI_ISSUE_STUCK_LABEL", "issueStuckLabel"],
-  ["RALPHAI_ISSUE_PRD_LABEL", "issuePrdLabel"],
-  ["RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL", "issuePrdInProgressLabel"],
-  ["RALPHAI_ISSUE_PRD_DONE_LABEL", "issuePrdDoneLabel"],
+  ["RALPHAI_STANDALONE_LABEL", "standaloneLabel"],
+  ["RALPHAI_SUBISSUE_LABEL", "subissueLabel"],
+  ["RALPHAI_PRD_LABEL", "prdLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
@@ -532,36 +487,18 @@ export function applyEnvOverrides(
     overrides.issueSource = issueSource as RalphaiConfig["issueSource"];
   }
 
-  // issueLabel
-  const issueLabel = get("RALPHAI_ISSUE_LABEL");
-  if (issueLabel !== undefined) overrides.issueLabel = issueLabel;
+  // standaloneLabel
+  const standaloneLabel = get("RALPHAI_STANDALONE_LABEL");
+  if (standaloneLabel !== undefined)
+    overrides.standaloneLabel = standaloneLabel;
 
-  // issueInProgressLabel
-  const issueIpLabel = get("RALPHAI_ISSUE_IN_PROGRESS_LABEL");
-  if (issueIpLabel !== undefined) overrides.issueInProgressLabel = issueIpLabel;
+  // subissueLabel
+  const subissueLabel = get("RALPHAI_SUBISSUE_LABEL");
+  if (subissueLabel !== undefined) overrides.subissueLabel = subissueLabel;
 
-  // issueDoneLabel
-  const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
-  if (issueDoneLabel !== undefined) overrides.issueDoneLabel = issueDoneLabel;
-
-  // issueStuckLabel
-  const issueStuckLabel = get("RALPHAI_ISSUE_STUCK_LABEL");
-  if (issueStuckLabel !== undefined)
-    overrides.issueStuckLabel = issueStuckLabel;
-
-  // issuePrdLabel
-  const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");
-  if (issuePrdLabel !== undefined) overrides.issuePrdLabel = issuePrdLabel;
-
-  // issuePrdInProgressLabel
-  const issuePrdIpLabel = get("RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL");
-  if (issuePrdIpLabel !== undefined)
-    overrides.issuePrdInProgressLabel = issuePrdIpLabel;
-
-  // issuePrdDoneLabel
-  const issuePrdDoneLabel = get("RALPHAI_ISSUE_PRD_DONE_LABEL");
-  if (issuePrdDoneLabel !== undefined)
-    overrides.issuePrdDoneLabel = issuePrdDoneLabel;
+  // prdLabel
+  const prdLabel = get("RALPHAI_PRD_LABEL");
+  if (prdLabel !== undefined) overrides.prdLabel = prdLabel;
 
   // issueRepo
   const issueRepo = get("RALPHAI_ISSUE_REPO");

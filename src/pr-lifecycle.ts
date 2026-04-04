@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { checkGhAvailable, detectIssueRepo } from "./issues.ts";
+import { transitionDone } from "./label-lifecycle.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
 import {
   buildPrBody,
@@ -70,8 +71,12 @@ export interface ContinuousPrOptions {
 export interface ArchiveRunOptions {
   wipFiles: string[];
   archiveDir: string;
-  issueInProgressLabel: string;
-  issueDoneLabel: string;
+  standaloneInProgressLabel: string;
+  standaloneDoneLabel: string;
+  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
+  /** Sub-issue done label (e.g. "ralphai-subissue:done"). */
+  subissueDoneLabel?: string;
   cwd: string;
 }
 
@@ -122,8 +127,15 @@ export function archiveRun(options: ArchiveRunOptions): {
   archived: boolean;
   message: string;
 } {
-  const { wipFiles, archiveDir, issueInProgressLabel, issueDoneLabel, cwd } =
-    options;
+  const {
+    wipFiles,
+    archiveDir,
+    standaloneInProgressLabel,
+    standaloneDoneLabel,
+    subissueInProgressLabel,
+    subissueDoneLabel,
+    cwd,
+  } = options;
   if (wipFiles.length === 0) {
     return { archived: false, message: "No WIP files to archive" };
   }
@@ -137,14 +149,25 @@ export function archiveRun(options: ArchiveRunOptions): {
   let issueSource = "";
   let issueNumber: number | undefined;
   let issueUrl = "";
+  let isSubIssue = false;
   for (const f of wipFiles) {
     if (!existsSync(f)) continue;
     const fm = extractIssueFrontmatter(f);
     issueSource = fm.source;
     issueNumber = fm.issue;
     issueUrl = fm.issueUrl;
+    if (fm.prd !== undefined) isSubIssue = true;
     if (issueSource === "github") break;
   }
+
+  // Choose the correct label family: sub-issues use subissue labels when
+  // available, standalone issues use standalone labels.
+  const issueInProgressLabel =
+    isSubIssue && subissueInProgressLabel
+      ? subissueInProgressLabel
+      : standaloneInProgressLabel;
+  const issueDoneLabel =
+    isSubIssue && subissueDoneLabel ? subissueDoneLabel : standaloneDoneLabel;
 
   const dest = join(archiveDir, planSlug);
   renameSync(planDir, dest);
@@ -165,9 +188,10 @@ export function archiveRun(options: ArchiveRunOptions): {
           `--body "Ralphai completed this task and is preparing to merge."`,
         cwd,
       );
-      execQuiet(
-        `gh issue edit ${issueNumber} --repo "${repo}" ` +
-          `--add-label "${issueDoneLabel}" --remove-label "${issueInProgressLabel}"`,
+      transitionDone(
+        { number: issueNumber, repo },
+        issueInProgressLabel,
+        issueDoneLabel,
         cwd,
       );
     }

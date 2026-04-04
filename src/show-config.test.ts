@@ -141,13 +141,9 @@ describe("formatShowConfig", () => {
 
   it("hides issue detail fields when issueSource is none", () => {
     const output = formatShowConfig(defaultInput());
-    expect(output).not.toContain("  issueLabel");
-    expect(output).not.toContain("  issueInProgressLabel");
-    expect(output).not.toContain("  issueDoneLabel");
-    expect(output).not.toContain("  issueStuckLabel");
-    expect(output).not.toContain("  issuePrdLabel");
-    expect(output).not.toContain("  issuePrdInProgressLabel");
-    expect(output).not.toContain("  issuePrdDoneLabel");
+    expect(output).not.toContain("  standaloneLabel");
+    expect(output).not.toContain("  subissueLabel");
+    expect(output).not.toContain("  prdLabel");
     expect(output).not.toContain("  issueRepo");
     expect(output).not.toContain("  issueCommentProgress");
   });
@@ -159,19 +155,13 @@ describe("formatShowConfig", () => {
     });
     input.configFileExists = true;
     const output = formatShowConfig(input);
-    expect(output).toContain("  issueLabel         = ralphai  (default)");
     expect(output).toContain(
-      "  issueInProgressLabel = ralphai:in-progress  (default)",
-    );
-    expect(output).toContain("  issueDoneLabel     = ralphai:done  (default)");
-    expect(output).toContain("  issueStuckLabel    = ralphai:stuck  (default)");
-    expect(output).toContain("  issuePrdLabel      = ralphai-prd  (default)");
-    expect(output).toContain(
-      "  issuePrdInProgressLabel = ralphai-prd:in-progress  (default)",
+      "  standaloneLabel    = ralphai-standalone  (default)",
     );
     expect(output).toContain(
-      "  issuePrdDoneLabel  = ralphai-prd:done  (default)",
+      "  subissueLabel      = ralphai-subissue  (default)",
     );
+    expect(output).toContain("  prdLabel           = ralphai-prd  (default)");
     expect(output).toContain(
       "  issueRepo          = <auto-detect>  (default (auto-detect))",
     );

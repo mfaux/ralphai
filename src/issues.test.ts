@@ -46,9 +46,9 @@ function defaultOptions(dir: string): PullIssueOptions {
     backlogDir: join(dir, ".ralphai", "pipeline", "backlog"),
     cwd: dir,
     issueSource: "github",
-    issueLabel: "ralphai",
-    issueInProgressLabel: "ralphai:in-progress",
-    issueDoneLabel: "ralphai:done",
+    standaloneLabel: "ralphai-standalone",
+    standaloneInProgressLabel: "ralphai-standalone:in-progress",
+    standaloneDoneLabel: "ralphai-standalone:done",
     issueRepo: "",
     issueCommentProgress: false,
   };
@@ -232,7 +232,7 @@ function defaultPeekOptions(dir: string): PeekIssueOptions {
   return {
     cwd: dir,
     issueSource: "github",
-    issueLabel: "ralphai",
+    standaloneLabel: "ralphai-standalone",
     issueRepo: "",
   };
 }

@@ -51,10 +51,14 @@ function defaultOptions(dir: string): PullIssueOptions {
     backlogDir: join(dir, ".ralphai", "pipeline", "backlog"),
     cwd: dir,
     issueSource: "github",
-    issueLabel: "ralphai",
-    issueInProgressLabel: "ralphai:in-progress",
-    issueDoneLabel: "ralphai:done",
-    issueStuckLabel: "ralphai:stuck",
+    standaloneLabel: "ralphai-standalone",
+    standaloneInProgressLabel: "ralphai-standalone:in-progress",
+    standaloneDoneLabel: "ralphai-standalone:done",
+    standaloneStuckLabel: "ralphai-standalone:stuck",
+    subissueLabel: "ralphai-subissue",
+    subissueInProgressLabel: "ralphai-subissue:in-progress",
+    subissueDoneLabel: "ralphai-subissue:done",
+    subissueStuckLabel: "ralphai-subissue:stuck",
     issueRepo: "owner/repo",
     issueCommentProgress: false,
   };
@@ -266,10 +270,10 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
         JSON.stringify(subIssues),
       // #201 has in-progress label
       'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai:in-progress",
+        "ralphai-subissue:in-progress",
       // #202 has done label
       'gh issue view 202 --repo "owner/repo" --json labels': () =>
-        "ralphai:done",
+        "ralphai-subissue:done",
       // #203 has no skip labels
       'gh issue view 203 --repo "owner/repo" --json labels': () => "",
       'gh issue view 203 --repo "owner/repo" --json title --jq': () =>
@@ -310,9 +314,9 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
       "gh api repos/owner/repo/issues/100/sub_issues": () =>
         JSON.stringify(subIssues),
       'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai:in-progress",
+        "ralphai-subissue:in-progress",
       'gh issue view 202 --repo "owner/repo" --json labels': () =>
-        "ralphai:done",
+        "ralphai-subissue:done",
     });
 
     const dir = makeTempDir();
@@ -336,7 +340,7 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
         JSON.stringify(subIssues),
       // #201 has stuck label — should be skipped
       'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai:stuck",
+        "ralphai-subissue:stuck",
       // #202 has no skip labels
       'gh issue view 202 --repo "owner/repo" --json labels': () => "",
       'gh issue view 202 --repo "owner/repo" --json title --jq': () =>

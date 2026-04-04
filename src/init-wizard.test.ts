@@ -17,18 +17,18 @@ describe("init wizard", () => {
   // Label prompts in wizard when GitHub Issues enabled
   // ---------------------------------------------------------------------------
 
-  it("prompts for all four label names when issues are enabled", () => {
-    expect(ralphaiSrc).toContain('message: "Issue intake label:"');
-    expect(ralphaiSrc).toContain('message: "Issue in-progress label:"');
-    expect(ralphaiSrc).toContain('message: "Issue done label:"');
-    expect(ralphaiSrc).toContain('message: "PRD label:"');
+  it("prompts for all three base label names when issues are enabled", () => {
+    expect(ralphaiSrc).toContain(
+      'message: "Standalone issue label (base name):"',
+    );
+    expect(ralphaiSrc).toContain('message: "Sub-issue label (base name):"');
+    expect(ralphaiSrc).toContain('message: "PRD label (base name):"');
   });
 
   it("label prompts use DEFAULTS as initialValue", () => {
-    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.issueLabel");
-    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.issueInProgressLabel");
-    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.issueDoneLabel");
-    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.issuePrdLabel");
+    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.standaloneLabel");
+    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.subissueLabel");
+    expect(ralphaiSrc).toContain("initialValue: DEFAULTS.prdLabel");
   });
 
   it("label prompts are inside the enableIssues block", () => {
@@ -37,16 +37,17 @@ describe("init wizard", () => {
       ralphaiSrc.indexOf("if (enableIssues)"),
       ralphaiSrc.indexOf("// 7. Update AGENTS.md"),
     );
-    expect(issueBlock).toContain('message: "Issue intake label:"');
-    expect(issueBlock).toContain('message: "PRD label:"');
+    expect(issueBlock).toContain(
+      'message: "Standalone issue label (base name):"',
+    );
+    expect(issueBlock).toContain('message: "PRD label (base name):"');
   });
 
   it("wizard returns label fields in the answers object", () => {
-    // The return statement should include all four label fields
-    expect(ralphaiSrc).toContain("issueLabel,");
-    expect(ralphaiSrc).toContain("issueInProgressLabel,");
-    expect(ralphaiSrc).toContain("issueDoneLabel,");
-    expect(ralphaiSrc).toContain("issuePrdLabel,");
+    // The return statement should include all three base label fields
+    expect(ralphaiSrc).toContain("standaloneLabel,");
+    expect(ralphaiSrc).toContain("subissueLabel,");
+    expect(ralphaiSrc).toContain("prdLabel,");
   });
 
   // ---------------------------------------------------------------------------
@@ -58,10 +59,9 @@ describe("init wizard", () => {
       join(__dirname, "parse-options.ts"),
       "utf-8",
     );
-    expect(parseOptsSrc).toContain("issueLabel?:");
-    expect(parseOptsSrc).toContain("issueInProgressLabel?:");
-    expect(parseOptsSrc).toContain("issueDoneLabel?:");
-    expect(parseOptsSrc).toContain("issuePrdLabel?:");
+    expect(parseOptsSrc).toContain("standaloneLabel?:");
+    expect(parseOptsSrc).toContain("subissueLabel?:");
+    expect(parseOptsSrc).toContain("prdLabel?:");
   });
 
   // ---------------------------------------------------------------------------
@@ -69,16 +69,13 @@ describe("init wizard", () => {
   // ---------------------------------------------------------------------------
 
   it("scaffold uses answers label values with DEFAULTS fallback", () => {
-    expect(ralphaiSrc).toContain("answers.issueLabel ?? DEFAULTS.issueLabel");
     expect(ralphaiSrc).toContain(
-      "answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel",
+      "answers.standaloneLabel ?? DEFAULTS.standaloneLabel",
     );
     expect(ralphaiSrc).toContain(
-      "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
+      "answers.subissueLabel ?? DEFAULTS.subissueLabel",
     );
-    expect(ralphaiSrc).toContain(
-      "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
-    );
+    expect(ralphaiSrc).toContain("answers.prdLabel ?? DEFAULTS.prdLabel");
   });
 
   // ---------------------------------------------------------------------------
@@ -87,7 +84,7 @@ describe("init wizard", () => {
 
   it("post-init GitHub hint uses answers label value", () => {
     expect(ralphaiSrc).toContain(
-      'answers.issueLabel ?? DEFAULTS.issueLabel}" and Ralphai will pick it up automatically',
+      'answers.standaloneLabel ?? DEFAULTS.standaloneLabel}" and Ralphai will pick it up automatically',
     );
   });
 });
