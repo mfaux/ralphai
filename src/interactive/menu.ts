@@ -345,8 +345,8 @@ async function dispatchAction(
 export async function runInteractive(cwd: string): Promise<void> {
   // Resolve config once for the session to check GitHub issue source
   let hasGitHubIssues = false;
-  let issueLabel = DEFAULTS.issueLabel;
-  let issuePrdLabel = DEFAULTS.issuePrdLabel;
+  let issueLabel = DEFAULTS.standaloneLabel;
+  let issuePrdLabel = DEFAULTS.prdLabel;
   let issueRepo = "";
   let resolvedConfig: ResolvedConfig | undefined;
   try {
@@ -357,8 +357,8 @@ export async function runInteractive(cwd: string): Promise<void> {
     });
     resolvedConfig = config;
     hasGitHubIssues = config.issueSource.value === "github";
-    issueLabel = config.issueLabel.value;
-    issuePrdLabel = config.issuePrdLabel.value;
+    issueLabel = config.standaloneLabel.value;
+    issuePrdLabel = config.prdLabel.value;
     issueRepo = config.issueRepo.value;
   } catch {
     // Config resolution failure — proceed with defaults

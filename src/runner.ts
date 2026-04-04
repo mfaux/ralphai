@@ -32,6 +32,7 @@ import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
+import { deriveLabels } from "./labels.ts";
 import {
   peekGithubIssues,
   peekPrdIssues,
@@ -404,9 +405,9 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     const peekOpts = {
       cwd,
       issueSource: config.issueSource.value,
-      issueLabel: config.issueLabel.value,
+      issueLabel: config.standaloneLabel.value,
       issueRepo: config.issueRepo.value,
-      issuePrdLabel: config.issuePrdLabel.value,
+      issuePrdLabel: config.prdLabel.value,
     };
     const prdPeek = peekPrdIssues(peekOpts);
     if (prdPeek.found) {
@@ -541,12 +542,14 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const agentCommand = config.agentCommand.value;
   const autoCommit = config.autoCommit.value === "true";
   const issueSource = config.issueSource.value;
-  const issueLabel = config.issueLabel.value;
-  const issueInProgressLabel = config.issueInProgressLabel.value;
-  const issueDoneLabel = config.issueDoneLabel.value;
-  const issueStuckLabel = config.issueStuckLabel.value;
-  const issuePrdLabel = config.issuePrdLabel.value;
-  const issuePrdInProgressLabel = config.issuePrdInProgressLabel.value;
+  const standaloneLabels = deriveLabels(config.standaloneLabel.value);
+  const issueLabel = standaloneLabels.intake;
+  const issueInProgressLabel = standaloneLabels.inProgress;
+  const issueDoneLabel = standaloneLabels.done;
+  const issueStuckLabel = standaloneLabels.stuck;
+  const prdLabels = deriveLabels(config.prdLabel.value);
+  const issuePrdLabel = prdLabels.intake;
+  const issuePrdInProgressLabel = prdLabels.inProgress;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 

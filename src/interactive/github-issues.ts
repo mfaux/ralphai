@@ -136,7 +136,7 @@ export function listGithubIssues(
   options: ListGithubIssuesOptions,
 ): ListGithubIssuesResult {
   const { cwd, issueLabel, issueRepo } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (!checkGhAvailable()) {
     return {

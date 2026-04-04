@@ -48,13 +48,9 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   maxStuck: "RALPHAI_MAX_STUCK",
   iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
   issueSource: "RALPHAI_ISSUE_SOURCE",
-  issueLabel: "RALPHAI_ISSUE_LABEL",
-  issueInProgressLabel: "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
-  issueDoneLabel: "RALPHAI_ISSUE_DONE_LABEL",
-  issueStuckLabel: "RALPHAI_ISSUE_STUCK_LABEL",
-  issuePrdLabel: "RALPHAI_ISSUE_PRD_LABEL",
-  issuePrdInProgressLabel: "RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL",
-  issuePrdDoneLabel: "RALPHAI_ISSUE_PRD_DONE_LABEL",
+  standaloneLabel: "RALPHAI_STANDALONE_LABEL",
+  subissueLabel: "RALPHAI_SUBISSUE_LABEL",
+  prdLabel: "RALPHAI_PRD_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
@@ -193,67 +189,27 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
 
   // Conditional issue settings (only shown when issueSource != "none")
   if (config.issueSource.value !== "none") {
-    const issueLabelSrc = sourceLabel(
-      "issueLabel",
-      config.issueLabel.source,
+    const standaloneLabelSrc = sourceLabel(
+      "standaloneLabel",
+      config.standaloneLabel.source,
       input,
     );
     lines.push(
-      `  issueLabel         = ${config.issueLabel.value}  (${issueLabelSrc})`,
+      `  standaloneLabel    = ${config.standaloneLabel.value}  (${standaloneLabelSrc})`,
     );
 
-    const issueIpSrc = sourceLabel(
-      "issueInProgressLabel",
-      config.issueInProgressLabel.source,
+    const subissueLabelSrc = sourceLabel(
+      "subissueLabel",
+      config.subissueLabel.source,
       input,
     );
     lines.push(
-      `  issueInProgressLabel = ${config.issueInProgressLabel.value}  (${issueIpSrc})`,
+      `  subissueLabel      = ${config.subissueLabel.value}  (${subissueLabelSrc})`,
     );
 
-    const issueDoneSrc = sourceLabel(
-      "issueDoneLabel",
-      config.issueDoneLabel.source,
-      input,
-    );
+    const prdLabelSrc = sourceLabel("prdLabel", config.prdLabel.source, input);
     lines.push(
-      `  issueDoneLabel     = ${config.issueDoneLabel.value}  (${issueDoneSrc})`,
-    );
-
-    const issueStuckSrc = sourceLabel(
-      "issueStuckLabel",
-      config.issueStuckLabel.source,
-      input,
-    );
-    lines.push(
-      `  issueStuckLabel    = ${config.issueStuckLabel.value}  (${issueStuckSrc})`,
-    );
-
-    const issuePrdSrc = sourceLabel(
-      "issuePrdLabel",
-      config.issuePrdLabel.source,
-      input,
-    );
-    lines.push(
-      `  issuePrdLabel      = ${config.issuePrdLabel.value}  (${issuePrdSrc})`,
-    );
-
-    const issuePrdIpSrc = sourceLabel(
-      "issuePrdInProgressLabel",
-      config.issuePrdInProgressLabel.source,
-      input,
-    );
-    lines.push(
-      `  issuePrdInProgressLabel = ${config.issuePrdInProgressLabel.value}  (${issuePrdIpSrc})`,
-    );
-
-    const issuePrdDoneSrc = sourceLabel(
-      "issuePrdDoneLabel",
-      config.issuePrdDoneLabel.source,
-      input,
-    );
-    lines.push(
-      `  issuePrdDoneLabel  = ${config.issuePrdDoneLabel.value}  (${issuePrdDoneSrc})`,
+      `  prdLabel           = ${config.prdLabel.value}  (${prdLabelSrc})`,
     );
 
     const issueRepoVal = config.issueRepo.value || "<auto-detect>";

@@ -9,6 +9,7 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DEFAULTS } from "./config.ts";
+import { deriveLabels } from "./labels.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -351,7 +352,7 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
  */
 export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
   const { cwd, issueSource, issueRepo } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
@@ -446,7 +447,7 @@ export function discoverParentPrd(
   cwd: string,
   prdLabel?: string,
 ): number | undefined {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -664,7 +665,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueRepo,
     issueCommentProgress,
   } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issuePrdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (issueSource !== "github") {
     return { pulled: false, message: "Issue source is not 'github'" };
@@ -783,7 +784,8 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
 
   // Best-effort: mark the PRD parent as in-progress when we first pull a sub-issue.
   const prdInProgressLabel =
-    options.issuePrdInProgressLabel ?? DEFAULTS.issuePrdInProgressLabel;
+    options.issuePrdInProgressLabel ??
+    deriveLabels(DEFAULTS.prdLabel).inProgress;
   execQuiet(
     `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
     cwd,
@@ -826,7 +828,7 @@ export function fetchPrdIssueByNumber(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot fetch PRD issue",
@@ -880,7 +882,7 @@ export function fetchPrdIssue(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue | null {
-  const label = prdLabel ?? DEFAULTS.issuePrdLabel;
+  const label = prdLabel ?? DEFAULTS.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
