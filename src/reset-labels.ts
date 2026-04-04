@@ -23,6 +23,8 @@ export interface RestoreIssueLabelsOptions {
   issueLabel: string;
   /** The in-progress label to remove (e.g. "ralphai:in-progress"). */
   issueInProgressLabel: string;
+  /** The stuck label to remove (e.g. "ralphai:stuck"). */
+  issueStuckLabel: string;
   /** Configured issue repo (owner/repo), or "" to auto-detect from issue-url. */
   issueRepo: string;
   /** Working directory for gh CLI calls. */
@@ -94,8 +96,14 @@ function repoFromUrl(issueUrl: string): string | null {
 export function restoreIssueLabels(
   options: RestoreIssueLabelsOptions,
 ): RestoreIssueLabelsResult {
-  const { planPath, issueLabel, issueInProgressLabel, issueRepo, cwd } =
-    options;
+  const {
+    planPath,
+    issueLabel,
+    issueInProgressLabel,
+    issueStuckLabel,
+    issueRepo,
+    cwd,
+  } = options;
 
   // Read frontmatter to check if this is a GitHub-sourced plan
   const fm = extractIssueFrontmatter(planPath);
@@ -124,10 +132,10 @@ export function restoreIssueLabels(
     };
   }
 
-  // Reverse the label transition: remove in-progress, add intake
+  // Reverse the label transition: remove in-progress and stuck, add intake
   const cmd =
     `gh issue edit ${fm.issue} --repo "${repo}" ` +
-    `--add-label "${issueLabel}" --remove-label "${issueInProgressLabel}"`;
+    `--add-label "${issueLabel}" --remove-label "${issueInProgressLabel}" --remove-label "${issueStuckLabel}"`;
 
   const result = execQuiet(cmd, cwd);
   if (result === null) {

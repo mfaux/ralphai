@@ -21,6 +21,7 @@ import {
   spawnAgent,
   runRunner,
   type RunnerOptions,
+  type RunnerResult,
 } from "./runner.ts";
 import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
@@ -230,7 +231,9 @@ function makeResolvedConfig(
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueDoneLabel: "ralphai:done",
+    issueStuckLabel: "ralphai:stuck",
     issuePrdLabel: "ralphai-prd",
+    issuePrdInProgressLabel: "ralphai-prd:in-progress",
     issueRepo: "",
     issueCommentProgress: "true",
     iterationTimeout: 0,
@@ -469,6 +472,119 @@ describe("runRunner — completion", () => {
     expect(output).toContain("Stuck:");
     expect(output).toContain("skipped 1 (stuck)");
     expect(output).toContain("stuck");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRunner — RunnerResult return type
+// ---------------------------------------------------------------------------
+
+describe("runRunner — RunnerResult", () => {
+  let dir: string;
+  let savedHome: string | undefined;
+
+  beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
+    dir = createTmpGitRepo();
+  });
+
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
+  test("returns stuck slugs when a plan gets stuck", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "stuck-result");
+
+    writeFileSync(
+      join(backlogDir, "stuck-result.md"),
+      "# Plan: Stuck Result\n\n### Task 1: Test\n",
+    );
+
+    // Agent that does nothing (no commits, no COMPLETE)
+    const agentScript = `bash -c 'echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        maxStuck: 2,
+        autoCommit: "false",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    const origLog = console.log;
+    console.log = () => {};
+    let result: RunnerResult;
+    try {
+      result = await runRunner(opts);
+    } finally {
+      console.log = origLog;
+    }
+
+    expect(result.stuckSlugs).toBeArrayOfSize(1);
+    expect(result.stuckSlugs[0]).toBe("stuck-result");
+  });
+
+  test("returns empty stuckSlugs on successful completion", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "success-result");
+
+    writeFileSync(
+      join(backlogDir, "success-result.md"),
+      "# Plan: Success\n\n### Task 1: Test\n",
+    );
+
+    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    const result = await runRunner(opts);
+
+    expect(result.stuckSlugs).toEqual([]);
+  });
+
+  test("dry-run returns empty stuckSlugs", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+
+    writeFileSync(
+      join(backlogDir, "dry-run-result.md"),
+      "# Plan: Dry Run\n\n### Task 1: Test\n",
+    );
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig(),
+      cwd: dir,
+      isWorktree: false,
+      mainWorktree: "",
+      dryRun: true,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    const result = await runRunner(opts);
+
+    expect(result.stuckSlugs).toEqual([]);
   });
 });
 

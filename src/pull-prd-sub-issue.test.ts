@@ -54,6 +54,7 @@ function defaultOptions(dir: string): PullIssueOptions {
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueDoneLabel: "ralphai:done",
+    issueStuckLabel: "ralphai:stuck",
     issueRepo: "owner/repo",
     issueCommentProgress: false,
   };
@@ -320,6 +321,48 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
     expect(result.message).toContain(
       "all open sub-issues already in-progress or done",
     );
+  });
+
+  it("skips sub-issues with the stuck label", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "Stuck", state: "open" },
+      { number: 202, title: "Available", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has stuck label — should be skipped
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "ralphai:stuck",
+      // #202 has no skip labels
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Available",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Available body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
   });
 
   it("returns pulled:false when PRD has no open sub-issues", () => {
@@ -646,5 +689,163 @@ describe("pullPrdSubIssue — custom issuePrdLabel", () => {
     const content = readFileSync(result.planPath!, "utf-8");
     expect(content).toContain("prd: 100");
     expect(content).toContain("issue: 201");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRD in-progress label on parent
+// ---------------------------------------------------------------------------
+
+describe("pullPrdSubIssue — PRD in-progress label on parent", () => {
+  it("adds default in-progress label to PRD parent when pulling a sub-issue", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
+
+    const editCalls: string[] = [];
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return "ok";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
+        editCalls.push(cmd);
+        return "";
+      }
+      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
+      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
+        return JSON.stringify(subIssues);
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
+        return "";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
+        return "Sub A";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
+        return "Sub A body";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
+        return "https://github.com/owner/repo/issues/201";
+      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
+        return JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        });
+      if (cmd.includes("gh api graphql"))
+        return JSON.stringify({
+          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
+        });
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+
+    // Verify an edit call was made to add the in-progress label to PRD parent #100
+    const prdEditCall = editCalls.find(
+      (c) => c.includes("100") && c.includes("ralphai-prd:in-progress"),
+    );
+    expect(prdEditCall).toBeDefined();
+    expect(prdEditCall).toContain("--add-label");
+  });
+
+  it("uses custom issuePrdInProgressLabel when provided", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
+
+    const editCalls: string[] = [];
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return "ok";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
+        editCalls.push(cmd);
+        return "";
+      }
+      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
+      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
+        return JSON.stringify(subIssues);
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
+        return "";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
+        return "Sub A";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
+        return "Sub A body";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
+        return "https://github.com/owner/repo/issues/201";
+      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
+        return JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        });
+      if (cmd.includes("gh api graphql"))
+        return JSON.stringify({
+          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
+        });
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const dir = makeTempDir();
+    const opts = {
+      ...defaultOptions(dir),
+      issuePrdInProgressLabel: "custom-prd:wip",
+    };
+    const result = pullPrdSubIssue(opts);
+    expect(result.pulled).toBe(true);
+
+    // Verify the custom label was used
+    const prdEditCall = editCalls.find(
+      (c) => c.includes("100") && c.includes("custom-prd:wip"),
+    );
+    expect(prdEditCall).toBeDefined();
+    expect(prdEditCall).toContain("--add-label");
+  });
+
+  it("uses custom issuePrdInProgressLabel when provided", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
+
+    const editCalls: string[] = [];
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return "ok";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
+        editCalls.push(cmd);
+        return "";
+      }
+      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
+      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
+        return JSON.stringify(subIssues);
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
+        return "";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
+        return "Sub A";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
+        return "Sub A body";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
+        return "https://github.com/owner/repo/issues/201";
+      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
+        return JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        });
+      if (cmd.includes("gh api graphql"))
+        return JSON.stringify({
+          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
+        });
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const dir = makeTempDir();
+    const opts = {
+      ...defaultOptions(dir),
+      issuePrdInProgressLabel: "custom-prd:wip",
+    };
+    const result = pullPrdSubIssue(opts);
+    expect(result.pulled).toBe(true);
+
+    // Verify the custom label was used
+    const prdEditCall = editCalls.find(
+      (c) => c.includes("100") && c.includes("custom-prd:wip"),
+    );
+    expect(prdEditCall).toBeDefined();
+    expect(prdEditCall).toContain("--add-label");
   });
 });

@@ -51,7 +51,10 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueLabel: "RALPHAI_ISSUE_LABEL",
   issueInProgressLabel: "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
   issueDoneLabel: "RALPHAI_ISSUE_DONE_LABEL",
+  issueStuckLabel: "RALPHAI_ISSUE_STUCK_LABEL",
   issuePrdLabel: "RALPHAI_ISSUE_PRD_LABEL",
+  issuePrdInProgressLabel: "RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL",
+  issuePrdDoneLabel: "RALPHAI_ISSUE_PRD_DONE_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
@@ -217,6 +220,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
       `  issueDoneLabel     = ${config.issueDoneLabel.value}  (${issueDoneSrc})`,
     );
 
+    const issueStuckSrc = sourceLabel(
+      "issueStuckLabel",
+      config.issueStuckLabel.source,
+      input,
+    );
+    lines.push(
+      `  issueStuckLabel    = ${config.issueStuckLabel.value}  (${issueStuckSrc})`,
+    );
+
     const issuePrdSrc = sourceLabel(
       "issuePrdLabel",
       config.issuePrdLabel.source,
@@ -224,6 +236,24 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     );
     lines.push(
       `  issuePrdLabel      = ${config.issuePrdLabel.value}  (${issuePrdSrc})`,
+    );
+
+    const issuePrdIpSrc = sourceLabel(
+      "issuePrdInProgressLabel",
+      config.issuePrdInProgressLabel.source,
+      input,
+    );
+    lines.push(
+      `  issuePrdInProgressLabel = ${config.issuePrdInProgressLabel.value}  (${issuePrdIpSrc})`,
+    );
+
+    const issuePrdDoneSrc = sourceLabel(
+      "issuePrdDoneLabel",
+      config.issuePrdDoneLabel.source,
+      input,
+    );
+    lines.push(
+      `  issuePrdDoneLabel  = ${config.issuePrdDoneLabel.value}  (${issuePrdDoneSrc})`,
     );
 
     const issueRepoVal = config.issueRepo.value || "<auto-detect>";

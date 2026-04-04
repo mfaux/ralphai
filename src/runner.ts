@@ -53,6 +53,7 @@ import {
   initReceipt,
   updateReceiptTasks,
   updateReceiptPrUrl,
+  updateReceiptOutcome,
   checkReceiptSource,
 } from "./receipt.ts";
 import { type ResolvedConfig } from "./config.ts";
@@ -60,6 +61,12 @@ import { type ResolvedConfig } from "./config.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Result returned from the runner after processing plans. */
+export interface RunnerResult {
+  /** Slugs of plans that got stuck during this run. */
+  stuckSlugs: string[];
+}
 
 /** Options passed from the CLI layer to the runner. */
 export interface RunnerOptions {
@@ -514,7 +521,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
 /**
  * Run the Ralphai autonomous loop.
  */
-export async function runRunner(opts: RunnerOptions): Promise<void> {
+export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const {
     config,
     cwd,
@@ -537,7 +544,9 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   const issueLabel = config.issueLabel.value;
   const issueInProgressLabel = config.issueInProgressLabel.value;
   const issueDoneLabel = config.issueDoneLabel.value;
+  const issueStuckLabel = config.issueStuckLabel.value;
   const issuePrdLabel = config.issuePrdLabel.value;
+  const issuePrdInProgressLabel = config.issuePrdInProgressLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -550,7 +559,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // --- Dry-run mode ---
   if (dryRun) {
     runDryRun(opts, dirs);
-    return;
+    return { stuckSlugs: [] };
   }
 
   // --- Signal handling ---
@@ -602,9 +611,11 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           issueLabel,
           issueInProgressLabel,
           issueDoneLabel,
+          issueStuckLabel,
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
+          issuePrdInProgressLabel,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues
@@ -895,6 +906,32 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
           stuck = true;
           skippedSlugs.add(planSlug);
           stuckSlugs.push(planSlug);
+
+          // Write outcome=stuck to receipt
+          updateReceiptOutcome(receiptFile, "stuck");
+
+          // Swap in-progress → stuck label on linked GitHub issue
+          if (issueFm.source === "github" && issueFm.issue && issueStuckLabel) {
+            let repo = issueRepo || null;
+            if (!repo && issueFm.issueUrl) {
+              const m = issueFm.issueUrl.match(
+                /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
+              );
+              repo = m?.[1] ?? null;
+            }
+            if (repo) {
+              try {
+                execSync(
+                  `gh issue edit ${issueFm.issue} --repo "${repo}" ` +
+                    `--add-label "${issueStuckLabel}" --remove-label "${issueInProgressLabel}"`,
+                  { cwd, stdio: ["pipe", "pipe", "pipe"] },
+                );
+              } catch {
+                // Best-effort: label swap failure is not fatal
+              }
+            }
+          }
+
           break;
         }
       } else {
@@ -1044,4 +1081,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Clean up signal handlers
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);
+
+  return { stuckSlugs };
 }

@@ -37,7 +37,7 @@ import {
   detectSetupCommand,
 } from "./project-detection.ts";
 import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
-import { runRunner, type RunnerOptions } from "./runner.ts";
+import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
 import {
   resolveConfig,
   parseCLIArgs,
@@ -370,7 +370,10 @@ interface LabelNames {
   intake: string;
   inProgress: string;
   done: string;
+  stuck: string;
   prd: string;
+  prdInProgress: string;
+  prdDone: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -384,7 +387,7 @@ function ghLabelCreateCmd(
   return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
 }
 
-/** The four label definitions with their descriptions and colors. */
+/** The label definitions with their descriptions and colors. */
 function labelDefs(names: LabelNames) {
   return [
     {
@@ -403,9 +406,24 @@ function labelDefs(names: LabelNames) {
       color: "0e8a16",
     },
     {
+      name: names.stuck,
+      description: "Ralphai is stuck on this issue",
+      color: "d93f0b",
+    },
+    {
       name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
+    },
+    {
+      name: names.prdInProgress,
+      description: "Ralphai is processing this PRD's sub-issues",
+      color: "fbca04",
+    },
+    {
+      name: names.prdDone,
+      description: "Ralphai finished all sub-issues for this PRD",
+      color: "0e8a16",
     },
   ];
 }
@@ -414,8 +432,8 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates four labels: intake, in-progress, done, and prd. All four use
- * the default label names from DEFAULTS.
+ * Creates five labels: intake, in-progress, done, stuck, and prd. All five
+ * use the default label names from DEFAULTS.
  */
 function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
@@ -489,9 +507,12 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueInProgressLabel:
       answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel,
     issueDoneLabel: answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel,
+    issueStuckLabel: DEFAULTS.issueStuckLabel,
     issueRepo: "",
     issueCommentProgress: true,
     issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
+    issuePrdInProgressLabel: DEFAULTS.issuePrdInProgressLabel,
+    issuePrdDoneLabel: DEFAULTS.issuePrdDoneLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -526,7 +547,10 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     intake: configObj.issueLabel as string,
     inProgress: configObj.issueInProgressLabel as string,
     done: configObj.issueDoneLabel as string,
+    stuck: configObj.issueStuckLabel as string,
     prd: configObj.issuePrdLabel as string,
+    prdInProgress: configObj.issuePrdInProgressLabel as string,
+    prdDone: configObj.issuePrdDoneLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -693,6 +717,7 @@ async function runRalphaiReset(
   // Best-effort: if config resolution fails we skip label restoration.
   let issueLabel = "";
   let issueInProgressLabel = "";
+  let issueStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -702,6 +727,7 @@ async function runRalphaiReset(
     });
     issueLabel = cfgResult.config.issueLabel.value;
     issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+    issueStuckLabel = cfgResult.config.issueStuckLabel.value;
     issueRepo = cfgResult.config.issueRepo.value;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
@@ -720,6 +746,7 @@ async function runRalphaiReset(
         planPath: planFile,
         issueLabel,
         issueInProgressLabel,
+        issueStuckLabel,
         issueRepo,
         cwd,
       });
@@ -833,12 +860,14 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
       });
       const issueLabel = cfgResult.config.issueLabel.value;
       const issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+      const issueStuckLabel = cfgResult.config.issueStuckLabel.value;
       const issueRepo = cfgResult.config.issueRepo.value;
       if (issueLabel && issueInProgressLabel) {
         const labelResult = restoreIssueLabels({
           planPath: planFile,
           issueLabel,
           issueInProgressLabel,
+          issueStuckLabel,
           issueRepo,
           cwd,
         });
@@ -1822,6 +1851,20 @@ async function runPrdIssueTarget(
   );
 
   // --- PRD with unchecked sub-issues: work through sequentially ---
+
+  // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
+  const prdInProgressLabel =
+    worktreeConfig.issuePrdInProgressLabel?.value ??
+    DEFAULTS.issuePrdInProgressLabel;
+  try {
+    execSync(
+      `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
+      { cwd, stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch {
+    // Best-effort: label application failure is not fatal
+  }
+
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
   );
@@ -1893,7 +1936,7 @@ async function runPrdIssueTarget(
     };
 
     try {
-      await runRalphaiRunner(
+      const result = await runRalphaiRunner(
         worktreeRunOptions,
         resolvedWorktreeDir,
         {
@@ -1902,8 +1945,16 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
-      completedCount++;
-      completedSubIssues.push(subIssueNumber);
+      if (result.stuckSlugs.length > 0) {
+        // Runner returned normally but the sub-issue got stuck
+        stuckSubIssues.push(subIssueNumber);
+        console.log(
+          `Sub-issue #${subIssueNumber} got stuck — continuing to next.`,
+        );
+      } else {
+        completedCount++;
+        completedSubIssues.push(subIssueNumber);
+      }
     } catch (error) {
       // Runner may exit on stuck detection or other errors
       stuckSubIssues.push(subIssueNumber);
@@ -2067,7 +2118,9 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueLabel = DEFAULTS.issueLabel;
   let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
   let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
+  let resolvedIssueStuckLabel = DEFAULTS.issueStuckLabel;
   let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
+  let resolvedIssuePrdInProgressLabel = DEFAULTS.issuePrdInProgressLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2083,7 +2136,10 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueLabel = cfgResult.config.issueLabel.value;
     resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
     resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
+    resolvedIssueStuckLabel = cfgResult.config.issueStuckLabel.value;
     resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
+    resolvedIssuePrdInProgressLabel =
+      cfgResult.config.issuePrdInProgressLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2387,9 +2443,11 @@ async function runRalphaiInManagedWorktree(
               issueLabel: resolvedIssueLabel,
               issueInProgressLabel: resolvedIssueInProgressLabel,
               issueDoneLabel: resolvedIssueDoneLabel,
+              issueStuckLabel: resolvedIssueStuckLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
+              issuePrdInProgressLabel: resolvedIssuePrdInProgressLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2482,14 +2540,14 @@ async function runRalphaiRunner(
   cwd: string,
   prdIssue?: PrdIssue,
   runnerFlags?: { skipPrCreation?: boolean },
-): Promise<void> {
+): Promise<RunnerResult> {
   const worktreeInfo = resolveWorktreeInfo(cwd);
   const runArgs = options.runArgs;
 
   // --- Handle --help ---
   if (runArgs.includes("--help") || runArgs.includes("-h")) {
     showRunHelp();
-    return;
+    return { stuckSlugs: [] };
   }
 
   // --- Reject unrecognized flags ---
@@ -2543,7 +2601,7 @@ async function runRalphaiRunner(
       workspaces: config.workspaces.value,
     });
     console.log(text);
-    return;
+    return { stuckSlugs: [] };
   }
 
   // Check that ralphai has been initialized (global config exists).
@@ -2570,7 +2628,10 @@ async function runRalphaiRunner(
         intake: config.issueLabel.value,
         inProgress: config.issueInProgressLabel.value,
         done: config.issueDoneLabel.value,
+        stuck: config.issueStuckLabel.value,
         prd: config.issuePrdLabel.value,
+        prdInProgress: config.issuePrdInProgressLabel.value,
+        prdDone: config.issuePrdDoneLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.
@@ -2635,5 +2696,5 @@ async function runRalphaiRunner(
     skipPrCreation: runnerFlags?.skipPrCreation,
   };
 
-  await runRunner(runnerOpts);
+  return await runRunner(runnerOpts);
 }

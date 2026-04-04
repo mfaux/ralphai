@@ -92,6 +92,7 @@ describe("restoreIssueLabels", () => {
       planPath,
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -109,6 +110,7 @@ describe("restoreIssueLabels", () => {
     expect(cmd).toContain('--repo "owner/repo"');
     expect(cmd).toContain('--add-label "ralphai"');
     expect(cmd).toContain('--remove-label "ralphai:in-progress"');
+    expect(cmd).toContain('--remove-label "ralphai:stuck"');
   });
 
   it("does not call gh issue edit for a non-GitHub plan", () => {
@@ -124,6 +126,7 @@ describe("restoreIssueLabels", () => {
       planPath,
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -160,6 +163,7 @@ describe("restoreIssueLabels", () => {
       planPath,
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -186,6 +190,7 @@ describe("restoreIssueLabels", () => {
       planPath,
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -207,6 +212,7 @@ describe("restoreIssueLabels", () => {
       planPath,
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "",
       cwd: ctx.dir,
     });
@@ -229,6 +235,7 @@ describe("restoreIssueLabels", () => {
       planPath: join(ctx.dir, "nonexistent.md"),
       issueLabel: "ralphai",
       issueInProgressLabel: "ralphai:in-progress",
+      issueStuckLabel: "ralphai:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });

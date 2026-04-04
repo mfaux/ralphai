@@ -25,7 +25,10 @@ export interface RalphaiConfig {
   issueLabel: string;
   issueInProgressLabel: string;
   issueDoneLabel: string;
+  issueStuckLabel: string;
   issuePrdLabel: string;
+  issuePrdInProgressLabel: string;
+  issuePrdDoneLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
@@ -66,7 +69,10 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueLabel: "ralphai",
   issueInProgressLabel: "ralphai:in-progress",
   issueDoneLabel: "ralphai:done",
+  issueStuckLabel: "ralphai:stuck",
   issuePrdLabel: "ralphai-prd",
+  issuePrdInProgressLabel: "ralphai-prd:in-progress",
+  issuePrdDoneLabel: "ralphai-prd:done",
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
@@ -174,7 +180,10 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueLabel",
   "issueInProgressLabel",
   "issueDoneLabel",
+  "issueStuckLabel",
   "issuePrdLabel",
+  "issuePrdInProgressLabel",
+  "issuePrdDoneLabel",
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
@@ -312,11 +321,33 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueDoneLabel = v;
   }
 
+  // issueStuckLabel (string, non-empty)
+  if ("issueStuckLabel" in obj) {
+    const v = String(obj.issueStuckLabel || "");
+    if (v === "") err("'issueStuckLabel' must be a non-empty label name");
+    values.issueStuckLabel = v;
+  }
+
   // issuePrdLabel (string, non-empty)
   if ("issuePrdLabel" in obj) {
     const v = String(obj.issuePrdLabel || "");
     if (v === "") err("'issuePrdLabel' must be a non-empty label name");
     values.issuePrdLabel = v;
+  }
+
+  // issuePrdInProgressLabel (string, non-empty)
+  if ("issuePrdInProgressLabel" in obj) {
+    const v = String(obj.issuePrdInProgressLabel || "");
+    if (v === "")
+      err("'issuePrdInProgressLabel' must be a non-empty label name");
+    values.issuePrdInProgressLabel = v;
+  }
+
+  // issuePrdDoneLabel (string, non-empty)
+  if ("issuePrdDoneLabel" in obj) {
+    const v = String(obj.issuePrdDoneLabel || "");
+    if (v === "") err("'issuePrdDoneLabel' must be a non-empty label name");
+    values.issuePrdDoneLabel = v;
   }
 
   // issueRepo (string, can be empty)
@@ -434,7 +465,10 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
   ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
+  ["RALPHAI_ISSUE_STUCK_LABEL", "issueStuckLabel"],
   ["RALPHAI_ISSUE_PRD_LABEL", "issuePrdLabel"],
+  ["RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL", "issuePrdInProgressLabel"],
+  ["RALPHAI_ISSUE_PRD_DONE_LABEL", "issuePrdDoneLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
@@ -510,9 +544,24 @@ export function applyEnvOverrides(
   const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
   if (issueDoneLabel !== undefined) overrides.issueDoneLabel = issueDoneLabel;
 
+  // issueStuckLabel
+  const issueStuckLabel = get("RALPHAI_ISSUE_STUCK_LABEL");
+  if (issueStuckLabel !== undefined)
+    overrides.issueStuckLabel = issueStuckLabel;
+
   // issuePrdLabel
   const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");
   if (issuePrdLabel !== undefined) overrides.issuePrdLabel = issuePrdLabel;
+
+  // issuePrdInProgressLabel
+  const issuePrdIpLabel = get("RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL");
+  if (issuePrdIpLabel !== undefined)
+    overrides.issuePrdInProgressLabel = issuePrdIpLabel;
+
+  // issuePrdDoneLabel
+  const issuePrdDoneLabel = get("RALPHAI_ISSUE_PRD_DONE_LABEL");
+  if (issuePrdDoneLabel !== undefined)
+    overrides.issuePrdDoneLabel = issuePrdDoneLabel;
 
   // issueRepo
   const issueRepo = get("RALPHAI_ISSUE_REPO");

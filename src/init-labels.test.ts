@@ -16,7 +16,7 @@ describe("init label creation", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Source-level: labelDefs includes all four labels
+  // Source-level: labelDefs includes all five labels
   // ---------------------------------------------------------------------------
 
   it("labelDefs includes the intake label with color 7057ff", () => {
@@ -36,12 +36,33 @@ describe("init label creation", () => {
     expect(ralphaiSrc).toContain('color: "0e8a16"');
   });
 
+  it("labelDefs includes the stuck label with color d93f0b", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is stuck on this issue"',
+    );
+    expect(ralphaiSrc).toContain('color: "d93f0b"');
+  });
+
   it("labelDefs includes the PRD label entry using names.prd with color 1d76db", () => {
     expect(ralphaiSrc).toContain("name: names.prd");
     expect(ralphaiSrc).toContain(
       'description: "Ralphai PRD — groups sub-issues for drain runs"',
     );
     expect(ralphaiSrc).toContain('color: "1d76db"');
+  });
+
+  it("labelDefs includes the PRD in-progress label entry using names.prdInProgress with color fbca04", () => {
+    expect(ralphaiSrc).toContain("name: names.prdInProgress");
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is processing this PRD\'s sub-issues"',
+    );
+  });
+
+  it("labelDefs includes the PRD done label entry using names.prdDone with color 0e8a16", () => {
+    expect(ralphaiSrc).toContain("name: names.prdDone");
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai finished all sub-issues for this PRD"',
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -80,7 +101,14 @@ describe("init label creation", () => {
       "inProgress: configObj.issueInProgressLabel as string",
     );
     expect(ralphaiSrc).toContain("done: configObj.issueDoneLabel as string");
+    expect(ralphaiSrc).toContain("stuck: configObj.issueStuckLabel as string");
     expect(ralphaiSrc).toContain("prd: configObj.issuePrdLabel as string");
+    expect(ralphaiSrc).toContain(
+      "prdInProgress: configObj.issuePrdInProgressLabel as string",
+    );
+    expect(ralphaiSrc).toContain(
+      "prdDone: configObj.issuePrdDoneLabel as string",
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -109,13 +137,18 @@ describe("init label creation", () => {
 
   it("runRalphaiRunner ensures labels when issueSource is github", () => {
     expect(ralphaiSrc).toContain('config.issueSource.value === "github"');
-    // Verify the ensure call uses config values for all four labels
+    // Verify the ensure call uses config values for all labels
     expect(ralphaiSrc).toContain("intake: config.issueLabel.value");
     expect(ralphaiSrc).toContain(
       "inProgress: config.issueInProgressLabel.value",
     );
     expect(ralphaiSrc).toContain("done: config.issueDoneLabel.value");
+    expect(ralphaiSrc).toContain("stuck: config.issueStuckLabel.value");
     expect(ralphaiSrc).toContain("prd: config.issuePrdLabel.value");
+    expect(ralphaiSrc).toContain(
+      "prdInProgress: config.issuePrdInProgressLabel.value",
+    );
+    expect(ralphaiSrc).toContain("prdDone: config.issuePrdDoneLabel.value");
   });
 
   it("run-start label ensure is skipped in dry-run mode", () => {
@@ -129,13 +162,16 @@ describe("init label creation", () => {
   // Source-level: init config includes issueDoneLabel
   // ---------------------------------------------------------------------------
 
-  it("scaffold config includes issueDoneLabel and issuePrdLabel", () => {
+  it("scaffold config includes issueDoneLabel, issueStuckLabel, issuePrdLabel, issuePrdInProgressLabel, and issuePrdDoneLabel", () => {
     expect(ralphaiSrc).toContain(
       "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
     );
+    expect(ralphaiSrc).toContain("DEFAULTS.issueStuckLabel");
     expect(ralphaiSrc).toContain(
       "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
     );
+    expect(ralphaiSrc).toContain("DEFAULTS.issuePrdInProgressLabel");
+    expect(ralphaiSrc).toContain("DEFAULTS.issuePrdDoneLabel");
   });
 
   // ---------------------------------------------------------------------------
