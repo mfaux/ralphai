@@ -31,7 +31,7 @@ For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 3. Point Ralphai at the PRD:
 
 ```bash
-ralphai run 42           # PRD #42: all sub-issues sequentially on one branch
+ralphai run 42           # issue #42: detected as PRD via label, processes sub-issues
 ```
 
 Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed and stuck items.
@@ -46,7 +46,9 @@ For one-off bugs or small tasks, label a GitHub issue with `ralphai-standalone` 
 ralphai run 57           # run standalone issue #57: one branch, one PR
 ```
 
-Or let the drain loop auto-pull when the local backlog is empty — Ralphai checks for PRD sub-issues first, then standalone issues. Each standalone issue gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
+Or let the drain loop auto-pull when the local backlog is empty — Ralphai checks for PRD sub-issues first, then standalone issues. Each standalone issue gets its own `feat/<slug>` branch and draft PR, the same as a local plan file.
+
+`ralphai run <number>` uses label-driven dispatch: it reads the issue's labels to classify it as standalone, sub-issue, or PRD. Targeting a sub-issue (labeled `ralphai-subissue`) automatically discovers its parent PRD and processes through the PRD flow.
 
 Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
 

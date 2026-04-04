@@ -168,11 +168,15 @@ PRD behavior:
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
 - The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck checklists
 
-The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the configured PRD label (`ralphai-prd` by default, configurable via `prdLabel`) and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
+The `ralphai run <number>` form uses label-driven dispatch: it reads the issue's labels to classify it as standalone (`ralphai-standalone`), sub-issue (`ralphai-subissue`), or PRD (`ralphai-prd`). Sub-issues automatically discover their parent PRD and process through the PRD flow. Issues with no recognized label produce an error with guidance. The old unified `ralphai` label is not recognized.
 
 #### Standalone Issues
 
-Label issues with the configured standalone intake label (`ralphai-standalone` by default). Each gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
+Label issues with the configured standalone intake label (`ralphai-standalone` by default). Each gets its own `feat/<slug>` branch and draft PR, the same as a local plan file.
+
+#### Sub-Issues
+
+Label issues with `ralphai-subissue` and ensure they have a parent PRD relationship on GitHub. Ralphai discovers the parent PRD and processes the sub-issue through the PRD flow on the parent's shared branch. Validation catches misconfigurations: orphaned sub-issues or parents missing the PRD label are skipped with a warning.
 
 ## Clean
 

@@ -486,6 +486,142 @@ export function discoverParentPrd(
 }
 
 // ---------------------------------------------------------------------------
+// Fetch issue with labels (for label-driven dispatch)
+// ---------------------------------------------------------------------------
+
+/** Result of fetching an issue with its labels. */
+export interface IssueWithLabels {
+  number: number;
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+/**
+ * Fetch a GitHub issue by number, returning title, body, and labels.
+ *
+ * Used by label-driven dispatch to classify which dispatch path to take.
+ * Read-only — does not write files or mutate labels.
+ *
+ * Throws a descriptive error if:
+ * - `gh` is not available or not authenticated
+ * - the issue is not found or is inaccessible
+ */
+export function fetchIssueWithLabels(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+): IssueWithLabels {
+  if (!checkGhAvailable()) {
+    throw new Error(
+      "gh CLI not available or not authenticated — cannot fetch issue",
+    );
+  }
+
+  const raw = execQuiet(
+    `gh issue view ${issueNumber} --repo "${repo}" --json title,body,labels`,
+    cwd,
+  );
+
+  if (!raw) {
+    throw new Error(
+      `Could not fetch issue #${issueNumber} from ${repo}. ` +
+        `Check that the issue exists and you have access.`,
+    );
+  }
+
+  let data: { title: string; body: string; labels: Array<{ name: string }> };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Failed to parse response for issue #${issueNumber} from ${repo}`,
+    );
+  }
+
+  return {
+    number: issueNumber,
+    title: data.title,
+    body: data.body ?? "",
+    labels: data.labels.map((l) => l.name),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Discover parent issue (richer than discoverParentPrd)
+// ---------------------------------------------------------------------------
+
+/** Result of parent issue discovery. */
+export interface ParentIssueResult {
+  /** Whether a parent issue exists. */
+  hasParent: boolean;
+  /** The parent issue number, if it exists. */
+  parentNumber: number | undefined;
+  /** Whether the parent has the PRD label. Only meaningful when hasParent is true. */
+  parentHasPrdLabel: boolean;
+  /** The parent issue title, if it exists. */
+  parentTitle: string | undefined;
+}
+
+/**
+ * Discover the parent issue for a given issue, returning both the parent
+ * number and whether it has the PRD label.
+ *
+ * Unlike `discoverParentPrd()`, this function distinguishes between:
+ * - no parent (404)
+ * - parent exists but lacks PRD label
+ * - parent exists with PRD label
+ *
+ * Used for label-driven dispatch validation where we need to differentiate
+ * these cases to provide appropriate warnings.
+ */
+export function discoverParentIssue(
+  repo: string,
+  issueNumber: number,
+  cwd: string,
+  prdLabel?: string,
+): ParentIssueResult {
+  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const raw = execQuiet(
+    `gh api repos/${repo}/issues/${issueNumber}/parent`,
+    cwd,
+  );
+
+  if (!raw) {
+    return {
+      hasParent: false,
+      parentNumber: undefined,
+      parentHasPrdLabel: false,
+      parentTitle: undefined,
+    };
+  }
+
+  let parent: {
+    number: number;
+    title?: string;
+    labels: Array<{ name: string }>;
+  };
+  try {
+    parent = JSON.parse(raw);
+  } catch {
+    return {
+      hasParent: false,
+      parentNumber: undefined,
+      parentHasPrdLabel: false,
+      parentTitle: undefined,
+    };
+  }
+
+  const hasPrdLabel = parent.labels?.some((l) => l.name === label) ?? false;
+  return {
+    hasParent: true,
+    parentNumber: parent.number,
+    parentHasPrdLabel: hasPrdLabel,
+    parentTitle: parent.title,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internal: shared pull logic
 // ---------------------------------------------------------------------------
 

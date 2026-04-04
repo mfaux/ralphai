@@ -70,6 +70,8 @@ import {
   detectIssueRepo,
   fetchPrdIssueByNumber,
   fetchIssueTitleByNumber,
+  fetchIssueWithLabels,
+  discoverParentIssue,
   prdBranchName,
   pullGithubIssueByNumber,
   pullGithubIssues,
@@ -79,6 +81,11 @@ import {
 import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
+import {
+  classifyIssue,
+  validateStandalone,
+  validateSubissue,
+} from "./issue-dispatch.ts";
 import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
 import {
@@ -1627,12 +1634,16 @@ function showRunHelp(): void {
  * Handle `ralphai run <issue-number>` — fetch the GitHub issue, determine
  * whether it is a PRD (has `ralphai-prd` label), and either:
  *
- * 1. **Non-PRD** — pull the issue into a plan file, create a `feat/<slug>`
+ * Label-driven dispatch: fetches the issue's labels, classifies the
+ * dispatch family, validates, and routes to the appropriate handler:
+ *
+ * 1. **standalone** — pull the issue into a plan file, create a `feat/<slug>`
  *    branch and worktree, run the agent once, open a PR on completion.
- * 2. **PRD with unchecked sub-issues** — create a single `feat/<slug>`
- *    worktree and work through each sub-issue sequentially.
- * 3. **PRD all completed** — report and exit.
- * 4. **PRD no task list** — error with guidance to add sub-issues.
+ * 2. **subissue** — discover parent PRD, delegate to `runPrdIssueTarget()`
+ *    which creates a shared `feat/<prd-slug>` branch.
+ * 3. **prd** — discover sub-issues via `discoverPrdTarget()`, process
+ *    sequentially on a shared branch.
+ * 4. **No recognized label** — error with guidance.
  */
 async function runIssueTarget(
   issueNumber: number,
@@ -1644,11 +1655,20 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
-    issuePrdLabel: string;
+    standaloneLabel: string;
+    subissueLabel: string;
+    prdLabel: string;
   },
 ): Promise<void> {
-  const { isDryRun, hasHelp, hasShowConfig, setupCommand, issuePrdLabel } =
-    flags;
+  const {
+    isDryRun,
+    hasHelp,
+    hasShowConfig,
+    setupCommand,
+    standaloneLabel,
+    subissueLabel,
+    prdLabel,
+  } = flags;
 
   // Pass through --help and --show-config unchanged
   if (hasHelp || hasShowConfig) {
@@ -1731,10 +1751,11 @@ async function runIssueTarget(
     return;
   }
 
-  // Discover whether this issue is a PRD or a standalone issue
-  let discovery: PrdDiscoveryResult;
+  // --- Label-driven dispatch ---
+  // Fetch the issue with labels for classification.
+  let issueInfo: import("./issues.ts").IssueWithLabels;
   try {
-    discovery = discoverPrdTarget(repo, issueNumber, cwd, issuePrdLabel);
+    issueInfo = fetchIssueWithLabels(repo, issueNumber, cwd);
   } catch (err: unknown) {
     console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
@@ -1743,13 +1764,107 @@ async function runIssueTarget(
     process.exit(1);
   }
 
-  if (discovery.isPrd) {
-    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, flags);
+  // Classify the issue into a dispatch family based on its labels.
+  const classification = classifyIssue(issueInfo.labels, {
+    standaloneLabel,
+    subissueLabel,
+    prdLabel,
+  });
+
+  if (!classification.ok) {
+    console.error(`ERROR: ${classification.message}`);
+    process.exit(1);
   }
 
-  // --- Non-PRD: standalone issue flow (unchanged) ---
-  const { issue } = discovery;
-  const issueTitle = issue.title;
+  // --- Dispatch: PRD ---
+  if (classification.family === "prd") {
+    // Use discoverPrdTarget to get sub-issues (it already handles PRD label check)
+    let discovery: PrdDiscoveryResult;
+    try {
+      discovery = discoverPrdTarget(repo, issueNumber, cwd, prdLabel);
+    } catch (err: unknown) {
+      console.error(
+        `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+
+    if (!discovery.isPrd) {
+      // Should not happen since we already classified via label, but guard anyway
+      console.error(
+        `ERROR: Issue #${issueNumber} has the PRD label but discoverPrdTarget did not confirm it as a PRD.`,
+      );
+      process.exit(1);
+    }
+
+    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+      setupCommand,
+    });
+  }
+
+  // --- Dispatch: Sub-issue ---
+  if (classification.family === "subissue") {
+    // Discover the parent PRD to validate and fold into its shared branch.
+    const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
+
+    // Validate sub-issue before processing
+    const validation = validateSubissue(
+      issueNumber,
+      parentResult.hasParent ? parentResult.parentNumber : undefined,
+      parentResult.parentHasPrdLabel,
+    );
+    if (!validation.valid) {
+      console.warn(`WARNING: ${validation.message}`);
+      return;
+    }
+
+    // Parent is valid — discover it as a PRD target to get sub-issues
+    let discovery: PrdDiscoveryResult;
+    try {
+      discovery = discoverPrdTarget(
+        repo,
+        parentResult.parentNumber!,
+        cwd,
+        prdLabel,
+      );
+    } catch (err: unknown) {
+      console.error(
+        `ERROR: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+
+    if (!discovery.isPrd) {
+      console.error(
+        `ERROR: Parent issue #${parentResult.parentNumber} was expected to be a PRD but was not confirmed.`,
+      );
+      process.exit(1);
+    }
+
+    return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
+      isDryRun,
+      hasHelp,
+      hasShowConfig,
+      setupCommand,
+    });
+  }
+
+  // --- Dispatch: Standalone ---
+  // Validate standalone: check if it has a parent PRD (misconfiguration)
+  const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
+  const standaloneValidation = validateStandalone(
+    issueNumber,
+    parentResult.hasParent ? parentResult.parentNumber : undefined,
+  );
+  if (!standaloneValidation.valid) {
+    console.warn(`WARNING: ${standaloneValidation.message}`);
+    return;
+  }
+
+  const issueTitle = issueInfo.title;
   const issueSlug = slugify(issueTitle);
   const branch = `feat/${issueSlug}`;
 
@@ -2213,6 +2328,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueStuckLabel = defaultStandaloneLabels.stuck;
   let resolvedIssuePrdLabel = DEFAULTS.prdLabel;
   let resolvedIssuePrdInProgressLabel = defaultPrdLabels.inProgress;
+  let resolvedSubissueLabel = DEFAULTS.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2235,6 +2351,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueStuckLabel = standaloneLabels.stuck;
     resolvedIssuePrdLabel = cfgResult.config.prdLabel.value;
     resolvedIssuePrdInProgressLabel = prdLabels.inProgress;
+    resolvedSubissueLabel = cfgResult.config.subissueLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2280,7 +2397,9 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
-      issuePrdLabel: resolvedIssuePrdLabel,
+      standaloneLabel: resolvedIssueLabel,
+      subissueLabel: resolvedSubissueLabel,
+      prdLabel: resolvedIssuePrdLabel,
     });
   }
 
