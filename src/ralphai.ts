@@ -55,6 +55,7 @@ import { runClean, showCleanHelp } from "./clean.ts";
 import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
 
+import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
@@ -2475,6 +2476,67 @@ async function runRalphaiInManagedWorktree(
     if (!plan) {
       if (plansProcessed === 0) process.exit(1);
       break;
+    }
+
+    // --- PRD sub-issue detection: if the plan has prd: N frontmatter,
+    // delegate to the unified PRD flow instead of standalone processing. ---
+    const { backlogDir: drainBacklog, wipDir: drainWip } =
+      getRepoPipelineDirs(cwd);
+    const planDir = plan.source === "backlog" ? drainBacklog : drainWip;
+    const planFullPath = resolvePlanPath(planDir, plan.slug);
+
+    if (planFullPath) {
+      const fm = extractIssueFrontmatter(planFullPath);
+      if (fm.prd !== undefined) {
+        const repo = detectIssueRepo(cwd, resolvedIssueRepo);
+        if (!repo) {
+          console.error(
+            `Plan '${plan.planFile}' has prd: ${fm.prd} but could not detect GitHub repo.`,
+          );
+          console.error(
+            "Set issue-repo in config or ensure a GitHub remote is configured.",
+          );
+          // Cannot route through PRD flow without a repo — stop the drain loop.
+          // The plan stays in the backlog for manual intervention.
+          if (plansProcessed === 0) process.exit(1);
+          break;
+        }
+
+        let prdDiscovery: PrdDiscoveryResult;
+        try {
+          prdDiscovery = discoverPrdTarget(
+            repo,
+            fm.prd,
+            cwd,
+            resolvedIssuePrdLabel,
+          );
+        } catch (err: unknown) {
+          console.error(
+            `Failed to discover PRD #${fm.prd} for plan '${plan.planFile}': ${err instanceof Error ? err.message : String(err)}`,
+          );
+          // PRD discovery failed — stop the drain loop.
+          // The plan stays in the backlog for retry.
+          if (plansProcessed === 0) process.exit(1);
+          break;
+        }
+
+        if (prdDiscovery.isPrd) {
+          // Delegate to the unified PRD flow (single feat/ branch, aggregate PR)
+          await runPrdIssueTarget(prdDiscovery, repo, options, runArgs, cwd, {
+            isDryRun: false,
+            hasHelp: false,
+            hasShowConfig: false,
+            setupCommand,
+          });
+          // runPrdIssueTarget handles all sub-issues and PR creation — we're done
+          break;
+        }
+
+        // isPrd: false — PRD label was removed; fall through to standalone processing
+        console.log(
+          `Plan '${plan.planFile}' has prd: ${fm.prd} but issue #${fm.prd} is no longer a PRD. Processing as standalone.`,
+        );
+      }
     }
 
     const branch = `ralphai/${plan.slug}`;

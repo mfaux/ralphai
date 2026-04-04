@@ -6,6 +6,7 @@
  *   - Each plan gets a unique ralphai/<slug> branch
  *   - --once processes exactly one plan
  *   - Worktrees are cleaned up between plans
+ *   - Plans with prd: frontmatter route through the PRD flow, not standalone
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import {
@@ -73,6 +74,23 @@ function addPlans(
       `# Plan: ${plan.title}\n\n### Task 1: Do it\n`,
     );
   }
+  return backlogDir;
+}
+
+/** Create a plan file with prd: N frontmatter (simulating a PRD sub-issue). */
+function addPrdSubIssuePlan(
+  dir: string,
+  env: Record<string, string>,
+  slug: string,
+  issueNumber: number,
+  prdNumber: number,
+): string {
+  const { backlogDir } = getRepoPipelineDirs(dir, env);
+  mkdirSync(backlogDir, { recursive: true });
+  writeFileSync(
+    join(backlogDir, `${slug}.md`),
+    `---\nsource: github\nissue: ${issueNumber}\nissue-url: https://github.com/test/repo/issues/${issueNumber}\nprd: ${prdNumber}\n---\n\n# Plan: ${slug}\n\n### Task 1: Do it\n`,
+  );
   return backlogDir;
 }
 
@@ -154,6 +172,50 @@ describe.skipIf(process.platform === "win32")(
       // After drain, earlier plan's worktree directory should be removed
       const worktreeBase = join(dir, "..", ".ralphai-worktrees");
       expect(existsSync(join(worktreeBase, "aaa-first"))).toBe(false);
+    });
+
+    test("plan with prd: frontmatter does not get a standalone ralphai/ branch", () => {
+      initWithAgent(dir, testEnv());
+      process.env.RALPHAI_HOME = ralphaiHome;
+
+      // Add a plan that simulates a PRD sub-issue (has prd: 42 frontmatter)
+      addPrdSubIssuePlan(dir, testEnv(), "gh-99-prd-sub-task", 99, 42);
+
+      // Run auto-detect. Since there's no GitHub remote, PRD discovery
+      // will fail, but the drain loop should NOT process this as a
+      // standalone plan on a ralphai/ branch.
+      const result = runCli(["run"], dir, testEnv(), 60000);
+
+      const branches = execSync("git branch --list", {
+        cwd: dir,
+        encoding: "utf-8",
+      });
+
+      // The plan has prd: frontmatter, so it must NOT be processed as
+      // standalone (which would create a ralphai/gh-99-prd-sub-task branch).
+      expect(branches).not.toContain("ralphai/gh-99-prd-sub-task");
+
+      // The combined output should indicate PRD routing was attempted
+      const combined = result.stdout + result.stderr;
+      expect(combined).toMatch(/PRD|prd/i);
+    });
+
+    test("plan without prd: frontmatter still gets standalone ralphai/ branch", () => {
+      initWithAgent(dir, testEnv());
+      process.env.RALPHAI_HOME = ralphaiHome;
+      addPlans(dir, testEnv(), [
+        { slug: "standalone-task", title: "Standalone Task" },
+      ]);
+
+      runCli(["run"], dir, testEnv(), 60000);
+
+      const branches = execSync("git branch --list", {
+        cwd: dir,
+        encoding: "utf-8",
+      });
+
+      // Plan without prd: should still be processed as standalone
+      expect(branches).toContain("ralphai/standalone-task");
     });
   },
 );
