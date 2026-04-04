@@ -90,9 +90,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -108,9 +108,9 @@ describe("restoreIssueLabels", () => {
     const cmd = ghEditCalls[0]![0] as string;
     expect(cmd).toContain("gh issue edit 42");
     expect(cmd).toContain('--repo "owner/repo"');
-    expect(cmd).toContain('--add-label "ralphai"');
-    expect(cmd).toContain('--remove-label "ralphai:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai:stuck"');
+    expect(cmd).toContain('--add-label "ralphai-standalone"');
+    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
+    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
   });
 
   it("does not call gh issue edit for a non-GitHub plan", () => {
@@ -124,9 +124,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -161,9 +161,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -188,9 +188,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -210,9 +210,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "",
       cwd: ctx.dir,
     });
@@ -233,9 +233,9 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath: join(ctx.dir, "nonexistent.md"),
-      issueLabel: "ralphai",
-      issueInProgressLabel: "ralphai:in-progress",
-      issueStuckLabel: "ralphai:stuck",
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });

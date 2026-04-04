@@ -38,7 +38,7 @@ export interface GithubIssueListItem {
 /** Options for fetching the issue list. */
 export interface ListGithubIssuesOptions {
   cwd: string;
-  issueLabel: string;
+  standaloneLabel: string;
   issueRepo: string;
   issuePrdLabel?: string;
 }
@@ -135,7 +135,7 @@ function fetchSubIssuesForPrd(
 export function listGithubIssues(
   options: ListGithubIssuesOptions,
 ): ListGithubIssuesResult {
-  const { cwd, issueLabel, issueRepo } = options;
+  const { cwd, standaloneLabel: issueLabel, issueRepo } = options;
   const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (!checkGhAvailable()) {

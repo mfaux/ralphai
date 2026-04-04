@@ -732,9 +732,9 @@ async function runRalphaiReset(
 
   // Load config to get label names for GitHub issue restoration.
   // Best-effort: if config resolution fails we skip label restoration.
-  let issueLabel = "";
-  let issueInProgressLabel = "";
-  let issueStuckLabel = "";
+  let standaloneLabel = "";
+  let standaloneInProgressLabel = "";
+  let standaloneStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -742,11 +742,13 @@ async function runRalphaiReset(
       envVars: process.env,
       cliArgs: [],
     });
-    issueLabel = deriveLabels(cfgResult.config.standaloneLabel.value).intake;
-    issueInProgressLabel = deriveLabels(
+    standaloneLabel = deriveLabels(
+      cfgResult.config.standaloneLabel.value,
+    ).intake;
+    standaloneInProgressLabel = deriveLabels(
       cfgResult.config.standaloneLabel.value,
     ).inProgress;
-    issueStuckLabel = deriveLabels(
+    standaloneStuckLabel = deriveLabels(
       cfgResult.config.standaloneLabel.value,
     ).stuck;
     issueRepo = cfgResult.config.issueRepo.value;
@@ -762,12 +764,12 @@ async function runRalphaiReset(
     mkdirSync(backlogDir, { recursive: true });
 
     // Restore GitHub issue labels before moving the file (needs frontmatter).
-    if (issueLabel && issueInProgressLabel && existsSync(planFile)) {
+    if (standaloneLabel && standaloneInProgressLabel && existsSync(planFile)) {
       const labelResult = restoreIssueLabels({
         planPath: planFile,
-        issueLabel,
-        issueInProgressLabel,
-        issueStuckLabel,
+        standaloneLabel,
+        standaloneInProgressLabel,
+        standaloneStuckLabel,
         issueRepo,
         cwd,
       });
@@ -882,16 +884,16 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
       const standaloneLabelsResolved = deriveLabels(
         cfgResult.config.standaloneLabel.value,
       );
-      const issueLabel = standaloneLabelsResolved.intake;
-      const issueInProgressLabel = standaloneLabelsResolved.inProgress;
-      const issueStuckLabel = standaloneLabelsResolved.stuck;
+      const standaloneLabel = standaloneLabelsResolved.intake;
+      const standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
+      const standaloneStuckLabel = standaloneLabelsResolved.stuck;
       const issueRepo = cfgResult.config.issueRepo.value;
-      if (issueLabel && issueInProgressLabel) {
+      if (standaloneLabel && standaloneInProgressLabel) {
         const labelResult = restoreIssueLabels({
           planPath: planFile,
-          issueLabel,
-          issueInProgressLabel,
-          issueStuckLabel,
+          standaloneLabel,
+          standaloneInProgressLabel,
+          standaloneStuckLabel,
           issueRepo,
           cwd,
         });
@@ -1548,9 +1550,8 @@ function showRunHelp(): void {
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, baseBranch, maxStuck,",
     "                  autoCommit, iterationTimeout, promptMode,",
-    "                  issueSource, issueLabel,",
-    "                  issueInProgressLabel, issueDoneLabel, issueRepo,",
-    "                  issueCommentProgress",
+    "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
+    "                  issueRepo, issueCommentProgress",
     "",
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
     "                   RALPHAI_FEEDBACK_COMMANDS,",
@@ -1559,8 +1560,8 @@ function showRunHelp(): void {
     "                   RALPHAI_ITERATION_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
-    "                   RALPHAI_ISSUE_LABEL, RALPHAI_ISSUE_IN_PROGRESS_LABEL,",
-    "                   RALPHAI_ISSUE_DONE_LABEL,",
+    "                   RALPHAI_STANDALONE_LABEL, RALPHAI_SUBISSUE_LABEL,",
+    "                   RALPHAI_PRD_LABEL,",
     "                   RALPHAI_ISSUE_REPO,",
     "                   RALPHAI_ISSUE_COMMENT_PROGRESS",
     "",
@@ -1743,10 +1744,12 @@ async function runIssueTarget(
     backlogDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
-    issueLabel: deriveLabels(worktreeConfig.standaloneLabel.value).intake,
-    issueInProgressLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
-      .inProgress,
-    issueDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value).done,
+    standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value).intake,
+    standaloneInProgressLabel: deriveLabels(
+      worktreeConfig.standaloneLabel.value,
+    ).inProgress,
+    standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
+      .done,
     issueRepo: worktreeConfig.issueRepo.value || repo,
     issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
     issueNumber,
@@ -1911,10 +1914,12 @@ async function runPrdIssueTarget(
       backlogDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      issueLabel: worktreeConfig.subissueLabel.value,
-      issueInProgressLabel: deriveLabels(worktreeConfig.subissueLabel.value)
-        .inProgress,
-      issueDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value).done,
+      standaloneLabel: worktreeConfig.subissueLabel.value,
+      standaloneInProgressLabel: deriveLabels(
+        worktreeConfig.subissueLabel.value,
+      ).inProgress,
+      standaloneDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+        .done,
       issueRepo: worktreeConfig.issueRepo.value || repo,
       issueCommentProgress:
         worktreeConfig.issueCommentProgress.value === "true",
@@ -2468,10 +2473,10 @@ async function runRalphaiInManagedWorktree(
               backlogDir,
               cwd,
               issueSource: resolvedIssueSource,
-              issueLabel: resolvedIssueLabel,
-              issueInProgressLabel: resolvedIssueInProgressLabel,
-              issueDoneLabel: resolvedIssueDoneLabel,
-              issueStuckLabel: resolvedIssueStuckLabel,
+              standaloneLabel: resolvedIssueLabel,
+              standaloneInProgressLabel: resolvedIssueInProgressLabel,
+              standaloneDoneLabel: resolvedIssueDoneLabel,
+              standaloneStuckLabel: resolvedIssueStuckLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,

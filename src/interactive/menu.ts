@@ -68,7 +68,7 @@ export interface MenuContext {
   /** Resolved config values needed by GitHub actions. */
   githubConfig?: {
     cwd: string;
-    issueLabel: string;
+    standaloneLabel: string;
     issueRepo: string;
     issuePrdLabel?: string;
   };
@@ -345,7 +345,7 @@ async function dispatchAction(
 export async function runInteractive(cwd: string): Promise<void> {
   // Resolve config once for the session to check GitHub issue source
   let hasGitHubIssues = false;
-  let issueLabel = DEFAULTS.standaloneLabel;
+  let standaloneLabel = DEFAULTS.standaloneLabel;
   let issuePrdLabel = DEFAULTS.prdLabel;
   let issueRepo = "";
   let resolvedConfig: ResolvedConfig | undefined;
@@ -357,7 +357,7 @@ export async function runInteractive(cwd: string): Promise<void> {
     });
     resolvedConfig = config;
     hasGitHubIssues = config.issueSource.value === "github";
-    issueLabel = config.standaloneLabel.value;
+    standaloneLabel = config.standaloneLabel.value;
     issuePrdLabel = config.prdLabel.value;
     issueRepo = config.issueRepo.value;
   } catch {
@@ -371,14 +371,14 @@ export async function runInteractive(cwd: string): Promise<void> {
     const regularPeek = peekGithubIssues({
       cwd,
       issueSource: "github",
-      issueLabel,
+      standaloneLabel,
       issueRepo,
       issuePrdLabel,
     });
     const prdPeek = peekPrdIssues({
       cwd,
       issueSource: "github",
-      issueLabel,
+      standaloneLabel,
       issueRepo,
       issuePrdLabel,
     });
@@ -390,7 +390,7 @@ export async function runInteractive(cwd: string): Promise<void> {
     hasGitHubIssues,
     githubIssueCount,
     githubConfig: hasGitHubIssues
-      ? { cwd, issueLabel, issueRepo, issuePrdLabel }
+      ? { cwd, standaloneLabel, issueRepo, issuePrdLabel }
       : undefined,
     resolvedConfig,
   };

@@ -406,7 +406,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     const peekOpts = {
       cwd,
       issueSource: config.issueSource.value,
-      issueLabel: config.standaloneLabel.value,
+      standaloneLabel: config.standaloneLabel.value,
       issueRepo: config.issueRepo.value,
       issuePrdLabel: config.prdLabel.value,
     };
@@ -544,10 +544,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const autoCommit = config.autoCommit.value === "true";
   const issueSource = config.issueSource.value;
   const standaloneLabels = deriveLabels(config.standaloneLabel.value);
-  const issueLabel = standaloneLabels.intake;
-  const issueInProgressLabel = standaloneLabels.inProgress;
-  const issueDoneLabel = standaloneLabels.done;
-  const issueStuckLabel = standaloneLabels.stuck;
+  const standaloneLabel = standaloneLabels.intake;
+  const standaloneInProgressLabel = standaloneLabels.inProgress;
+  const standaloneDoneLabel = standaloneLabels.done;
+  const standaloneStuckLabel = standaloneLabels.stuck;
   const prdLabels = deriveLabels(config.prdLabel.value);
   const issuePrdLabel = prdLabels.intake;
   const issuePrdInProgressLabel = prdLabels.inProgress;
@@ -612,10 +612,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           backlogDir: dirs.backlogDir,
           cwd,
           issueSource,
-          issueLabel,
-          issueInProgressLabel,
-          issueDoneLabel,
-          issueStuckLabel,
+          standaloneLabel,
+          standaloneInProgressLabel,
+          standaloneDoneLabel,
+          standaloneStuckLabel,
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
@@ -915,7 +915,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           updateReceiptOutcome(receiptFile, "stuck");
 
           // Swap in-progress → stuck label on linked GitHub issue
-          if (issueFm.source === "github" && issueFm.issue && issueStuckLabel) {
+          if (
+            issueFm.source === "github" &&
+            issueFm.issue &&
+            standaloneStuckLabel
+          ) {
             let repo = issueRepo || null;
             if (!repo && issueFm.issueUrl) {
               const m = issueFm.issueUrl.match(
@@ -926,8 +930,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             if (repo) {
               transitionStuck(
                 { number: issueFm.issue, repo },
-                issueInProgressLabel,
-                issueStuckLabel,
+                standaloneInProgressLabel,
+                standaloneStuckLabel,
                 cwd,
               );
             }
@@ -1029,8 +1033,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         archiveRun({
           wipFiles: [planFile],
           archiveDir: dirs.archiveDir,
-          issueInProgressLabel,
-          issueDoneLabel,
+          standaloneInProgressLabel,
+          standaloneDoneLabel,
           cwd,
         });
 

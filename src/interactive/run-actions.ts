@@ -299,7 +299,7 @@ export async function handlePickFromGitHub(
 
   if (result.issues.length === 0) {
     clack.log.warning(
-      `No issues labeled '${listOptions.issueLabel}' found in ${result.repo}.`,
+      `No issues labeled '${listOptions.standaloneLabel}' found in ${result.repo}.`,
     );
     return "continue";
   }
@@ -463,7 +463,7 @@ async function selectTarget(
     }
     if (result.issues.length === 0) {
       clack.log.warning(
-        `No issues labeled '${ctx.githubConfig.issueLabel}' found in ${result.repo}.`,
+        `No issues labeled '${ctx.githubConfig.standaloneLabel}' found in ${result.repo}.`,
       );
       return null;
     }

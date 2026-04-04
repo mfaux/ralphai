@@ -71,8 +71,8 @@ export interface ContinuousPrOptions {
 export interface ArchiveRunOptions {
   wipFiles: string[];
   archiveDir: string;
-  issueInProgressLabel: string;
-  issueDoneLabel: string;
+  standaloneInProgressLabel: string;
+  standaloneDoneLabel: string;
   cwd: string;
 }
 
@@ -123,8 +123,13 @@ export function archiveRun(options: ArchiveRunOptions): {
   archived: boolean;
   message: string;
 } {
-  const { wipFiles, archiveDir, issueInProgressLabel, issueDoneLabel, cwd } =
-    options;
+  const {
+    wipFiles,
+    archiveDir,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneDoneLabel: issueDoneLabel,
+    cwd,
+  } = options;
   if (wipFiles.length === 0) {
     return { archived: false, message: "No WIP files to archive" };
   }

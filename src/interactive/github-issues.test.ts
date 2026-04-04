@@ -44,7 +44,7 @@ const { listGithubIssues } = await import("./github-issues.ts");
 function makeIssue(
   number: number,
   title: string,
-  labels: string[] = ["ralphai"],
+  labels: string[] = ["ralphai-standalone"],
 ) {
   return {
     number,
@@ -102,7 +102,7 @@ function mockGhWithIssues(
     if (
       typeof cmd === "string" &&
       cmd.includes("gh issue list") &&
-      cmd.includes('"ralphai"')
+      cmd.includes('"ralphai-standalone"')
     ) {
       return regularJson;
     }
@@ -138,7 +138,7 @@ function mockGhApiFails(): void {
 
 const defaultOptions = {
   cwd: "/tmp",
-  issueLabel: "ralphai",
+  standaloneLabel: "ralphai-standalone",
   issueRepo: "owner/repo",
 };
 
@@ -245,7 +245,10 @@ describe("listGithubIssues", () => {
 
   it("deduplicates issues that appear in both queries", () => {
     // Issue #10 has both ralphai and ralphai-prd labels
-    const issue10 = makeIssue(10, "Auth Redesign", ["ralphai", "ralphai-prd"]);
+    const issue10 = makeIssue(10, "Auth Redesign", [
+      "ralphai-standalone",
+      "ralphai-prd",
+    ]);
     const regular = [issue10, makeIssue(14, "Fix bug")];
     const prd = [issue10];
     const subIssues = [makeSubIssue(11, "Add login")];
@@ -308,7 +311,7 @@ describe("listGithubIssues", () => {
       if (
         typeof cmd === "string" &&
         cmd.includes("gh issue list") &&
-        cmd.includes('"ralphai"')
+        cmd.includes('"ralphai-standalone"')
       ) {
         return JSON.stringify([makeIssue(14, "Fix bug")]);
       }
@@ -366,7 +369,7 @@ describe("listGithubIssues", () => {
       if (
         typeof cmd === "string" &&
         cmd.includes("gh issue list") &&
-        cmd.includes('"ralphai"')
+        cmd.includes('"ralphai-standalone"')
       ) {
         return "[]";
       }
@@ -480,7 +483,7 @@ describe("listGithubIssues — custom issuePrdLabel", () => {
       if (
         typeof cmd === "string" &&
         cmd.includes("gh issue list") &&
-        cmd.includes('"ralphai"')
+        cmd.includes('"ralphai-standalone"')
       ) {
         return "[]";
       }
@@ -503,7 +506,7 @@ describe("listGithubIssues — custom issuePrdLabel", () => {
   it("does not classify issues with default label as PRD when custom label is configured", () => {
     // Issue has default "ralphai-prd" label, but custom label is configured
     const regularIssues = [
-      makeIssue(10, "Has default label", ["ralphai", "ralphai-prd"]),
+      makeIssue(10, "Has default label", ["ralphai-standalone", "ralphai-prd"]),
     ];
 
     mockExecSync.mockImplementation((cmd: string) => {
@@ -526,7 +529,7 @@ describe("listGithubIssues — custom issuePrdLabel", () => {
       if (
         typeof cmd === "string" &&
         cmd.includes("gh issue list") &&
-        cmd.includes('"ralphai"')
+        cmd.includes('"ralphai-standalone"')
       ) {
         return JSON.stringify(regularIssues);
       }

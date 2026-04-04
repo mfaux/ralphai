@@ -23,14 +23,14 @@ export interface PullIssueOptions {
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
   issueSource: string;
-  /** Label to filter open issues by (e.g. "ralphai"). */
-  issueLabel: string;
-  /** Label applied when an issue is picked up (e.g. "ralphai:in-progress"). */
-  issueInProgressLabel: string;
-  /** Label applied when an issue is completed (e.g. "ralphai:done"). */
-  issueDoneLabel: string;
-  /** Label applied when an issue is stuck (e.g. "ralphai:stuck"). */
-  issueStuckLabel?: string;
+  /** Label to filter open issues by (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
+  /** Label applied when an issue is picked up (e.g. "ralphai-standalone:in-progress"). */
+  standaloneInProgressLabel: string;
+  /** Label applied when an issue is completed (e.g. "ralphai-standalone:done"). */
+  standaloneDoneLabel: string;
+  /** Label applied when an issue is stuck (e.g. "ralphai-standalone:stuck"). */
+  standaloneStuckLabel?: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
@@ -57,8 +57,8 @@ export interface PeekIssueOptions {
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
   issueSource: string;
-  /** Label to filter open issues by (e.g. "ralphai"). */
-  issueLabel: string;
+  /** Label to filter open issues by (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
@@ -271,7 +271,7 @@ export function buildIssuePlanContent(
  * files, edits labels, or posts comments.
  */
 export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
-  const { cwd, issueSource, issueLabel, issueRepo } = options;
+  const { cwd, issueSource, standaloneLabel: issueLabel, issueRepo } = options;
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
@@ -486,8 +486,8 @@ interface FetchAndWriteOptions {
   issueNumber: string;
   backlogDir: string;
   cwd: string;
-  issueInProgressLabel: string;
-  issueLabel: string;
+  standaloneInProgressLabel: string;
+  standaloneLabel: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
 }
@@ -503,8 +503,8 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
     issueNumber,
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
   } = opts;
 
@@ -590,8 +590,8 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     backlogDir,
     cwd,
     issueSource,
-    issueLabel,
-    issueInProgressLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
   } = options;
@@ -636,8 +636,8 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     issueNumber: number,
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
@@ -661,9 +661,9 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     backlogDir,
     cwd,
     issueSource,
-    issueLabel,
-    issueInProgressLabel,
-    issueDoneLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneDoneLabel: issueDoneLabel,
     issueRepo,
     issueCommentProgress,
   } = options;
@@ -758,7 +758,8 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
   const skipLabels = [issueInProgressLabel, issueDoneLabel];
-  if (options.issueStuckLabel) skipLabels.push(options.issueStuckLabel);
+  if (options.standaloneStuckLabel)
+    skipLabels.push(options.standaloneStuckLabel);
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(
@@ -799,8 +800,8 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueNumber: String(subIssueNumber),
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
@@ -1000,8 +1001,8 @@ export function pullGithubIssueByNumber(
     backlogDir,
     cwd,
     issueSource,
-    issueLabel,
-    issueInProgressLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
     issueNumber,
@@ -1032,8 +1033,8 @@ export function pullGithubIssueByNumber(
     issueNumber: String(issueNumber),
     backlogDir,
     cwd,
-    issueInProgressLabel,
-    issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });

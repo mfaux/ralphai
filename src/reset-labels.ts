@@ -20,12 +20,12 @@ import { transitionReset } from "./label-lifecycle.ts";
 export interface RestoreIssueLabelsOptions {
   /** Path to the plan .md file (must still exist on disk). */
   planPath: string;
-  /** The intake label to restore (e.g. "ralphai"). */
-  issueLabel: string;
-  /** The in-progress label to remove (e.g. "ralphai:in-progress"). */
-  issueInProgressLabel: string;
-  /** The stuck label to remove (e.g. "ralphai:stuck"). */
-  issueStuckLabel: string;
+  /** The intake label to restore (e.g. "ralphai-standalone"). */
+  standaloneLabel: string;
+  /** The in-progress label to remove (e.g. "ralphai-standalone:in-progress"). */
+  standaloneInProgressLabel: string;
+  /** The stuck label to remove (e.g. "ralphai-standalone:stuck"). */
+  standaloneStuckLabel: string;
   /** Configured issue repo (owner/repo), or "" to auto-detect from issue-url. */
   issueRepo: string;
   /** Working directory for gh CLI calls. */
@@ -87,9 +87,9 @@ export function restoreIssueLabels(
 ): RestoreIssueLabelsResult {
   const {
     planPath,
-    issueLabel,
-    issueInProgressLabel,
-    issueStuckLabel,
+    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: issueInProgressLabel,
+    standaloneStuckLabel: issueStuckLabel,
     issueRepo,
     cwd,
   } = options;
