@@ -57,9 +57,6 @@ export interface WizardAnswers {
   feedbackCommands: string;
   autoCommit?: boolean;
   issueSource: "none" | "github";
-  standaloneLabel?: string;
-  subissueLabel?: string;
-  prdLabel?: string;
   updateAgentsMd?: boolean;
   createSamplePlan?: boolean;
   workspaces?: Record<string, { feedbackCommands: string[] }>;

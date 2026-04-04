@@ -259,51 +259,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   }
 
   const enableIssues = disableIssues;
-  let standaloneLabel: string | undefined;
-  let subissueLabel: string | undefined;
-  let prdLabel: string | undefined;
-
-  if (enableIssues) {
-    // Label configuration prompts
-    const standaloneLabelAnswer = await clack.text({
-      message: "Standalone issue label (base name):",
-      initialValue: DEFAULTS.standaloneLabel,
-      validate: (value) => {
-        if (!value.trim()) return "Label cannot be empty";
-      },
-    });
-    if (clack.isCancel(standaloneLabelAnswer)) {
-      clack.cancel("Setup cancelled.");
-      return null;
-    }
-    standaloneLabel = standaloneLabelAnswer;
-
-    const subissueLabelAnswer = await clack.text({
-      message: "Sub-issue label (base name):",
-      initialValue: DEFAULTS.subissueLabel,
-      validate: (value) => {
-        if (!value.trim()) return "Label cannot be empty";
-      },
-    });
-    if (clack.isCancel(subissueLabelAnswer)) {
-      clack.cancel("Setup cancelled.");
-      return null;
-    }
-    subissueLabel = subissueLabelAnswer;
-
-    const prdLabelAnswer = await clack.text({
-      message: "PRD label (base name):",
-      initialValue: DEFAULTS.prdLabel,
-      validate: (value) => {
-        if (!value.trim()) return "Label cannot be empty";
-      },
-    });
-    if (clack.isCancel(prdLabelAnswer)) {
-      clack.cancel("Setup cancelled.");
-      return null;
-    }
-    prdLabel = prdLabelAnswer;
-  }
 
   // 7. Update AGENTS.md
   const agentsMdPath = join(cwd, "AGENTS.md");
@@ -347,9 +302,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
-    standaloneLabel,
-    subissueLabel,
-    prdLabel,
     updateAgentsMd,
     createSamplePlan,
   };
@@ -551,9 +503,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
-    standaloneLabel: answers.standaloneLabel ?? DEFAULTS.standaloneLabel,
-    subissueLabel: answers.subissueLabel ?? DEFAULTS.subissueLabel,
-    prdLabel: answers.prdLabel ?? DEFAULTS.prdLabel,
+    standaloneLabel: DEFAULTS.standaloneLabel,
+    subissueLabel: DEFAULTS.subissueLabel,
+    prdLabel: DEFAULTS.prdLabel,
     issueRepo: "",
     issueCommentProgress: true,
   };
@@ -617,11 +569,20 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   );
   if (labelResult) {
     if (labelResult.success) {
-      const allLabels = labelDefs(initLabelNames).map((l) => `"${l.name}"`);
-      const labelList =
-        allLabels.slice(0, -1).join(", ") + ", and " + allLabels.at(-1);
       console.log(
-        `  GitHub labels              ${DIM}Created ${labelList} labels${RESET}`,
+        `  GitHub labels              ${DIM}Created 12 labels across 3 families:${RESET}`,
+      );
+      console.log(
+        `    ${TEXT}${configObj.standaloneLabel}${RESET}       ${DIM}Intake label for standalone issues${RESET}`,
+      );
+      console.log(
+        `    ${TEXT}${configObj.subissueLabel}${RESET}         ${DIM}Intake label for PRD sub-issues${RESET}`,
+      );
+      console.log(
+        `    ${TEXT}${configObj.prdLabel}${RESET}              ${DIM}Intake label for PRD parent issues${RESET}`,
+      );
+      console.log(
+        `                             ${DIM}Each has :in-progress, :done, and :stuck variants${RESET}`,
       );
     } else {
       console.log();
@@ -660,7 +621,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "${answers.standaloneLabel ?? DEFAULTS.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${configObj.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
   }
   console.log();
