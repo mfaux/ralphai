@@ -54,6 +54,7 @@ function defaultOptions(dir: string): PullIssueOptions {
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueDoneLabel: "ralphai:done",
+    issueStuckLabel: "ralphai:stuck",
     issueRepo: "owner/repo",
     issueCommentProgress: false,
   };
@@ -320,6 +321,48 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
     expect(result.message).toContain(
       "all open sub-issues already in-progress or done",
     );
+  });
+
+  it("skips sub-issues with the stuck label", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "Stuck", state: "open" },
+      { number: 202, title: "Available", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has stuck label — should be skipped
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "ralphai:stuck",
+      // #202 has no skip labels
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Available",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Available body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
   });
 
   it("returns pulled:false when PRD has no open sub-issues", () => {

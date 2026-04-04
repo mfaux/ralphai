@@ -352,6 +352,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_LABEL`             | `issueLabel`           |
 | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | `issueInProgressLabel` |
 | `RALPHAI_ISSUE_DONE_LABEL`        | `issueDoneLabel`       |
+| `RALPHAI_ISSUE_STUCK_LABEL`       | `issueStuckLabel`      |
 | `RALPHAI_ISSUE_PRD_LABEL`         | `issuePrdLabel`        |
 | `RALPHAI_ISSUE_REPO`              | `issueRepo`            |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | `issueCommentProgress` |
@@ -370,6 +371,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `issueLabel`           | `"ralphai"`          | `RALPHAI_ISSUE_LABEL`             | GitHub label for intake issues                                       |
 | `issueInProgressLabel` | `"ralphai-progress"` | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | GitHub label applied when a plan is in progress                      |
 | `issueDoneLabel`       | `"ralphai-done"`     | `RALPHAI_ISSUE_DONE_LABEL`        | GitHub label applied when a plan is completed                        |
+| `issueStuckLabel`      | `"ralphai:stuck"`    | `RALPHAI_ISSUE_STUCK_LABEL`       | GitHub label applied when a plan is stuck                            |
 | `issuePrdLabel`        | `"ralphai-prd"`      | `RALPHAI_ISSUE_PRD_LABEL`         | GitHub label identifying PRD issues                                  |
 | `issueRepo`            | _(auto-detected)_    | `RALPHAI_ISSUE_REPO`              | GitHub `owner/repo` for issue queries                                |
 | `issueCommentProgress` | `false`              | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | Post progress comments on GitHub issues                              |

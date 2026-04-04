@@ -25,6 +25,7 @@ export interface RalphaiConfig {
   issueLabel: string;
   issueInProgressLabel: string;
   issueDoneLabel: string;
+  issueStuckLabel: string;
   issuePrdLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
@@ -66,6 +67,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueLabel: "ralphai",
   issueInProgressLabel: "ralphai:in-progress",
   issueDoneLabel: "ralphai:done",
+  issueStuckLabel: "ralphai:stuck",
   issuePrdLabel: "ralphai-prd",
   issueRepo: "",
   issueCommentProgress: "true",
@@ -174,6 +176,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueLabel",
   "issueInProgressLabel",
   "issueDoneLabel",
+  "issueStuckLabel",
   "issuePrdLabel",
   "issueRepo",
   "issueCommentProgress",
@@ -312,6 +315,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueDoneLabel = v;
   }
 
+  // issueStuckLabel (string, non-empty)
+  if ("issueStuckLabel" in obj) {
+    const v = String(obj.issueStuckLabel || "");
+    if (v === "") err("'issueStuckLabel' must be a non-empty label name");
+    values.issueStuckLabel = v;
+  }
+
   // issuePrdLabel (string, non-empty)
   if ("issuePrdLabel" in obj) {
     const v = String(obj.issuePrdLabel || "");
@@ -434,6 +444,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_LABEL", "issueLabel"],
   ["RALPHAI_ISSUE_IN_PROGRESS_LABEL", "issueInProgressLabel"],
   ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
+  ["RALPHAI_ISSUE_STUCK_LABEL", "issueStuckLabel"],
   ["RALPHAI_ISSUE_PRD_LABEL", "issuePrdLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
@@ -509,6 +520,11 @@ export function applyEnvOverrides(
   // issueDoneLabel
   const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
   if (issueDoneLabel !== undefined) overrides.issueDoneLabel = issueDoneLabel;
+
+  // issueStuckLabel
+  const issueStuckLabel = get("RALPHAI_ISSUE_STUCK_LABEL");
+  if (issueStuckLabel !== undefined)
+    overrides.issueStuckLabel = issueStuckLabel;
 
   // issuePrdLabel
   const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");

@@ -27,6 +27,8 @@ export interface PullIssueOptions {
   issueInProgressLabel: string;
   /** Label applied when an issue is completed (e.g. "ralphai:done"). */
   issueDoneLabel: string;
+  /** Label applied when an issue is stuck (e.g. "ralphai:stuck"). */
+  issueStuckLabel?: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
@@ -751,6 +753,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
   const skipLabels = [issueInProgressLabel, issueDoneLabel];
+  if (options.issueStuckLabel) skipLabels.push(options.issueStuckLabel);
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(

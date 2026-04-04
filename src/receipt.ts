@@ -155,6 +155,28 @@ export function updateReceiptPrUrl(receiptPath: string, prUrl: string): void {
   }
 }
 
+/**
+ * Write `outcome=<value>` to an existing receipt file.
+ *
+ * Appends the field if not present, or updates it if it already exists.
+ * No-op if the receipt file does not exist or the outcome is empty.
+ */
+export function updateReceiptOutcome(
+  receiptPath: string,
+  outcome: string,
+): void {
+  if (!outcome) return;
+  if (!existsSync(receiptPath)) return;
+
+  const content = readFileSync(receiptPath, "utf-8");
+  if (/^outcome=/m.test(content)) {
+    const updated = content.replace(/^outcome=.*/m, `outcome=${outcome}`);
+    writeFileSync(receiptPath, updated);
+  } else {
+    writeFileSync(receiptPath, content + `outcome=${outcome}\n`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Branch-based receipt lookup
 // ---------------------------------------------------------------------------

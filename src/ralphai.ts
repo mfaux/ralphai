@@ -370,6 +370,7 @@ interface LabelNames {
   intake: string;
   inProgress: string;
   done: string;
+  stuck: string;
   prd: string;
 }
 
@@ -384,7 +385,7 @@ function ghLabelCreateCmd(
   return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
 }
 
-/** The four label definitions with their descriptions and colors. */
+/** The five label definitions with their descriptions and colors. */
 function labelDefs(names: LabelNames) {
   return [
     {
@@ -403,6 +404,11 @@ function labelDefs(names: LabelNames) {
       color: "0e8a16",
     },
     {
+      name: names.stuck,
+      description: "Ralphai is stuck on this issue",
+      color: "d93f0b",
+    },
+    {
       name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
@@ -414,8 +420,8 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates four labels: intake, in-progress, done, and prd. All four use
- * the default label names from DEFAULTS.
+ * Creates five labels: intake, in-progress, done, stuck, and prd. All five
+ * use the default label names from DEFAULTS.
  */
 function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
@@ -489,6 +495,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueInProgressLabel:
       answers.issueInProgressLabel ?? DEFAULTS.issueInProgressLabel,
     issueDoneLabel: answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel,
+    issueStuckLabel: DEFAULTS.issueStuckLabel,
     issueRepo: "",
     issueCommentProgress: true,
     issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
@@ -526,6 +533,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     intake: configObj.issueLabel as string,
     inProgress: configObj.issueInProgressLabel as string,
     done: configObj.issueDoneLabel as string,
+    stuck: configObj.issueStuckLabel as string,
     prd: configObj.issuePrdLabel as string,
   };
   let labelResult: LabelResult | null = null;
@@ -693,6 +701,7 @@ async function runRalphaiReset(
   // Best-effort: if config resolution fails we skip label restoration.
   let issueLabel = "";
   let issueInProgressLabel = "";
+  let issueStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -702,6 +711,7 @@ async function runRalphaiReset(
     });
     issueLabel = cfgResult.config.issueLabel.value;
     issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+    issueStuckLabel = cfgResult.config.issueStuckLabel.value;
     issueRepo = cfgResult.config.issueRepo.value;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
@@ -720,6 +730,7 @@ async function runRalphaiReset(
         planPath: planFile,
         issueLabel,
         issueInProgressLabel,
+        issueStuckLabel,
         issueRepo,
         cwd,
       });
@@ -833,12 +844,14 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
       });
       const issueLabel = cfgResult.config.issueLabel.value;
       const issueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
+      const issueStuckLabel = cfgResult.config.issueStuckLabel.value;
       const issueRepo = cfgResult.config.issueRepo.value;
       if (issueLabel && issueInProgressLabel) {
         const labelResult = restoreIssueLabels({
           planPath: planFile,
           issueLabel,
           issueInProgressLabel,
+          issueStuckLabel,
           issueRepo,
           cwd,
         });
@@ -2067,6 +2080,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueLabel = DEFAULTS.issueLabel;
   let resolvedIssueInProgressLabel = DEFAULTS.issueInProgressLabel;
   let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
+  let resolvedIssueStuckLabel = DEFAULTS.issueStuckLabel;
   let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
@@ -2083,6 +2097,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueLabel = cfgResult.config.issueLabel.value;
     resolvedIssueInProgressLabel = cfgResult.config.issueInProgressLabel.value;
     resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
+    resolvedIssueStuckLabel = cfgResult.config.issueStuckLabel.value;
     resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
@@ -2387,6 +2402,7 @@ async function runRalphaiInManagedWorktree(
               issueLabel: resolvedIssueLabel,
               issueInProgressLabel: resolvedIssueInProgressLabel,
               issueDoneLabel: resolvedIssueDoneLabel,
+              issueStuckLabel: resolvedIssueStuckLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
@@ -2570,6 +2586,7 @@ async function runRalphaiRunner(
         intake: config.issueLabel.value,
         inProgress: config.issueInProgressLabel.value,
         done: config.issueDoneLabel.value,
+        stuck: config.issueStuckLabel.value,
         prd: config.issuePrdLabel.value,
       });
     } catch {

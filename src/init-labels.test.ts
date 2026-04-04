@@ -16,7 +16,7 @@ describe("init label creation", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // Source-level: labelDefs includes all four labels
+  // Source-level: labelDefs includes all five labels
   // ---------------------------------------------------------------------------
 
   it("labelDefs includes the intake label with color 7057ff", () => {
@@ -34,6 +34,13 @@ describe("init label creation", () => {
   it("labelDefs includes the done label with color 0e8a16", () => {
     expect(ralphaiSrc).toContain('description: "Ralphai finished this issue"');
     expect(ralphaiSrc).toContain('color: "0e8a16"');
+  });
+
+  it("labelDefs includes the stuck label with color d93f0b", () => {
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai is stuck on this issue"',
+    );
+    expect(ralphaiSrc).toContain('color: "d93f0b"');
   });
 
   it("labelDefs includes the PRD label entry using names.prd with color 1d76db", () => {
@@ -80,6 +87,7 @@ describe("init label creation", () => {
       "inProgress: configObj.issueInProgressLabel as string",
     );
     expect(ralphaiSrc).toContain("done: configObj.issueDoneLabel as string");
+    expect(ralphaiSrc).toContain("stuck: configObj.issueStuckLabel as string");
     expect(ralphaiSrc).toContain("prd: configObj.issuePrdLabel as string");
   });
 
@@ -115,6 +123,7 @@ describe("init label creation", () => {
       "inProgress: config.issueInProgressLabel.value",
     );
     expect(ralphaiSrc).toContain("done: config.issueDoneLabel.value");
+    expect(ralphaiSrc).toContain("stuck: config.issueStuckLabel.value");
     expect(ralphaiSrc).toContain("prd: config.issuePrdLabel.value");
   });
 
@@ -129,10 +138,11 @@ describe("init label creation", () => {
   // Source-level: init config includes issueDoneLabel
   // ---------------------------------------------------------------------------
 
-  it("scaffold config includes issueDoneLabel and issuePrdLabel", () => {
+  it("scaffold config includes issueDoneLabel, issueStuckLabel, and issuePrdLabel", () => {
     expect(ralphaiSrc).toContain(
       "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
     );
+    expect(ralphaiSrc).toContain("DEFAULTS.issueStuckLabel");
     expect(ralphaiSrc).toContain(
       "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
     );

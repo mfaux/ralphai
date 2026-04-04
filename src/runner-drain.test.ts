@@ -70,6 +70,7 @@ function makeResolvedConfig(
     issueLabel: "ralphai",
     issueInProgressLabel: "ralphai:in-progress",
     issueDoneLabel: "ralphai:done",
+    issueStuckLabel: "ralphai:stuck",
     issuePrdLabel: "ralphai-prd",
     issueRepo: "",
     issueCommentProgress: "true",
