@@ -127,7 +127,7 @@ When `ralphai run <number>` treats your PRD as a standalone issue, the issue is 
 
 **Check:**
 
-1. The issue must have the configured PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`).
+1. The issue must have the configured PRD label (`ralphai-prd` by default, configurable via `prdLabel`).
 2. The issue must have at least one **open** sub-issue. If all sub-issues are closed, Ralphai reports "all sub-issues are already completed."
 3. Run `gh issue view <number> --json labels` to verify the label is present.
 4. If the label doesn't exist in your repo yet, `ralphai run --prd=<number>` auto-creates it. The positional `ralphai run <number>` form does not.

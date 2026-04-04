@@ -47,7 +47,7 @@ import {
   DEFAULTS,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
-import { deriveLabels } from "./labels.ts";
+import { deriveLabels, type DerivedLabels } from "./labels.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -354,13 +354,9 @@ interface LabelResult {
 }
 
 interface LabelNames {
-  intake: string;
-  inProgress: string;
-  done: string;
-  stuck: string;
-  prd: string;
-  prdInProgress: string;
-  prdDone: string;
+  standalone: DerivedLabels;
+  subissue: DerivedLabels;
+  prd: DerivedLabels;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -374,43 +370,86 @@ function ghLabelCreateCmd(
   return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
 }
 
-/** The label definitions with their descriptions and colors. */
+/** The label definitions with their descriptions and colors.
+ *
+ * Produces 12 labels: 3 families (standalone, subissue, prd) × 4 states
+ * (intake, in-progress, done, stuck). Each family has a distinct intake
+ * color; state colors (yellow, green, red) are shared across families.
+ */
 function labelDefs(names: LabelNames) {
+  // Intake colors — one per family
+  const STANDALONE_INTAKE_COLOR = "7057ff"; // purple
+  const SUBISSUE_INTAKE_COLOR = "c5def5"; // light blue
+  const PRD_INTAKE_COLOR = "1d76db"; // blue
+
+  // Shared state colors
+  const IN_PROGRESS_COLOR = "fbca04"; // yellow
+  const DONE_COLOR = "0e8a16"; // green
+  const STUCK_COLOR = "d93f0b"; // red
+
   return [
+    // Standalone family
     {
-      name: names.intake,
-      description: "Ralphai picks up this issue",
-      color: "7057ff",
+      name: names.standalone.intake,
+      description: "Ralphai picks up this standalone issue",
+      color: STANDALONE_INTAKE_COLOR,
     },
     {
-      name: names.inProgress,
-      description: "Ralphai is working on this issue",
-      color: "fbca04",
+      name: names.standalone.inProgress,
+      description: "Ralphai is working on this standalone issue",
+      color: IN_PROGRESS_COLOR,
     },
     {
-      name: names.done,
-      description: "Ralphai finished this issue",
-      color: "0e8a16",
+      name: names.standalone.done,
+      description: "Ralphai finished this standalone issue",
+      color: DONE_COLOR,
     },
     {
-      name: names.stuck,
-      description: "Ralphai is stuck on this issue",
-      color: "d93f0b",
+      name: names.standalone.stuck,
+      description: "Ralphai is stuck on this standalone issue",
+      color: STUCK_COLOR,
+    },
+    // Subissue family
+    {
+      name: names.subissue.intake,
+      description: "Ralphai picks up this PRD sub-issue",
+      color: SUBISSUE_INTAKE_COLOR,
     },
     {
-      name: names.prd,
+      name: names.subissue.inProgress,
+      description: "Ralphai is working on this PRD sub-issue",
+      color: IN_PROGRESS_COLOR,
+    },
+    {
+      name: names.subissue.done,
+      description: "Ralphai finished this PRD sub-issue",
+      color: DONE_COLOR,
+    },
+    {
+      name: names.subissue.stuck,
+      description: "Ralphai is stuck on this PRD sub-issue",
+      color: STUCK_COLOR,
+    },
+    // PRD family
+    {
+      name: names.prd.intake,
       description: "Ralphai PRD — groups sub-issues for drain runs",
-      color: "1d76db",
+      color: PRD_INTAKE_COLOR,
     },
     {
-      name: names.prdInProgress,
+      name: names.prd.inProgress,
       description: "Ralphai is processing this PRD's sub-issues",
-      color: "fbca04",
+      color: IN_PROGRESS_COLOR,
     },
     {
-      name: names.prdDone,
+      name: names.prd.done,
       description: "Ralphai finished all sub-issues for this PRD",
-      color: "0e8a16",
+      color: DONE_COLOR,
+    },
+    {
+      name: names.prd.stuck,
+      description: "Ralphai is stuck processing this PRD",
+      color: STUCK_COLOR,
     },
   ];
 }
@@ -419,8 +458,7 @@ function labelDefs(names: LabelNames) {
  * Create issue-tracking labels on the GitHub repo. Uses `gh label create
  * --force` so it is idempotent. Never throws — label creation is best-effort.
  *
- * Creates five labels: intake, in-progress, done, stuck, and prd. All five
- * use the default label names from DEFAULTS.
+ * Creates 12 labels: 3 families (standalone, subissue, prd) × 4 states.
  */
 function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
   try {
@@ -525,16 +563,10 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   }
 
   // Create GitHub labels if issues integration is enabled
-  const standaloneLabels = deriveLabels(configObj.standaloneLabel as string);
-  const prdLabels = deriveLabels(configObj.prdLabel as string);
   const initLabelNames: LabelNames = {
-    intake: standaloneLabels.intake,
-    inProgress: standaloneLabels.inProgress,
-    done: standaloneLabels.done,
-    stuck: standaloneLabels.stuck,
-    prd: prdLabels.intake,
-    prdInProgress: prdLabels.inProgress,
-    prdDone: prdLabels.done,
+    standalone: deriveLabels(configObj.standaloneLabel as string),
+    subissue: deriveLabels(configObj.subissueLabel as string),
+    prd: deriveLabels(configObj.prdLabel as string),
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -2683,27 +2715,10 @@ async function runRalphaiRunner(
   // upgrading users don't need to re-run `ralphai init`. Skipped in dry-run.
   if (!isDryRun && config.issueSource.value === "github") {
     try {
-      const standaloneLabels = deriveLabels(config.standaloneLabel.value);
-      const subissueLabels = deriveLabels(config.subissueLabel.value);
-      const prdLabels = deriveLabels(config.prdLabel.value);
       ensureGitHubLabels(cwd, {
-        intake: standaloneLabels.intake,
-        inProgress: standaloneLabels.inProgress,
-        done: standaloneLabels.done,
-        stuck: standaloneLabels.stuck,
-        prd: prdLabels.intake,
-        prdInProgress: prdLabels.inProgress,
-        prdDone: prdLabels.done,
-      });
-      // Also ensure subissue labels exist
-      ensureGitHubLabels(cwd, {
-        intake: subissueLabels.intake,
-        inProgress: subissueLabels.inProgress,
-        done: subissueLabels.done,
-        stuck: subissueLabels.stuck,
-        prd: prdLabels.intake,
-        prdInProgress: prdLabels.inProgress,
-        prdDone: prdLabels.done,
+        standalone: deriveLabels(config.standaloneLabel.value),
+        subissue: deriveLabels(config.subissueLabel.value),
+        prd: deriveLabels(config.prdLabel.value),
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

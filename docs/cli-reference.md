@@ -153,7 +153,7 @@ Issue tracking is configured via `config.json` or environment variables (see [Co
 
 #### PRDs (Product Requirements Documents)
 
-For multi-step features, create a GitHub issue labeled with the PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`) with sub-issues.
+For multi-step features, create a GitHub issue labeled with the PRD label (`ralphai-prd` by default, configurable via `prdLabel`) with sub-issues.
 
 ```bash
 ralphai run 42           # auto-detects PRD label, processes sub-issues sequentially
@@ -168,11 +168,11 @@ PRD behavior:
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
 - The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck checklists
 
-The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the configured PRD label (`ralphai-prd` by default, configurable via `issuePrdLabel`) and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
+The `ralphai run <number>` form auto-detects whether the issue is a PRD or standalone. If it has the configured PRD label (`ralphai-prd` by default, configurable via `prdLabel`) and open sub-issues, it runs in PRD mode. Otherwise it runs as a standalone issue.
 
 #### Standalone Issues
 
-Label issues with the configured intake label (`ralphai` by default). Each gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
+Label issues with the configured standalone intake label (`ralphai-standalone` by default). Each gets its own `ralphai/<slug>` branch and draft PR, the same as a local plan file.
 
 ## Clean
 
@@ -361,24 +361,20 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### Config Keys
 
-| Key                       | Default                     | Env Var                               | Description                                                          |
-| ------------------------- | --------------------------- | ------------------------------------- | -------------------------------------------------------------------- |
-| `agentCommand`            | _(none)_                    | `RALPHAI_AGENT_COMMAND`               | CLI command to invoke the coding agent                               |
-| `feedbackCommands`        | _(auto-detected)_           | `RALPHAI_FEEDBACK_COMMANDS`           | Comma-separated build/test/lint commands                             |
-| `baseBranch`              | `"main"`                    | `RALPHAI_BASE_BRANCH`                 | Base branch for worktree creation                                    |
-| `autoCommit`              | `false`                     | `RALPHAI_AUTO_COMMIT`                 | Enable auto-commit recovery snapshots                                |
-| `maxStuck`                | `3`                         | `RALPHAI_MAX_STUCK`                   | Consecutive no-commit iterations before abort                        |
-| `iterationTimeout`        | `0`                         | `RALPHAI_ITERATION_TIMEOUT`           | Per-agent-invocation timeout in seconds (0 = no timeout)             |
-| `issueSource`             | `"none"`                    | `RALPHAI_ISSUE_SOURCE`                | Issue source (`"github"` or `"none"`); `init` defaults to `"github"` |
-| `issueLabel`              | `"ralphai"`                 | `RALPHAI_ISSUE_LABEL`                 | GitHub label for intake issues                                       |
-| `issueInProgressLabel`    | `"ralphai-progress"`        | `RALPHAI_ISSUE_IN_PROGRESS_LABEL`     | GitHub label applied when a plan is in progress                      |
-| `issueDoneLabel`          | `"ralphai-done"`            | `RALPHAI_ISSUE_DONE_LABEL`            | GitHub label applied when a plan is completed                        |
-| `issueStuckLabel`         | `"ralphai:stuck"`           | `RALPHAI_ISSUE_STUCK_LABEL`           | GitHub label applied when a plan is stuck                            |
-| `issuePrdLabel`           | `"ralphai-prd"`             | `RALPHAI_ISSUE_PRD_LABEL`             | GitHub label identifying PRD issues                                  |
-| `issuePrdInProgressLabel` | `"ralphai-prd:in-progress"` | `RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL` | GitHub label applied to PRD parent when processing starts            |
-| `issuePrdDoneLabel`       | `"ralphai-prd:done"`        | `RALPHAI_ISSUE_PRD_DONE_LABEL`        | GitHub label applied to PRD parent when all sub-issues complete      |
-| `issueRepo`               | _(auto-detected)_           | `RALPHAI_ISSUE_REPO`                  | GitHub `owner/repo` for issue queries                                |
-| `issueCommentProgress`    | `false`                     | `RALPHAI_ISSUE_COMMENT_PROGRESS`      | Post progress comments on GitHub issues                              |
+| Key                    | Default                | Env Var                          | Description                                                          |
+| ---------------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| `agentCommand`         | _(none)_               | `RALPHAI_AGENT_COMMAND`          | CLI command to invoke the coding agent                               |
+| `feedbackCommands`     | _(auto-detected)_      | `RALPHAI_FEEDBACK_COMMANDS`      | Comma-separated build/test/lint commands                             |
+| `baseBranch`           | `"main"`               | `RALPHAI_BASE_BRANCH`            | Base branch for worktree creation                                    |
+| `autoCommit`           | `false`                | `RALPHAI_AUTO_COMMIT`            | Enable auto-commit recovery snapshots                                |
+| `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                        |
+| `iterationTimeout`     | `0`                    | `RALPHAI_ITERATION_TIMEOUT`      | Per-agent-invocation timeout in seconds (0 = no timeout)             |
+| `issueSource`          | `"none"`               | `RALPHAI_ISSUE_SOURCE`           | Issue source (`"github"` or `"none"`); `init` defaults to `"github"` |
+| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Base name for standalone issue labels (4 states derived)             |
+| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Base name for PRD sub-issue labels (4 states derived)                |
+| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Base name for PRD parent labels (4 states derived)                   |
+| `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                |
+| `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                              |
 
 ### Workspaces
 
