@@ -181,8 +181,14 @@ describe("init label creation", () => {
   // Source-level: success message lists all labels dynamically
   // ---------------------------------------------------------------------------
 
-  it("success message is built from labelDefs", () => {
-    expect(ralphaiSrc).toContain("const allLabels = labelDefs(initLabelNames)");
+  it("success message shows per-family label summary", () => {
+    expect(ralphaiSrc).toContain("Created 12 labels across 3 families:");
+    expect(ralphaiSrc).toContain("Intake label for standalone issues");
+    expect(ralphaiSrc).toContain("Intake label for PRD sub-issues");
+    expect(ralphaiSrc).toContain("Intake label for PRD parent issues");
+    expect(ralphaiSrc).toContain(
+      "Each has :in-progress, :done, and :stuck variants",
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -224,14 +230,10 @@ describe("init label creation", () => {
   // Source-level: init config uses 3 base label keys
   // ---------------------------------------------------------------------------
 
-  it("scaffold config includes standaloneLabel, subissueLabel, and prdLabel", () => {
-    expect(ralphaiSrc).toContain(
-      "answers.standaloneLabel ?? DEFAULTS.standaloneLabel",
-    );
-    expect(ralphaiSrc).toContain(
-      "answers.subissueLabel ?? DEFAULTS.subissueLabel",
-    );
-    expect(ralphaiSrc).toContain("answers.prdLabel ?? DEFAULTS.prdLabel");
+  it("scaffold config uses DEFAULTS directly for label values", () => {
+    expect(ralphaiSrc).toContain("standaloneLabel: DEFAULTS.standaloneLabel");
+    expect(ralphaiSrc).toContain("subissueLabel: DEFAULTS.subissueLabel");
+    expect(ralphaiSrc).toContain("prdLabel: DEFAULTS.prdLabel");
   });
 
   // ---------------------------------------------------------------------------
