@@ -62,6 +62,12 @@ import { type ResolvedConfig } from "./config.ts";
 // Types
 // ---------------------------------------------------------------------------
 
+/** Result returned from the runner after processing plans. */
+export interface RunnerResult {
+  /** Slugs of plans that got stuck during this run. */
+  stuckSlugs: string[];
+}
+
 /** Options passed from the CLI layer to the runner. */
 export interface RunnerOptions {
   /** Resolved config (all layers merged). */
@@ -515,7 +521,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
 /**
  * Run the Ralphai autonomous loop.
  */
-export async function runRunner(opts: RunnerOptions): Promise<void> {
+export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const {
     config,
     cwd,
@@ -552,7 +558,7 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // --- Dry-run mode ---
   if (dryRun) {
     runDryRun(opts, dirs);
-    return;
+    return { stuckSlugs: [] };
   }
 
   // --- Signal handling ---
@@ -1073,4 +1079,6 @@ export async function runRunner(opts: RunnerOptions): Promise<void> {
   // Clean up signal handlers
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);
+
+  return { stuckSlugs };
 }

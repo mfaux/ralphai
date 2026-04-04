@@ -37,7 +37,7 @@ import {
   detectSetupCommand,
 } from "./project-detection.ts";
 import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
-import { runRunner, type RunnerOptions } from "./runner.ts";
+import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
 import {
   resolveConfig,
   parseCLIArgs,
@@ -1906,7 +1906,7 @@ async function runPrdIssueTarget(
     };
 
     try {
-      await runRalphaiRunner(
+      const result = await runRalphaiRunner(
         worktreeRunOptions,
         resolvedWorktreeDir,
         {
@@ -1915,8 +1915,16 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
-      completedCount++;
-      completedSubIssues.push(subIssueNumber);
+      if (result.stuckSlugs.length > 0) {
+        // Runner returned normally but the sub-issue got stuck
+        stuckSubIssues.push(subIssueNumber);
+        console.log(
+          `Sub-issue #${subIssueNumber} got stuck — continuing to next.`,
+        );
+      } else {
+        completedCount++;
+        completedSubIssues.push(subIssueNumber);
+      }
     } catch (error) {
       // Runner may exit on stuck detection or other errors
       stuckSubIssues.push(subIssueNumber);
@@ -2498,14 +2506,14 @@ async function runRalphaiRunner(
   cwd: string,
   prdIssue?: PrdIssue,
   runnerFlags?: { skipPrCreation?: boolean },
-): Promise<void> {
+): Promise<RunnerResult> {
   const worktreeInfo = resolveWorktreeInfo(cwd);
   const runArgs = options.runArgs;
 
   // --- Handle --help ---
   if (runArgs.includes("--help") || runArgs.includes("-h")) {
     showRunHelp();
-    return;
+    return { stuckSlugs: [] };
   }
 
   // --- Reject unrecognized flags ---
@@ -2559,7 +2567,7 @@ async function runRalphaiRunner(
       workspaces: config.workspaces.value,
     });
     console.log(text);
-    return;
+    return { stuckSlugs: [] };
   }
 
   // Check that ralphai has been initialized (global config exists).
@@ -2652,5 +2660,5 @@ async function runRalphaiRunner(
     skipPrCreation: runnerFlags?.skipPrCreation,
   };
 
-  await runRunner(runnerOpts);
+  return await runRunner(runnerOpts);
 }

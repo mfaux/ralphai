@@ -85,7 +85,7 @@ function makeResolvedConfig(
 }
 
 /** Capture console.log output during an async function. */
-async function captureLogs(fn: () => Promise<void>): Promise<string> {
+async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   const logs: string[] = [];
   const origLog = console.log;
   console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
