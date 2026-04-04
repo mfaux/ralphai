@@ -21,27 +21,26 @@ describe("GitHub Issues integration", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("init --yes defaults issueSource to none in config", () => {
+  it("init --yes defaults issueSource to github in config", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
-    expect(parsed.issueSource).toBe("none");
+    expect(parsed.issueSource).toBe("github");
   });
 
-  it("init --yes includes issueSource as none in JSON config", () => {
+  it("init --yes includes issueSource as github in JSON config", () => {
     runCli(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
-    // issueSource should be "none" by default (all 17 keys are explicit)
-    expect(parsed.issueSource).toBe("none");
+    // issueSource should be "github" by default (all 17 keys are explicit)
+    expect(parsed.issueSource).toBe("github");
   });
 
-  it("init --yes output does not contain GitHub label info", () => {
+  it("init --yes output contains GitHub label info", () => {
     const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
-    expect(output).not.toContain("GitHub labels");
-    expect(output).not.toContain("Label a GitHub issue");
+    expect(output).toContain("Label a GitHub issue");
   });
 });
 

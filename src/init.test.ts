@@ -97,7 +97,7 @@ describe("init command", () => {
     expect(parsed.iterationTimeout).toBe(0);
 
     // Issue tracking defaults
-    expect(parsed.issueSource).toBe("none");
+    expect(parsed.issueSource).toBe("github");
     expect(parsed.issueLabel).toBe("ralphai");
     expect(parsed.issueInProgressLabel).toBe("ralphai:in-progress");
     expect(parsed.issueDoneLabel).toBe("ralphai:done");
