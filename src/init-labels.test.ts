@@ -58,6 +58,13 @@ describe("init label creation", () => {
     );
   });
 
+  it("labelDefs includes the PRD done label entry using names.prdDone with color 0e8a16", () => {
+    expect(ralphaiSrc).toContain("name: names.prdDone");
+    expect(ralphaiSrc).toContain(
+      'description: "Ralphai finished all sub-issues for this PRD"',
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // Source-level: ghLabelCreateCmd produces proper commands
   // ---------------------------------------------------------------------------
@@ -99,6 +106,9 @@ describe("init label creation", () => {
     expect(ralphaiSrc).toContain(
       "prdInProgress: configObj.issuePrdInProgressLabel as string",
     );
+    expect(ralphaiSrc).toContain(
+      "prdDone: configObj.issuePrdDoneLabel as string",
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -138,6 +148,7 @@ describe("init label creation", () => {
     expect(ralphaiSrc).toContain(
       "prdInProgress: config.issuePrdInProgressLabel.value",
     );
+    expect(ralphaiSrc).toContain("prdDone: config.issuePrdDoneLabel.value");
   });
 
   it("run-start label ensure is skipped in dry-run mode", () => {
@@ -151,7 +162,7 @@ describe("init label creation", () => {
   // Source-level: init config includes issueDoneLabel
   // ---------------------------------------------------------------------------
 
-  it("scaffold config includes issueDoneLabel, issueStuckLabel, issuePrdLabel, and issuePrdInProgressLabel", () => {
+  it("scaffold config includes issueDoneLabel, issueStuckLabel, issuePrdLabel, issuePrdInProgressLabel, and issuePrdDoneLabel", () => {
     expect(ralphaiSrc).toContain(
       "answers.issueDoneLabel ?? DEFAULTS.issueDoneLabel",
     );
@@ -160,6 +171,7 @@ describe("init label creation", () => {
       "answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel",
     );
     expect(ralphaiSrc).toContain("DEFAULTS.issuePrdInProgressLabel");
+    expect(ralphaiSrc).toContain("DEFAULTS.issuePrdDoneLabel");
   });
 
   // ---------------------------------------------------------------------------

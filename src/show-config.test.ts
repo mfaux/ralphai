@@ -147,6 +147,7 @@ describe("formatShowConfig", () => {
     expect(output).not.toContain("  issueStuckLabel");
     expect(output).not.toContain("  issuePrdLabel");
     expect(output).not.toContain("  issuePrdInProgressLabel");
+    expect(output).not.toContain("  issuePrdDoneLabel");
     expect(output).not.toContain("  issueRepo");
     expect(output).not.toContain("  issueCommentProgress");
   });
@@ -167,6 +168,9 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  issuePrdLabel      = ralphai-prd  (default)");
     expect(output).toContain(
       "  issuePrdInProgressLabel = ralphai-prd:in-progress  (default)",
+    );
+    expect(output).toContain(
+      "  issuePrdDoneLabel  = ralphai-prd:done  (default)",
     );
     expect(output).toContain(
       "  issueRepo          = <auto-detect>  (default (auto-detect))",

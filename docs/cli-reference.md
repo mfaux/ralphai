@@ -355,6 +355,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_STUCK_LABEL`           | `issueStuckLabel`         |
 | `RALPHAI_ISSUE_PRD_LABEL`             | `issuePrdLabel`           |
 | `RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL` | `issuePrdInProgressLabel` |
+| `RALPHAI_ISSUE_PRD_DONE_LABEL`        | `issuePrdDoneLabel`       |
 | `RALPHAI_ISSUE_REPO`                  | `issueRepo`               |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`      | `issueCommentProgress`    |
 
@@ -375,6 +376,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `issueStuckLabel`         | `"ralphai:stuck"`           | `RALPHAI_ISSUE_STUCK_LABEL`           | GitHub label applied when a plan is stuck                            |
 | `issuePrdLabel`           | `"ralphai-prd"`             | `RALPHAI_ISSUE_PRD_LABEL`             | GitHub label identifying PRD issues                                  |
 | `issuePrdInProgressLabel` | `"ralphai-prd:in-progress"` | `RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL` | GitHub label applied to PRD parent when processing starts            |
+| `issuePrdDoneLabel`       | `"ralphai-prd:done"`        | `RALPHAI_ISSUE_PRD_DONE_LABEL`        | GitHub label applied to PRD parent when all sub-issues complete      |
 | `issueRepo`               | _(auto-detected)_           | `RALPHAI_ISSUE_REPO`                  | GitHub `owner/repo` for issue queries                                |
 | `issueCommentProgress`    | `false`                     | `RALPHAI_ISSUE_COMMENT_PROGRESS`      | Post progress comments on GitHub issues                              |
 

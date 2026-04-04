@@ -373,6 +373,7 @@ interface LabelNames {
   stuck: string;
   prd: string;
   prdInProgress: string;
+  prdDone: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -418,6 +419,11 @@ function labelDefs(names: LabelNames) {
       name: names.prdInProgress,
       description: "Ralphai is processing this PRD's sub-issues",
       color: "fbca04",
+    },
+    {
+      name: names.prdDone,
+      description: "Ralphai finished all sub-issues for this PRD",
+      color: "0e8a16",
     },
   ];
 }
@@ -506,6 +512,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueCommentProgress: true,
     issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
     issuePrdInProgressLabel: DEFAULTS.issuePrdInProgressLabel,
+    issuePrdDoneLabel: DEFAULTS.issuePrdDoneLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -543,6 +550,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     stuck: configObj.issueStuckLabel as string,
     prd: configObj.issuePrdLabel as string,
     prdInProgress: configObj.issuePrdInProgressLabel as string,
+    prdDone: configObj.issuePrdDoneLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -2623,6 +2631,7 @@ async function runRalphaiRunner(
         stuck: config.issueStuckLabel.value,
         prd: config.issuePrdLabel.value,
         prdInProgress: config.issuePrdInProgressLabel.value,
+        prdDone: config.issuePrdDoneLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

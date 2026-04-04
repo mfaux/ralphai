@@ -180,7 +180,8 @@ By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, `ralphai
   "issueDoneLabel": "ai-done",
   "issueStuckLabel": "ai-stuck",
   "issuePrdLabel": "ai-prd",
-  "issuePrdInProgressLabel": "ai-prd-wip"
+  "issuePrdInProgressLabel": "ai-prd-wip",
+  "issuePrdDoneLabel": "ai-prd-done"
 }
 ```
 
@@ -193,6 +194,7 @@ export RALPHAI_ISSUE_DONE_LABEL=ai-done
 export RALPHAI_ISSUE_STUCK_LABEL=ai-stuck
 export RALPHAI_ISSUE_PRD_LABEL=ai-prd
 export RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL=ai-prd-wip
+export RALPHAI_ISSUE_PRD_DONE_LABEL=ai-prd-done
 ```
 
 See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.

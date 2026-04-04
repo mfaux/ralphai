@@ -134,6 +134,10 @@ ralphai run 42           # target PRD #42
 
 When Ralphai begins processing a PRD's sub-issues — either via an explicit `ralphai run 42` or via auto-drain — it applies the configured PRD in-progress label (`ralphai-prd:in-progress` by default, configurable via `issuePrdInProgressLabel`) to the parent PRD issue. This is best-effort: if the label application fails, processing continues normally.
 
+### PRD Done Label
+
+When all of a PRD's sub-issues have completed successfully (all have the `ralphai:done` label, none have `ralphai:stuck` or `ralphai:in-progress`), Ralphai swaps the PRD in-progress label for the PRD done label (`ralphai-prd:done` by default, configurable via `issuePrdDoneLabel`). This transition happens in three code paths: the explicit PRD runner after its sub-issue loop, the auto-drain path when no more eligible sub-issues remain, and the early exit path when all sub-issues are already complete on entry.
+
 ### Sequencing
 
 Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-issues can declare dependencies on each other via GitHub's native blocking relationships — Ralphai writes these as `depends-on` frontmatter and respects them during plan selection.
