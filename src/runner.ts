@@ -33,7 +33,11 @@ import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
 import { deriveLabels } from "./labels.ts";
-import { transitionStuck, type IssueMeta } from "./label-lifecycle.ts";
+import {
+  transitionStuck,
+  prdTransitionStuck,
+  type IssueMeta,
+} from "./label-lifecycle.ts";
 import {
   peekGithubIssues,
   peekPrdIssues,
@@ -548,9 +552,15 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const standaloneInProgressLabel = standaloneLabels.inProgress;
   const standaloneDoneLabel = standaloneLabels.done;
   const standaloneStuckLabel = standaloneLabels.stuck;
+  const subissueLabels = deriveLabels(config.subissueLabel.value);
+  const subissueLabel = subissueLabels.intake;
+  const subissueInProgressLabel = subissueLabels.inProgress;
+  const subissueDoneLabel = subissueLabels.done;
+  const subissueStuckLabel = subissueLabels.stuck;
   const prdLabels = deriveLabels(config.prdLabel.value);
   const issuePrdLabel = prdLabels.intake;
   const issuePrdInProgressLabel = prdLabels.inProgress;
+  const prdStuckLabel = prdLabels.stuck;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -616,6 +626,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           standaloneInProgressLabel,
           standaloneDoneLabel,
           standaloneStuckLabel,
+          subissueLabel,
+          subissueInProgressLabel,
+          subissueDoneLabel,
+          subissueStuckLabel,
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
@@ -915,11 +929,18 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           updateReceiptOutcome(receiptFile, "stuck");
 
           // Swap in-progress → stuck label on linked GitHub issue
-          if (
-            issueFm.source === "github" &&
-            issueFm.issue &&
-            standaloneStuckLabel
-          ) {
+          if (issueFm.source === "github" && issueFm.issue) {
+            // Choose the correct label family: sub-issues (prd present in
+            // frontmatter) use subissue labels, standalone issues use
+            // standalone labels.
+            const isSubIssue = issueFm.prd !== undefined;
+            const activeInProgressLabel = isSubIssue
+              ? subissueInProgressLabel
+              : standaloneInProgressLabel;
+            const activeStuckLabel = isSubIssue
+              ? subissueStuckLabel
+              : standaloneStuckLabel;
+
             let repo = issueRepo || null;
             if (!repo && issueFm.issueUrl) {
               const m = issueFm.issueUrl.match(
@@ -930,10 +951,19 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             if (repo) {
               transitionStuck(
                 { number: issueFm.issue, repo },
-                standaloneInProgressLabel,
-                standaloneStuckLabel,
+                activeInProgressLabel,
+                activeStuckLabel,
                 cwd,
               );
+
+              // Propagate stuck to PRD parent when a sub-issue gets stuck
+              if (isSubIssue && issueFm.prd) {
+                prdTransitionStuck(
+                  { number: issueFm.prd, repo },
+                  prdStuckLabel,
+                  cwd,
+                );
+              }
             }
           }
 
@@ -1035,6 +1065,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           archiveDir: dirs.archiveDir,
           standaloneInProgressLabel,
           standaloneDoneLabel,
+          subissueInProgressLabel,
+          subissueDoneLabel,
           cwd,
         });
 

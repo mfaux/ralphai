@@ -64,6 +64,17 @@ function githubPlanContent(issueNumber: number, repo?: string): string {
   return `---\nsource: github\nissue: ${issueNumber}\nissue-url: ${url}\n---\n\n# Fix something\n\nBody text.\n`;
 }
 
+function githubSubIssuePlanContent(
+  issueNumber: number,
+  prdNumber: number,
+  repo?: string,
+): string {
+  const url = repo
+    ? `https://github.com/${repo}/issues/${issueNumber}`
+    : `https://github.com/owner/repo/issues/${issueNumber}`;
+  return `---\nsource: github\nissue: ${issueNumber}\nprd: ${prdNumber}\nissue-url: ${url}\n---\n\n# Sub-issue task\n\nBody text.\n`;
+}
+
 function localPlanContent(): string {
   return `---\nscope: packages/web\n---\n\n# Local feature\n\nBody text.\n`;
 }
@@ -241,5 +252,119 @@ describe("restoreIssueLabels", () => {
     });
 
     expect(result.restored).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sub-issue reset tests
+// ---------------------------------------------------------------------------
+
+describe("restoreIssueLabels — sub-issue label selection", () => {
+  it("uses subissue labels when plan has prd frontmatter and subissue labels are provided", () => {
+    mockGhAvailable();
+
+    const planPath = writePlanFile(
+      ctx.dir,
+      "gh-201-sub-task",
+      githubSubIssuePlanContent(201, 100),
+    );
+
+    const result = restoreIssueLabels({
+      planPath,
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
+      subissueLabel: "ralphai-subissue",
+      subissueInProgressLabel: "ralphai-subissue:in-progress",
+      subissueStuckLabel: "ralphai-subissue:stuck",
+      issueRepo: "owner/repo",
+      cwd: ctx.dir,
+    });
+
+    expect(result.restored).toBe(true);
+
+    // Verify gh issue edit was called with subissue labels
+    const ghEditCalls = mockExecSync.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh issue edit"),
+    );
+    expect(ghEditCalls.length).toBe(1);
+    const cmd = ghEditCalls[0]![0] as string;
+    expect(cmd).toContain("gh issue edit 201");
+    expect(cmd).toContain('--add-label "ralphai-subissue"');
+    expect(cmd).toContain('--remove-label "ralphai-subissue:in-progress"');
+    expect(cmd).toContain('--remove-label "ralphai-subissue:stuck"');
+    // Should NOT contain standalone labels
+    expect(cmd).not.toContain("ralphai-standalone");
+  });
+
+  it("uses standalone labels when plan has no prd frontmatter even with subissue labels provided", () => {
+    mockGhAvailable();
+
+    const planPath = writePlanFile(
+      ctx.dir,
+      "gh-42-standalone-issue",
+      githubPlanContent(42),
+    );
+
+    const result = restoreIssueLabels({
+      planPath,
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
+      subissueLabel: "ralphai-subissue",
+      subissueInProgressLabel: "ralphai-subissue:in-progress",
+      subissueStuckLabel: "ralphai-subissue:stuck",
+      issueRepo: "owner/repo",
+      cwd: ctx.dir,
+    });
+
+    expect(result.restored).toBe(true);
+
+    // Verify gh issue edit was called with standalone labels
+    const ghEditCalls = mockExecSync.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh issue edit"),
+    );
+    expect(ghEditCalls.length).toBe(1);
+    const cmd = ghEditCalls[0]![0] as string;
+    expect(cmd).toContain("gh issue edit 42");
+    expect(cmd).toContain('--add-label "ralphai-standalone"');
+    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
+    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
+    // Should NOT contain subissue labels
+    expect(cmd).not.toContain("ralphai-subissue");
+  });
+
+  it("falls back to standalone labels for sub-issue when subissue labels not provided", () => {
+    mockGhAvailable();
+
+    const planPath = writePlanFile(
+      ctx.dir,
+      "gh-201-sub-no-labels",
+      githubSubIssuePlanContent(201, 100),
+    );
+
+    // Do NOT pass subissue label options — should fall back to standalone
+    const result = restoreIssueLabels({
+      planPath,
+      standaloneLabel: "ralphai-standalone",
+      standaloneInProgressLabel: "ralphai-standalone:in-progress",
+      standaloneStuckLabel: "ralphai-standalone:stuck",
+      issueRepo: "owner/repo",
+      cwd: ctx.dir,
+    });
+
+    expect(result.restored).toBe(true);
+
+    const ghEditCalls = mockExecSync.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh issue edit"),
+    );
+    expect(ghEditCalls.length).toBe(1);
+    const cmd = ghEditCalls[0]![0] as string;
+    // Falls back to standalone since subissue labels not provided
+    expect(cmd).toContain('--add-label "ralphai-standalone"');
+    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
   });
 });

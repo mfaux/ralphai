@@ -31,6 +31,14 @@ export interface PullIssueOptions {
   standaloneDoneLabel: string;
   /** Label applied when an issue is stuck (e.g. "ralphai-standalone:stuck"). */
   standaloneStuckLabel?: string;
+  /** Sub-issue intake label (e.g. "ralphai-subissue"). Used by pullPrdSubIssue(). */
+  subissueLabel?: string;
+  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
+  /** Sub-issue done label (e.g. "ralphai-subissue:done"). */
+  subissueDoneLabel?: string;
+  /** Sub-issue stuck label (e.g. "ralphai-subissue:stuck"). */
+  subissueStuckLabel?: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
@@ -657,16 +665,20 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
  * Returns `{ pulled: false }` when no PRD or no eligible sub-issues exist.
  */
 export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
-  const {
-    backlogDir,
-    cwd,
-    issueSource,
-    standaloneLabel: issueLabel,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneDoneLabel: issueDoneLabel,
-    issueRepo,
-    issueCommentProgress,
-  } = options;
+  const { backlogDir, cwd, issueSource, issueRepo, issueCommentProgress } =
+    options;
+
+  // Sub-issues use the subissue label family when provided, falling back
+  // to the standalone labels for backward compatibility.
+  const subissueLabels = options.subissueLabel
+    ? deriveLabels(options.subissueLabel)
+    : null;
+  const issueLabel = subissueLabels?.intake ?? options.standaloneLabel;
+  const issueInProgressLabel =
+    subissueLabels?.inProgress ?? options.standaloneInProgressLabel;
+  const issueDoneLabel = subissueLabels?.done ?? options.standaloneDoneLabel;
+  const issueStuckLabel = subissueLabels?.stuck ?? options.standaloneStuckLabel;
+
   const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
   if (issueSource !== "github") {
@@ -758,8 +770,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
   const skipLabels = [issueInProgressLabel, issueDoneLabel];
-  if (options.standaloneStuckLabel)
-    skipLabels.push(options.standaloneStuckLabel);
+  if (issueStuckLabel) skipLabels.push(issueStuckLabel);
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(

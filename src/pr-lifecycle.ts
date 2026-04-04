@@ -73,6 +73,10 @@ export interface ArchiveRunOptions {
   archiveDir: string;
   standaloneInProgressLabel: string;
   standaloneDoneLabel: string;
+  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
+  /** Sub-issue done label (e.g. "ralphai-subissue:done"). */
+  subissueDoneLabel?: string;
   cwd: string;
 }
 
@@ -126,8 +130,10 @@ export function archiveRun(options: ArchiveRunOptions): {
   const {
     wipFiles,
     archiveDir,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneDoneLabel: issueDoneLabel,
+    standaloneInProgressLabel,
+    standaloneDoneLabel,
+    subissueInProgressLabel,
+    subissueDoneLabel,
     cwd,
   } = options;
   if (wipFiles.length === 0) {
@@ -143,14 +149,25 @@ export function archiveRun(options: ArchiveRunOptions): {
   let issueSource = "";
   let issueNumber: number | undefined;
   let issueUrl = "";
+  let isSubIssue = false;
   for (const f of wipFiles) {
     if (!existsSync(f)) continue;
     const fm = extractIssueFrontmatter(f);
     issueSource = fm.source;
     issueNumber = fm.issue;
     issueUrl = fm.issueUrl;
+    if (fm.prd !== undefined) isSubIssue = true;
     if (issueSource === "github") break;
   }
+
+  // Choose the correct label family: sub-issues use subissue labels when
+  // available, standalone issues use standalone labels.
+  const issueInProgressLabel =
+    isSubIssue && subissueInProgressLabel
+      ? subissueInProgressLabel
+      : standaloneInProgressLabel;
+  const issueDoneLabel =
+    isSubIssue && subissueDoneLabel ? subissueDoneLabel : standaloneDoneLabel;
 
   const dest = join(archiveDir, planSlug);
   renameSync(planDir, dest);

@@ -404,6 +404,86 @@ describe("cross-family labels", () => {
     expect(calls[0]).toContain('--add-label "my-custom:done"');
     expect(calls[0]).toContain('--remove-label "my-custom:in-progress"');
   });
+
+  it("transitionStuck works with subissue labels", () => {
+    mockGhSuccess();
+
+    const result = transitionStuck(
+      { number: 201, repo: "org/repo" },
+      "ralphai-subissue:in-progress",
+      "ralphai-subissue:stuck",
+      "/tmp",
+    );
+
+    expect(result.ok).toBe(true);
+
+    const calls = ghEditCalls();
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toContain("gh issue edit 201");
+    expect(calls[0]).toContain('--add-label "ralphai-subissue:stuck"');
+    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
+  });
+
+  it("transitionReset works with subissue labels", () => {
+    mockGhSuccess();
+
+    const result = transitionReset(
+      { number: 201, repo: "org/repo" },
+      "ralphai-subissue",
+      "ralphai-subissue:in-progress",
+      "ralphai-subissue:stuck",
+      "/tmp",
+    );
+
+    expect(result.ok).toBe(true);
+
+    const calls = ghEditCalls();
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toContain("gh issue edit 201");
+    expect(calls[0]).toContain('--add-label "ralphai-subissue"');
+    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
+    expect(calls[0]).toContain('--remove-label "ralphai-subissue:stuck"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sub-issue stuck + PRD parent propagation pattern
+// ---------------------------------------------------------------------------
+
+describe("sub-issue stuck with PRD parent propagation", () => {
+  it("sub-issue stuck uses subissue labels and PRD parent gets prd:stuck", () => {
+    mockGhSuccess();
+
+    const subIssue = { number: 201, repo: "org/repo" };
+    const prdIssue = { number: 100, repo: "org/repo" };
+
+    // 1. Sub-issue transitions to stuck with subissue label family
+    const stuckResult = transitionStuck(
+      subIssue,
+      "ralphai-subissue:in-progress",
+      "ralphai-subissue:stuck",
+      "/tmp",
+    );
+    expect(stuckResult.ok).toBe(true);
+
+    // 2. PRD parent gets stuck label propagated
+    const prdResult = prdTransitionStuck(prdIssue, "ralphai-prd:stuck", "/tmp");
+    expect(prdResult.ok).toBe(true);
+
+    // Verify both calls happened
+    const calls = ghEditCalls();
+    expect(calls.length).toBe(2);
+
+    // First call: sub-issue stuck with subissue labels
+    expect(calls[0]).toContain("gh issue edit 201");
+    expect(calls[0]).toContain('--add-label "ralphai-subissue:stuck"');
+    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
+
+    // Second call: PRD parent gets ralphai-prd:stuck (additive only)
+    expect(calls[1]).toContain("gh issue edit 100");
+    expect(calls[1]).toContain('--add-label "ralphai-prd:stuck"');
+    expect(calls[1]).not.toContain("--remove-label");
+  });
 });
 
 // ---------------------------------------------------------------------------

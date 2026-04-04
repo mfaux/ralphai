@@ -747,6 +747,9 @@ async function runRalphaiReset(
   let standaloneLabel = "";
   let standaloneInProgressLabel = "";
   let standaloneStuckLabel = "";
+  let subissueLabel = "";
+  let subissueInProgressLabel = "";
+  let subissueStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -754,15 +757,18 @@ async function runRalphaiReset(
       envVars: process.env,
       cliArgs: [],
     });
-    standaloneLabel = deriveLabels(
+    const standaloneLabelsResolved = deriveLabels(
       cfgResult.config.standaloneLabel.value,
-    ).intake;
-    standaloneInProgressLabel = deriveLabels(
-      cfgResult.config.standaloneLabel.value,
-    ).inProgress;
-    standaloneStuckLabel = deriveLabels(
-      cfgResult.config.standaloneLabel.value,
-    ).stuck;
+    );
+    standaloneLabel = standaloneLabelsResolved.intake;
+    standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
+    standaloneStuckLabel = standaloneLabelsResolved.stuck;
+    const subissueLabelsResolved = deriveLabels(
+      cfgResult.config.subissueLabel.value,
+    );
+    subissueLabel = subissueLabelsResolved.intake;
+    subissueInProgressLabel = subissueLabelsResolved.inProgress;
+    subissueStuckLabel = subissueLabelsResolved.stuck;
     issueRepo = cfgResult.config.issueRepo.value;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
@@ -782,6 +788,9 @@ async function runRalphaiReset(
         standaloneLabel,
         standaloneInProgressLabel,
         standaloneStuckLabel,
+        subissueLabel,
+        subissueInProgressLabel,
+        subissueStuckLabel,
         issueRepo,
         cwd,
       });
@@ -899,6 +908,12 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
       const standaloneLabel = standaloneLabelsResolved.intake;
       const standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
       const standaloneStuckLabel = standaloneLabelsResolved.stuck;
+      const subissueLabelsResolved = deriveLabels(
+        cfgResult.config.subissueLabel.value,
+      );
+      const subissueLabel = subissueLabelsResolved.intake;
+      const subissueInProgressLabel = subissueLabelsResolved.inProgress;
+      const subissueStuckLabel = subissueLabelsResolved.stuck;
       const issueRepo = cfgResult.config.issueRepo.value;
       if (standaloneLabel && standaloneInProgressLabel) {
         const labelResult = restoreIssueLabels({
@@ -906,6 +921,9 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
           standaloneLabel,
           standaloneInProgressLabel,
           standaloneStuckLabel,
+          subissueLabel,
+          subissueInProgressLabel,
+          subissueStuckLabel,
           issueRepo,
           cwd,
         });
@@ -1926,12 +1944,19 @@ async function runPrdIssueTarget(
       backlogDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      standaloneLabel: worktreeConfig.subissueLabel.value,
+      standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
+        .intake,
       standaloneInProgressLabel: deriveLabels(
-        worktreeConfig.subissueLabel.value,
+        worktreeConfig.standaloneLabel.value,
       ).inProgress,
-      standaloneDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+      standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
         .done,
+      subissueLabel: worktreeConfig.subissueLabel.value,
+      subissueInProgressLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+        .inProgress,
+      subissueDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value).done,
+      subissueStuckLabel: deriveLabels(worktreeConfig.subissueLabel.value)
+        .stuck,
       issueRepo: worktreeConfig.issueRepo.value || repo,
       issueCommentProgress:
         worktreeConfig.issueCommentProgress.value === "true",
