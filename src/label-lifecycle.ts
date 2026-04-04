@@ -14,6 +14,10 @@
  *   prdStuck:      add stuck label on PRD parent
  *
  * All functions are best-effort: failures are logged but never thrown.
+ *
+ * Dry-run safety: every transition function accepts an optional `dryRun`
+ * parameter. When true, the function logs what would have been done and
+ * returns a successful result without executing any `gh issue edit` calls.
  */
 import { execSync } from "child_process";
 
@@ -35,10 +39,12 @@ export interface LabelTransitionResult {
   ok: boolean;
   /** Human-readable status message. */
   message: string;
+  /** Whether the operation was skipped due to dry-run mode. */
+  skipped?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Internal helper
+// Internal helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -57,6 +63,15 @@ function execQuiet(cmd: string, cwd: string): string | null {
   }
 }
 
+/**
+ * Build a dry-run skip result. Logs what would have been done and returns
+ * a successful result with `skipped: true`.
+ */
+function dryRunSkip(description: string): LabelTransitionResult {
+  console.log(`[dry-run] Would execute label operation: ${description}`);
+  return { ok: true, message: `[dry-run] ${description}`, skipped: true };
+}
+
 // ---------------------------------------------------------------------------
 // Core transitions
 // ---------------------------------------------------------------------------
@@ -71,7 +86,13 @@ export function transitionPull(
   intakeLabel: string,
   inProgressLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(
+      `Issue #${issue.number}: ${intakeLabel} → ${inProgressLabel}`,
+    );
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${inProgressLabel}" --remove-label "${intakeLabel}"`,
@@ -99,7 +120,13 @@ export function transitionDone(
   inProgressLabel: string,
   doneLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(
+      `Issue #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
+    );
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${doneLabel}" --remove-label "${inProgressLabel}"`,
@@ -127,7 +154,13 @@ export function transitionStuck(
   inProgressLabel: string,
   stuckLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(
+      `Issue #${issue.number}: ${inProgressLabel} → ${stuckLabel}`,
+    );
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${stuckLabel}" --remove-label "${inProgressLabel}"`,
@@ -157,7 +190,11 @@ export function transitionReset(
   inProgressLabel: string,
   stuckLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(`Issue #${issue.number}: reset to ${intakeLabel}`);
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${intakeLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`,
@@ -190,7 +227,11 @@ export function prdTransitionInProgress(
   issue: IssueMeta,
   prdInProgressLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(`PRD #${issue.number}: add ${prdInProgressLabel}`);
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${prdInProgressLabel}"`,
@@ -219,7 +260,13 @@ export function prdTransitionDone(
   prdInProgressLabel: string,
   prdDoneLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(
+      `PRD #${issue.number}: ${prdInProgressLabel} → ${prdDoneLabel}`,
+    );
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${prdDoneLabel}" --remove-label "${prdInProgressLabel}"`,
@@ -248,7 +295,11 @@ export function prdTransitionStuck(
   issue: IssueMeta,
   prdStuckLabel: string,
   cwd: string,
+  dryRun = false,
 ): LabelTransitionResult {
+  if (dryRun) {
+    return dryRunSkip(`PRD #${issue.number}: add ${prdStuckLabel}`);
+  }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${prdStuckLabel}"`,

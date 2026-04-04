@@ -139,10 +139,10 @@ describe("init label creation", () => {
   // Source-level: ensureGitHubLabels uses configured names (LabelNames)
   // ---------------------------------------------------------------------------
 
-  it("ensureGitHubLabels accepts LabelNames parameter", () => {
-    expect(ralphaiSrc).toContain(
-      "function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult",
-    );
+  it("ensureGitHubLabels accepts LabelNames and dryRun parameters", () => {
+    expect(ralphaiSrc).toContain("function ensureGitHubLabels(");
+    expect(ralphaiSrc).toContain("names: LabelNames,");
+    expect(ralphaiSrc).toContain("dryRun = false,");
   });
 
   it("scaffold passes configured label names to ensureGitHubLabels", () => {

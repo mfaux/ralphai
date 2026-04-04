@@ -405,3 +405,163 @@ describe("cross-family labels", () => {
     expect(calls[0]).toContain('--remove-label "my-custom:in-progress"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Dry-run safety: no gh issue edit calls when dryRun=true
+// ---------------------------------------------------------------------------
+
+describe("dry-run safety — label lifecycle", () => {
+  it("transitionPull skips gh call and returns skipped result", () => {
+    const result = transitionPull(
+      ISSUE,
+      "ralphai-standalone",
+      "ralphai-standalone:in-progress",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-standalone");
+    expect(result.message).toContain("ralphai-standalone:in-progress");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("transitionDone skips gh call and returns skipped result", () => {
+    const result = transitionDone(
+      ISSUE,
+      "ralphai-standalone:in-progress",
+      "ralphai-standalone:done",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-standalone:in-progress");
+    expect(result.message).toContain("ralphai-standalone:done");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("transitionStuck skips gh call and returns skipped result", () => {
+    const result = transitionStuck(
+      ISSUE,
+      "ralphai-standalone:in-progress",
+      "ralphai-standalone:stuck",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-standalone:in-progress");
+    expect(result.message).toContain("ralphai-standalone:stuck");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("transitionReset skips gh call and returns skipped result", () => {
+    const result = transitionReset(
+      ISSUE,
+      "ralphai-standalone",
+      "ralphai-standalone:in-progress",
+      "ralphai-standalone:stuck",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("reset to ralphai-standalone");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("prdTransitionInProgress skips gh call and returns skipped result", () => {
+    const result = prdTransitionInProgress(
+      { number: 100, repo: "acme/widgets" },
+      "ralphai-prd:in-progress",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-prd:in-progress");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("prdTransitionDone skips gh call and returns skipped result", () => {
+    const result = prdTransitionDone(
+      { number: 100, repo: "acme/widgets" },
+      "ralphai-prd:in-progress",
+      "ralphai-prd:done",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-prd:in-progress");
+    expect(result.message).toContain("ralphai-prd:done");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("prdTransitionStuck skips gh call and returns skipped result", () => {
+    const result = prdTransitionStuck(
+      { number: 100, repo: "acme/widgets" },
+      "ralphai-prd:stuck",
+      "/tmp",
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain("[dry-run]");
+    expect(result.message).toContain("ralphai-prd:stuck");
+    expect(ghEditCalls()).toHaveLength(0);
+  });
+
+  it("dryRun=false (default) still executes gh calls", () => {
+    mockGhSuccess();
+
+    const result = transitionPull(
+      ISSUE,
+      "ralphai-standalone",
+      "ralphai-standalone:in-progress",
+      "/tmp",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBeUndefined();
+    expect(ghEditCalls()).toHaveLength(1);
+  });
+
+  it("dry-run logs describe the skipped operation", () => {
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+
+    try {
+      transitionStuck(
+        ISSUE,
+        "ralphai-standalone:in-progress",
+        "ralphai-standalone:stuck",
+        "/tmp",
+        true,
+      );
+    } finally {
+      console.log = origLog;
+    }
+
+    expect(logs.length).toBe(1);
+    expect(logs[0]).toContain("[dry-run] Would execute label operation");
+    expect(logs[0]).toContain("Issue #42");
+    expect(logs[0]).toContain("ralphai-standalone:in-progress");
+    expect(logs[0]).toContain("ralphai-standalone:stuck");
+  });
+});

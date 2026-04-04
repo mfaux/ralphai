@@ -461,7 +461,19 @@ function labelDefs(names: LabelNames) {
  *
  * Creates 12 labels: 3 families (standalone, subissue, prd) × 4 states.
  */
-function ensureGitHubLabels(cwd: string, names: LabelNames): LabelResult {
+function ensureGitHubLabels(
+  cwd: string,
+  names: LabelNames,
+  dryRun = false,
+): LabelResult {
+  if (dryRun) {
+    const defs = labelDefs(names);
+    for (const label of defs) {
+      console.log(`[dry-run] Would create label: ${label.name}`);
+    }
+    return { success: true };
+  }
+
   try {
     // Check gh is available
     execSync("gh --version", { cwd, stdio: "pipe" });
