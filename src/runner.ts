@@ -36,6 +36,7 @@ import { deriveLabels } from "./labels.ts";
 import {
   transitionStuck,
   prdTransitionStuck,
+  prdTransitionDone,
   type IssueMeta,
 } from "./label-lifecycle.ts";
 import {
@@ -43,6 +44,7 @@ import {
   peekPrdIssues,
   pullGithubIssues,
   pullPrdSubIssue,
+  checkAllPrdSubIssuesDone,
 } from "./issues.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import {
@@ -560,6 +562,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const prdLabels = deriveLabels(config.prdLabel.value);
   const issuePrdLabel = prdLabels.intake;
   const issuePrdInProgressLabel = prdLabels.inProgress;
+  const prdDoneLabel = prdLabels.done;
   const prdStuckLabel = prdLabels.stuck;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
@@ -1069,6 +1072,39 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           subissueDoneLabel,
           cwd,
         });
+
+        // --- PRD done detection ---
+        // When a sub-issue completes, check whether ALL sibling sub-issues
+        // under the same PRD parent are now done. If so, transition the
+        // PRD parent to done.
+        if (issueFm.prd && issueFm.source === "github") {
+          let prdRepo = issueRepo || null;
+          if (!prdRepo && issueFm.issueUrl) {
+            const m = issueFm.issueUrl.match(
+              /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
+            );
+            prdRepo = m?.[1] ?? null;
+          }
+          if (prdRepo) {
+            const allDone = checkAllPrdSubIssuesDone(
+              prdRepo,
+              issueFm.prd,
+              subissueDoneLabel,
+              cwd,
+            );
+            if (allDone) {
+              console.log(
+                `All sub-issues of PRD #${issueFm.prd} are done — transitioning PRD to done.`,
+              );
+              prdTransitionDone(
+                { number: issueFm.prd, repo: prdRepo },
+                issuePrdInProgressLabel,
+                prdDoneLabel,
+                cwd,
+              );
+            }
+          }
+        }
 
         plansCompleted++;
         completed = true;

@@ -1050,3 +1050,58 @@ export function pullGithubIssueByNumber(
     issuePrdLabel: options.issuePrdLabel,
   });
 }
+
+// ---------------------------------------------------------------------------
+// PRD done detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether ALL sub-issues of a PRD parent have reached the done state.
+ *
+ * Queries the native sub_issues REST API to get all sub-issues, then
+ * checks each open sub-issue's labels. Returns true only when every
+ * sub-issue is either closed OR has the done label.
+ *
+ * Best-effort: returns false on any API failure (fail-closed — we
+ * won't prematurely mark a PRD as done).
+ */
+export function checkAllPrdSubIssuesDone(
+  repo: string,
+  prdNumber: number,
+  subissueDoneLabel: string,
+  cwd: string,
+): boolean {
+  // Fetch all sub-issues via the native REST API
+  const subIssuesRaw = execQuiet(
+    `gh api repos/${repo}/issues/${prdNumber}/sub_issues`,
+    cwd,
+  );
+
+  if (subIssuesRaw === null) return false;
+
+  let allSubIssues: Array<{ number: number; state: string }>;
+  try {
+    allSubIssues = JSON.parse(subIssuesRaw);
+  } catch {
+    return false;
+  }
+
+  if (!Array.isArray(allSubIssues) || allSubIssues.length === 0) return false;
+
+  // Check each open sub-issue for the done label
+  for (const si of allSubIssues) {
+    // Closed sub-issues are considered done regardless of labels
+    if (si.state !== "open") continue;
+
+    const labelsRaw = execQuiet(
+      `gh issue view ${si.number} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (!labels.includes(subissueDoneLabel)) {
+      return false;
+    }
+  }
+
+  return true;
+}

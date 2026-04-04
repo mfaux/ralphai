@@ -48,7 +48,10 @@ import {
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { deriveLabels, type DerivedLabels } from "./labels.ts";
-import { prdTransitionInProgress } from "./label-lifecycle.ts";
+import {
+  prdTransitionInProgress,
+  prdTransitionDone,
+} from "./label-lifecycle.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -2041,6 +2044,28 @@ async function runPrdIssueTarget(
   if (stuckSubIssues.length > 0) {
     console.log(
       `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
+
+  // --- PRD done transition ---
+  // When all sub-issues completed successfully (none stuck), mark the
+  // PRD parent as done.
+  if (
+    completedCount === subIssues.length &&
+    stuckSubIssues.length === 0 &&
+    subIssues.length > 0
+  ) {
+    const prdLabels = deriveLabels(
+      worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
+    );
+    console.log(
+      `All sub-issues of PRD #${prd.number} are done — transitioning PRD to done.`,
+    );
+    prdTransitionDone(
+      { number: prd.number, repo },
+      prdLabels.inProgress,
+      prdLabels.done,
+      cwd,
     );
   }
 
