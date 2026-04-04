@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { checkGhAvailable, detectIssueRepo } from "./issues.ts";
+import { transitionDone } from "./label-lifecycle.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
 import {
   buildPrBody,
@@ -165,9 +166,10 @@ export function archiveRun(options: ArchiveRunOptions): {
           `--body "Ralphai completed this task and is preparing to merge."`,
         cwd,
       );
-      execQuiet(
-        `gh issue edit ${issueNumber} --repo "${repo}" ` +
-          `--add-label "${issueDoneLabel}" --remove-label "${issueInProgressLabel}"`,
+      transitionDone(
+        { number: issueNumber, repo },
+        issueInProgressLabel,
+        issueDoneLabel,
         cwd,
       );
     }

@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DEFAULTS } from "./config.ts";
 import { deriveLabels } from "./labels.ts";
+import { transitionPull, prdTransitionInProgress } from "./label-lifecycle.ts";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -552,9 +553,10 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   writeFileSync(planPath, planContent, "utf-8");
 
   // Update issue labels: add in-progress, remove intake label
-  execQuiet(
-    `gh issue edit ${issueNumber} --repo "${repo}" ` +
-      `--add-label "${issueInProgressLabel}" --remove-label "${issueLabel}"`,
+  transitionPull(
+    { number: Number(issueNumber), repo },
+    issueLabel,
+    issueInProgressLabel,
     cwd,
   );
 
@@ -786,8 +788,9 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   const prdInProgressLabel =
     options.issuePrdInProgressLabel ??
     deriveLabels(DEFAULTS.prdLabel).inProgress;
-  execQuiet(
-    `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
+  prdTransitionInProgress(
+    { number: prd.number, repo },
+    prdInProgressLabel,
     cwd,
   );
 

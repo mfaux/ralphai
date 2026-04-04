@@ -33,6 +33,7 @@ import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
 import { deriveLabels } from "./labels.ts";
+import { transitionStuck, type IssueMeta } from "./label-lifecycle.ts";
 import {
   peekGithubIssues,
   peekPrdIssues,
@@ -923,15 +924,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               repo = m?.[1] ?? null;
             }
             if (repo) {
-              try {
-                execSync(
-                  `gh issue edit ${issueFm.issue} --repo "${repo}" ` +
-                    `--add-label "${issueStuckLabel}" --remove-label "${issueInProgressLabel}"`,
-                  { cwd, stdio: ["pipe", "pipe", "pipe"] },
-                );
-              } catch {
-                // Best-effort: label swap failure is not fatal
-              }
+              transitionStuck(
+                { number: issueFm.issue, repo },
+                issueInProgressLabel,
+                issueStuckLabel,
+                cwd,
+              );
             }
           }
 

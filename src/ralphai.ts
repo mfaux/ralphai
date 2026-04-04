@@ -48,6 +48,7 @@ import {
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { deriveLabels, type DerivedLabels } from "./labels.ts";
+import { prdTransitionInProgress } from "./label-lifecycle.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -1880,14 +1881,11 @@ async function runPrdIssueTarget(
   const prdInProgressLabel = deriveLabels(
     worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
   ).inProgress;
-  try {
-    execSync(
-      `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
-      { cwd, stdio: ["pipe", "pipe", "pipe"] },
-    );
-  } catch {
-    // Best-effort: label application failure is not fatal
-  }
+  prdTransitionInProgress(
+    { number: prd.number, repo },
+    prdInProgressLabel,
+    cwd,
+  );
 
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,

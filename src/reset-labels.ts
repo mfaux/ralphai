@@ -11,6 +11,7 @@
  */
 import { execSync } from "child_process";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { transitionReset } from "./label-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,18 +40,6 @@ export interface RestoreIssueLabelsResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Check whether the `gh` CLI is installed and authenticated.
@@ -133,20 +122,16 @@ export function restoreIssueLabels(
   }
 
   // Reverse the label transition: remove in-progress and stuck, add intake
-  const cmd =
-    `gh issue edit ${fm.issue} --repo "${repo}" ` +
-    `--add-label "${issueLabel}" --remove-label "${issueInProgressLabel}" --remove-label "${issueStuckLabel}"`;
-
-  const result = execQuiet(cmd, cwd);
-  if (result === null) {
-    return {
-      restored: false,
-      message: `Label restoration failed for issue #${fm.issue}`,
-    };
-  }
+  const transitionResult = transitionReset(
+    { number: fm.issue, repo },
+    issueLabel,
+    issueInProgressLabel,
+    issueStuckLabel,
+    cwd,
+  );
 
   return {
-    restored: true,
-    message: `Restored labels on issue #${fm.issue} (${repo})`,
+    restored: transitionResult.ok,
+    message: transitionResult.message,
   };
 }
