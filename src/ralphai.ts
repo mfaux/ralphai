@@ -227,29 +227,31 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   let autoCommit = false;
 
-  // 6. GitHub Issues integration
-  const enableIssues = await clack.confirm({
+  // 6. GitHub Issues integration (enabled by default)
+  clack.note(
+    "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
+      `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.\n` +
+      "Disable this if you use a different issue tracker.",
+    "GitHub Issues",
+  );
+
+  const disableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
-    initialValue: false,
+    initialValue: true,
   });
 
-  if (clack.isCancel(enableIssues)) {
+  if (clack.isCancel(disableIssues)) {
     clack.cancel("Setup cancelled.");
     return null;
   }
 
+  const enableIssues = disableIssues;
   let issueLabel: string | undefined;
   let issueInProgressLabel: string | undefined;
   let issueDoneLabel: string | undefined;
   let issuePrdLabel: string | undefined;
 
   if (enableIssues) {
-    clack.note(
-      "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
-        `open issue labeled "${DEFAULTS.issueLabel}" and convert it to a plan.`,
-      "GitHub Issues",
-    );
-
     // Label configuration prompts
     const labelAnswer = await clack.text({
       message: "Issue intake label:",
@@ -1266,7 +1268,7 @@ async function runRalphaiInit(
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
       autoCommit: false,
-      issueSource: "none",
+      issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
       createSamplePlan: true,
     };
@@ -1285,6 +1287,9 @@ async function runRalphaiInit(
     console.log(`  ${DIM}Setup:${RESET}     ${TEXT}${setupDisplay}${RESET}`);
     console.log(
       `  ${DIM}Project:${RESET}   ${TEXT}${detectedProject?.label ?? "(none)"}${RESET}`,
+    );
+    console.log(
+      `  ${DIM}Issues:${RESET}    ${TEXT}GitHub Issues (enabled)${RESET}`,
     );
 
     // Workspace detection for --yes mode

@@ -139,13 +139,12 @@ describe("init label creation", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // init --yes (issueSource=none) does not show label info
+  // init --yes (issueSource=github) shows label info
   // ---------------------------------------------------------------------------
 
-  it("init --yes with default issueSource=none does not mention labels", () => {
+  it("init --yes with default issueSource=github mentions GitHub issue labeling", () => {
     const result = runCli(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
-    expect(output).not.toContain("GitHub labels");
-    expect(output).not.toContain("ralphai-prd label");
+    expect(output).toContain("Label a GitHub issue");
   });
 });

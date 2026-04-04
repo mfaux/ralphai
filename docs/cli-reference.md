@@ -85,6 +85,8 @@ The dashboard auto-refreshes every 3 seconds. In non-TTY environments, `ralphai`
 
 In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files for .NET projects. In mixed repos, workspaces from all ecosystems are merged. Both modes display workspace info without adding config, and feedback commands are auto-filtered by scope at runtime.
 
+GitHub Issues integration is enabled by default during `init` (both interactive and `--yes`). To use a different issue tracker, decline the prompt in interactive mode or set `issueSource` to `"none"` in `config.json` after init.
+
 ## Run
 
 `ralphai run [<issue-number>]` is the only execution entrypoint. It always works through a managed git worktree.
@@ -356,21 +358,21 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### Config Keys
 
-| Key                    | Default              | Env Var                           | Description                                              |
-| ---------------------- | -------------------- | --------------------------------- | -------------------------------------------------------- |
-| `agentCommand`         | _(none)_             | `RALPHAI_AGENT_COMMAND`           | CLI command to invoke the coding agent                   |
-| `feedbackCommands`     | _(auto-detected)_    | `RALPHAI_FEEDBACK_COMMANDS`       | Comma-separated build/test/lint commands                 |
-| `baseBranch`           | `"main"`             | `RALPHAI_BASE_BRANCH`             | Base branch for worktree creation                        |
-| `autoCommit`           | `false`              | `RALPHAI_AUTO_COMMIT`             | Enable auto-commit recovery snapshots                    |
-| `maxStuck`             | `3`                  | `RALPHAI_MAX_STUCK`               | Consecutive no-commit iterations before abort            |
-| `iterationTimeout`     | `0`                  | `RALPHAI_ITERATION_TIMEOUT`       | Per-agent-invocation timeout in seconds (0 = no timeout) |
-| `issueSource`          | `"none"`             | `RALPHAI_ISSUE_SOURCE`            | Issue source (`"github"` or `"none"`)                    |
-| `issueLabel`           | `"ralphai"`          | `RALPHAI_ISSUE_LABEL`             | GitHub label for intake issues                           |
-| `issueInProgressLabel` | `"ralphai-progress"` | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | GitHub label applied when a plan is in progress          |
-| `issueDoneLabel`       | `"ralphai-done"`     | `RALPHAI_ISSUE_DONE_LABEL`        | GitHub label applied when a plan is completed            |
-| `issuePrdLabel`        | `"ralphai-prd"`      | `RALPHAI_ISSUE_PRD_LABEL`         | GitHub label identifying PRD issues                      |
-| `issueRepo`            | _(auto-detected)_    | `RALPHAI_ISSUE_REPO`              | GitHub `owner/repo` for issue queries                    |
-| `issueCommentProgress` | `false`              | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | Post progress comments on GitHub issues                  |
+| Key                    | Default              | Env Var                           | Description                                                          |
+| ---------------------- | -------------------- | --------------------------------- | -------------------------------------------------------------------- |
+| `agentCommand`         | _(none)_             | `RALPHAI_AGENT_COMMAND`           | CLI command to invoke the coding agent                               |
+| `feedbackCommands`     | _(auto-detected)_    | `RALPHAI_FEEDBACK_COMMANDS`       | Comma-separated build/test/lint commands                             |
+| `baseBranch`           | `"main"`             | `RALPHAI_BASE_BRANCH`             | Base branch for worktree creation                                    |
+| `autoCommit`           | `false`              | `RALPHAI_AUTO_COMMIT`             | Enable auto-commit recovery snapshots                                |
+| `maxStuck`             | `3`                  | `RALPHAI_MAX_STUCK`               | Consecutive no-commit iterations before abort                        |
+| `iterationTimeout`     | `0`                  | `RALPHAI_ITERATION_TIMEOUT`       | Per-agent-invocation timeout in seconds (0 = no timeout)             |
+| `issueSource`          | `"none"`             | `RALPHAI_ISSUE_SOURCE`            | Issue source (`"github"` or `"none"`); `init` defaults to `"github"` |
+| `issueLabel`           | `"ralphai"`          | `RALPHAI_ISSUE_LABEL`             | GitHub label for intake issues                                       |
+| `issueInProgressLabel` | `"ralphai-progress"` | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | GitHub label applied when a plan is in progress                      |
+| `issueDoneLabel`       | `"ralphai-done"`     | `RALPHAI_ISSUE_DONE_LABEL`        | GitHub label applied when a plan is completed                        |
+| `issuePrdLabel`        | `"ralphai-prd"`      | `RALPHAI_ISSUE_PRD_LABEL`         | GitHub label identifying PRD issues                                  |
+| `issueRepo`            | _(auto-detected)_    | `RALPHAI_ISSUE_REPO`              | GitHub `owner/repo` for issue queries                                |
+| `issueCommentProgress` | `false`              | `RALPHAI_ISSUE_COMMENT_PROGRESS`  | Post progress comments on GitHub issues                              |
 
 ### Workspaces
 
