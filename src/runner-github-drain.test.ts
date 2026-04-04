@@ -276,4 +276,206 @@ describe("runner GitHub drain behavior", () => {
     // Runner should have completed both
     expect(output).toContain("Completed 2");
   });
+
+  // --- Scenario 38: Drain mode queries both standalone and PRD intake labels ---
+
+  test("drain calls both pullPrdSubIssue and pullGithubIssues (both intake labels queried)", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "both-labels");
+
+    // Both return nothing — we just need to verify both are called
+    mockPullPrdSubIssue.mockImplementation(() => ({
+      pulled: false,
+      message: "No PRD sub-issues",
+    }));
+    mockPullGithubIssues.mockImplementation(() => ({
+      pulled: false,
+      message: "No standalone issues",
+    }));
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    await captureLogs(() => runRunner(opts));
+
+    // Both pull functions must be called — drain queries both intake labels
+    expect(mockPullPrdSubIssue).toHaveBeenCalled();
+    expect(mockPullGithubIssues).toHaveBeenCalled();
+  });
+
+  test("drain passes ralphai-standalone label to pullGithubIssues (not old ralphai label)", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "label-check-standalone");
+
+    mockPullPrdSubIssue.mockImplementation(() => ({
+      pulled: false,
+      message: "No PRD sub-issues",
+    }));
+    mockPullGithubIssues.mockImplementation(() => ({
+      pulled: false,
+      message: "No standalone issues",
+    }));
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    await captureLogs(() => runRunner(opts));
+
+    // Verify pullGithubIssues was called with the new standalone label
+    expect(mockPullGithubIssues).toHaveBeenCalled();
+    const callArgs = mockPullGithubIssues.mock.calls[0]![0];
+    expect(callArgs.standaloneLabel).toBe("ralphai-standalone");
+    // The old unified "ralphai" label must NOT appear anywhere in the options
+    expect(callArgs.standaloneLabel).not.toBe("ralphai");
+  });
+
+  test("drain passes ralphai-prd label to pullPrdSubIssue (not old ralphai label)", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "label-check-prd");
+
+    mockPullPrdSubIssue.mockImplementation(() => ({
+      pulled: false,
+      message: "No PRD sub-issues",
+    }));
+    mockPullGithubIssues.mockImplementation(() => ({
+      pulled: false,
+      message: "No standalone issues",
+    }));
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    await captureLogs(() => runRunner(opts));
+
+    // Verify pullPrdSubIssue was called with the new PRD label
+    expect(mockPullPrdSubIssue).toHaveBeenCalled();
+    const callArgs = mockPullPrdSubIssue.mock.calls[0]![0];
+    expect(callArgs.issuePrdLabel).toBe("ralphai-prd");
+    // The old unified "ralphai" label must NOT appear
+    expect(callArgs.issuePrdLabel).not.toBe("ralphai");
+  });
+
+  test("drain does not directly query ralphai-subissue label as an intake candidate", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "no-subissue-direct");
+
+    mockPullPrdSubIssue.mockImplementation(() => ({
+      pulled: false,
+      message: "No PRD sub-issues",
+    }));
+    mockPullGithubIssues.mockImplementation(() => ({
+      pulled: false,
+      message: "No standalone issues",
+    }));
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    await captureLogs(() => runRunner(opts));
+
+    // pullGithubIssues queries standaloneLabel, NOT subissueLabel
+    expect(mockPullGithubIssues).toHaveBeenCalled();
+    const standaloneCallArgs = mockPullGithubIssues.mock.calls[0]![0];
+    expect(standaloneCallArgs.standaloneLabel).toBe("ralphai-standalone");
+    // The subissue label is passed through for PRD sub-issue filtering,
+    // but it is NOT the label used for the direct GitHub issue query
+    expect(standaloneCallArgs.standaloneLabel).not.toBe("ralphai-subissue");
+  });
+
+  test("drain tries PRD sub-issues before standalone issues (priority chain)", async () => {
+    const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "prd-priority");
+
+    const callOrder: string[] = [];
+
+    // PRD pull succeeds on first call (simulating a PRD with sub-issues)
+    mockPullPrdSubIssue.mockImplementation(
+      (() => {
+        let called = 0;
+        return (options: PullIssueOptions): PullIssueResult => {
+          callOrder.push("prd");
+          if (called === 0) {
+            called++;
+            const planPath = join(backlogDir, "prd-priority.md");
+            writeFileSync(
+              planPath,
+              `---\nsource: github\nissue: 200\n---\n\n# Plan: prd-priority\n\n### Task 1: Do\n`,
+            );
+            return { pulled: true, planPath, message: "Pulled PRD sub-issue" };
+          }
+          return { pulled: false, message: "No more PRD sub-issues" };
+        };
+      })(),
+    );
+
+    mockPullGithubIssues.mockImplementation((options: PullIssueOptions) => {
+      callOrder.push("standalone");
+      return { pulled: false, message: "No standalone issues" };
+    });
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    await captureLogs(() => runRunner(opts));
+
+    // PRD should be tried first in the priority chain
+    expect(callOrder[0]).toBe("prd");
+    // After PRD sub-issues are exhausted, standalone is tried
+    expect(callOrder).toContain("standalone");
+  });
 });
