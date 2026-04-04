@@ -53,6 +53,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueDoneLabel: "RALPHAI_ISSUE_DONE_LABEL",
   issueStuckLabel: "RALPHAI_ISSUE_STUCK_LABEL",
   issuePrdLabel: "RALPHAI_ISSUE_PRD_LABEL",
+  issuePrdInProgressLabel: "RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   autoCommit: "RALPHAI_AUTO_COMMIT",
@@ -234,6 +235,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     );
     lines.push(
       `  issuePrdLabel      = ${config.issuePrdLabel.value}  (${issuePrdSrc})`,
+    );
+
+    const issuePrdIpSrc = sourceLabel(
+      "issuePrdInProgressLabel",
+      config.issuePrdInProgressLabel.source,
+      input,
+    );
+    lines.push(
+      `  issuePrdInProgressLabel = ${config.issuePrdInProgressLabel.value}  (${issuePrdIpSrc})`,
     );
 
     const issueRepoVal = config.issueRepo.value || "<auto-detect>";

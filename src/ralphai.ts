@@ -372,6 +372,7 @@ interface LabelNames {
   done: string;
   stuck: string;
   prd: string;
+  prdInProgress: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -385,7 +386,7 @@ function ghLabelCreateCmd(
   return `gh label create ${quotedName} --description "${description}" --color ${color} --force`;
 }
 
-/** The five label definitions with their descriptions and colors. */
+/** The label definitions with their descriptions and colors. */
 function labelDefs(names: LabelNames) {
   return [
     {
@@ -412,6 +413,11 @@ function labelDefs(names: LabelNames) {
       name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: "1d76db",
+    },
+    {
+      name: names.prdInProgress,
+      description: "Ralphai is processing this PRD's sub-issues",
+      color: "fbca04",
     },
   ];
 }
@@ -499,6 +505,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     issueRepo: "",
     issueCommentProgress: true,
     issuePrdLabel: answers.issuePrdLabel ?? DEFAULTS.issuePrdLabel,
+    issuePrdInProgressLabel: DEFAULTS.issuePrdInProgressLabel,
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -535,6 +542,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     done: configObj.issueDoneLabel as string,
     stuck: configObj.issueStuckLabel as string,
     prd: configObj.issuePrdLabel as string,
+    prdInProgress: configObj.issuePrdInProgressLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -1835,6 +1843,20 @@ async function runPrdIssueTarget(
   );
 
   // --- PRD with unchecked sub-issues: work through sequentially ---
+
+  // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
+  const prdInProgressLabel =
+    worktreeConfig.issuePrdInProgressLabel?.value ??
+    DEFAULTS.issuePrdInProgressLabel;
+  try {
+    execSync(
+      `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
+      { cwd, stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch {
+    // Best-effort: label application failure is not fatal
+  }
+
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
   );
@@ -2090,6 +2112,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueDoneLabel = DEFAULTS.issueDoneLabel;
   let resolvedIssueStuckLabel = DEFAULTS.issueStuckLabel;
   let resolvedIssuePrdLabel = DEFAULTS.issuePrdLabel;
+  let resolvedIssuePrdInProgressLabel = DEFAULTS.issuePrdInProgressLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
@@ -2107,6 +2130,8 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueDoneLabel = cfgResult.config.issueDoneLabel.value;
     resolvedIssueStuckLabel = cfgResult.config.issueStuckLabel.value;
     resolvedIssuePrdLabel = cfgResult.config.issuePrdLabel.value;
+    resolvedIssuePrdInProgressLabel =
+      cfgResult.config.issuePrdInProgressLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
@@ -2414,6 +2439,7 @@ async function runRalphaiInManagedWorktree(
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
+              issuePrdInProgressLabel: resolvedIssuePrdInProgressLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2596,6 +2622,7 @@ async function runRalphaiRunner(
         done: config.issueDoneLabel.value,
         stuck: config.issueStuckLabel.value,
         prd: config.issuePrdLabel.value,
+        prdInProgress: config.issuePrdInProgressLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

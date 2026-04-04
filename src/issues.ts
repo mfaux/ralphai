@@ -35,6 +35,8 @@ export interface PullIssueOptions {
   issueCommentProgress: boolean;
   /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
   issuePrdLabel?: string;
+  /** Label applied to PRD parent when drain processing starts (e.g. "ralphai-prd:in-progress"). */
+  issuePrdInProgressLabel?: string;
 }
 
 /** Result of a pullGithubIssues() call. */
@@ -777,6 +779,14 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
 
   console.log(
     `PRD #${prd.number} — pulling sub-issue #${subIssueNumber} into backlog`,
+  );
+
+  // Best-effort: mark the PRD parent as in-progress when we first pull a sub-issue.
+  const prdInProgressLabel =
+    options.issuePrdInProgressLabel ?? DEFAULTS.issuePrdInProgressLabel;
+  execQuiet(
+    `gh issue edit ${prd.number} --repo "${repo}" --add-label "${prdInProgressLabel}"`,
+    cwd,
   );
 
   return fetchAndWriteIssuePlan({

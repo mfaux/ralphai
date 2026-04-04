@@ -130,6 +130,10 @@ ralphai run 42           # target PRD #42
 | PR             | One draft PR per plan            | One aggregate draft PR for all sub-issues   |
 | Stuck handling | Plan is skipped, drain continues | Sub-issue is skipped, PRD continues to next |
 
+### PRD In-Progress Label
+
+When Ralphai begins processing a PRD's sub-issues — either via an explicit `ralphai run 42` or via auto-drain — it applies the configured PRD in-progress label (`ralphai-prd:in-progress` by default, configurable via `issuePrdInProgressLabel`) to the parent PRD issue. This is best-effort: if the label application fails, processing continues normally.
+
 ### Sequencing
 
 Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-issues can declare dependencies on each other via GitHub's native blocking relationships — Ralphai writes these as `depends-on` frontmatter and respects them during plan selection.

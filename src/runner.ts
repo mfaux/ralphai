@@ -546,6 +546,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueDoneLabel = config.issueDoneLabel.value;
   const issueStuckLabel = config.issueStuckLabel.value;
   const issuePrdLabel = config.issuePrdLabel.value;
+  const issuePrdInProgressLabel = config.issuePrdInProgressLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -614,6 +615,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
+          issuePrdInProgressLabel,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues

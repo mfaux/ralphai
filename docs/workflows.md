@@ -171,7 +171,7 @@ ralphai run -w --plan=dark-mode  # wizard + specific plan
 
 ## Customize GitHub labels
 
-By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, `ralphai:stuck`, and `ralphai-prd` as GitHub labels. Override any or all of them in `config.json`:
+By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, `ralphai:stuck`, `ralphai-prd`, and `ralphai-prd:in-progress` as GitHub labels. Override any or all of them in `config.json`:
 
 ```json
 {
@@ -179,7 +179,8 @@ By default, Ralphai uses `ralphai`, `ralphai-progress`, `ralphai-done`, `ralphai
   "issueInProgressLabel": "ai-wip",
   "issueDoneLabel": "ai-done",
   "issueStuckLabel": "ai-stuck",
-  "issuePrdLabel": "ai-prd"
+  "issuePrdLabel": "ai-prd",
+  "issuePrdInProgressLabel": "ai-prd-wip"
 }
 ```
 
@@ -191,6 +192,7 @@ export RALPHAI_ISSUE_IN_PROGRESS_LABEL=ai-wip
 export RALPHAI_ISSUE_DONE_LABEL=ai-done
 export RALPHAI_ISSUE_STUCK_LABEL=ai-stuck
 export RALPHAI_ISSUE_PRD_LABEL=ai-prd
+export RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL=ai-prd-wip
 ```
 
 See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.

@@ -82,8 +82,8 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 15 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(15);
+    // Verify exactly 16 keys are present (includes repoPath)
+    expect(Object.keys(parsed)).toHaveLength(16);
 
     // Core settings from wizard
     expect(typeof parsed.agentCommand).toBe("string");
@@ -114,7 +114,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(15);
+    expect(Object.keys(parsed)).toHaveLength(16);
     expect(parsed.autoCommit).toBe(false);
   });
 

@@ -27,6 +27,7 @@ export interface RalphaiConfig {
   issueDoneLabel: string;
   issueStuckLabel: string;
   issuePrdLabel: string;
+  issuePrdInProgressLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
   iterationTimeout: number;
@@ -69,6 +70,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueDoneLabel: "ralphai:done",
   issueStuckLabel: "ralphai:stuck",
   issuePrdLabel: "ralphai-prd",
+  issuePrdInProgressLabel: "ralphai-prd:in-progress",
   issueRepo: "",
   issueCommentProgress: "true",
   iterationTimeout: 0,
@@ -178,6 +180,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueDoneLabel",
   "issueStuckLabel",
   "issuePrdLabel",
+  "issuePrdInProgressLabel",
   "issueRepo",
   "issueCommentProgress",
   "iterationTimeout",
@@ -329,6 +332,14 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issuePrdLabel = v;
   }
 
+  // issuePrdInProgressLabel (string, non-empty)
+  if ("issuePrdInProgressLabel" in obj) {
+    const v = String(obj.issuePrdInProgressLabel || "");
+    if (v === "")
+      err("'issuePrdInProgressLabel' must be a non-empty label name");
+    values.issuePrdInProgressLabel = v;
+  }
+
   // issueRepo (string, can be empty)
   if ("issueRepo" in obj) {
     values.issueRepo = String(obj.issueRepo || "");
@@ -446,6 +457,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_DONE_LABEL", "issueDoneLabel"],
   ["RALPHAI_ISSUE_STUCK_LABEL", "issueStuckLabel"],
   ["RALPHAI_ISSUE_PRD_LABEL", "issuePrdLabel"],
+  ["RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL", "issuePrdInProgressLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
@@ -529,6 +541,11 @@ export function applyEnvOverrides(
   // issuePrdLabel
   const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");
   if (issuePrdLabel !== undefined) overrides.issuePrdLabel = issuePrdLabel;
+
+  // issuePrdInProgressLabel
+  const issuePrdIpLabel = get("RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL");
+  if (issuePrdIpLabel !== undefined)
+    overrides.issuePrdInProgressLabel = issuePrdIpLabel;
 
   // issueRepo
   const issueRepo = get("RALPHAI_ISSUE_REPO");
