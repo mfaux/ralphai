@@ -120,7 +120,10 @@ PRDs (Product Requirements Documents) are the recommended way to drive multi-ste
 
 ```bash
 ralphai run 42           # target PRD #42
+ralphai run              # auto-detect: PRD sub-issues are routed through the PRD flow automatically
 ```
+
+When `ralphai run` (auto-detect, no target) encounters a plan with `prd: N` frontmatter — written by `pullPrdSubIssue()` when pulling GitHub issues — the drain loop detects the PRD parent and delegates to the unified PRD flow. This ensures the same behavior as `ralphai run <prd-number>`: a single `feat/<prd-slug>` branch, sequential sub-issue processing, and an aggregate PR.
 
 ### How it differs from standalone plans
 
