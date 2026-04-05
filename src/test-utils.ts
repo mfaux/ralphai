@@ -4,6 +4,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "bun:test";
 import { stripAnsi } from "./utils.ts";
+import { runRalphai } from "./ralphai.ts";
+import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -97,6 +99,98 @@ export function runCliOutput(
   env?: Record<string, string>,
 ): string {
   const result = runCli(args, cwd, env);
+  return result.stdout || result.stderr;
+}
+
+/**
+ * Run a CLI command in-process by calling `runRalphai(args)` directly,
+ * eliminating the ~300ms overhead of spawning a child Node process.
+ *
+ * Intercepts `process.exit`, `console.log`, `console.error`, and
+ * `process.cwd()` (via `process.chdir`) to capture output and exit codes.
+ * All monkey-patched globals are restored in a finally block.
+ *
+ * Has the same return type as `runCli()` so callers can be migrated with
+ * a mechanical find-replace.
+ *
+ * Use `runCli()` instead when you need real subprocess behavior (E2E tests,
+ * process-kill tests, NO_COLOR env var tests, or tests that rely on
+ * module-level side effects from a fresh process).
+ */
+export async function runCliInProcess(
+  args: string[],
+  cwd?: string,
+  _env?: Record<string, string>,
+  _timeout?: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const originalExit = process.exit;
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalCwd = process.cwd();
+
+  let exitCode = 0;
+  let capturedExitCode: number | undefined;
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+
+  try {
+    // Intercept process.exit to capture exit code
+    process.exit = ((code?: number) => {
+      capturedExitCode = code ?? 0;
+      throw new ExitIntercepted();
+    }) as never;
+
+    // Capture console.log -> stdout
+    console.log = (...logArgs: unknown[]) => {
+      stdoutChunks.push(
+        logArgs.map((a) => (typeof a === "string" ? a : String(a))).join(" "),
+      );
+    };
+
+    // Capture console.error -> stderr
+    console.error = (...errArgs: unknown[]) => {
+      stderrChunks.push(
+        errArgs.map((a) => (typeof a === "string" ? a : String(a))).join(" "),
+      );
+    };
+
+    // Override cwd if requested
+    if (cwd) {
+      process.chdir(cwd);
+    }
+
+    await runRalphai(args);
+  } catch (e) {
+    if (e instanceof ExitIntercepted) {
+      exitCode = capturedExitCode ?? 1;
+    } else {
+      // Unhandled error — treat as exit code 1
+      exitCode = 1;
+    }
+  } finally {
+    process.exit = originalExit;
+    console.log = originalLog;
+    console.error = originalError;
+    process.chdir(originalCwd);
+  }
+
+  return {
+    stdout: stripAnsi(stdoutChunks.join("\n")),
+    stderr: stripAnsi(stderrChunks.join("\n")),
+    exitCode,
+  };
+}
+
+/**
+ * Convenience wrapper around `runCliInProcess()` that returns `stdout || stderr`,
+ * mirroring the `runCliOutput()` helper.
+ */
+export async function runCliOutputInProcess(
+  args: string[],
+  cwd?: string,
+  env?: Record<string, string>,
+): Promise<string> {
+  const result = await runCliInProcess(args, cwd, env);
   return result.stdout || result.stderr;
 }
 
