@@ -19,6 +19,7 @@ export interface RalphaiConfig {
   agentCommand: string;
   setupCommand: string;
   feedbackCommands: string;
+  prFeedbackCommands: string;
   baseBranch: string;
   maxStuck: number;
   issueSource: "none" | "github";
@@ -34,6 +35,7 @@ export interface RalphaiConfig {
 
 export interface WorkspaceOverrides {
   feedbackCommands?: string[] | string;
+  prFeedbackCommands?: string[] | string;
   [key: string]: unknown;
 }
 
@@ -59,6 +61,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   agentCommand: "",
   setupCommand: "",
   feedbackCommands: "",
+  prFeedbackCommands: "",
   baseBranch: "main",
   maxStuck: 3,
   issueSource: "none",
@@ -166,6 +169,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "agentCommand",
   "setupCommand",
   "feedbackCommands",
+  "prFeedbackCommands",
   "baseBranch",
   "maxStuck",
   "issueSource",
@@ -259,6 +263,22 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     } else {
       err(
         `'feedbackCommands' must be an array of strings or a comma-separated string, got ${typeof v}`,
+      );
+    }
+  }
+
+  // prFeedbackCommands (array of strings or comma-separated string)
+  if ("prFeedbackCommands" in obj) {
+    const v = obj.prFeedbackCommands;
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err("'prFeedbackCommands' array contains an empty entry");
+      values.prFeedbackCommands = v.join(",");
+    } else if (typeof v === "string") {
+      values.prFeedbackCommands = v;
+    } else {
+      err(
+        `'prFeedbackCommands' must be an array of strings or a comma-separated string, got ${typeof v}`,
       );
     }
   }
@@ -367,6 +387,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
             `workspaces['${k}'].feedbackCommands must be an array of strings or a comma-separated string, got ${typeof fc}`,
           );
       }
+      if ("prFeedbackCommands" in entryObj) {
+        const pfc = entryObj.prFeedbackCommands;
+        if (!Array.isArray(pfc) && typeof pfc !== "string")
+          err(
+            `workspaces['${k}'].prFeedbackCommands must be an array of strings or a comma-separated string, got ${typeof pfc}`,
+          );
+      }
     }
     values.workspaces = wsObj as Record<string, WorkspaceOverrides>;
   }
@@ -417,6 +444,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_AGENT_COMMAND", "agentCommand"],
   ["RALPHAI_SETUP_COMMAND", "setupCommand"],
   ["RALPHAI_FEEDBACK_COMMANDS", "feedbackCommands"],
+  ["RALPHAI_PR_FEEDBACK_COMMANDS", "prFeedbackCommands"],
   ["RALPHAI_BASE_BRANCH", "baseBranch"],
   ["RALPHAI_MAX_STUCK", "maxStuck"],
   ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
@@ -454,6 +482,11 @@ export function applyEnvOverrides(
   // feedbackCommands
   const feedbackCmds = get("RALPHAI_FEEDBACK_COMMANDS");
   if (feedbackCmds !== undefined) overrides.feedbackCommands = feedbackCmds;
+
+  // prFeedbackCommands
+  const prFeedbackCmds = get("RALPHAI_PR_FEEDBACK_COMMANDS");
+  if (prFeedbackCmds !== undefined)
+    overrides.prFeedbackCommands = prFeedbackCmds;
 
   // baseBranch (validate no spaces)
   const baseBranch = get("RALPHAI_BASE_BRANCH");
@@ -560,6 +593,11 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       if (v !== "") validateCommaList(v, "--feedback-commands");
       overrides.feedbackCommands = v;
       rawFlags.feedbackCommands = arg;
+    } else if (arg.startsWith("--pr-feedback-commands=")) {
+      const v = arg.slice("--pr-feedback-commands=".length);
+      if (v !== "") validateCommaList(v, "--pr-feedback-commands");
+      overrides.prFeedbackCommands = v;
+      rawFlags.prFeedbackCommands = arg;
     } else if (arg.startsWith("--base-branch=")) {
       const v = arg.slice("--base-branch=".length);
       if (v === "") {

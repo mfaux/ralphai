@@ -44,6 +44,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   agentCommand: "RALPHAI_AGENT_COMMAND",
   setupCommand: "RALPHAI_SETUP_COMMAND",
   feedbackCommands: "RALPHAI_FEEDBACK_COMMANDS",
+  prFeedbackCommands: "RALPHAI_PR_FEEDBACK_COMMANDS",
   baseBranch: "RALPHAI_BASE_BRANCH",
   maxStuck: "RALPHAI_MAX_STUCK",
   iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
@@ -143,6 +144,16 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     "none",
   );
   lines.push(`  feedbackCommands   = ${feedbackDisplay}  (${feedbackSrc})`);
+
+  const prFeedbackCmd = config.prFeedbackCommands.value;
+  const prFeedbackDisplay = prFeedbackCmd || "<none>";
+  const prFeedbackSrc = sourceLabel(
+    "prFeedbackCommands",
+    config.prFeedbackCommands.source,
+    input,
+    "none",
+  );
+  lines.push(`  prFeedbackCommands = ${prFeedbackDisplay}  (${prFeedbackSrc})`);
 
   const baseBranchSrc = sourceLabel(
     "baseBranch",
@@ -266,7 +277,17 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
         } else {
           fcDisplay = String(fc);
         }
+        const pfc = overrides.prFeedbackCommands;
+        let pfcDisplay: string;
+        if (pfc == null) {
+          pfcDisplay = "none";
+        } else if (Array.isArray(pfc)) {
+          pfcDisplay = pfc.join(", ");
+        } else {
+          pfcDisplay = String(pfc);
+        }
         lines.push(`  ${pkg}: feedbackCommands=${fcDisplay}`);
+        lines.push(`  ${pkg}: prFeedbackCommands=${pfcDisplay}`);
       }
     }
   } else {

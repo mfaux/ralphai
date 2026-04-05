@@ -45,6 +45,7 @@ function shellEscape(val: string): string {
 const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
   ["agentCommand", "AGENT_COMMAND"],
   ["feedbackCommands", "FEEDBACK_COMMANDS"],
+  ["prFeedbackCommands", "PR_FEEDBACK_COMMANDS"],
   ["baseBranch", "BASE_BRANCH"],
   ["maxStuck", "MAX_STUCK"],
   ["issueSource", "ISSUE_SOURCE"],

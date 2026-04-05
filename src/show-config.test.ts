@@ -107,6 +107,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  agentCommand       = <none>  (default (none))");
     expect(output).toContain("  setupCommand       = <none>  (default (none))");
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
+    expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
@@ -265,5 +266,32 @@ describe("formatShowConfig", () => {
     };
     const output = formatShowConfig(input);
     expect(output).toContain("  packages/baz: feedbackCommands=none");
+    expect(output).toContain("  packages/baz: prFeedbackCommands=none");
+  });
+
+  it("shows workspaces with prFeedbackCommands array", () => {
+    const input = defaultInput();
+    input.configFileExists = true;
+    input.workspaces = {
+      "packages/web": {
+        prFeedbackCommands: ["bun test", "bun run lint"],
+      },
+    };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  packages/web: prFeedbackCommands=bun test, bun run lint",
+    );
+  });
+
+  it("shows workspaces with prFeedbackCommands string", () => {
+    const input = defaultInput();
+    input.configFileExists = true;
+    input.workspaces = {
+      "packages/api": {
+        prFeedbackCommands: "npm test",
+      },
+    };
+    const output = formatShowConfig(input);
+    expect(output).toContain("  packages/api: prFeedbackCommands=npm test");
   });
 });

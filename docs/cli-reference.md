@@ -114,6 +114,7 @@ What it does:
 --agent-command=<command>         Override agent CLI command
 --setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
 --feedback-commands=<list>        Comma-separated feedback commands
+--pr-feedback-commands=<list>     Comma-separated PR feedback commands
 --base-branch=<branch>            Override base branch (default: main)
 --once                            Process a single work unit then exit
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
@@ -347,6 +348,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | ------------------------------------- | ------------------------- |
 | `RALPHAI_AGENT_COMMAND`               | `agentCommand`            |
 | `RALPHAI_FEEDBACK_COMMANDS`           | `feedbackCommands`        |
+| `RALPHAI_PR_FEEDBACK_COMMANDS`        | `prFeedbackCommands`      |
 | `RALPHAI_BASE_BRANCH`                 | `baseBranch`              |
 | `RALPHAI_AUTO_COMMIT`                 | `autoCommit`              |
 | `RALPHAI_MAX_STUCK`                   | `maxStuck`                |
@@ -369,6 +371,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | ---------------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | `agentCommand`         | _(none)_               | `RALPHAI_AGENT_COMMAND`          | CLI command to invoke the coding agent                               |
 | `feedbackCommands`     | _(auto-detected)_      | `RALPHAI_FEEDBACK_COMMANDS`      | Comma-separated build/test/lint commands                             |
+| `prFeedbackCommands`   | `""`                   | `RALPHAI_PR_FEEDBACK_COMMANDS`   | Comma-separated PR feedback commands (run after PR creation)         |
 | `baseBranch`           | `"main"`               | `RALPHAI_BASE_BRANCH`            | Base branch for worktree creation                                    |
 | `autoCommit`           | `false`                | `RALPHAI_AUTO_COMMIT`            | Enable auto-commit recovery snapshots                                |
 | `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                        |
@@ -382,7 +385,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### Workspaces
 
-The `workspaces` key in `config.json` provides per-package feedback command overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value.
+The `workspaces` key in `config.json` provides per-package feedback command overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value. Both `feedbackCommands` and `prFeedbackCommands` can be overridden per workspace.
 
 ```json
 {
