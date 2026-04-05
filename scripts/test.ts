@@ -29,6 +29,17 @@ const ISOLATED = [
   "src/runner-github-drain.test.ts",
 ];
 
+// Inherently slow tests (E2E runner loops, real process spawning, real sockets).
+// Excluded when --fast is passed to keep the feedback loop under ~60s.
+const SLOW = [
+  "src/auto-detect-drain.test.ts",
+  "src/stop.test.ts",
+  "src/ipc-server.test.ts",
+  "src/ipc-robustness.test.ts",
+];
+
+const fast = process.argv.includes("--fast");
+
 function findTestFiles(dir: string): string[] {
   const results: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -46,14 +57,21 @@ const root = join(import.meta.dirname, "..");
 const allTests = findTestFiles(join(root, "src")).map((f) =>
   relative(root, f).split("\\").join("/"),
 );
-const mainTests = allTests.filter((f) => !ISOLATED.includes(f));
+
+const excluded = fast ? new Set([...ISOLATED, ...SLOW]) : new Set(ISOLATED);
+const isolatedTests = ISOLATED.filter((f) => !fast || !SLOW.includes(f));
+const mainTests = allTests.filter((f) => !excluded.has(f));
+
+if (fast) {
+  console.log(`--fast: skipping ${SLOW.length} slow test files`);
+}
 
 const TIMEOUT = "60000";
 
 let failed = false;
 
 // 1. Run isolated files one-by-one
-for (const file of ISOLATED) {
+for (const file of isolatedTests) {
   console.log(`\n--- isolated: ${file} ---`);
   try {
     execSync(`bun test --timeout ${TIMEOUT} ${file}`, {
