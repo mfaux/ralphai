@@ -224,6 +224,98 @@ export function TuiRouter({
 }
 
 // ---------------------------------------------------------------------------
+// Terminal safety
+// ---------------------------------------------------------------------------
+
+/** ANSI escape to make the cursor visible again. */
+const SHOW_CURSOR = "\x1b[?25h";
+
+/**
+ * Restore terminal state after the TUI exits or crashes.
+ *
+ * - Disables raw mode on stdin (so typed characters echo normally)
+ * - Shows the cursor (Ink hides it while rendering)
+ *
+ * Safe to call multiple times — guards against missing TTY or
+ * already-restored state.
+ */
+export function restoreTerminal(): void {
+  try {
+    if (
+      process.stdin.isTTY &&
+      process.stdin.isRaw &&
+      typeof process.stdin.setRawMode === "function"
+    ) {
+      process.stdin.setRawMode(false);
+    }
+  } catch {
+    // stdin may already be destroyed — ignore
+  }
+
+  try {
+    process.stdout.write(SHOW_CURSOR);
+  } catch {
+    // stdout may already be closed — ignore
+  }
+}
+
+/**
+ * Install process-level safety handlers that restore the terminal if
+ * the TUI is killed or crashes. Returns a cleanup function that
+ * removes the handlers (call after the TUI exits normally).
+ *
+ * Handles:
+ * - SIGINT  — Ctrl+C from another terminal or `kill -INT`
+ * - SIGTERM — default `kill` signal
+ * - uncaughtException  — unhandled throw
+ * - unhandledRejection — unhandled promise rejection
+ *
+ * Ink already handles interactive Ctrl+C (via stdin raw-mode input
+ * parsing), but external signals bypass Ink's React cleanup. These
+ * supplementary handlers ensure the terminal is never left in raw mode
+ * with a hidden cursor.
+ */
+export function installTerminalSafetyHandlers(): () => void {
+  const handleSignal = (signal: string) => {
+    restoreTerminal();
+    // Re-raise with default behavior so the process exits with the
+    // correct signal code (128 + signal number).
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+
+  const handleSigint = () => handleSignal("SIGINT");
+  const handleSigterm = () => handleSignal("SIGTERM");
+
+  const handleException = (err: unknown) => {
+    restoreTerminal();
+    // Print the error after restoring the terminal so it's readable
+    console.error(err instanceof Error ? (err.stack ?? err.message) : err);
+    process.exit(1);
+  };
+
+  const handleRejection = (reason: unknown) => {
+    restoreTerminal();
+    console.error(
+      "Unhandled rejection:",
+      reason instanceof Error ? (reason.stack ?? reason.message) : reason,
+    );
+    process.exit(1);
+  };
+
+  process.on("SIGINT", handleSigint);
+  process.on("SIGTERM", handleSigterm);
+  process.on("uncaughtException", handleException);
+  process.on("unhandledRejection", handleRejection);
+
+  return () => {
+    process.removeListener("SIGINT", handleSigint);
+    process.removeListener("SIGTERM", handleSigterm);
+    process.removeListener("uncaughtException", handleException);
+    process.removeListener("unhandledRejection", handleRejection);
+  };
+}
+
+// ---------------------------------------------------------------------------
 // TUI launcher
 // ---------------------------------------------------------------------------
 
@@ -236,9 +328,16 @@ export function TuiRouter({
  *
  * If the user presses Ctrl+C, the app exits with a "quit" result.
  *
+ * Terminal safety handlers (SIGINT, SIGTERM, uncaughtException,
+ * unhandledRejection) are installed for the duration of the TUI
+ * session and removed once it exits normally. This ensures the
+ * terminal is always restored even if the process is killed.
+ *
  * @returns The TUI result describing what the CLI should do next.
  */
 export async function renderTui(node: React.ReactNode): Promise<TuiResult> {
+  const removeSafetyHandlers = installTerminalSafetyHandlers();
+
   const instance = render(node);
 
   try {
@@ -247,5 +346,12 @@ export async function renderTui(node: React.ReactNode): Promise<TuiResult> {
   } catch {
     // Ctrl+C or unexpected error — treat as quit
     return { action: "quit" };
+  } finally {
+    // Remove safety handlers so they don't interfere with post-TUI
+    // code (e.g. the runner streaming agent output).
+    removeSafetyHandlers();
+    // Belt-and-suspenders: ensure terminal is restored even if Ink's
+    // React cleanup didn't run (e.g. render threw synchronously).
+    restoreTerminal();
   }
 }

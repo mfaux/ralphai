@@ -4,6 +4,8 @@
  * Tests pure helper functions exported from app.tsx:
  * - targetChoiceFromRunArgs()
  * - initialScreenFrom()
+ * - restoreTerminal()
+ * - installTerminalSafetyHandlers()
  *
  * Tests the TuiRouter component renders correctly for each screen type
  * and transitions between screens via callbacks.
@@ -12,7 +14,7 @@
  * Component tests use Ink's render() to verify mount/unmount behavior.
  */
 
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 import React from "react";
 import { render } from "ink";
 import type { ConfigSource } from "../config.ts";
@@ -23,6 +25,8 @@ import type { ConfirmScreenData } from "./screens/confirm.tsx";
 import {
   targetChoiceFromRunArgs,
   initialScreenFrom,
+  restoreTerminal,
+  installTerminalSafetyHandlers,
   TuiRouter,
   type Screen,
 } from "./app.tsx";
@@ -339,5 +343,92 @@ describe("confirm → wizard integration", () => {
       expect(wizardScreen.preSelectedTarget?.args).toEqual(["42"]);
       expect(wizardScreen.previousScreen?.tag).toBe("confirm");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// restoreTerminal
+// ---------------------------------------------------------------------------
+
+describe("restoreTerminal", () => {
+  it("does not throw when stdin is not a TTY", () => {
+    // In test environment, stdin is typically not a TTY
+    expect(() => restoreTerminal()).not.toThrow();
+  });
+
+  it("writes show-cursor escape to stdout", () => {
+    const written: string[] = [];
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      if (typeof chunk === "string") written.push(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      restoreTerminal();
+      expect(written).toContain("\x1b[?25h");
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+
+  it("is safe to call multiple times", () => {
+    expect(() => {
+      restoreTerminal();
+      restoreTerminal();
+      restoreTerminal();
+    }).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// installTerminalSafetyHandlers
+// ---------------------------------------------------------------------------
+
+describe("installTerminalSafetyHandlers", () => {
+  it("returns a cleanup function", () => {
+    const cleanup = installTerminalSafetyHandlers();
+    expect(typeof cleanup).toBe("function");
+    cleanup(); // remove handlers immediately
+  });
+
+  it("installs SIGINT listener that is removed by cleanup", () => {
+    const before = process.listenerCount("SIGINT");
+    const cleanup = installTerminalSafetyHandlers();
+    expect(process.listenerCount("SIGINT")).toBe(before + 1);
+    cleanup();
+    expect(process.listenerCount("SIGINT")).toBe(before);
+  });
+
+  it("installs SIGTERM listener that is removed by cleanup", () => {
+    const before = process.listenerCount("SIGTERM");
+    const cleanup = installTerminalSafetyHandlers();
+    expect(process.listenerCount("SIGTERM")).toBe(before + 1);
+    cleanup();
+    expect(process.listenerCount("SIGTERM")).toBe(before);
+  });
+
+  it("installs uncaughtException listener that is removed by cleanup", () => {
+    const before = process.listenerCount("uncaughtException");
+    const cleanup = installTerminalSafetyHandlers();
+    expect(process.listenerCount("uncaughtException")).toBe(before + 1);
+    cleanup();
+    expect(process.listenerCount("uncaughtException")).toBe(before);
+  });
+
+  it("installs unhandledRejection listener that is removed by cleanup", () => {
+    const before = process.listenerCount("unhandledRejection");
+    const cleanup = installTerminalSafetyHandlers();
+    expect(process.listenerCount("unhandledRejection")).toBe(before + 1);
+    cleanup();
+    expect(process.listenerCount("unhandledRejection")).toBe(before);
+  });
+
+  it("cleanup is idempotent — safe to call multiple times", () => {
+    const before = process.listenerCount("SIGINT");
+    const cleanup = installTerminalSafetyHandlers();
+    cleanup();
+    cleanup();
+    expect(process.listenerCount("SIGINT")).toBe(before);
   });
 });
