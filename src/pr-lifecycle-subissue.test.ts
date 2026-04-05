@@ -1,9 +1,10 @@
 /**
- * Unit tests for archiveRun() sub-issue label behaviour.
+ * Unit tests for archiveRun() label behaviour with sub-issues.
  *
- * When a plan has `prd: <number>` in its frontmatter, archiveRun() should
- * use the subissue label family (ralphai-subissue:*) for the done transition
- * instead of the standalone labels.
+ * With shared state labels, archiveRun() uses the same `done` and
+ * `in-progress` labels regardless of whether the plan is a standalone
+ * issue or a sub-issue. This file verifies that the done transition
+ * works correctly for both plan types.
  *
  * Uses mock.module to control `child_process.execSync` so we can verify
  * the label arguments passed to `gh issue edit`.
@@ -64,8 +65,8 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("archiveRun — sub-issue label selection", () => {
-  it("uses subissue labels for done transition when plan has prd frontmatter", () => {
+describe("archiveRun — shared state labels for sub-issues", () => {
+  it("uses shared done label for sub-issue plans (prd frontmatter)", () => {
     mockGhAvailable();
 
     const wipDir = join(ctx.dir, "in-progress", "gh-201-sub-task");
@@ -79,16 +80,12 @@ describe("archiveRun — sub-issue label selection", () => {
     const result = archiveRun({
       wipFiles: [join(wipDir, "gh-201-sub-task.md")],
       archiveDir,
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneDoneLabel: "ralphai-standalone:done",
-      subissueInProgressLabel: "ralphai-subissue:in-progress",
-      subissueDoneLabel: "ralphai-subissue:done",
       cwd: ctx.dir,
     });
 
     expect(result.archived).toBe(true);
 
-    // Verify gh issue edit was called with subissue labels, not standalone
+    // Verify gh issue edit was called with shared state labels
     const ghEditCalls = mockExecSync.mock.calls.filter(
       (call: unknown[]) =>
         typeof call[0] === "string" && call[0].includes("gh issue edit"),
@@ -96,13 +93,11 @@ describe("archiveRun — sub-issue label selection", () => {
     expect(ghEditCalls.length).toBe(1);
     const cmd = ghEditCalls[0]![0] as string;
     expect(cmd).toContain("gh issue edit 201");
-    expect(cmd).toContain('--add-label "ralphai-subissue:done"');
-    expect(cmd).toContain('--remove-label "ralphai-subissue:in-progress"');
-    // Should NOT contain standalone labels
-    expect(cmd).not.toContain("ralphai-standalone");
+    expect(cmd).toContain('--add-label "done"');
+    expect(cmd).toContain('--remove-label "in-progress"');
   });
 
-  it("uses standalone labels for done transition when plan has no prd frontmatter", () => {
+  it("uses the same shared labels for standalone issues (no prd frontmatter)", () => {
     mockGhAvailable();
 
     const wipDir = join(ctx.dir, "in-progress", "gh-42-fix-bug");
@@ -116,16 +111,12 @@ describe("archiveRun — sub-issue label selection", () => {
     const result = archiveRun({
       wipFiles: [join(wipDir, "gh-42-fix-bug.md")],
       archiveDir,
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneDoneLabel: "ralphai-standalone:done",
-      subissueInProgressLabel: "ralphai-subissue:in-progress",
-      subissueDoneLabel: "ralphai-subissue:done",
       cwd: ctx.dir,
     });
 
     expect(result.archived).toBe(true);
 
-    // Verify gh issue edit was called with standalone labels
+    // Verify gh issue edit was called with the same shared state labels
     const ghEditCalls = mockExecSync.mock.calls.filter(
       (call: unknown[]) =>
         typeof call[0] === "string" && call[0].includes("gh issue edit"),
@@ -133,42 +124,59 @@ describe("archiveRun — sub-issue label selection", () => {
     expect(ghEditCalls.length).toBe(1);
     const cmd = ghEditCalls[0]![0] as string;
     expect(cmd).toContain("gh issue edit 42");
-    expect(cmd).toContain('--add-label "ralphai-standalone:done"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-    // Should NOT contain subissue labels
-    expect(cmd).not.toContain("ralphai-subissue");
+    expect(cmd).toContain('--add-label "done"');
+    expect(cmd).toContain('--remove-label "in-progress"');
   });
 
-  it("falls back to standalone labels when subissue labels are not provided for a sub-issue", () => {
+  it("both standalone and sub-issue use identical label transitions", () => {
     mockGhAvailable();
 
-    const wipDir = join(ctx.dir, "in-progress", "gh-201-sub-task");
-    const archiveDir = join(ctx.dir, "out");
-    mkdirSync(wipDir, { recursive: true });
+    // Sub-issue plan
+    const wipDir1 = join(ctx.dir, "in-progress", "gh-201-sub-task");
+    mkdirSync(wipDir1, { recursive: true });
     writeFileSync(
-      join(wipDir, "gh-201-sub-task.md"),
+      join(wipDir1, "gh-201-sub-task.md"),
       "---\nsource: github\nissue: 201\nprd: 100\nissue-url: https://github.com/owner/repo/issues/201\n---\n\n# Sub task\n",
     );
 
-    // Do NOT pass subissue label options — should fall back to standalone
-    const result = archiveRun({
-      wipFiles: [join(wipDir, "gh-201-sub-task.md")],
-      archiveDir,
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneDoneLabel: "ralphai-standalone:done",
+    archiveRun({
+      wipFiles: [join(wipDir1, "gh-201-sub-task.md")],
+      archiveDir: join(ctx.dir, "out1"),
       cwd: ctx.dir,
     });
 
-    expect(result.archived).toBe(true);
+    // Standalone plan
+    const wipDir2 = join(ctx.dir, "in-progress", "gh-42-fix-bug");
+    mkdirSync(wipDir2, { recursive: true });
+    writeFileSync(
+      join(wipDir2, "gh-42-fix-bug.md"),
+      "---\nsource: github\nissue: 42\nissue-url: https://github.com/owner/repo/issues/42\n---\n\n# Fix bug\n",
+    );
 
+    archiveRun({
+      wipFiles: [join(wipDir2, "gh-42-fix-bug.md")],
+      archiveDir: join(ctx.dir, "out2"),
+      cwd: ctx.dir,
+    });
+
+    // Both calls should use the same shared state labels
     const ghEditCalls = mockExecSync.mock.calls.filter(
       (call: unknown[]) =>
         typeof call[0] === "string" && call[0].includes("gh issue edit"),
     );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-    // Falls back to standalone since subissue labels not provided
-    expect(cmd).toContain('--add-label "ralphai-standalone:done"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
+    expect(ghEditCalls.length).toBe(2);
+
+    const cmd1 = ghEditCalls[0]![0] as string;
+    const cmd2 = ghEditCalls[1]![0] as string;
+
+    // Extract just the label parts (everything after the issue number)
+    const labelPart1 = cmd1.replace(/gh issue edit \d+/, "");
+    const labelPart2 = cmd2.replace(/gh issue edit \d+/, "");
+
+    // Same label operations for both families
+    expect(labelPart1).toContain('--add-label "done"');
+    expect(labelPart2).toContain('--add-label "done"');
+    expect(labelPart1).toContain('--remove-label "in-progress"');
+    expect(labelPart2).toContain('--remove-label "in-progress"');
   });
 });

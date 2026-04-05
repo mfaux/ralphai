@@ -47,7 +47,7 @@ import {
   DEFAULTS,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
-import { deriveLabels, type DerivedLabels } from "./labels.ts";
+import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import {
   prdTransitionInProgress,
   prdTransitionDone,
@@ -318,9 +318,9 @@ interface LabelResult {
 }
 
 interface LabelNames {
-  standalone: DerivedLabels;
-  subissue: DerivedLabels;
-  prd: DerivedLabels;
+  standalone: string;
+  subissue: string;
+  prd: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -336,9 +336,10 @@ function ghLabelCreateCmd(
 
 /** The label definitions with their descriptions and colors.
  *
- * Produces 12 labels: 3 families (standalone, subissue, prd) × 4 states
- * (intake, in-progress, done, stuck). Each family has a distinct intake
- * color; state colors (yellow, green, red) are shared across families.
+ * Produces 6 labels: 3 family labels (standalone, subissue, prd) with
+ * distinct colors, plus 3 shared state labels (in-progress, done, stuck)
+ * with shared colors. Issues carry their family label through all states;
+ * state labels are added/removed as the issue progresses.
  */
 function labelDefs(names: LabelNames) {
   // Intake colors — one per family
@@ -352,67 +353,36 @@ function labelDefs(names: LabelNames) {
   const STUCK_COLOR = "d93f0b"; // red
 
   return [
-    // Standalone family
+    // Family labels
     {
-      name: names.standalone.intake,
+      name: names.standalone,
       description: "Ralphai picks up this standalone issue",
       color: STANDALONE_INTAKE_COLOR,
     },
     {
-      name: names.standalone.inProgress,
-      description: "Ralphai is working on this standalone issue",
-      color: IN_PROGRESS_COLOR,
-    },
-    {
-      name: names.standalone.done,
-      description: "Ralphai finished this standalone issue",
-      color: DONE_COLOR,
-    },
-    {
-      name: names.standalone.stuck,
-      description: "Ralphai is stuck on this standalone issue",
-      color: STUCK_COLOR,
-    },
-    // Subissue family
-    {
-      name: names.subissue.intake,
+      name: names.subissue,
       description: "Ralphai picks up this PRD sub-issue",
       color: SUBISSUE_INTAKE_COLOR,
     },
     {
-      name: names.subissue.inProgress,
-      description: "Ralphai is working on this PRD sub-issue",
-      color: IN_PROGRESS_COLOR,
-    },
-    {
-      name: names.subissue.done,
-      description: "Ralphai finished this PRD sub-issue",
-      color: DONE_COLOR,
-    },
-    {
-      name: names.subissue.stuck,
-      description: "Ralphai is stuck on this PRD sub-issue",
-      color: STUCK_COLOR,
-    },
-    // PRD family
-    {
-      name: names.prd.intake,
+      name: names.prd,
       description: "Ralphai PRD — groups sub-issues for drain runs",
       color: PRD_INTAKE_COLOR,
     },
+    // Shared state labels
     {
-      name: names.prd.inProgress,
-      description: "Ralphai is processing this PRD's sub-issues",
+      name: IN_PROGRESS_LABEL,
+      description: "Ralphai is working on this issue",
       color: IN_PROGRESS_COLOR,
     },
     {
-      name: names.prd.done,
-      description: "Ralphai finished all sub-issues for this PRD",
+      name: DONE_LABEL,
+      description: "Ralphai finished this issue",
       color: DONE_COLOR,
     },
     {
-      name: names.prd.stuck,
-      description: "Ralphai is stuck processing this PRD",
+      name: STUCK_LABEL,
+      description: "Ralphai is stuck on this issue",
       color: STUCK_COLOR,
     },
   ];
@@ -540,9 +510,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
 
   // Create GitHub labels if issues integration is enabled
   const initLabelNames: LabelNames = {
-    standalone: deriveLabels(configObj.standaloneLabel as string),
-    subissue: deriveLabels(configObj.subissueLabel as string),
-    prd: deriveLabels(configObj.prdLabel as string),
+    standalone: configObj.standaloneLabel as string,
+    subissue: configObj.subissueLabel as string,
+    prd: configObj.prdLabel as string,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -571,19 +541,19 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (labelResult) {
     if (labelResult.success) {
       console.log(
-        `  GitHub labels              ${DIM}Created 12 labels across 3 families:${RESET}`,
+        `  GitHub labels              ${DIM}Created 6 labels (3 family + 3 shared state):${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.standaloneLabel}${RESET}       ${DIM}Intake label for standalone issues${RESET}`,
+        `    ${TEXT}${configObj.standaloneLabel}${RESET}       ${DIM}Family label for standalone issues${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.subissueLabel}${RESET}         ${DIM}Intake label for PRD sub-issues${RESET}`,
+        `    ${TEXT}${configObj.subissueLabel}${RESET}         ${DIM}Family label for PRD sub-issues${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.prdLabel}${RESET}              ${DIM}Intake label for PRD parent issues${RESET}`,
+        `    ${TEXT}${configObj.prdLabel}${RESET}              ${DIM}Family label for PRD parent issues${RESET}`,
       );
       console.log(
-        `                             ${DIM}Each has :in-progress, :done, and :stuck variants${RESET}`,
+        `                             ${DIM}Shared state: in-progress, done, stuck${RESET}`,
       );
     } else {
       console.log();
@@ -714,14 +684,8 @@ async function runRalphaiReset(
 
   let actions = 0;
 
-  // Load config to get label names for GitHub issue restoration.
+  // Load config to get issue repo for GitHub issue restoration.
   // Best-effort: if config resolution fails we skip label restoration.
-  let standaloneLabel = "";
-  let standaloneInProgressLabel = "";
-  let standaloneStuckLabel = "";
-  let subissueLabel = "";
-  let subissueInProgressLabel = "";
-  let subissueStuckLabel = "";
   let issueRepo = "";
   try {
     const cfgResult = resolveConfig({
@@ -729,18 +693,6 @@ async function runRalphaiReset(
       envVars: process.env,
       cliArgs: [],
     });
-    const standaloneLabelsResolved = deriveLabels(
-      cfgResult.config.standaloneLabel.value,
-    );
-    standaloneLabel = standaloneLabelsResolved.intake;
-    standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
-    standaloneStuckLabel = standaloneLabelsResolved.stuck;
-    const subissueLabelsResolved = deriveLabels(
-      cfgResult.config.subissueLabel.value,
-    );
-    subissueLabel = subissueLabelsResolved.intake;
-    subissueInProgressLabel = subissueLabelsResolved.inProgress;
-    subissueStuckLabel = subissueLabelsResolved.stuck;
     issueRepo = cfgResult.config.issueRepo.value;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
@@ -754,15 +706,9 @@ async function runRalphaiReset(
     mkdirSync(backlogDir, { recursive: true });
 
     // Restore GitHub issue labels before moving the file (needs frontmatter).
-    if (standaloneLabel && standaloneInProgressLabel && existsSync(planFile)) {
+    if (existsSync(planFile)) {
       const labelResult = restoreIssueLabels({
         planPath: planFile,
-        standaloneLabel,
-        standaloneInProgressLabel,
-        standaloneStuckLabel,
-        subissueLabel,
-        subissueInProgressLabel,
-        subissueStuckLabel,
         issueRepo,
         cwd,
       });
@@ -874,34 +820,14 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
         envVars: process.env,
         cliArgs: [],
       });
-      const standaloneLabelsResolved = deriveLabels(
-        cfgResult.config.standaloneLabel.value,
-      );
-      const standaloneLabel = standaloneLabelsResolved.intake;
-      const standaloneInProgressLabel = standaloneLabelsResolved.inProgress;
-      const standaloneStuckLabel = standaloneLabelsResolved.stuck;
-      const subissueLabelsResolved = deriveLabels(
-        cfgResult.config.subissueLabel.value,
-      );
-      const subissueLabel = subissueLabelsResolved.intake;
-      const subissueInProgressLabel = subissueLabelsResolved.inProgress;
-      const subissueStuckLabel = subissueLabelsResolved.stuck;
       const issueRepo = cfgResult.config.issueRepo.value;
-      if (standaloneLabel && standaloneInProgressLabel) {
-        const labelResult = restoreIssueLabels({
-          planPath: planFile,
-          standaloneLabel,
-          standaloneInProgressLabel,
-          standaloneStuckLabel,
-          subissueLabel,
-          subissueInProgressLabel,
-          subissueStuckLabel,
-          issueRepo,
-          cwd,
-        });
-        if (labelResult.restored) {
-          console.log(`  ${DIM}${labelResult.message}${RESET}`);
-        }
+      const labelResult = restoreIssueLabels({
+        planPath: planFile,
+        issueRepo,
+        cwd,
+      });
+      if (labelResult.restored) {
+        console.log(`  ${DIM}${labelResult.message}${RESET}`);
       }
     } catch {
       // Config resolution failure is not critical — skip label restoration.
@@ -1854,12 +1780,7 @@ async function runIssueTarget(
     backlogDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
-    standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value).intake,
-    standaloneInProgressLabel: deriveLabels(
-      worktreeConfig.standaloneLabel.value,
-    ).inProgress,
-    standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
-      .done,
+    standaloneLabel: worktreeConfig.standaloneLabel.value,
     issueRepo: worktreeConfig.issueRepo.value || repo,
     issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
     issueNumber,
@@ -1991,14 +1912,7 @@ async function runPrdIssueTarget(
   // --- PRD with unchecked sub-issues: work through sequentially ---
 
   // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
-  const prdInProgressLabel = deriveLabels(
-    worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
-  ).inProgress;
-  prdTransitionInProgress(
-    { number: prd.number, repo },
-    prdInProgressLabel,
-    cwd,
-  );
+  prdTransitionInProgress({ number: prd.number, repo }, cwd);
 
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
@@ -2024,19 +1938,8 @@ async function runPrdIssueTarget(
       backlogDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      standaloneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
-        .intake,
-      standaloneInProgressLabel: deriveLabels(
-        worktreeConfig.standaloneLabel.value,
-      ).inProgress,
-      standaloneDoneLabel: deriveLabels(worktreeConfig.standaloneLabel.value)
-        .done,
+      standaloneLabel: worktreeConfig.standaloneLabel.value,
       subissueLabel: worktreeConfig.subissueLabel.value,
-      subissueInProgressLabel: deriveLabels(worktreeConfig.subissueLabel.value)
-        .inProgress,
-      subissueDoneLabel: deriveLabels(worktreeConfig.subissueLabel.value).done,
-      subissueStuckLabel: deriveLabels(worktreeConfig.subissueLabel.value)
-        .stuck,
       issueRepo: worktreeConfig.issueRepo.value || repo,
       issueCommentProgress:
         worktreeConfig.issueCommentProgress.value === "true",
@@ -2132,18 +2035,10 @@ async function runPrdIssueTarget(
     stuckSubIssues.length === 0 &&
     subIssues.length > 0
   ) {
-    const prdLabels = deriveLabels(
-      worktreeConfig.prdLabel?.value ?? DEFAULTS.prdLabel,
-    );
     console.log(
       `All sub-issues of PRD #${prd.number} are done — transitioning PRD to done.`,
     );
-    prdTransitionDone(
-      { number: prd.number, repo },
-      prdLabels.inProgress,
-      prdLabels.done,
-      cwd,
-    );
+    prdTransitionDone({ number: prd.number, repo }, cwd);
   }
 
   // --- Create aggregate PRD pull request ---
@@ -2282,14 +2177,8 @@ async function runRalphaiInManagedWorktree(
   // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
   let resolvedIssueSource = "none";
-  const defaultStandaloneLabels = deriveLabels(DEFAULTS.standaloneLabel);
-  const defaultPrdLabels = deriveLabels(DEFAULTS.prdLabel);
   let resolvedIssueLabel = DEFAULTS.standaloneLabel;
-  let resolvedIssueInProgressLabel = defaultStandaloneLabels.inProgress;
-  let resolvedIssueDoneLabel = defaultStandaloneLabels.done;
-  let resolvedIssueStuckLabel = defaultStandaloneLabels.stuck;
   let resolvedIssuePrdLabel = DEFAULTS.prdLabel;
-  let resolvedIssuePrdInProgressLabel = defaultPrdLabels.inProgress;
   let resolvedSubissueLabel = DEFAULTS.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
@@ -2303,16 +2192,8 @@ async function runRalphaiInManagedWorktree(
     resolvedConfig = cfgResult.config;
     setupCommand = cfgResult.config.setupCommand.value;
     resolvedIssueSource = cfgResult.config.issueSource.value;
-    const standaloneLabels = deriveLabels(
-      cfgResult.config.standaloneLabel.value,
-    );
-    const prdLabels = deriveLabels(cfgResult.config.prdLabel.value);
     resolvedIssueLabel = cfgResult.config.standaloneLabel.value;
-    resolvedIssueInProgressLabel = standaloneLabels.inProgress;
-    resolvedIssueDoneLabel = standaloneLabels.done;
-    resolvedIssueStuckLabel = standaloneLabels.stuck;
     resolvedIssuePrdLabel = cfgResult.config.prdLabel.value;
-    resolvedIssuePrdInProgressLabel = prdLabels.inProgress;
     resolvedSubissueLabel = cfgResult.config.subissueLabel.value;
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
@@ -2617,13 +2498,10 @@ async function runRalphaiInManagedWorktree(
               cwd,
               issueSource: resolvedIssueSource,
               standaloneLabel: resolvedIssueLabel,
-              standaloneInProgressLabel: resolvedIssueInProgressLabel,
-              standaloneDoneLabel: resolvedIssueDoneLabel,
-              standaloneStuckLabel: resolvedIssueStuckLabel,
+              subissueLabel: resolvedSubissueLabel,
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
-              issuePrdInProgressLabel: resolvedIssuePrdInProgressLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2862,9 +2740,9 @@ async function runRalphaiRunner(
   if (!isDryRun && config.issueSource.value === "github") {
     try {
       ensureGitHubLabels(cwd, {
-        standalone: deriveLabels(config.standaloneLabel.value),
-        subissue: deriveLabels(config.subissueLabel.value),
-        prd: deriveLabels(config.prdLabel.value),
+        standalone: config.standaloneLabel.value,
+        subissue: config.subissueLabel.value,
+        prd: config.prdLabel.value,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

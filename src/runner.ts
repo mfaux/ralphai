@@ -36,7 +36,7 @@ import {
   detectCompletion,
   extractNoncedBlock,
 } from "./sentinel.ts";
-import { deriveLabels } from "./labels.ts";
+import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import {
   transitionStuck,
   prdTransitionStuck,
@@ -561,21 +561,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const agentCommand = config.agentCommand.value;
   const autoCommit = config.autoCommit.value === "true";
   const issueSource = config.issueSource.value;
-  const standaloneLabels = deriveLabels(config.standaloneLabel.value);
-  const standaloneLabel = standaloneLabels.intake;
-  const standaloneInProgressLabel = standaloneLabels.inProgress;
-  const standaloneDoneLabel = standaloneLabels.done;
-  const standaloneStuckLabel = standaloneLabels.stuck;
-  const subissueLabels = deriveLabels(config.subissueLabel.value);
-  const subissueLabel = subissueLabels.intake;
-  const subissueInProgressLabel = subissueLabels.inProgress;
-  const subissueDoneLabel = subissueLabels.done;
-  const subissueStuckLabel = subissueLabels.stuck;
-  const prdLabels = deriveLabels(config.prdLabel.value);
-  const issuePrdLabel = prdLabels.intake;
-  const issuePrdInProgressLabel = prdLabels.inProgress;
-  const prdDoneLabel = prdLabels.done;
-  const prdStuckLabel = prdLabels.stuck;
+  const standaloneLabel = config.standaloneLabel.value;
+  const subissueLabel = config.subissueLabel.value;
+  const issuePrdLabel = config.prdLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
@@ -638,17 +626,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           cwd,
           issueSource,
           standaloneLabel,
-          standaloneInProgressLabel,
-          standaloneDoneLabel,
-          standaloneStuckLabel,
           subissueLabel,
-          subissueInProgressLabel,
-          subissueDoneLabel,
-          subissueStuckLabel,
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
-          issuePrdInProgressLabel,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues
@@ -963,17 +944,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
           // Swap in-progress → stuck label on linked GitHub issue
           if (issueFm.source === "github" && issueFm.issue) {
-            // Choose the correct label family: sub-issues (prd present in
-            // frontmatter) use subissue labels, standalone issues use
-            // standalone labels.
-            const isSubIssue = issueFm.prd !== undefined;
-            const activeInProgressLabel = isSubIssue
-              ? subissueInProgressLabel
-              : standaloneInProgressLabel;
-            const activeStuckLabel = isSubIssue
-              ? subissueStuckLabel
-              : standaloneStuckLabel;
-
             let repo = issueRepo || null;
             if (!repo && issueFm.issueUrl) {
               const m = issueFm.issueUrl.match(
@@ -982,20 +952,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               repo = m?.[1] ?? null;
             }
             if (repo) {
-              transitionStuck(
-                { number: issueFm.issue, repo },
-                activeInProgressLabel,
-                activeStuckLabel,
-                cwd,
-              );
+              transitionStuck({ number: issueFm.issue, repo }, cwd);
 
               // Propagate stuck to PRD parent when a sub-issue gets stuck
-              if (isSubIssue && issueFm.prd) {
-                prdTransitionStuck(
-                  { number: issueFm.prd, repo },
-                  prdStuckLabel,
-                  cwd,
-                );
+              if (issueFm.prd) {
+                prdTransitionStuck({ number: issueFm.prd, repo }, cwd);
               }
             }
           }
@@ -1135,10 +1096,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         archiveRun({
           wipFiles: [planFile],
           archiveDir: dirs.archiveDir,
-          standaloneInProgressLabel,
-          standaloneDoneLabel,
-          subissueInProgressLabel,
-          subissueDoneLabel,
           cwd,
         });
 
@@ -1155,22 +1112,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             prdRepo = m?.[1] ?? null;
           }
           if (prdRepo) {
-            const allDone = checkAllPrdSubIssuesDone(
-              prdRepo,
-              issueFm.prd,
-              subissueDoneLabel,
-              cwd,
-            );
+            const allDone = checkAllPrdSubIssuesDone(prdRepo, issueFm.prd, cwd);
             if (allDone) {
               console.log(
                 `All sub-issues of PRD #${issueFm.prd} are done — transitioning PRD to done.`,
               );
-              prdTransitionDone(
-                { number: issueFm.prd, repo: prdRepo },
-                issuePrdInProgressLabel,
-                prdDoneLabel,
-                cwd,
-              );
+              prdTransitionDone({ number: issueFm.prd, repo: prdRepo }, cwd);
             }
           }
         }

@@ -173,7 +173,7 @@ ralphai run -w --plan=dark-mode  # wizard + specific plan
 
 ## Customize GitHub labels
 
-By default, Ralphai creates 12 GitHub labels from 3 base names — `ralphai-standalone`, `ralphai-subissue`, and `ralphai-prd` — each with 4 state suffixes (intake, `:in-progress`, `:done`, `:stuck`). Override the base names in `config.json`:
+By default, Ralphai creates 6 GitHub labels: 3 family labels (`ralphai-standalone`, `ralphai-subissue`, `ralphai-prd`) plus 3 shared state labels (`in-progress`, `done`, `stuck`). Override the family label names in `config.json`:
 
 ```json
 {

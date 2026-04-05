@@ -8,13 +8,15 @@
  * - `prd`        — discover sub-issues, process sequentially on shared branch
  * - `none`       — no recognized label, error with guidance
  *
+ * With shared state labels, classification only needs to check for family
+ * labels (which persist through all states). The `in-progress` label is
+ * shared and doesn't affect family classification.
+ *
  * Validation catches misconfigurations early with skip-with-warning:
  * - standalone + has parent PRD → skip
  * - subissue + no parent PRD → skip
  * - subissue + parent lacks ralphai-prd label → skip
  */
-
-import { deriveLabels } from "./labels.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,38 +67,28 @@ export interface LabelConfig {
 /**
  * Classify an issue into a dispatch family based on its labels.
  *
- * Matches against the intake and in-progress state for each family.
+ * Checks for family labels only — since family labels persist through
+ * all states, an issue with `ralphai-standalone` (with or without
+ * `in-progress`, `done`, etc.) is classified as standalone.
+ *
  * The old unified `ralphai` label is NOT recognized (hard cutover).
  */
 export function classifyIssue(
   issueLabels: string[],
   config: LabelConfig,
 ): DispatchResult {
-  const standaloneLabels = deriveLabels(config.standaloneLabel);
-  const subissueLabels = deriveLabels(config.subissueLabel);
-  const prdLabels = deriveLabels(config.prdLabel);
-
-  // Check standalone family (intake or in-progress)
-  if (
-    issueLabels.includes(standaloneLabels.intake) ||
-    issueLabels.includes(standaloneLabels.inProgress)
-  ) {
+  // Check standalone family
+  if (issueLabels.includes(config.standaloneLabel)) {
     return { ok: true, family: "standalone" };
   }
 
-  // Check subissue family (intake or in-progress)
-  if (
-    issueLabels.includes(subissueLabels.intake) ||
-    issueLabels.includes(subissueLabels.inProgress)
-  ) {
+  // Check subissue family
+  if (issueLabels.includes(config.subissueLabel)) {
     return { ok: true, family: "subissue" };
   }
 
-  // Check PRD family (intake or in-progress)
-  if (
-    issueLabels.includes(prdLabels.intake) ||
-    issueLabels.includes(prdLabels.inProgress)
-  ) {
+  // Check PRD family
+  if (issueLabels.includes(config.prdLabel)) {
     return { ok: true, family: "prd" };
   }
 

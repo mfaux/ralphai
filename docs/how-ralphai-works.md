@@ -126,7 +126,7 @@ When you run `ralphai run <number>`, Ralphai fetches the issue's labels from Git
 
 If no recognized label is found, Ralphai exits with an error and guidance to add the appropriate label. The old unified `ralphai` label is not recognized (hard cutover).
 
-Both the intake label (e.g. `ralphai-standalone`) and the in-progress label (e.g. `ralphai-standalone:in-progress`) are recognized for dispatch, so re-running an issue that's already in progress works correctly.
+Both the family label (e.g. `ralphai-standalone`) and the shared `in-progress` label can be present simultaneously — classification only checks for the family label, so re-running an issue that's already in progress works correctly.
 
 ### Validation rules
 
@@ -157,11 +157,11 @@ When `ralphai run` (auto-detect, no target) encounters a plan with `prd: N` fron
 
 ### PRD In-Progress Label
 
-When Ralphai begins processing a PRD's sub-issues — either via an explicit `ralphai run 42` or via auto-drain — it applies the configured PRD in-progress label (`ralphai-prd:in-progress`, derived from `prdLabel`) to the parent PRD issue. This is best-effort: if the label application fails, processing continues normally.
+When Ralphai begins processing a PRD's sub-issues — either via an explicit `ralphai run 42` or via auto-drain — it adds the shared `in-progress` label to the parent PRD issue. This is best-effort: if the label application fails, processing continues normally.
 
 ### PRD Done Label
 
-When all of a PRD's sub-issues have completed successfully (all have the done label, none have stuck or in-progress labels), Ralphai swaps the PRD in-progress label for the PRD done label (`ralphai-prd:done`, derived from `prdLabel`). This transition happens in three code paths: the explicit PRD runner after its sub-issue loop, the auto-drain path when no more eligible sub-issues remain, and the early exit path when all sub-issues are already complete on entry.
+When all of a PRD's sub-issues have completed successfully (all have the `done` label, none have `stuck` or `in-progress` labels), Ralphai swaps the `in-progress` label for the `done` label on the PRD parent. This transition happens in three code paths: the explicit PRD runner after its sub-issue loop, the auto-drain path when no more eligible sub-issues remain, and the early exit path when all sub-issues are already complete on entry.
 
 ### Sequencing
 

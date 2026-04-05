@@ -47,7 +47,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/show-config.ts`       | `--show-config` output formatting.                                        |
 | `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery.  |
 | `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.    |
-| `src/labels.ts`            | Label derivation from base label names (`deriveLabels()`).                |
+| `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).            |
 | `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).            |
 | `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                |
 | `src/pr-lifecycle.ts`      | PR creation after plan completion.                                        |

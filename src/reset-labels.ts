@@ -2,12 +2,12 @@
  * Label restoration for GitHub issues when plans are reset.
  *
  * When a plan sourced from a GitHub issue is moved back to the backlog
- * (via `ralphai reset` or the interactive menu), the in-progress label
- * should be removed and the intake label restored — returning the issue
- * to the pickup queue.
+ * (via `ralphai reset` or the interactive menu), the in-progress and
+ * stuck labels should be removed — returning the issue to the pickup
+ * queue. The family label stays (it was never removed during pull).
  *
- * This is the reverse of the intake → in-progress transition performed
- * in issues.ts when an issue is pulled into the pipeline.
+ * This is the reverse of the pull transition performed in issues.ts
+ * when an issue is pulled into the pipeline.
  */
 import { execSync } from "child_process";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
@@ -20,18 +20,6 @@ import { transitionReset } from "./label-lifecycle.ts";
 export interface RestoreIssueLabelsOptions {
   /** Path to the plan .md file (must still exist on disk). */
   planPath: string;
-  /** The intake label to restore (e.g. "ralphai-standalone"). */
-  standaloneLabel: string;
-  /** The in-progress label to remove (e.g. "ralphai-standalone:in-progress"). */
-  standaloneInProgressLabel: string;
-  /** The stuck label to remove (e.g. "ralphai-standalone:stuck"). */
-  standaloneStuckLabel: string;
-  /** Sub-issue intake label (e.g. "ralphai-subissue"). */
-  subissueLabel?: string;
-  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
-  subissueInProgressLabel?: string;
-  /** Sub-issue stuck label (e.g. "ralphai-subissue:stuck"). */
-  subissueStuckLabel?: string;
   /** Configured issue repo (owner/repo), or "" to auto-detect from issue-url. */
   issueRepo: string;
   /** Working directory for gh CLI calls. */
@@ -80,11 +68,12 @@ function repoFromUrl(issueUrl: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Restore the intake label on a GitHub issue when its plan is reset.
+ * Restore labels on a GitHub issue when its plan is reset.
  *
  * Reads frontmatter from the plan file. If the plan is GitHub-sourced
  * (`source: github` with an issue number), calls `gh issue edit` to
- * remove the in-progress label and add the intake label.
+ * remove the in-progress and stuck state labels (shared labels).
+ * The family label is left untouched since it was never removed.
  *
  * Best-effort: failures are reported in the result but never thrown.
  */
@@ -99,22 +88,6 @@ export function restoreIssueLabels(
   if (fm.source !== "github" || !fm.issue) {
     return { restored: false, message: "not a GitHub-sourced plan" };
   }
-
-  // Choose the correct label family: sub-issues (prd present in frontmatter)
-  // use subissue labels when available, standalone issues use standalone labels.
-  const isSubIssue = fm.prd !== undefined;
-  const issueLabel =
-    isSubIssue && options.subissueLabel
-      ? options.subissueLabel
-      : options.standaloneLabel;
-  const issueInProgressLabel =
-    isSubIssue && options.subissueInProgressLabel
-      ? options.subissueInProgressLabel
-      : options.standaloneInProgressLabel;
-  const issueStuckLabel =
-    isSubIssue && options.subissueStuckLabel
-      ? options.subissueStuckLabel
-      : options.standaloneStuckLabel;
 
   // Check gh CLI availability
   if (!isGhAvailable()) {
@@ -136,27 +109,9 @@ export function restoreIssueLabels(
     };
   }
 
-  // Reverse the label transition: remove in-progress and stuck, add intake.
-  // For sub-issues, also defensively remove standalone state labels in case
-  // the wrong family was applied (the pullGithubIssueByNumber bug).
-  // gh issue edit --remove-label is a no-op for labels that aren't present.
-  const extraRemoveLabels: string[] = [];
-  if (isSubIssue && options.subissueLabel) {
-    // We're resetting a sub-issue with subissue labels — also remove
-    // any standalone state labels that may have been erroneously applied.
-    extraRemoveLabels.push(options.standaloneInProgressLabel);
-    extraRemoveLabels.push(options.standaloneStuckLabel);
-  }
-
-  const transitionResult = transitionReset(
-    { number: fm.issue, repo },
-    issueLabel,
-    issueInProgressLabel,
-    issueStuckLabel,
-    cwd,
-    false,
-    extraRemoveLabels,
-  );
+  // Remove shared state labels (in-progress and stuck).
+  // The family label stays — it was never removed during pull.
+  const transitionResult = transitionReset({ number: fm.issue, repo }, cwd);
 
   return {
     restored: transitionResult.ok,

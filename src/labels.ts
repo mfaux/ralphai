@@ -1,45 +1,36 @@
 /**
- * Label derivation module — pure functions for deriving state-suffixed
- * GitHub labels from a base label name.
+ * Shared state label constants for GitHub issue tracking.
  *
- * Given a base name like "ralphai-standalone", deriveLabels returns:
- *   { intake: "ralphai-standalone",
- *     inProgress: "ralphai-standalone:in-progress",
- *     done: "ralphai-standalone:done",
- *     stuck: "ralphai-standalone:stuck" }
+ * Ralphai uses two kinds of labels on GitHub issues:
+ *
+ * 1. **Family labels** (configurable per repo):
+ *    - `ralphai-standalone`  — standalone issues
+ *    - `ralphai-subissue`    — PRD sub-issues
+ *    - `ralphai-prd`         — PRD parent issues
+ *
+ * 2. **State labels** (fixed, shared across all families):
+ *    - `in-progress`  — issue is being worked on
+ *    - `done`         — issue completed successfully
+ *    - `stuck`        — agent is stuck on this issue
+ *
+ * An issue carries its family label through all states. When a state
+ * transition occurs, only the state label changes — the family label
+ * stays. For example, a standalone issue that gets picked up will have
+ * both `ralphai-standalone` and `in-progress` labels.
  */
 
 // ---------------------------------------------------------------------------
-// Types
+// Shared state labels
 // ---------------------------------------------------------------------------
 
-/** The four state labels derived from a single base name. */
-export interface DerivedLabels {
-  /** The intake/triage label (the base name itself). */
-  intake: string;
-  /** The in-progress state label. */
-  inProgress: string;
-  /** The done state label. */
-  done: string;
-  /** The stuck state label. */
-  stuck: string;
-}
+/** Label added when an issue is picked up and work begins. */
+export const IN_PROGRESS_LABEL = "in-progress";
 
-// ---------------------------------------------------------------------------
-// Derivation
-// ---------------------------------------------------------------------------
+/** Label added when work completes successfully. */
+export const DONE_LABEL = "done";
 
-/**
- * Derive the four state labels from a base label name.
- *
- * The intake label is the base name itself. State suffixes are appended
- * with a colon separator: `:in-progress`, `:done`, `:stuck`.
- */
-export function deriveLabels(baseName: string): DerivedLabels {
-  return {
-    intake: baseName,
-    inProgress: `${baseName}:in-progress`,
-    done: `${baseName}:done`,
-    stuck: `${baseName}:stuck`,
-  };
-}
+/** Label added when the agent gets stuck on an issue. */
+export const STUCK_LABEL = "stuck";
+
+/** All state labels that can be removed during a reset. */
+export const STATE_LABELS = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];

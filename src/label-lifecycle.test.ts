@@ -7,6 +7,10 @@
  * Tests verify correct `--add-label`/`--remove-label` arguments for each
  * transition (pull, done, stuck, reset) and for PRD parent propagation
  * (in-progress, done, stuck).
+ *
+ * All transition functions use shared state labels (in-progress, done,
+ * stuck) — family labels are managed separately and never passed to
+ * transition functions.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
@@ -79,19 +83,14 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// transitionPull: intake → in-progress
+// transitionPull: add in-progress (family label stays)
 // ---------------------------------------------------------------------------
 
 describe("transitionPull", () => {
-  it("calls gh issue edit with correct add/remove labels", () => {
+  it("calls gh issue edit to add in-progress label", () => {
     mockGhSuccess();
 
-    const result = transitionPull(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "/tmp",
-    );
+    const result = transitionPull(ISSUE, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -99,19 +98,15 @@ describe("transitionPull", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 42");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-standalone:in-progress"');
-    expect(calls[0]).toContain('--remove-label "ralphai-standalone"');
+    expect(calls[0]).toContain('--add-label "in-progress"');
+    // Family label is not touched — no --remove-label
+    expect(calls[0]).not.toContain("--remove-label");
   });
 
   it("returns ok: false on gh failure", () => {
     mockGhFailure();
 
-    const result = transitionPull(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "/tmp",
-    );
+    const result = transitionPull(ISSUE, "/tmp");
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("failed");
@@ -123,15 +118,10 @@ describe("transitionPull", () => {
 // ---------------------------------------------------------------------------
 
 describe("transitionDone", () => {
-  it("calls gh issue edit with correct add/remove labels", () => {
+  it("calls gh issue edit to add done and remove in-progress", () => {
     mockGhSuccess();
 
-    const result = transitionDone(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:done",
-      "/tmp",
-    );
+    const result = transitionDone(ISSUE, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -139,21 +129,14 @@ describe("transitionDone", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 42");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-standalone:done"');
-    expect(calls[0]).toContain(
-      '--remove-label "ralphai-standalone:in-progress"',
-    );
+    expect(calls[0]).toContain('--add-label "done"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
   });
 
   it("returns ok: false on gh failure", () => {
     mockGhFailure();
 
-    const result = transitionDone(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:done",
-      "/tmp",
-    );
+    const result = transitionDone(ISSUE, "/tmp");
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("failed");
@@ -165,15 +148,10 @@ describe("transitionDone", () => {
 // ---------------------------------------------------------------------------
 
 describe("transitionStuck", () => {
-  it("calls gh issue edit with correct add/remove labels", () => {
+  it("calls gh issue edit to add stuck and remove in-progress", () => {
     mockGhSuccess();
 
-    const result = transitionStuck(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-    );
+    const result = transitionStuck(ISSUE, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -181,21 +159,14 @@ describe("transitionStuck", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 42");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-standalone:stuck"');
-    expect(calls[0]).toContain(
-      '--remove-label "ralphai-standalone:in-progress"',
-    );
+    expect(calls[0]).toContain('--add-label "stuck"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
   });
 
   it("returns ok: false on gh failure", () => {
     mockGhFailure();
 
-    const result = transitionStuck(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-    );
+    const result = transitionStuck(ISSUE, "/tmp");
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("failed");
@@ -203,20 +174,14 @@ describe("transitionStuck", () => {
 });
 
 // ---------------------------------------------------------------------------
-// transitionReset: in-progress/stuck → intake
+// transitionReset: remove in-progress + stuck
 // ---------------------------------------------------------------------------
 
 describe("transitionReset", () => {
-  it("calls gh issue edit to add intake and remove in-progress + stuck", () => {
+  it("calls gh issue edit to remove in-progress and stuck labels", () => {
     mockGhSuccess();
 
-    const result = transitionReset(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-    );
+    const result = transitionReset(ISSUE, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -224,23 +189,16 @@ describe("transitionReset", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 42");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-standalone"');
-    expect(calls[0]).toContain(
-      '--remove-label "ralphai-standalone:in-progress"',
-    );
-    expect(calls[0]).toContain('--remove-label "ralphai-standalone:stuck"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
+    expect(calls[0]).toContain('--remove-label "stuck"');
+    // No --add-label — family label stays untouched
+    expect(calls[0]).not.toContain("--add-label");
   });
 
   it("returns ok: false on gh failure", () => {
     mockGhFailure();
 
-    const result = transitionReset(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-    );
+    const result = transitionReset(ISSUE, "/tmp");
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("failed");
@@ -252,15 +210,11 @@ describe("transitionReset", () => {
 // ---------------------------------------------------------------------------
 
 describe("prdTransitionInProgress", () => {
-  it("calls gh issue edit to add prd in-progress label", () => {
+  it("calls gh issue edit to add in-progress label", () => {
     mockGhSuccess();
 
     const prdIssue = { number: 100, repo: "acme/widgets" };
-    const result = prdTransitionInProgress(
-      prdIssue,
-      "ralphai-prd:in-progress",
-      "/tmp",
-    );
+    const result = prdTransitionInProgress(prdIssue, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -268,7 +222,7 @@ describe("prdTransitionInProgress", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 100");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-prd:in-progress"');
+    expect(calls[0]).toContain('--add-label "in-progress"');
     // Should NOT have --remove-label (additive only)
     expect(calls[0]).not.toContain("--remove-label");
   });
@@ -278,7 +232,6 @@ describe("prdTransitionInProgress", () => {
 
     const result = prdTransitionInProgress(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:in-progress",
       "/tmp",
     );
 
@@ -296,12 +249,7 @@ describe("prdTransitionDone", () => {
     mockGhSuccess();
 
     const prdIssue = { number: 100, repo: "acme/widgets" };
-    const result = prdTransitionDone(
-      prdIssue,
-      "ralphai-prd:in-progress",
-      "ralphai-prd:done",
-      "/tmp",
-    );
+    const result = prdTransitionDone(prdIssue, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -309,8 +257,8 @@ describe("prdTransitionDone", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 100");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-prd:done"');
-    expect(calls[0]).toContain('--remove-label "ralphai-prd:in-progress"');
+    expect(calls[0]).toContain('--add-label "done"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
   });
 
   it("returns ok: false on gh failure", () => {
@@ -318,8 +266,6 @@ describe("prdTransitionDone", () => {
 
     const result = prdTransitionDone(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:in-progress",
-      "ralphai-prd:done",
       "/tmp",
     );
 
@@ -333,11 +279,11 @@ describe("prdTransitionDone", () => {
 // ---------------------------------------------------------------------------
 
 describe("prdTransitionStuck", () => {
-  it("calls gh issue edit to add prd stuck label", () => {
+  it("calls gh issue edit to add stuck label", () => {
     mockGhSuccess();
 
     const prdIssue = { number: 100, repo: "acme/widgets" };
-    const result = prdTransitionStuck(prdIssue, "ralphai-prd:stuck", "/tmp");
+    const result = prdTransitionStuck(prdIssue, "/tmp");
 
     expect(result.ok).toBe(true);
 
@@ -345,7 +291,7 @@ describe("prdTransitionStuck", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 100");
     expect(calls[0]).toContain('--repo "acme/widgets"');
-    expect(calls[0]).toContain('--add-label "ralphai-prd:stuck"');
+    expect(calls[0]).toContain('--add-label "stuck"');
     // Should NOT have --remove-label (additive only)
     expect(calls[0]).not.toContain("--remove-label");
   });
@@ -355,7 +301,6 @@ describe("prdTransitionStuck", () => {
 
     const result = prdTransitionStuck(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:stuck",
       "/tmp",
     );
 
@@ -365,84 +310,61 @@ describe("prdTransitionStuck", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cross-family: works with subissue labels too
+// Shared state labels work the same regardless of issue family
 // ---------------------------------------------------------------------------
 
-describe("cross-family labels", () => {
-  it("transitionPull works with subissue labels", () => {
+describe("shared state labels across families", () => {
+  it("transitionPull uses the same in-progress label for any issue", () => {
     mockGhSuccess();
 
-    const result = transitionPull(
-      { number: 7, repo: "org/repo" },
-      "ralphai-subissue",
-      "ralphai-subissue:in-progress",
-      "/tmp",
-    );
+    const result = transitionPull({ number: 7, repo: "org/repo" }, "/tmp");
 
     expect(result.ok).toBe(true);
 
     const calls = ghEditCalls();
     expect(calls.length).toBe(1);
-    expect(calls[0]).toContain('--add-label "ralphai-subissue:in-progress"');
-    expect(calls[0]).toContain('--remove-label "ralphai-subissue"');
+    expect(calls[0]).toContain('--add-label "in-progress"');
   });
 
-  it("transitionDone works with custom label base names", () => {
+  it("transitionDone uses the same done/in-progress labels for any issue", () => {
     mockGhSuccess();
 
-    const result = transitionDone(
-      { number: 7, repo: "org/repo" },
-      "my-custom:in-progress",
-      "my-custom:done",
-      "/tmp",
-    );
+    const result = transitionDone({ number: 7, repo: "org/repo" }, "/tmp");
 
     expect(result.ok).toBe(true);
 
     const calls = ghEditCalls();
     expect(calls.length).toBe(1);
-    expect(calls[0]).toContain('--add-label "my-custom:done"');
-    expect(calls[0]).toContain('--remove-label "my-custom:in-progress"');
+    expect(calls[0]).toContain('--add-label "done"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
   });
 
-  it("transitionStuck works with subissue labels", () => {
+  it("transitionStuck uses the same stuck/in-progress labels for any issue", () => {
     mockGhSuccess();
 
-    const result = transitionStuck(
-      { number: 201, repo: "org/repo" },
-      "ralphai-subissue:in-progress",
-      "ralphai-subissue:stuck",
-      "/tmp",
-    );
+    const result = transitionStuck({ number: 201, repo: "org/repo" }, "/tmp");
 
     expect(result.ok).toBe(true);
 
     const calls = ghEditCalls();
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 201");
-    expect(calls[0]).toContain('--add-label "ralphai-subissue:stuck"');
-    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
+    expect(calls[0]).toContain('--add-label "stuck"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
   });
 
-  it("transitionReset works with subissue labels", () => {
+  it("transitionReset removes the same state labels for any issue", () => {
     mockGhSuccess();
 
-    const result = transitionReset(
-      { number: 201, repo: "org/repo" },
-      "ralphai-subissue",
-      "ralphai-subissue:in-progress",
-      "ralphai-subissue:stuck",
-      "/tmp",
-    );
+    const result = transitionReset({ number: 201, repo: "org/repo" }, "/tmp");
 
     expect(result.ok).toBe(true);
 
     const calls = ghEditCalls();
     expect(calls.length).toBe(1);
     expect(calls[0]).toContain("gh issue edit 201");
-    expect(calls[0]).toContain('--add-label "ralphai-subissue"');
-    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
-    expect(calls[0]).toContain('--remove-label "ralphai-subissue:stuck"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
+    expect(calls[0]).toContain('--remove-label "stuck"');
   });
 });
 
@@ -451,37 +373,32 @@ describe("cross-family labels", () => {
 // ---------------------------------------------------------------------------
 
 describe("sub-issue stuck with PRD parent propagation", () => {
-  it("sub-issue stuck uses subissue labels and PRD parent gets prd:stuck", () => {
+  it("sub-issue gets stuck label, PRD parent also gets stuck label", () => {
     mockGhSuccess();
 
     const subIssue = { number: 201, repo: "org/repo" };
     const prdIssue = { number: 100, repo: "org/repo" };
 
-    // 1. Sub-issue transitions to stuck with subissue label family
-    const stuckResult = transitionStuck(
-      subIssue,
-      "ralphai-subissue:in-progress",
-      "ralphai-subissue:stuck",
-      "/tmp",
-    );
+    // 1. Sub-issue transitions to stuck
+    const stuckResult = transitionStuck(subIssue, "/tmp");
     expect(stuckResult.ok).toBe(true);
 
     // 2. PRD parent gets stuck label propagated
-    const prdResult = prdTransitionStuck(prdIssue, "ralphai-prd:stuck", "/tmp");
+    const prdResult = prdTransitionStuck(prdIssue, "/tmp");
     expect(prdResult.ok).toBe(true);
 
     // Verify both calls happened
     const calls = ghEditCalls();
     expect(calls.length).toBe(2);
 
-    // First call: sub-issue stuck with subissue labels
+    // First call: sub-issue stuck
     expect(calls[0]).toContain("gh issue edit 201");
-    expect(calls[0]).toContain('--add-label "ralphai-subissue:stuck"');
-    expect(calls[0]).toContain('--remove-label "ralphai-subissue:in-progress"');
+    expect(calls[0]).toContain('--add-label "stuck"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
 
-    // Second call: PRD parent gets ralphai-prd:stuck (additive only)
+    // Second call: PRD parent gets stuck (additive only)
     expect(calls[1]).toContain("gh issue edit 100");
-    expect(calls[1]).toContain('--add-label "ralphai-prd:stuck"');
+    expect(calls[1]).toContain('--add-label "stuck"');
     expect(calls[1]).not.toContain("--remove-label");
   });
 });
@@ -492,77 +409,49 @@ describe("sub-issue stuck with PRD parent propagation", () => {
 
 describe("dry-run safety — label lifecycle", () => {
   it("transitionPull skips gh call and returns skipped result", () => {
-    const result = transitionPull(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "/tmp",
-      true,
-    );
+    const result = transitionPull(ISSUE, "/tmp", true);
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-standalone");
-    expect(result.message).toContain("ralphai-standalone:in-progress");
+    expect(result.message).toContain("in-progress");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("transitionDone skips gh call and returns skipped result", () => {
-    const result = transitionDone(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:done",
-      "/tmp",
-      true,
-    );
+    const result = transitionDone(ISSUE, "/tmp", true);
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-standalone:in-progress");
-    expect(result.message).toContain("ralphai-standalone:done");
+    expect(result.message).toContain("in-progress");
+    expect(result.message).toContain("done");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("transitionStuck skips gh call and returns skipped result", () => {
-    const result = transitionStuck(
-      ISSUE,
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-      true,
-    );
+    const result = transitionStuck(ISSUE, "/tmp", true);
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-standalone:in-progress");
-    expect(result.message).toContain("ralphai-standalone:stuck");
+    expect(result.message).toContain("in-progress");
+    expect(result.message).toContain("stuck");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("transitionReset skips gh call and returns skipped result", () => {
-    const result = transitionReset(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "ralphai-standalone:stuck",
-      "/tmp",
-      true,
-    );
+    const result = transitionReset(ISSUE, "/tmp", true);
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("reset to ralphai-standalone");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("prdTransitionInProgress skips gh call and returns skipped result", () => {
     const result = prdTransitionInProgress(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:in-progress",
       "/tmp",
       true,
     );
@@ -570,15 +459,13 @@ describe("dry-run safety — label lifecycle", () => {
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-prd:in-progress");
+    expect(result.message).toContain("in-progress");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("prdTransitionDone skips gh call and returns skipped result", () => {
     const result = prdTransitionDone(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:in-progress",
-      "ralphai-prd:done",
       "/tmp",
       true,
     );
@@ -586,15 +473,14 @@ describe("dry-run safety — label lifecycle", () => {
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-prd:in-progress");
-    expect(result.message).toContain("ralphai-prd:done");
+    expect(result.message).toContain("in-progress");
+    expect(result.message).toContain("done");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("prdTransitionStuck skips gh call and returns skipped result", () => {
     const result = prdTransitionStuck(
       { number: 100, repo: "acme/widgets" },
-      "ralphai-prd:stuck",
       "/tmp",
       true,
     );
@@ -602,19 +488,14 @@ describe("dry-run safety — label lifecycle", () => {
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("ralphai-prd:stuck");
+    expect(result.message).toContain("stuck");
     expect(ghEditCalls()).toHaveLength(0);
   });
 
   it("dryRun=false (default) still executes gh calls", () => {
     mockGhSuccess();
 
-    const result = transitionPull(
-      ISSUE,
-      "ralphai-standalone",
-      "ralphai-standalone:in-progress",
-      "/tmp",
-    );
+    const result = transitionPull(ISSUE, "/tmp");
 
     expect(result.ok).toBe(true);
     expect(result.skipped).toBeUndefined();
@@ -627,13 +508,7 @@ describe("dry-run safety — label lifecycle", () => {
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
 
     try {
-      transitionStuck(
-        ISSUE,
-        "ralphai-standalone:in-progress",
-        "ralphai-standalone:stuck",
-        "/tmp",
-        true,
-      );
+      transitionStuck(ISSUE, "/tmp", true);
     } finally {
       console.log = origLog;
     }
@@ -641,7 +516,7 @@ describe("dry-run safety — label lifecycle", () => {
     expect(logs.length).toBe(1);
     expect(logs[0]).toContain("[dry-run] Would execute label operation");
     expect(logs[0]).toContain("Issue #42");
-    expect(logs[0]).toContain("ralphai-standalone:in-progress");
-    expect(logs[0]).toContain("ralphai-standalone:stuck");
+    expect(logs[0]).toContain("in-progress");
+    expect(logs[0]).toContain("stuck");
   });
 });

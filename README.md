@@ -146,7 +146,7 @@ ralphai run              # auto-pulls from GitHub when the backlog is empty
 
 Each standalone issue gets its own branch and PR, the same as a local plan file.
 
-Both workflows require the `gh` CLI and `issueSource: "github"` in config. Ralphai creates 12 GitHub labels (3 families — `standaloneLabel`, `subissueLabel`, `prdLabel` — × 4 states each), all configurable via `config.json` or environment variables. See the [CLI Reference](docs/cli-reference.md#config-keys) for all options.
+Both workflows require the `gh` CLI and `issueSource: "github"` in config. Ralphai creates 6 GitHub labels — 3 family labels (`standaloneLabel`, `subissueLabel`, `prdLabel`) plus 3 shared state labels (`in-progress`, `done`, `stuck`). Family labels are configurable via `config.json` or environment variables. See the [CLI Reference](docs/cli-reference.md#config-keys) for all options.
 
 ## Multi-Repo Management
 
