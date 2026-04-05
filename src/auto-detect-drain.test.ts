@@ -14,6 +14,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "fs";
 import { join } from "path";
@@ -58,6 +59,16 @@ function initWithAgent(dir: string, env: Record<string, string>): void {
   config.agentCommand = completeAgent;
   config.autoCommit = true;
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+
+  // Remove the scaffolded hello-world sample plan so it doesn't interfere
+  // with test plans. The hello-world plan uses task headings that don't
+  // match the test agent's progress format, causing the completion gate
+  // to reject and the runner to get stuck.
+  const { backlogDir } = getRepoPipelineDirs(dir, env);
+  const samplePlan = join(backlogDir, "hello-world.md");
+  if (existsSync(samplePlan)) {
+    rmSync(samplePlan);
+  }
 }
 
 /** Create plan files in the backlog directory. */
