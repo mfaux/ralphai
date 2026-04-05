@@ -41,8 +41,29 @@ export function parseWorktreeList(output: string): WorktreeEntry[] {
   return entries;
 }
 
+/**
+ * Conventional-commit type prefixes used for issue-driven branches.
+ * Must stay in sync with `CC_TITLE_PATTERN` in `src/issues.ts`.
+ */
+const CC_BRANCH_PREFIXES = [
+  "feat/",
+  "fix/",
+  "refactor/",
+  "test/",
+  "docs/",
+  "chore/",
+  "ci/",
+  "build/",
+  "perf/",
+  "style/",
+  "revert/",
+];
+
 export function isRalphaiManagedBranch(branch: string): boolean {
-  return branch.startsWith("ralphai/") || branch.startsWith("feat/");
+  return (
+    branch.startsWith("ralphai/") ||
+    CC_BRANCH_PREFIXES.some((prefix) => branch.startsWith(prefix))
+  );
 }
 
 export function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {

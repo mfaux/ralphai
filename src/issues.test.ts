@@ -5,7 +5,9 @@ import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 import {
   checkGhAvailable,
+  commitTypeFromTitle,
   detectIssueRepo,
+  issueBranchName,
   slugify,
   peekGithubIssues,
   pullGithubIssues,
@@ -280,33 +282,149 @@ describe("peekGithubIssues", () => {
 });
 
 // ---------------------------------------------------------------------------
-// prdBranchName
+// commitTypeFromTitle
+// ---------------------------------------------------------------------------
+
+describe("commitTypeFromTitle", () => {
+  it("extracts fix type from title", () => {
+    expect(commitTypeFromTitle("fix: broken login")).toEqual({
+      type: "fix",
+      description: "broken login",
+    });
+  });
+
+  it("extracts feat type from title", () => {
+    expect(commitTypeFromTitle("feat: add dark mode")).toEqual({
+      type: "feat",
+      description: "add dark mode",
+    });
+  });
+
+  it("extracts docs type from title", () => {
+    expect(commitTypeFromTitle("docs: update CLI reference")).toEqual({
+      type: "docs",
+      description: "update CLI reference",
+    });
+  });
+
+  it("extracts refactor type from title", () => {
+    expect(commitTypeFromTitle("refactor: extract label helpers")).toEqual({
+      type: "refactor",
+      description: "extract label helpers",
+    });
+  });
+
+  it("handles scoped types like feat(ui):", () => {
+    expect(commitTypeFromTitle("feat(ui): add toggle")).toEqual({
+      type: "feat",
+      description: "add toggle",
+    });
+  });
+
+  it("handles breaking change indicator (!)", () => {
+    expect(commitTypeFromTitle("fix!: remove deprecated API")).toEqual({
+      type: "fix",
+      description: "remove deprecated API",
+    });
+  });
+
+  it("is case-insensitive", () => {
+    expect(commitTypeFromTitle("Fix: login issue")).toEqual({
+      type: "fix",
+      description: "login issue",
+    });
+  });
+
+  it("defaults to feat when no prefix is present", () => {
+    expect(commitTypeFromTitle("Add dark mode support")).toEqual({
+      type: "feat",
+      description: "Add dark mode support",
+    });
+  });
+
+  it("defaults to feat for empty string", () => {
+    expect(commitTypeFromTitle("")).toEqual({
+      type: "feat",
+      description: "",
+    });
+  });
+
+  it("does not treat unknown prefixes as types", () => {
+    expect(commitTypeFromTitle("update: something")).toEqual({
+      type: "feat",
+      description: "update: something",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// issueBranchName
+// ---------------------------------------------------------------------------
+
+describe("issueBranchName", () => {
+  it("uses feat/ prefix for titles without conventional type", () => {
+    expect(issueBranchName("Add dark mode support")).toBe(
+      "feat/add-dark-mode-support",
+    );
+  });
+
+  it("uses fix/ prefix for fix: titles", () => {
+    expect(issueBranchName("fix: broken login page")).toBe(
+      "fix/broken-login-page",
+    );
+  });
+
+  it("uses docs/ prefix for docs: titles", () => {
+    expect(issueBranchName("docs: update CLI reference")).toBe(
+      "docs/update-cli-reference",
+    );
+  });
+
+  it("uses refactor/ prefix for refactor: titles", () => {
+    expect(issueBranchName("refactor: extract helpers")).toBe(
+      "refactor/extract-helpers",
+    );
+  });
+
+  it("strips conventional prefix from slug to avoid duplication", () => {
+    // Should NOT produce "fix/fix-broken-login"
+    expect(issueBranchName("fix: broken login")).toBe("fix/broken-login");
+  });
+
+  it("truncates long descriptions to fit slugify 60-char limit", () => {
+    const longTitle =
+      "fix: this is a very long title that should be truncated to sixty characters at most by slugify";
+    const result = issueBranchName(longTitle);
+    expect(result.startsWith("fix/")).toBe(true);
+    // prefix + "/" + max 60 char slug
+    const slug = result.slice("fix/".length);
+    expect(slug.length).toBeLessThanOrEqual(60);
+  });
+
+  it("handles empty title", () => {
+    expect(issueBranchName("")).toBe("feat/");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// prdBranchName (deprecated alias)
 // ---------------------------------------------------------------------------
 
 describe("prdBranchName", () => {
-  it("returns feat/ prefix with slugified title", () => {
+  it("is an alias for issueBranchName", () => {
+    expect(prdBranchName("Add dark mode support")).toBe(
+      issueBranchName("Add dark mode support"),
+    );
+  });
+
+  it("returns feat/ prefix for titles without conventional type", () => {
     expect(prdBranchName("Add dark mode support")).toBe(
       "feat/add-dark-mode-support",
     );
   });
 
-  it("handles special characters in title", () => {
-    expect(prdBranchName("feat: add new_feature!")).toBe(
-      "feat/feat-add-new-feature",
-    );
-  });
-
-  it("truncates long titles to fit slugify 60-char limit", () => {
-    const longTitle =
-      "this is a very long PRD title that should be truncated to sixty characters at most by slugify";
-    const result = prdBranchName(longTitle);
-    // "feat/" is 5 chars, slug is max 60 chars
-    expect(result.startsWith("feat/")).toBe(true);
-    expect(result.length).toBeLessThanOrEqual(65);
-  });
-
-  it("handles empty title", () => {
-    expect(prdBranchName("")).toBe("feat/");
+  it("strips conventional prefix from slug", () => {
+    expect(prdBranchName("feat: add new feature")).toBe("feat/add-new-feature");
   });
 });
 

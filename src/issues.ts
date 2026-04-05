@@ -172,6 +172,35 @@ export function slugify(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Conventional-commit type extraction from titles
+// ---------------------------------------------------------------------------
+
+/**
+ * Conventional commit types recognised in issue/PRD titles.
+ * Same set used by `CC_PATTERN` in `pr-description.ts`.
+ */
+const CC_TITLE_PATTERN =
+  /^(feat|fix|refactor|test|docs|chore|ci|build|perf|style|revert)(?:\([^)]*\))?!?:\s+(.+)$/i;
+
+/**
+ * Extract the conventional-commit type and remaining description from a title.
+ *
+ * If the title starts with a recognised prefix (e.g. `"fix: broken login"`),
+ * returns `{ type: "fix", description: "broken login" }`.
+ * Otherwise defaults to `{ type: "feat", description: <original title> }`.
+ */
+export function commitTypeFromTitle(title: string): {
+  type: string;
+  description: string;
+} {
+  const m = title.match(CC_TITLE_PATTERN);
+  if (m) {
+    return { type: m[1]!.toLowerCase(), description: m[2]!.trim() };
+  }
+  return { type: "feat", description: title };
+}
+
+// ---------------------------------------------------------------------------
 // Blocker discovery via GitHub GraphQL API (Issue.blockedBy)
 // ---------------------------------------------------------------------------
 
@@ -1091,11 +1120,19 @@ export function fetchPrdIssue(
 }
 
 /**
- * Derive a branch name from a PRD title: `feat/<slugify(title)>`.
+ * Derive a branch name from an issue or PRD title.
+ *
+ * If the title starts with a conventional-commit prefix (e.g. `"fix: broken
+ * login"`), the branch uses that type: `fix/broken-login`.
+ * Otherwise defaults to `feat/<slugified-title>`.
  */
-export function prdBranchName(title: string): string {
-  return `feat/${slugify(title)}`;
+export function issueBranchName(title: string): string {
+  const { type, description } = commitTypeFromTitle(title);
+  return `${type}/${slugify(description)}`;
 }
+
+/** @deprecated Use {@link issueBranchName} instead. */
+export const prdBranchName = issueBranchName;
 
 // ---------------------------------------------------------------------------
 // Fetch issue title (for branch naming, no plan file written)
@@ -1104,7 +1141,7 @@ export function prdBranchName(title: string): string {
 /**
  * Fetch a GitHub issue by number and return its title.
  *
- * Used by `ralphai run <number>` to derive the `feat/<slug>` branch name
+ * Used by `ralphai run <number>` to derive the branch name
  * before pulling the issue into a plan file. Does not write files or
  * mutate labels — read-only and safe for dry-run.
  *
