@@ -3,7 +3,7 @@ import { existsSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 
@@ -21,23 +21,23 @@ describe("GitHub Issues integration", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("init --yes defaults issueSource to github in config", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes defaults issueSource to github in config", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(parsed.issueSource).toBe("github");
   });
 
-  it("init --yes includes issueSource as github in JSON config", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes includes issueSource as github in JSON config", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
     // issueSource should be "github" by default (all 17 keys are explicit)
     expect(parsed.issueSource).toBe("github");
   });
 
-  it("init --yes output contains GitHub label info", () => {
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes output contains GitHub label info", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Label a GitHub issue");
@@ -182,24 +182,24 @@ describe("status subcommand", () => {
     return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
   }
 
-  it("shows help text with status command listed", () => {
-    const result = runCli([], ctx.dir, testEnv());
+  it("shows help text with status command listed", async () => {
+    const result = await runCliInProcess([], ctx.dir, testEnv());
     const output = stripLogo(result.stdout);
     expect(output).toContain("status");
   });
 
-  it("status fails when ralphai is not initialized", () => {
-    const result = runCli(["status"], ctx.dir, testEnv());
+  it("status fails when ralphai is not initialized", async () => {
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
     expect(result.exitCode).toBe(1);
     expect(combined).toContain("not set up");
   });
 
-  it("status shows empty pipeline", () => {
+  it("status shows empty pipeline", async () => {
     // Initialize ralphai
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -210,8 +210,8 @@ describe("status subcommand", () => {
     expect(output).toContain("Completed");
   });
 
-  it("status shows backlog plans", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows backlog plans", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     writeFileSync(
@@ -223,7 +223,7 @@ describe("status subcommand", () => {
       "---\ndepends-on: [prd-auth.md]\n---\n\n# Search\n\n### Task 1: Index\n",
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -233,8 +233,8 @@ describe("status subcommand", () => {
     expect(output).toContain("waiting on prd-auth.md");
   });
 
-  it("status shows in-progress plan with task progress from receipt", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows in-progress plan with task progress from receipt", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-dark-mode");
@@ -264,7 +264,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -275,8 +275,8 @@ describe("status subcommand", () => {
     expect(output).toContain("worktree: prd-dark-mode");
   });
 
-  it("status shows 0 tasks_completed for receipt without tasks_completed field", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows 0 tasks_completed for receipt without tasks_completed field", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-legacy");
@@ -298,15 +298,15 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
     expect(output).toContain("0 of 2 tasks");
   });
 
-  it("status shows tasks_completed from receipt, not progress.md", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows tasks_completed from receipt, not progress.md", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-feature");
@@ -335,7 +335,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -343,8 +343,8 @@ describe("status subcommand", () => {
     expect(output).toContain("3 of 4 tasks");
   });
 
-  it("status shows orphaned receipt as a problem", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows orphaned receipt as a problem", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const orphanDir = join(ipDir, "orphan");
@@ -360,7 +360,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -368,8 +368,8 @@ describe("status subcommand", () => {
     expect(output).toContain("Orphaned receipt: orphan/receipt.txt");
   });
 
-  it("status counts completed plans from archive", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status counts completed plans from archive", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const authDir = join(outDir, "prd-auth");
@@ -381,7 +381,7 @@ describe("status subcommand", () => {
     writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
     writeFileSync(join(searchDir, "prd-search.md"), "# Search\n");
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -392,8 +392,8 @@ describe("status subcommand", () => {
     expect(output).toContain("prd-search.md");
   });
 
-  it("status pairs non-prd plan with receipt via plan_file field", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status pairs non-prd plan with receipt via plan_file field", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "remove-fallback-agents");
@@ -417,7 +417,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -429,8 +429,8 @@ describe("status subcommand", () => {
     expect(output).not.toContain("Orphaned");
   });
 
-  it("status pairs gh-prefixed plan with receipt via plan_file field", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status pairs gh-prefixed plan with receipt via plan_file field", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "gh-42-search");
@@ -455,7 +455,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -466,8 +466,8 @@ describe("status subcommand", () => {
     expect(output).not.toContain("Orphaned");
   });
 
-  it("status counts completed non-prd plans from archive", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status counts completed non-prd plans from archive", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const agentsDir = join(outDir, "remove-fallback-agents");
@@ -485,7 +485,7 @@ describe("status subcommand", () => {
     writeFileSync(join(searchDir, "gh-42-search.md"), "# Search\n");
     writeFileSync(join(authDir, "prd-auth.md"), "# Auth\n");
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -496,8 +496,8 @@ describe("status subcommand", () => {
     expect(output).toContain("prd-auth.md");
   });
 
-  it("status shows outcome when receipt has outcome field", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows outcome when receipt has outcome field", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-stuck-plan");
@@ -520,7 +520,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -528,8 +528,8 @@ describe("status subcommand", () => {
     expect(output).not.toContain("[in progress]");
   });
 
-  it("status shows [in progress] when receipt has no outcome", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("status shows [in progress] when receipt has no outcome", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(ipDir, "prd-active");
@@ -551,7 +551,7 @@ describe("status subcommand", () => {
       ].join("\n"),
     );
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -573,20 +573,24 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("shows help text with doctor command listed", () => {
-    const result = runCli([], ctx.dir, testEnv());
+  it("shows help text with doctor command listed", async () => {
+    const result = await runCliInProcess([], ctx.dir, testEnv());
     const output = stripLogo(result.stdout);
     expect(output).toContain("doctor");
   });
 
-  it("doctor --help shows doctor-specific help", () => {
-    const result = runCli(["doctor", "--help"], ctx.dir, testEnv());
+  it("doctor --help shows doctor-specific help", async () => {
+    const result = await runCliInProcess(
+      ["doctor", "--help"],
+      ctx.dir,
+      testEnv(),
+    );
     const output = result.stdout + result.stderr;
     expect(output).toContain("ralphai doctor");
     expect(output).toContain("diagnostic");
   });
 
-  it("doctor in fully initialized directory reports all checks passing", () => {
+  it("doctor in fully initialized directory reports all checks passing", async () => {
     // Create an initial commit on main so detectBaseBranch and base branch check work
     execSync(
       "git config user.email 'test@test.com' && git config user.name 'Test'",
@@ -605,7 +609,7 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     });
 
     // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Seed a plan so the backlog check passes (init --yes no longer creates samples)
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
@@ -626,7 +630,10 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     config.feedbackCommands = ["true"];
     writeConfigFile(ctx.dir, config, testEnv());
 
-    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
+    const result = await runCliInProcess(["doctor"], ctx.dir, {
+      ...testEnv(),
+      NO_COLOR: "1",
+    });
     const output = result.stdout;
 
     // All checks should pass
@@ -641,11 +648,14 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it("doctor without config reports first check as failed", () => {
+  it("doctor without config reports first check as failed", async () => {
     // Don't run init -- no config
     // Without config the doctor should still run and report failures
 
-    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
+    const result = await runCliInProcess(["doctor"], ctx.dir, {
+      ...testEnv(),
+      NO_COLOR: "1",
+    });
     const output = result.stdout;
 
     expect(output).toContain("\u2717"); // x-mark
@@ -653,15 +663,18 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it("doctor with unreachable agent command shows failure", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("doctor with unreachable agent command shows failure", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Set an agent command that won't be found in PATH
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     config.agentCommand = "nonexistent-agent-binary-xyz";
     writeConfigFile(ctx.dir, config, testEnv());
 
-    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
+    const result = await runCliInProcess(["doctor"], ctx.dir, {
+      ...testEnv(),
+      NO_COLOR: "1",
+    });
     const output = result.stdout;
 
     expect(output).toContain("\u2717"); // x-mark
@@ -670,7 +683,7 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it("doctor exit code is 0 when only warnings (no failures)", () => {
+  it("doctor exit code is 0 when only warnings (no failures)", async () => {
     // Create an initial commit on main so detectBaseBranch and base branch check work
     execSync(
       "git config user.email 'test@test.com' && git config user.name 'Test'",
@@ -689,7 +702,7 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     });
 
     // Initialize ralphai (after main branch exists so baseBranch is detected correctly)
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Commit ralphai files so we have a clean base
     execSync("git add -A && git commit -m 'add ralphai'", {
@@ -707,7 +720,10 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
     // Make the working tree dirty (uncommitted change) — produces a warning
     writeFileSync(join(ctx.dir, "dirty.txt"), "dirty");
 
-    const result = runCli(["doctor"], ctx.dir, { ...testEnv(), NO_COLOR: "1" });
+    const result = await runCliInProcess(["doctor"], ctx.dir, {
+      ...testEnv(),
+      NO_COLOR: "1",
+    });
     const output = result.stdout;
 
     // Should have warnings but no failures
