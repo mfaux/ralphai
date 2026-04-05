@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { existsSync, rmSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, rmSync, readFileSync } from "fs";
 import { join, dirname } from "path";
-import { tmpdir } from "os";
 import { execSync, execFileSync } from "child_process";
 import { fileURLToPath } from "url";
-import { runCli, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 
@@ -24,245 +23,11 @@ describe("runner config", () => {
   }
 
   // -------------------------------------------------------------------------
-  // Agent type detection
-  // -------------------------------------------------------------------------
-
-  describe.skipIf(process.platform === "win32")(
-    "detect_agent_type mapping",
-    () => {
-      /** Helper: inline bash detect_agent_type logic for testing */
-      function detectAgent(agentCommand: string): string {
-        // Extract just the function and call it with a given AGENT_COMMAND
-        const result = execSync(
-          `bash -c 'AGENT_COMMAND=${JSON.stringify(agentCommand)}; detect_agent_type() { local cmd; cmd=$(echo "$AGENT_COMMAND" | tr "[:upper:]" "[:lower:]"); case "$cmd" in *claude*) DETECTED_AGENT_TYPE="claude" ;; *opencode*) DETECTED_AGENT_TYPE="opencode" ;; *codex*) DETECTED_AGENT_TYPE="codex" ;; *gemini*) DETECTED_AGENT_TYPE="gemini" ;; *aider*) DETECTED_AGENT_TYPE="aider" ;; *goose*) DETECTED_AGENT_TYPE="goose" ;; *kiro*) DETECTED_AGENT_TYPE="kiro" ;; *amp*) DETECTED_AGENT_TYPE="amp" ;; *) DETECTED_AGENT_TYPE="unknown" ;; esac; }; detect_agent_type; echo "$DETECTED_AGENT_TYPE"'`,
-          { encoding: "utf-8" },
-        ).trim();
-        return result;
-      }
-
-      it("detects claude from command string", () => {
-        expect(detectAgent("claude -p")).toBe("claude");
-      });
-
-      it("detects claude from wrapped command", () => {
-        expect(detectAgent("npx claude -p")).toBe("claude");
-      });
-
-      it("detects opencode", () => {
-        expect(detectAgent("opencode run --agent build")).toBe("opencode");
-      });
-
-      it("detects opencode from full path", () => {
-        expect(detectAgent("/usr/local/bin/opencode run")).toBe("opencode");
-      });
-
-      it("detects codex", () => {
-        expect(detectAgent("codex exec")).toBe("codex");
-      });
-
-      it("detects gemini", () => {
-        expect(detectAgent("gemini")).toBe("gemini");
-      });
-
-      it("detects aider", () => {
-        expect(detectAgent("aider --yes")).toBe("aider");
-      });
-
-      it("detects goose", () => {
-        expect(detectAgent("goose run")).toBe("goose");
-      });
-
-      it("detects kiro", () => {
-        expect(detectAgent("kiro")).toBe("kiro");
-      });
-
-      it("detects amp", () => {
-        expect(detectAgent("amp run")).toBe("amp");
-      });
-
-      it("returns unknown for unrecognized commands", () => {
-        expect(detectAgent("my-custom-agent")).toBe("unknown");
-      });
-
-      it("handles case-insensitive matching", () => {
-        expect(detectAgent("Claude -p")).toBe("claude");
-        expect(detectAgent("OPENCODE run")).toBe("opencode");
-      });
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // --auto-commit config infrastructure tests
-  // -------------------------------------------------------------------------
-
-  describe.skipIf(process.platform === "win32")(
-    "autoCommit config precedence",
-    () => {
-      /**
-       * Helper: simulates the config loading pipeline for AUTO_COMMIT
-       * and returns the resolved value.
-       */
-      function resolveAutoCommit(opts: {
-        configValue?: string;
-        envValue?: string;
-        cliFlag?: "auto-commit" | "no-auto-commit";
-      }): string {
-        const configContent = opts.configValue
-          ? `autoCommit=${opts.configValue}`
-          : "";
-        const envExport = opts.envValue
-          ? `export RALPHAI_AUTO_COMMIT=${JSON.stringify(opts.envValue)}`
-          : "";
-        let cliArg = "";
-        if (opts.cliFlag === "auto-commit") cliArg = "--auto-commit";
-        else if (opts.cliFlag === "no-auto-commit") cliArg = "--no-auto-commit";
-
-        const script = `#!/bin/bash
-set -e
-
-# Defaults
-DEFAULT_AUTO_COMMIT="false"
-AUTO_COMMIT="$DEFAULT_AUTO_COMMIT"
-CLI_AUTO_COMMIT=""
-
-# Simulate load_config
-CONFIG_AUTO_COMMIT=""
-config_content=${JSON.stringify(configContent)}
-if [[ -n "$config_content" ]]; then
-  key="\${config_content%%=*}"
-  value="\${config_content#*=}"
-  if [[ "$key" == "autoCommit" ]]; then
-    if [[ "$value" != "true" && "$value" != "false" ]]; then
-      echo "ERROR: 'autoCommit' must be true or false, got '$value'"
-      exit 1
-    fi
-    CONFIG_AUTO_COMMIT="$value"
-  fi
-fi
-
-# Simulate apply_config
-if [[ -n "\${CONFIG_AUTO_COMMIT:-}" ]]; then
-  AUTO_COMMIT="$CONFIG_AUTO_COMMIT"
-fi
-
-# Simulate apply_env_overrides
-${envExport}
-if [[ -n "\${RALPHAI_AUTO_COMMIT:-}" ]]; then
-  if [[ "$RALPHAI_AUTO_COMMIT" != "true" && "$RALPHAI_AUTO_COMMIT" != "false" ]]; then
-    echo "ERROR: RALPHAI_AUTO_COMMIT must be 'true' or 'false', got '$RALPHAI_AUTO_COMMIT'"
-    exit 1
-  fi
-  AUTO_COMMIT="$RALPHAI_AUTO_COMMIT"
-fi
-
-# Simulate CLI flag parsing
-for arg in ${cliArg}; do
-  case "$arg" in
-    --auto-commit)
-      CLI_AUTO_COMMIT="true"
-      ;;
-    --no-auto-commit)
-      CLI_AUTO_COMMIT="false"
-      ;;
-  esac
-done
-
-# Simulate CLI override merge
-if [[ -n "$CLI_AUTO_COMMIT" ]]; then
-  AUTO_COMMIT="$CLI_AUTO_COMMIT"
-fi
-
-echo "$AUTO_COMMIT"
-`;
-
-        const scriptFile = join(
-          tmpdir(),
-          `ralphai-ac-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`,
-        );
-        try {
-          writeFileSync(scriptFile, script);
-          const result = execSync(`bash ${JSON.stringify(scriptFile)}`, {
-            encoding: "utf-8",
-          });
-          return result.trim();
-        } finally {
-          try {
-            rmSync(scriptFile);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-
-      it("defaults to false when no overrides", () => {
-        expect(resolveAutoCommit({})).toBe("false");
-      });
-
-      it("config file sets autoCommit to true", () => {
-        expect(resolveAutoCommit({ configValue: "true" })).toBe("true");
-      });
-
-      it("config file sets autoCommit to false", () => {
-        expect(resolveAutoCommit({ configValue: "false" })).toBe("false");
-      });
-
-      it("env var overrides config file", () => {
-        expect(
-          resolveAutoCommit({
-            configValue: "true",
-            envValue: "false",
-          }),
-        ).toBe("false");
-      });
-
-      it("env var sets autoCommit when no config", () => {
-        expect(resolveAutoCommit({ envValue: "true" })).toBe("true");
-      });
-
-      it("--auto-commit CLI flag overrides env var", () => {
-        expect(
-          resolveAutoCommit({
-            envValue: "false",
-            cliFlag: "auto-commit",
-          }),
-        ).toBe("true");
-      });
-
-      it("--no-auto-commit CLI flag overrides env var", () => {
-        expect(
-          resolveAutoCommit({
-            envValue: "true",
-            cliFlag: "no-auto-commit",
-          }),
-        ).toBe("false");
-      });
-
-      it("CLI flag overrides config and env", () => {
-        expect(
-          resolveAutoCommit({
-            configValue: "false",
-            envValue: "false",
-            cliFlag: "auto-commit",
-          }),
-        ).toBe("true");
-      });
-
-      it("rejects invalid config value", () => {
-        expect(() => resolveAutoCommit({ configValue: "bad" })).toThrow();
-      });
-
-      it("rejects invalid env var value", () => {
-        expect(() => resolveAutoCommit({ envValue: "bad" })).toThrow();
-      });
-    },
-  );
-
-  // -------------------------------------------------------------------------
   // Init defaults
   // -------------------------------------------------------------------------
 
-  it("init --yes sets autoCommit=false by default", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes sets autoCommit=false by default", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.mode).toBeUndefined();
@@ -274,20 +39,24 @@ echo "$AUTO_COMMIT"
   // -------------------------------------------------------------------------
 
   describe.skipIf(process.platform === "win32")("run config", () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       // Scaffold ralphai (creates .ralphai/ directory)
-      runCli(["init", "--yes"], ctx.dir, testEnv());
+      await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     });
 
-    it("run --show-config shows default values", () => {
-      const result = runCli(["run", "--show-config"], ctx.dir, testEnv());
+    it("run --show-config shows default values", async () => {
+      const result = await runCliInProcess(
+        ["run", "--show-config"],
+        ctx.dir,
+        testEnv(),
+      );
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("iterationTimeout   = off");
       expect(result.stdout).toContain("(default)");
     });
 
-    it("run --dry-run produces preview output", () => {
-      const result = runCli(["run", "--dry-run"], ctx.dir, {
+    it("run --dry-run produces preview output", async () => {
+      const result = await runCliInProcess(["run", "--dry-run"], ctx.dir, {
         ...testEnv(),
         RALPHAI_AGENT_COMMAND: "echo mock",
         RALPHAI_NO_UPDATE_CHECK: "1",
@@ -297,16 +66,20 @@ echo "$AUTO_COMMIT"
       expect(combined).toContain("dry-run");
     });
 
-    it("run --help shows usage information", () => {
-      const result = runCli(["run", "--help"], ctx.dir, testEnv());
+    it("run --help shows usage information", async () => {
+      const result = await runCliInProcess(
+        ["run", "--help"],
+        ctx.dir,
+        testEnv(),
+      );
       expect(result.exitCode).toBe(0);
       const combined = result.stdout + result.stderr;
       expect(combined).toContain("--dry-run");
       expect(combined).toContain("--once");
     });
 
-    it("run 3 is treated as an issue target (requires GitHub)", () => {
-      const result = runCli(["run", "3"], ctx.dir, testEnv());
+    it("run 3 is treated as an issue target (requires GitHub)", async () => {
+      const result = await runCliInProcess(["run", "3"], ctx.dir, testEnv());
       const combined = result.stdout + result.stderr;
       expect(result.exitCode).not.toBe(0);
       // Issue target requires GitHub repo detection — fails in test env

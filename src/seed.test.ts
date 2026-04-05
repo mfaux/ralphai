@@ -2,8 +2,8 @@ import { describe, it, expect } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import {
-  runCli,
-  runCliOutput,
+  runCliInProcess,
+  runCliOutputInProcess,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
@@ -16,8 +16,8 @@ describe("seed command", () => {
     return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
   }
 
-  it("seeds hello-world into an initialized repo", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("seeds hello-world into an initialized repo", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // init already creates hello-world.md — remove it to test seed independently
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
@@ -28,7 +28,9 @@ describe("seed command", () => {
     }
     expect(existsSync(planPath)).toBe(false);
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     expect(existsSync(planPath)).toBe(true);
     const content = readFileSync(planPath, "utf8");
@@ -37,15 +39,17 @@ describe("seed command", () => {
     expect(output).not.toContain("Cleaned");
   });
 
-  it("overwrites existing hello-world in backlog", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("overwrites existing hello-world in backlog", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planPath = join(backlogDir, "hello-world.md");
 
     // Write different content to backlog
     writeFileSync(planPath, "# old content");
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     expect(existsSync(planPath)).toBe(true);
     const content = readFileSync(planPath, "utf8");
@@ -54,8 +58,8 @@ describe("seed command", () => {
     expect(output).toContain("Seeded hello-world into backlog");
   });
 
-  it("cleans up in-progress plan and seeds fresh copy", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("cleans up in-progress plan and seeds fresh copy", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(
       ctx.dir,
       testEnv(),
@@ -67,7 +71,9 @@ describe("seed command", () => {
     writeFileSync(join(slugDir, "hello-world.md"), "# in progress");
     writeFileSync(join(slugDir, "progress.md"), "## Progress");
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     // In-progress directory should be removed
     expect(existsSync(slugDir)).toBe(false);
@@ -79,8 +85,8 @@ describe("seed command", () => {
     expect(output).toContain("Seeded hello-world into backlog");
   });
 
-  it("cleans up archived plan and seeds fresh copy", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("cleans up archived plan and seeds fresh copy", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { backlogDir, archiveDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // Remove backlog copy from init
@@ -96,7 +102,9 @@ describe("seed command", () => {
     writeFileSync(join(archiveSlugDir, "hello-world.md"), "# archived");
     writeFileSync(join(archiveSlugDir, "receipt.txt"), "outcome: success");
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     // Archive directory should be removed
     expect(existsSync(archiveSlugDir)).toBe(false);
@@ -107,8 +115,8 @@ describe("seed command", () => {
     expect(output).toContain("Seeded hello-world into backlog");
   });
 
-  it("cleans all stages when plan exists everywhere", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("cleans all stages when plan exists everywhere", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const {
       backlogDir,
       wipDir: inProgressDir,
@@ -128,7 +136,9 @@ describe("seed command", () => {
     mkdirSync(archDir, { recursive: true });
     writeFileSync(join(archDir, "hello-world.md"), "# done");
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("in-progress");
     expect(output).toContain("archive");
@@ -139,16 +149,18 @@ describe("seed command", () => {
     expect(existsSync(join(backlogDir, "hello-world.md"))).toBe(true);
   });
 
-  it("errors when ralphai is not initialized", () => {
+  it("errors when ralphai is not initialized", async () => {
     // Don't run init
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("not set up");
     expect(output).toContain("ralphai init");
   });
 
-  it("aborts when runner PID is active", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("aborts when runner PID is active", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // Simulate an in-progress plan with an active runner PID
@@ -158,7 +170,9 @@ describe("seed command", () => {
     // Use the current process PID (guaranteed alive)
     writeFileSync(join(slugDir, "runner.pid"), String(process.pid));
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Cannot seed");
     expect(output).toContain(String(process.pid));
@@ -167,8 +181,8 @@ describe("seed command", () => {
     expect(existsSync(slugDir)).toBe(true);
   });
 
-  it("ignores stale PID file when process is gone", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("ignores stale PID file when process is gone", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(
       ctx.dir,
       testEnv(),
@@ -180,7 +194,9 @@ describe("seed command", () => {
     writeFileSync(join(slugDir, "hello-world.md"), "# stale");
     writeFileSync(join(slugDir, "runner.pid"), "99999999");
 
-    const output = stripLogo(runCliOutput(["seed"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["seed"], ctx.dir, testEnv()),
+    );
 
     // Should proceed despite stale PID
     expect(existsSync(slugDir)).toBe(false);
@@ -188,8 +204,10 @@ describe("seed command", () => {
     expect(output).toContain("Seeded hello-world into backlog");
   });
 
-  it("is listed under Plumbing in help output", () => {
-    const output = stripLogo(runCliOutput(["--help"], ctx.dir, testEnv()));
+  it("is listed under Plumbing in help output", async () => {
+    const output = stripLogo(
+      await runCliOutputInProcess(["--help"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Plumbing");
     expect(output).toContain("seed");

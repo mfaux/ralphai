@@ -5,7 +5,7 @@
  * nature of the runner loop.
  */
 import { createHash } from "crypto";
-import { execSync } from "child_process";
+import { execQuiet, execOk } from "./exec.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,37 +22,9 @@ export interface CollisionResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Run a command and return trimmed stdout, or null on any error. */
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
-/** Run a command, returning true if it exits 0. */
-function execOk(cmd: string, cwd: string): boolean {
-  try {
-    execSync(cmd, { cwd, stdio: ["pipe", "pipe", "pipe"] });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Check whether the `gh` CLI is available on PATH. */
+/** Check whether the `gh` CLI is available on PATH (version check only). */
 function ghAvailable(): boolean {
-  try {
-    execSync("gh --version", { stdio: ["pipe", "pipe", "pipe"] });
-    return true;
-  } catch {
-    return false;
-  }
+  return execOk("gh --version", ".");
 }
 
 // ---------------------------------------------------------------------------

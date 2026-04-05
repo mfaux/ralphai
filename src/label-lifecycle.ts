@@ -23,7 +23,7 @@
  * parameter. When true, the function logs what would have been done and
  * returns a successful result without executing any `gh issue edit` calls.
  */
-import { execSync } from "child_process";
+import { execQuiet } from "./exec.ts";
 import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 
 // ---------------------------------------------------------------------------
@@ -51,22 +51,6 @@ export interface LabelTransitionResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Run a command and return trimmed stdout, or null on any error.
- * Best-effort: callers treat null as a non-fatal failure.
- */
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Build a dry-run skip result. Logs what would have been done and returns

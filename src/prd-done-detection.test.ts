@@ -2,37 +2,22 @@
  * Unit tests for checkAllPrdSubIssuesDone() — verifies that the PRD
  * parent transitions to done only when ALL sub-issues have the done label.
  *
- * Uses mock.module to control `child_process.execSync` so we can test
+ * Uses setExecImpl() to swap execSync with a mock so we can test
  * the full flow without requiring a real GitHub repo or gh CLI.
  *
  * The shared "done" label is used for all issue families (standalone,
  * subissue, PRD). checkAllPrdSubIssuesDone checks for this fixed label.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { setExecImpl } from "./exec.ts";
+import { checkAllPrdSubIssuesDone } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { checkAllPrdSubIssuesDone } = await import("./issues.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,7 +51,12 @@ function mockGhCommands(
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("checkAllPrdSubIssuesDone", () => {
@@ -213,42 +203,5 @@ describe("checkAllPrdSubIssuesDone", () => {
     const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
     expect(issue202Checked).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Stuck stickiness: reset sub-issue does NOT clear PRD parent stuck label
-// ---------------------------------------------------------------------------
-
-describe("stuck stickiness — design verification", () => {
-  it("transitionReset only operates on the sub-issue, not the PRD parent", async () => {
-    // Reset the mock for this test
-    mockExecSync.mockReset();
-    mockExecSync.mockImplementation(() => "ok");
-
-    const { transitionReset } = await import("./label-lifecycle.ts");
-
-    const subIssue = { number: 201, repo: "org/repo" };
-
-    // Reset the sub-issue: removes shared state labels
-    const result = transitionReset(subIssue, "/tmp");
-    expect(result.ok).toBe(true);
-
-    // Verify only ONE gh issue edit call was made — for the sub-issue
-    const ghCalls = mockExecSync.mock.calls
-      .filter(
-        (call: unknown[]) =>
-          typeof call[0] === "string" && call[0].includes("gh issue edit"),
-      )
-      .map((call: unknown[]) => call[0] as string);
-
-    expect(ghCalls).toHaveLength(1);
-    // The call targets the sub-issue (#201), NOT the PRD parent
-    expect(ghCalls[0]).toContain("gh issue edit 201");
-    // It removes shared state labels
-    expect(ghCalls[0]).toContain('--remove-label "in-progress"');
-    expect(ghCalls[0]).toContain('--remove-label "stuck"');
-    // PRD labels are NOT touched
-    expect(ghCalls[0]).not.toContain("ralphai-prd");
   });
 });

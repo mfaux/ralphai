@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
 import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
-import { runCli, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 
@@ -26,7 +26,7 @@ describe.skipIf(process.platform === "win32")(
      * Helper: initialize a fully passing doctor environment so we can isolate
      * workspace-specific behavior without noise from unrelated check failures.
      */
-    function initCleanDoctor() {
+    async function initCleanDoctor() {
       execSync(
         "git config user.email 'test@test.com' && git config user.name 'Test'",
         { cwd: ctx.dir, stdio: "ignore" },
@@ -40,7 +40,7 @@ describe.skipIf(process.platform === "win32")(
         stdio: "ignore",
       });
 
-      runCli(["init", "--yes"], ctx.dir, testEnv());
+      await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
       execSync("git add -A && git commit -m 'add ralphai'", {
         cwd: ctx.dir,
@@ -59,15 +59,15 @@ describe.skipIf(process.platform === "win32")(
       return config;
     }
 
-    it("workspace feedback commands that exit 0 produce pass results", () => {
-      const config = initCleanDoctor();
+    it("workspace feedback commands that exit 0 produce pass results", async () => {
+      const config = await initCleanDoctor();
 
       config.workspaces = {
         "packages/web": { feedbackCommands: ["true"] },
       };
       writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, {
+      const result = await runCliInProcess(["doctor"], ctx.dir, {
         ...testEnv(),
         NO_COLOR: "1",
       });
@@ -79,15 +79,15 @@ describe.skipIf(process.platform === "win32")(
       expect(result.exitCode).toBe(0);
     });
 
-    it("workspace feedback commands that exit non-zero produce warn (not fail)", () => {
-      const config = initCleanDoctor();
+    it("workspace feedback commands that exit non-zero produce warn (not fail)", async () => {
+      const config = await initCleanDoctor();
 
       config.workspaces = {
         "packages/api": { feedbackCommands: ["false"] },
       };
       writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, {
+      const result = await runCliInProcess(["doctor"], ctx.dir, {
         ...testEnv(),
         NO_COLOR: "1",
       });
@@ -101,14 +101,14 @@ describe.skipIf(process.platform === "win32")(
       expect(result.exitCode).toBe(0);
     });
 
-    it("no workspaces config means no workspace checks run", () => {
-      const config = initCleanDoctor();
+    it("no workspaces config means no workspace checks run", async () => {
+      const config = await initCleanDoctor();
 
       // Explicitly no workspaces key
       delete config.workspaces;
       writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, {
+      const result = await runCliInProcess(["doctor"], ctx.dir, {
         ...testEnv(),
         NO_COLOR: "1",
       });
@@ -120,8 +120,8 @@ describe.skipIf(process.platform === "win32")(
       expect(result.exitCode).toBe(0);
     });
 
-    it("multiple workspace entries are each validated independently", () => {
-      const config = initCleanDoctor();
+    it("multiple workspace entries are each validated independently", async () => {
+      const config = await initCleanDoctor();
 
       config.workspaces = {
         "packages/web": { feedbackCommands: ["true"] },
@@ -129,7 +129,7 @@ describe.skipIf(process.platform === "win32")(
       };
       writeConfigFile(ctx.dir, config, testEnv());
 
-      const result = runCli(["doctor"], ctx.dir, {
+      const result = await runCliInProcess(["doctor"], ctx.dir, {
         ...testEnv(),
         NO_COLOR: "1",
       });

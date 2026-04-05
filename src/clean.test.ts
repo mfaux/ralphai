@@ -2,8 +2,8 @@ import { describe, it, expect } from "bun:test";
 import { existsSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
 import {
-  runCli,
-  runCliOutput,
+  runCliInProcess,
+  runCliOutputInProcess,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
@@ -20,8 +20,8 @@ describe("clean command", () => {
   // Help and flag validation
   // -------------------------------------------------------------------------
 
-  it("clean --help shows usage", () => {
-    const result = runCli(["clean", "--help"]);
+  it("clean --help shows usage", async () => {
+    const result = await runCliInProcess(["clean", "--help"]);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("clean");
@@ -30,16 +30,16 @@ describe("clean command", () => {
     expect(result.stdout).toContain("--yes");
   });
 
-  it("clean rejects unknown flags", () => {
-    const result = runCli(["clean", "--bad-flag"], ctx.dir);
+  it("clean rejects unknown flags", async () => {
+    const result = await runCliInProcess(["clean", "--bad-flag"], ctx.dir);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
     expect(result.stderr).toContain("--bad-flag");
   });
 
-  it("clean is listed in top-level --help", () => {
-    const result = runCli(["--help"]);
+  it("clean is listed in top-level --help", async () => {
+    const result = await runCliInProcess(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("clean");
   });
@@ -48,8 +48,12 @@ describe("clean command", () => {
   // Config guard
   // -------------------------------------------------------------------------
 
-  it("clean errors when config does not exist", () => {
-    const result = runCli(["clean", "--yes"], ctx.dir, testEnv());
+  it("clean errors when config does not exist", async () => {
+    const result = await runCliInProcess(
+      ["clean", "--yes"],
+      ctx.dir,
+      testEnv(),
+    );
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
@@ -60,29 +64,39 @@ describe("clean command", () => {
   // Nothing to clean
   // -------------------------------------------------------------------------
 
-  it("clean -y prints 'Nothing to clean' when no archive and no worktrees", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
-
-    const output = stripLogo(runCliOutput(["clean", "-y"], ctx.dir, testEnv()));
-
-    expect(output).toContain("Nothing to clean");
-  });
-
-  it("clean --archive -y prints 'Nothing to clean' when out/ is empty", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean -y prints 'Nothing to clean' when no archive and no worktrees", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const output = stripLogo(
-      runCliOutput(["clean", "--archive", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(["clean", "-y"], ctx.dir, testEnv()),
     );
 
     expect(output).toContain("Nothing to clean");
   });
 
-  it("clean --worktrees -y prints 'Nothing to clean' when no orphaned worktrees", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --archive -y prints 'Nothing to clean' when out/ is empty", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const output = stripLogo(
-      runCliOutput(["clean", "--worktrees", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(
+        ["clean", "--archive", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
+    );
+
+    expect(output).toContain("Nothing to clean");
+  });
+
+  it("clean --worktrees -y prints 'Nothing to clean' when no orphaned worktrees", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
+
+    const output = stripLogo(
+      await runCliOutputInProcess(
+        ["clean", "--worktrees", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
     );
 
     expect(output).toContain("Nothing to clean");
@@ -92,8 +106,8 @@ describe("clean command", () => {
   // Archive cleanup (--archive)
   // -------------------------------------------------------------------------
 
-  it("clean --archive -y deletes archived plans", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --archive -y deletes archived plans", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(outDir, "my-feature");
@@ -103,15 +117,19 @@ describe("clean command", () => {
     writeFileSync(join(planDir, "receipt.txt"), "slug=my-feature");
 
     const output = stripLogo(
-      runCliOutput(["clean", "--archive", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(
+        ["clean", "--archive", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
     );
 
     expect(output).toContain("Cleaned");
     expect(readdirSync(outDir)).toEqual([]);
   });
 
-  it("clean --archive -y shows summary counts", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --archive -y shows summary counts", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDirA = join(outDir, "feat-a");
@@ -125,7 +143,11 @@ describe("clean command", () => {
     writeFileSync(join(planDirB, "receipt.txt"), "slug=feat-b");
 
     const output = stripLogo(
-      runCliOutput(["clean", "--archive", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(
+        ["clean", "--archive", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
     );
 
     expect(output).toContain("2 archived plans");
@@ -133,15 +155,19 @@ describe("clean command", () => {
     expect(output).toContain("2 receipts");
   });
 
-  it("clean --archive -y preserves the out/ directory itself", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --archive -y preserves the out/ directory itself", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(outDir, "plan");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "plan.md"), "# Plan");
 
-    runCliOutput(["clean", "--archive", "-y"], ctx.dir, testEnv());
+    await runCliOutputInProcess(
+      ["clean", "--archive", "-y"],
+      ctx.dir,
+      testEnv(),
+    );
 
     expect(existsSync(outDir)).toBe(true);
     expect(readdirSync(outDir)).toEqual([]);
@@ -151,15 +177,17 @@ describe("clean command", () => {
   // Default (both) — archive portion
   // -------------------------------------------------------------------------
 
-  it("clean -y deletes archived plans (default scope includes archive)", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean -y deletes archived plans (default scope includes archive)", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(outDir, "my-feature");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "my-feature.md"), "# My Feature");
 
-    const output = stripLogo(runCliOutput(["clean", "-y"], ctx.dir, testEnv()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["clean", "-y"], ctx.dir, testEnv()),
+    );
 
     expect(output).toContain("Cleaned");
     expect(readdirSync(outDir)).toEqual([]);
@@ -169,8 +197,8 @@ describe("clean command", () => {
   // --worktrees only does NOT touch archive
   // -------------------------------------------------------------------------
 
-  it("clean --worktrees -y does not remove archived plans", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --worktrees -y does not remove archived plans", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(outDir, "my-feature");
@@ -178,7 +206,11 @@ describe("clean command", () => {
     writeFileSync(join(planDir, "my-feature.md"), "# My Feature");
 
     const output = stripLogo(
-      runCliOutput(["clean", "--worktrees", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(
+        ["clean", "--worktrees", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
     );
 
     // Should still say "Nothing to clean" because there are no orphaned worktrees
@@ -193,8 +225,8 @@ describe("clean command", () => {
   // (validated implicitly — no worktrees exist in test, so just archive cleanup)
   // -------------------------------------------------------------------------
 
-  it("clean --archive -y only cleans archive, not worktrees", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean --archive -y only cleans archive, not worktrees", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { archiveDir: outDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(outDir, "feat-x");
@@ -202,7 +234,11 @@ describe("clean command", () => {
     writeFileSync(join(planDir, "feat-x.md"), "# X");
 
     const output = stripLogo(
-      runCliOutput(["clean", "--archive", "-y"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(
+        ["clean", "--archive", "-y"],
+        ctx.dir,
+        testEnv(),
+      ),
     );
 
     expect(output).toContain("Cleaned");
@@ -214,10 +250,10 @@ describe("clean command", () => {
   // Exit code
   // -------------------------------------------------------------------------
 
-  it("clean -y exits 0 when nothing to clean", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("clean -y exits 0 when nothing to clean", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
-    const result = runCli(["clean", "-y"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["clean", "-y"], ctx.dir, testEnv());
 
     expect(result.exitCode).toBe(0);
   });

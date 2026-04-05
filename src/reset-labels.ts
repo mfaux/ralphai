@@ -9,7 +9,7 @@
  * This is the reverse of the pull transition performed in issues.ts
  * when an issue is pulled into the pipeline.
  */
-import { execSync } from "child_process";
+import { checkGhAvailable } from "./exec.ts";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { transitionReset } from "./label-lifecycle.ts";
 
@@ -34,25 +34,6 @@ export interface RestoreIssueLabelsResult {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Check whether the `gh` CLI is installed and authenticated.
- * Duplicated from issues.ts to keep this module self-contained for
- * testability (mock.module scope).
- */
-function isGhAvailable(): boolean {
-  try {
-    execSync("gh --version", { stdio: ["pipe", "pipe", "pipe"] });
-  } catch {
-    return false;
-  }
-  try {
-    execSync("gh auth status", { stdio: ["pipe", "pipe", "pipe"] });
-  } catch {
-    return false;
-  }
-  return true;
-}
 
 /**
  * Extract owner/repo from an issue URL.
@@ -90,7 +71,7 @@ export function restoreIssueLabels(
   }
 
   // Check gh CLI availability
-  if (!isGhAvailable()) {
+  if (!checkGhAvailable()) {
     return {
       restored: false,
       message: "gh CLI not available — cannot restore issue labels",

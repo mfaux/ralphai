@@ -8,7 +8,7 @@
  *
  * Exported entry point: `runRunner(options)`.
  */
-import { spawn, execSync, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import {
   createWriteStream,
   existsSync,
@@ -21,6 +21,7 @@ import {
 import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
+import { execQuiet, execOk } from "./exec.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import {
   getSocketPath,
@@ -110,29 +111,6 @@ export interface RunnerOptions {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Run a git command and return trimmed stdout, or null on error. */
-function gitExec(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
-/** Run a git command, returning true if it exits 0. */
-function gitOk(cmd: string, cwd: string): boolean {
-  try {
-    execSync(cmd, { cwd, stdio: ["pipe", "pipe", "pipe"] });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Roll back a plan: move plan file from WIP back to backlog as a flat file.
@@ -506,7 +484,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     console.log(`[dry-run] Would create worktree: ${worktreeDir}`);
   }
 
-  if (gitOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
+  if (execOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
     console.log(
       `[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '${branch}'.`,
     );
@@ -611,7 +589,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const detectResult = detectPlan({
       dirs,
       worktreeBranch: isWorktree
-        ? (gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? undefined)
+        ? (execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? undefined)
         : undefined,
       dryRun: false,
       skippedSlugs,
@@ -724,7 +702,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     if (resumed || resume) {
       const currentBranch =
-        gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
+        execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
       if (currentBranch === baseBranch) {
         console.error(
           `ERROR: Resuming requires being on a ralphai/* branch, not '${baseBranch}'.`,
@@ -738,7 +716,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       console.log(`Resuming on existing branch: ${branch}`);
       ensureProgressFile(progressFile);
     } else if (isWorktree) {
-      branch = gitExec("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
+      branch = execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
 
       if (branch === baseBranch) {
         console.error(
@@ -970,8 +948,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
       // --- Auto-commit dirty state (AFTER stuck detection) ---
       const hasDiff =
-        !gitOk("git diff --quiet HEAD", cwd) ||
-        !gitOk("git diff --cached --quiet", cwd);
+        !execOk("git diff --quiet HEAD", cwd) ||
+        !execOk("git diff --cached --quiet", cwd);
       if (hasDiff) {
         if (!autoCommit) {
           console.log(
@@ -981,8 +959,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           console.log(
             "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot.",
           );
-          gitExec("git add -A", cwd);
-          gitExec(
+          execQuiet("git add -A", cwd);
+          execQuiet(
             `git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration ${iterationNumber}"`,
             cwd,
           );

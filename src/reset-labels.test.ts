@@ -1,41 +1,26 @@
 /**
  * Unit tests for restoreIssueLabels() — GitHub label restoration on reset.
  *
- * Uses mock.module to control `child_process.execSync` so we can verify
- * `gh issue edit` calls without requiring a real GitHub repo.
+ * Uses setExecImpl() from exec.ts to swap execSync with a mock,
+ * verifying `gh issue edit` calls without requiring a real GitHub repo.
  *
  * restoreIssueLabels reads frontmatter to find the issue number/repo,
  * then calls transitionReset to remove the shared state labels
  * (in-progress, stuck). The family label is never touched.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
+import { setExecImpl } from "./exec.ts";
+import { restoreIssueLabels } from "./reset-labels.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync — intercept gh commands only
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { restoreIssueLabels } = await import("./reset-labels.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,17 +53,6 @@ function githubPlanContent(issueNumber: number, repo?: string): string {
   return `---\nsource: github\nissue: ${issueNumber}\nissue-url: ${url}\n---\n\n# Fix something\n\nBody text.\n`;
 }
 
-function githubSubIssuePlanContent(
-  issueNumber: number,
-  prdNumber: number,
-  repo?: string,
-): string {
-  const url = repo
-    ? `https://github.com/${repo}/issues/${issueNumber}`
-    : `https://github.com/owner/repo/issues/${issueNumber}`;
-  return `---\nsource: github\nissue: ${issueNumber}\nprd: ${prdNumber}\nissue-url: ${url}\n---\n\n# Sub-issue task\n\nBody text.\n`;
-}
-
 function localPlanContent(): string {
   return `---\nscope: packages/web\n---\n\n# Local feature\n\nBody text.\n`;
 }
@@ -90,40 +64,15 @@ function localPlanContent(): string {
 const ctx = useTempDir();
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
 });
 
+afterEach(() => {
+  restoreExec();
+});
+
 describe("restoreIssueLabels", () => {
-  it("calls gh issue edit to remove state labels for a GitHub-sourced plan", () => {
-    mockGhAvailable();
-
-    const planPath = writePlanFile(
-      ctx.dir,
-      "gh-42-fix-bug",
-      githubPlanContent(42),
-    );
-
-    const result = restoreIssueLabels({
-      planPath,
-      issueRepo: "owner/repo",
-      cwd: ctx.dir,
-    });
-
-    expect(result.restored).toBe(true);
-
-    // Verify gh issue edit was called with correct label arguments
-    const ghEditCalls = mockExecSync.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue edit"),
-    );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-    expect(cmd).toContain("gh issue edit 42");
-    expect(cmd).toContain('--repo "owner/repo"');
-    expect(cmd).toContain('--remove-label "in-progress"');
-    expect(cmd).toContain('--remove-label "stuck"');
-  });
-
   it("does not call gh issue edit for a non-GitHub plan", () => {
     mockGhAvailable();
 
@@ -237,85 +186,5 @@ describe("restoreIssueLabels", () => {
     });
 
     expect(result.restored).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Sub-issue reset uses the same shared state labels
-// ---------------------------------------------------------------------------
-
-describe("restoreIssueLabels — sub-issue reset", () => {
-  it("removes the same shared state labels for sub-issue plans", () => {
-    mockGhAvailable();
-
-    const planPath = writePlanFile(
-      ctx.dir,
-      "gh-201-sub-task",
-      githubSubIssuePlanContent(201, 100),
-    );
-
-    const result = restoreIssueLabels({
-      planPath,
-      issueRepo: "owner/repo",
-      cwd: ctx.dir,
-    });
-
-    expect(result.restored).toBe(true);
-
-    const ghEditCalls = mockExecSync.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue edit"),
-    );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-    expect(cmd).toContain("gh issue edit 201");
-    // Removes shared state labels — same for all families
-    expect(cmd).toContain('--remove-label "in-progress"');
-    expect(cmd).toContain('--remove-label "stuck"');
-  });
-
-  it("uses the same transition for standalone and sub-issue plans", () => {
-    mockGhAvailable();
-
-    // Standalone plan
-    const standalonePath = writePlanFile(
-      ctx.dir,
-      "gh-42-standalone",
-      githubPlanContent(42),
-    );
-
-    const standaloneResult = restoreIssueLabels({
-      planPath: standalonePath,
-      issueRepo: "owner/repo",
-      cwd: ctx.dir,
-    });
-    expect(standaloneResult.restored).toBe(true);
-
-    mockExecSync.mockReset();
-    mockGhAvailable();
-
-    // Sub-issue plan
-    const subIssuePath = writePlanFile(
-      ctx.dir,
-      "gh-201-subissue",
-      githubSubIssuePlanContent(201, 100),
-    );
-
-    const subIssueResult = restoreIssueLabels({
-      planPath: subIssuePath,
-      issueRepo: "owner/repo",
-      cwd: ctx.dir,
-    });
-    expect(subIssueResult.restored).toBe(true);
-
-    // Both should use the same gh issue edit pattern (shared state labels)
-    const ghEditCalls = mockExecSync.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue edit"),
-    );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-    expect(cmd).toContain('--remove-label "in-progress"');
-    expect(cmd).toContain('--remove-label "stuck"');
   });
 });

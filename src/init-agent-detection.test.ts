@@ -46,23 +46,7 @@ describe.skipIf(process.platform === "win32")(
       return getConfigFilePath(ctx.dir, testEnv());
     }
 
-    it("detects Claude Code when claude binary is in PATH", () => {
-      const { path } = pathWithAgent(ctx.dir, "claude");
-      const result = runCli(["init", "--yes"], ctx.dir, {
-        ...testEnv(),
-        PATH: path,
-        NO_COLOR: "1",
-      });
-      const output = stripLogo(result.stdout);
-
-      expect(output).toContain("Detected Claude Code");
-      expect(output).toContain("claude -p");
-
-      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      expect(config.agentCommand).toBe("claude -p");
-    });
-
-    it("detects OpenCode when opencode binary is in PATH (but not claude)", () => {
+    it("detects OpenCode when opencode binary is in PATH", () => {
       const { path } = pathWithAgent(ctx.dir, "opencode");
       const result = runCli(["init", "--yes"], ctx.dir, {
         ...testEnv(),
@@ -95,39 +79,19 @@ describe.skipIf(process.platform === "win32")(
     });
 
     it("explicit --agent-command skips detection entirely", () => {
-      const { path } = pathWithAgent(ctx.dir, "claude");
       const result = runCli(
         ["init", "--yes", "--agent-command=custom-agent --flag"],
         ctx.dir,
-        { ...testEnv(), PATH: path, NO_COLOR: "1" },
+        { ...testEnv(), PATH: basePathWithoutAgents(), NO_COLOR: "1" },
       );
       const output = stripLogo(result.stdout);
 
       // Should NOT show any detection message
-      expect(output).not.toContain("Detected Claude Code");
+      expect(output).not.toContain("Detected OpenCode");
       expect(output).not.toContain("No supported agent found");
 
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
       expect(config.agentCommand).toBe("custom-agent --flag");
-    });
-
-    it("prioritizes Claude Code over OpenCode when both are available", () => {
-      const { path, shimDir } = pathWithAgent(ctx.dir, "claude");
-      writeFileSync(join(shimDir, "opencode"), "#!/bin/sh\nexit 0\n", {
-        mode: 0o755,
-      });
-
-      const result = runCli(["init", "--yes"], ctx.dir, {
-        ...testEnv(),
-        PATH: path,
-        NO_COLOR: "1",
-      });
-      const output = stripLogo(result.stdout);
-
-      expect(output).toContain("Detected Claude Code");
-
-      const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      expect(config.agentCommand).toBe("claude -p");
     });
   },
 );

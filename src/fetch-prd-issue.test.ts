@@ -1,35 +1,19 @@
 /**
  * Unit tests for fetchPrdIssue() — auto-detection of a single PRD issue.
  *
- * Uses mock.module to control `child_process.execSync` so we can test the
+ * Uses setExecImpl() to swap execSync with a mock so we can test the
  * 0, 1, and multiple-result paths without requiring a real GitHub repo.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { setExecImpl } from "./exec.ts";
+import { fetchPrdIssue, fetchPrdIssueByNumber } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { fetchPrdIssue, fetchPrdIssueByNumber } = await import("./issues.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,7 +51,12 @@ function mockGhUnavailable(): void {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("fetchPrdIssue", () => {

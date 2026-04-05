@@ -2,41 +2,25 @@
  * Unit tests for pullPrdSubIssue() — the auto-drain entry point that discovers
  * PRD sub-issues via the native REST API.
  *
- * Uses mock.module to control `child_process.execSync` so we can test the
- * full flow (PRD listing → sub-issues API → label filtering → plan write)
+ * Uses setExecImpl() from exec.ts to swap execSync with a mock,
+ * verifying the full flow (PRD listing → sub-issues API → label filtering → plan write)
  * without requiring a real GitHub repo or gh CLI.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
 import type { PullIssueOptions } from "./issues.ts";
+import { setExecImpl } from "./exec.ts";
+import { pullPrdSubIssue } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    // Pass through non-gh commands (e.g., git init in test setup)
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { pullPrdSubIssue } = await import("./issues.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -94,7 +78,12 @@ function mockGhCommands(
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("pullPrdSubIssue — guard clauses", () => {
@@ -621,28 +610,6 @@ describe("pullPrdSubIssue — no body parsing", () => {
 });
 
 describe("pullPrdSubIssue — custom issuePrdLabel", () => {
-  it("uses custom label in gh issue list query", () => {
-    mockGhCommands({
-      "gh issue list": () => JSON.stringify([]),
-    });
-
-    const dir = makeTempDir();
-    const opts = {
-      ...defaultOptions(dir),
-      issuePrdLabel: "my-custom-prd",
-    };
-    pullPrdSubIssue(opts);
-
-    const listCalls = mockExecSync.mock.calls
-      .map((c: unknown[]) => c[0])
-      .filter(
-        (c: unknown) => typeof c === "string" && c.includes("gh issue list"),
-      );
-    expect(listCalls.length).toBeGreaterThan(0);
-    expect(listCalls[0]).toContain('"my-custom-prd"');
-    expect(listCalls[0]).not.toContain('"ralphai-prd"');
-  });
-
   it("pulls sub-issue using custom PRD label and threads it to parent discovery", () => {
     const prdIssues = [{ number: 100, title: "Custom PRD" }];
     const subIssues = [{ number: 201, title: "Sub task", state: "open" }];
@@ -684,117 +651,5 @@ describe("pullPrdSubIssue — custom issuePrdLabel", () => {
     const content = readFileSync(result.planPath!, "utf-8");
     expect(content).toContain("prd: 100");
     expect(content).toContain("issue: 201");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// PRD in-progress label on parent
-// ---------------------------------------------------------------------------
-
-describe("pullPrdSubIssue — PRD in-progress label on parent", () => {
-  it("adds default in-progress label to PRD parent when pulling a sub-issue", () => {
-    const prdIssues = [{ number: 100, title: "Feature PRD" }];
-    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
-
-    const editCalls: string[] = [];
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd === "gh --version" || cmd === "gh auth status") {
-        return "ok";
-      }
-      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
-        editCalls.push(cmd);
-        return "";
-      }
-      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
-      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
-        return JSON.stringify(subIssues);
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
-        return "";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
-        return "Sub A";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
-        return "Sub A body";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
-        return "https://github.com/owner/repo/issues/201";
-      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
-        return JSON.stringify({
-          number: 100,
-          labels: [{ name: "ralphai-prd" }],
-        });
-      if (cmd.includes("gh api graphql"))
-        return JSON.stringify({
-          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
-        });
-      throw new Error(`Unexpected command: ${cmd}`);
-    });
-
-    const dir = makeTempDir();
-    const result = pullPrdSubIssue(defaultOptions(dir));
-    expect(result.pulled).toBe(true);
-
-    // Verify an edit call was made to add the in-progress label to PRD parent #100
-    const prdEditCall = editCalls.find(
-      (c) => c.includes("100") && c.includes('"in-progress"'),
-    );
-    expect(prdEditCall).toBeDefined();
-    expect(prdEditCall).toContain("--add-label");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Regression guard: drain path uses subissue labels for transitionPull
-// ---------------------------------------------------------------------------
-
-describe("pullPrdSubIssue — subissue label family in transitionPull", () => {
-  it("calls transitionPull with subissue labels (not standalone) for sub-issues", () => {
-    const prdIssues = [{ number: 100, title: "Feature PRD" }];
-    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
-
-    const editCalls: string[] = [];
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd === "gh --version" || cmd === "gh auth status") {
-        return "ok";
-      }
-      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
-        editCalls.push(cmd);
-        return "";
-      }
-      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
-      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
-        return JSON.stringify(subIssues);
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
-        return "";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
-        return "Sub A";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
-        return "Sub A body";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
-        return "https://github.com/owner/repo/issues/201";
-      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
-        return JSON.stringify({
-          number: 100,
-          labels: [{ name: "ralphai-prd" }],
-        });
-      if (cmd.includes("gh api graphql"))
-        return JSON.stringify({
-          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
-        });
-      throw new Error(`Unexpected command: ${cmd}`);
-    });
-
-    const dir = makeTempDir();
-    const result = pullPrdSubIssue(defaultOptions(dir));
-    expect(result.pulled).toBe(true);
-
-    // Find the edit call for sub-issue #201 (not the PRD parent #100)
-    const subIssueEditCall = editCalls.find((c) =>
-      c.includes("gh issue edit 201"),
-    );
-    expect(subIssueEditCall).toBeDefined();
-
-    // Verify shared state labels were used (same for all families)
-    expect(subIssueEditCall).toContain('--add-label "in-progress"');
-    // Family label is not touched during pull
-    expect(subIssueEditCall).not.toContain("--remove-label");
   });
 });

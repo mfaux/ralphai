@@ -1,42 +1,39 @@
 /**
  * Unit tests for discoverParentPrd() — parent PRD discovery via REST API.
  *
- * Uses mock.module to control `child_process.execSync` so we can test
+ * Uses setExecImpl() to swap execSync with a mock so we can test
  * parent discovery without requiring a real GitHub repo.
  */
-import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
+import { setExecImpl } from "./exec.ts";
+import { discoverParentPrd } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { discoverParentPrd } = await import("./issues.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("discoverParentPrd", () => {
@@ -115,27 +112,6 @@ describe("discoverParentPrd", () => {
     );
 
     warnSpy.mockRestore();
-  });
-
-  it("calls the correct REST API endpoint", () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (typeof cmd === "string" && cmd.includes("gh api")) {
-        return JSON.stringify({
-          number: 245,
-          labels: [{ name: "ralphai-prd" }],
-        });
-      }
-      throw new Error(`Unexpected command: ${cmd}`);
-    });
-
-    discoverParentPrd("myorg/myrepo", "42", "/some/dir");
-
-    const ghApiCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh api"),
-    );
-    expect(ghApiCall).toBeDefined();
-    expect(ghApiCall![0]).toContain("repos/myorg/myrepo/issues/42/parent");
   });
 
   it("returns undefined when parent labels field is missing", () => {

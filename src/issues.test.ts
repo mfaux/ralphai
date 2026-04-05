@@ -11,9 +11,7 @@ import {
   slugify,
   peekGithubIssues,
   pullGithubIssues,
-  pullPrdSubIssue,
   fetchPrdIssueByNumber,
-  prdBranchName,
 } from "./issues.ts";
 import type { PullIssueOptions, PeekIssueOptions } from "./issues.ts";
 
@@ -405,28 +403,6 @@ describe("issueBranchName", () => {
 });
 
 // ---------------------------------------------------------------------------
-// prdBranchName (deprecated alias)
-// ---------------------------------------------------------------------------
-
-describe("prdBranchName", () => {
-  it("is an alias for issueBranchName", () => {
-    expect(prdBranchName("Add dark mode support")).toBe(
-      issueBranchName("Add dark mode support"),
-    );
-  });
-
-  it("returns feat/ prefix for titles without conventional type", () => {
-    expect(prdBranchName("Add dark mode support")).toBe(
-      "feat/add-dark-mode-support",
-    );
-  });
-
-  it("strips conventional prefix from slug", () => {
-    expect(prdBranchName("feat: add new feature")).toBe("feat/add-new-feature");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // fetchPrdIssueByNumber — guard clause tests (no gh required)
 // ---------------------------------------------------------------------------
 
@@ -451,32 +427,6 @@ describe("fetchPrdIssueByNumber", () => {
           ctx.dir,
         ),
       ).toThrow();
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// pullPrdSubIssue — guard clause tests (no gh required)
-// ---------------------------------------------------------------------------
-
-describe("pullPrdSubIssue", () => {
-  const ctx = useTempDir();
-
-  it("returns early when issueSource is not github", () => {
-    const opts = { ...defaultOptions(ctx.dir), issueSource: "none" };
-    const result = pullPrdSubIssue(opts);
-    expect(result.pulled).toBe(false);
-    expect(result.message).toContain("not 'github'");
-  });
-
-  it("returns early when gh is not available", () => {
-    initRepo(ctx.dir);
-    const ghAvailable = checkGhAvailable();
-    if (!ghAvailable) {
-      const opts = defaultOptions(ctx.dir);
-      const result = pullPrdSubIssue(opts);
-      expect(result.pulled).toBe(false);
-      expect(result.message).toContain("not available");
     }
   });
 });

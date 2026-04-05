@@ -3,7 +3,11 @@ import { existsSync, rmSync, mkdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
-import { runCli, runCliOutput, stripLogo } from "./test-utils.ts";
+import {
+  runCliInProcess,
+  runCliOutputInProcess,
+  stripLogo,
+} from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
 
 describe("worktree", () => {
@@ -72,8 +76,12 @@ describe("worktree", () => {
       }
     });
 
-    it("init --yes fails inside a git worktree", () => {
-      const result = runCli(["init", "--yes"], worktreeDir, env());
+    it("init --yes fails inside a git worktree", async () => {
+      const result = await runCliInProcess(
+        ["init", "--yes"],
+        worktreeDir,
+        env(),
+      );
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain(
         "Cannot initialize ralphai inside a git worktree",
@@ -82,21 +90,25 @@ describe("worktree", () => {
       expect(result.stderr).toContain("main repository");
     });
 
-    it("init --yes succeeds in the main repo (not a worktree)", () => {
+    it("init --yes succeeds in the main repo (not a worktree)", async () => {
       const output = stripLogo(
-        runCliOutput(["init", "--yes"], mainRepo, env()),
+        await runCliOutputInProcess(["init", "--yes"], mainRepo, env()),
       );
       expect(output).toContain("Ralphai initialized");
       expect(existsSync(getConfigFilePath(mainRepo, env()))).toBe(true);
     });
 
-    it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", () => {
+    it("run resolves .ralphai/ from the main worktree when invoked inside a worktree", async () => {
       // Initialize ralphai in the main repo (creates .ralphai/)
-      runCliOutput(["init", "--yes"], mainRepo, env());
+      await runCliOutputInProcess(["init", "--yes"], mainRepo, env());
 
       // Run --show-config from worktree — should find .ralphai/ and
       // config.json in global state and resolve config successfully
-      const result = runCli(["run", "--show-config"], worktreeDir, env());
+      const result = await runCliInProcess(
+        ["run", "--show-config"],
+        worktreeDir,
+        env(),
+      );
       expect(result.exitCode).toBe(0);
       // Config output should include the agent command from the main repo's config
       expect(result.stdout).toContain("agentCommand");
@@ -104,8 +116,8 @@ describe("worktree", () => {
       expect(result.stdout).toContain("worktree");
     });
 
-    it("run rejects execution from inside a worktree when not initialized", () => {
-      const result = runCli(["run"], worktreeDir, env());
+    it("run rejects execution from inside a worktree when not initialized", async () => {
+      const result = await runCliInProcess(["run"], worktreeDir, env());
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("must be run from the main repository");
     });
