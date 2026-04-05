@@ -365,8 +365,8 @@ describe("runRunner — completion", () => {
       "# Plan: Simple Plan\n\n## Implementation Tasks\n\n### Task 1: Test\n",
     );
 
-    // Agent command that outputs the COMPLETE marker
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+    // Agent command that outputs progress, COMPLETE marker, and learnings
+    const agentScript = `bash -c 'echo "<progress>"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
@@ -398,7 +398,7 @@ describe("runRunner — completion", () => {
       "# Plan: Log Test\n\n## Implementation Tasks\n\n### Task 1: Verify logging\n",
     );
 
-    const agentScript = `bash -c 'echo "agent-says-hello"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'echo "agent-says-hello"; echo "<progress>"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
@@ -539,7 +539,7 @@ describe("runRunner — RunnerResult", () => {
       "# Plan: Success\n\n### Task 1: Test\n",
     );
 
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'echo "<progress>"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({

@@ -14,6 +14,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "fs";
 import { join } from "path";
@@ -58,6 +59,16 @@ function initWithAgent(dir: string, env: Record<string, string>): void {
   config.agentCommand = completeAgent;
   config.autoCommit = true;
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+
+  // Remove the scaffolded hello-world sample plan so it doesn't interfere
+  // with test plans. The hello-world plan uses task headings that don't
+  // match the test agent's progress format, causing the completion gate
+  // to reject and the runner to get stuck.
+  const { backlogDir } = getRepoPipelineDirs(dir, env);
+  const samplePlan = join(backlogDir, "hello-world.md");
+  if (existsSync(samplePlan)) {
+    rmSync(samplePlan);
+  }
 }
 
 /** Create plan files in the backlog directory. */
@@ -71,7 +82,7 @@ function addPlans(
   for (const plan of plans) {
     writeFileSync(
       join(backlogDir, `${plan.slug}.md`),
-      `# Plan: ${plan.title}\n\n### Task 1: Do it\n`,
+      `# Plan: ${plan.title}\n\nImplement the feature.\n`,
     );
   }
   return backlogDir;
@@ -89,7 +100,7 @@ function addPrdSubIssuePlan(
   mkdirSync(backlogDir, { recursive: true });
   writeFileSync(
     join(backlogDir, `${slug}.md`),
-    `---\nsource: github\nissue: ${issueNumber}\nissue-url: https://github.com/test/repo/issues/${issueNumber}\nprd: ${prdNumber}\n---\n\n# Plan: ${slug}\n\n### Task 1: Do it\n`,
+    `---\nsource: github\nissue: ${issueNumber}\nissue-url: https://github.com/test/repo/issues/${issueNumber}\nprd: ${prdNumber}\n---\n\n# Plan: ${slug}\n\nImplement the feature.\n`,
   );
   return backlogDir;
 }

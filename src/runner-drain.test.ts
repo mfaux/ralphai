@@ -98,7 +98,7 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'echo "<progress>"; echo "### Task 1: Done"; echo "**Status:** Complete"; echo "Finished."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
 const stuckAgent = `bash -c 'echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"'`;
 
 // ---------------------------------------------------------------------------
@@ -322,7 +322,7 @@ fi
     const counterFile = join(dir, ".agent-counter");
     writeFileSync(counterFile, "0");
     // Agent that completes on first call, then does nothing on subsequent calls
-    const mixedAgent = `bash -c 'count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"; fi'`;
+    const mixedAgent = `bash -c 'count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress>"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"; fi'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
