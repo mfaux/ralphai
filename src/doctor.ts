@@ -34,6 +34,122 @@ export interface DoctorCheckResult {
   message: string;
 }
 
+/** A single check descriptor — what to run and its label. */
+export interface DoctorCheck {
+  /** Human-readable name for the check (e.g., "config exists"). */
+  name: string;
+  /** The function that performs the check. May return one or many results. */
+  run: (cwd: string) => DoctorCheckResult | DoctorCheckResult[];
+}
+
+/**
+ * Build the ordered list of doctor checks, respecting conditional
+ * dependencies (some checks are skipped when prerequisites fail).
+ *
+ * Returns an array of `DoctorCheck` descriptors. Each entry's `run`
+ * function is safe to call independently — dependency gating is
+ * handled by the caller via `collectDoctorChecks()`.
+ *
+ * Exported for the TUI doctor screen.
+ */
+export function buildDoctorChecks(cwd: string): DoctorCheck[] {
+  // Run prerequisite checks first to determine which optional checks to include.
+  const configExistsResult = checkConfigExists(cwd);
+  const configValidResult = checkConfigValid(cwd);
+  const gitRepoResult = checkGitRepo(cwd);
+
+  const checks: DoctorCheck[] = [
+    { name: "config exists", run: () => configExistsResult },
+    { name: "config valid", run: () => configValidResult },
+    { name: "git repo", run: () => gitRepoResult },
+  ];
+
+  // Conditional checks based on prerequisites
+  if (gitRepoResult.status !== "fail") {
+    checks.push({ name: "working tree clean", run: checkWorkingTreeClean });
+    checks.push({ name: "base branch exists", run: checkBaseBranchExists });
+  }
+
+  if (configValidResult.status !== "fail") {
+    checks.push({ name: "agent command", run: checkAgentCommand });
+    checks.push({ name: "feedback commands", run: checkFeedbackCommands });
+    checks.push({
+      name: "workspace feedback commands",
+      run: checkWorkspaceFeedbackCommands,
+    });
+  }
+
+  if (configExistsResult.status !== "fail") {
+    checks.push({ name: "backlog has plans", run: checkBacklogHasPlans });
+    checks.push({ name: "orphaned receipts", run: checkOrphanedReceipts });
+  }
+
+  return checks;
+}
+
+/**
+ * Run all doctor checks and collect their results.
+ *
+ * Returns a flat array of results in execution order. Unlike
+ * `runRalphaiDoctor()`, this function does not print anything or
+ * call `process.exit()`, making it suitable for the TUI.
+ */
+export function collectDoctorChecks(cwd: string): DoctorCheckResult[] {
+  const checks = buildDoctorChecks(cwd);
+  const results: DoctorCheckResult[] = [];
+
+  for (const check of checks) {
+    const result = check.run(cwd);
+    if (Array.isArray(result)) {
+      results.push(...result);
+    } else {
+      results.push(result);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Build a human-readable summary line from doctor check results.
+ *
+ * Returns "All checks passed" when there are no failures or warnings,
+ * otherwise a comma-separated count like "2 warnings, 1 failure".
+ */
+export function buildDoctorSummary(results: DoctorCheckResult[]): string {
+  let failures = 0;
+  let warnings = 0;
+  for (const r of results) {
+    if (r.status === "fail") failures++;
+    if (r.status === "warn") warnings++;
+  }
+
+  if (failures === 0 && warnings === 0) {
+    return "All checks passed";
+  }
+
+  const parts: string[] = [];
+  if (warnings > 0)
+    parts.push(`${warnings} warning${warnings !== 1 ? "s" : ""}`);
+  if (failures > 0)
+    parts.push(`${failures} failure${failures !== 1 ? "s" : ""}`);
+  return parts.join(", ");
+}
+
+/**
+ * Map a check status to a Unicode icon.
+ *
+ * Exported for reuse in the TUI doctor screen.
+ */
+export function statusIcon(status: DoctorCheckResult["status"]): string {
+  const icons: Record<DoctorCheckResult["status"], string> = {
+    pass: "\u2713",
+    fail: "\u2717",
+    warn: "\u26A0",
+  };
+  return icons[status];
+}
+
 function checkConfigExists(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (existsSync(configPath)) {
@@ -282,94 +398,26 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
 // ---------------------------------------------------------------------------
 
 export function runRalphaiDoctor(cwd: string): void {
-  const statusIcons: Record<DoctorCheckResult["status"], string> = {
-    pass: "\u2713",
-    fail: "\u2717",
-    warn: "\u26A0",
-  };
-
-  let failures = 0;
-  let warnings = 0;
-
   // Print header immediately so the user sees output right away.
   console.log();
   console.log(`${TEXT}ralphai doctor${RESET}`);
   console.log();
 
-  function emit(result: DoctorCheckResult): void {
-    if (result.status === "fail") failures++;
-    if (result.status === "warn") warnings++;
-    const icon = statusIcons[result.status];
+  const results = collectDoctorChecks(cwd);
+
+  for (const result of results) {
+    const icon = statusIcon(result.status);
     console.log(`  ${icon} ${DIM}${result.message}${RESET}`);
-  }
-
-  function emitAll(results: DoctorCheckResult[]): void {
-    for (const r of results) emit(r);
-  }
-
-  // 1. Config exists
-  const configExists = checkConfigExists(cwd);
-  emit(configExists);
-
-  // 2. config.json valid
-  const configValid = checkConfigValid(cwd);
-  emit(configValid);
-
-  // 3. Git repo detected
-  const gitRepo = checkGitRepo(cwd);
-  emit(gitRepo);
-
-  // 4. Working tree clean (only if git repo detected)
-  if (gitRepo.status !== "fail") {
-    emit(checkWorkingTreeClean(cwd));
-  }
-
-  // 5. Base branch exists (only if git repo detected)
-  if (gitRepo.status !== "fail") {
-    emit(checkBaseBranchExists(cwd));
-  }
-
-  // 6. Agent command in PATH (only if config valid)
-  if (configValid.status !== "fail") {
-    emit(checkAgentCommand(cwd));
-  }
-
-  // 7. Feedback commands (only if config valid)
-  if (configValid.status !== "fail") {
-    emitAll(checkFeedbackCommands(cwd));
-  }
-
-  // 7b. Workspace feedback commands (only if config valid)
-  if (configValid.status !== "fail") {
-    emitAll(checkWorkspaceFeedbackCommands(cwd));
-  }
-
-  // 8. Backlog has plans (only if config exists)
-  if (configExists.status !== "fail") {
-    emit(checkBacklogHasPlans(cwd));
-  }
-
-  // 9. No orphaned receipts (only if config exists)
-  if (configExists.status !== "fail") {
-    emit(checkOrphanedReceipts(cwd));
   }
 
   // --- Summary ---
   console.log();
-  if (failures > 0 || warnings > 0) {
-    const parts: string[] = [];
-    if (warnings > 0)
-      parts.push(`${warnings} warning${warnings !== 1 ? "s" : ""}`);
-    if (failures > 0)
-      parts.push(`${failures} failure${failures !== 1 ? "s" : ""}`);
-    console.log(`  ${DIM}${parts.join(", ")}${RESET}`);
-  } else {
-    console.log(`  ${DIM}All checks passed${RESET}`);
-  }
+  console.log(`  ${DIM}${buildDoctorSummary(results)}${RESET}`);
   console.log();
 
   // Exit code: 1 if any check failed, 0 otherwise (warnings don't count)
-  if (failures > 0) {
+  const hasFailures = results.some((r) => r.status === "fail");
+  if (hasFailures) {
     process.exit(1);
   }
 }
