@@ -41,30 +41,32 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 
 ## Supporting modules
 
-| File                       | Role                                                                     |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                     |
-| `src/show-config.ts`       | `--show-config` output formatting.                                       |
-| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery. |
-| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.   |
-| `src/labels.ts`            | Label derivation from base label names (`deriveLabels()`).               |
-| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).           |
-| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                               |
-| `src/pr-lifecycle.ts`      | PR creation after plan completion.                                       |
-| `src/pr-description.ts`    | PR body generation (summary, learnings).                                 |
-| `src/receipt.ts`           | Completion receipt parsing and source checking.                          |
-| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).               |
-| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.         |
-| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                |
-| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).       |
-| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                         |
-| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.              |
-| `src/learnings.ts`         | Learnings extraction and persistence across iterations.                  |
-| `src/process-utils.ts`     | Child process helpers.                                                   |
-| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                |
-| `src/ipc-server.ts`        | IPC server for agent communication.                                      |
-| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                            |
-| `src/self-update.ts`       | `ralphai update` self-update logic.                                      |
+| File                       | Role                                                                      |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                      |
+| `src/show-config.ts`       | `--show-config` output formatting.                                        |
+| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery.  |
+| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.    |
+| `src/labels.ts`            | Label derivation from base label names (`deriveLabels()`).                |
+| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).            |
+| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                |
+| `src/pr-lifecycle.ts`      | PR creation after plan completion.                                        |
+| `src/pr-description.ts`    | PR body generation (summary, learnings).                                  |
+| `src/receipt.ts`           | Completion receipt parsing and source checking.                           |
+| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                |
+| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.          |
+| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                 |
+| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).        |
+| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                          |
+| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.               |
+| `src/learnings.ts`         | Learnings extraction and persistence across iterations.                   |
+| `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction). |
+| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.          |
+| `src/process-utils.ts`     | Child process helpers.                                                    |
+| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                 |
+| `src/ipc-server.ts`        | IPC server for agent communication.                                       |
+| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                             |
+| `src/self-update.ts`       | `ralphai update` self-update logic.                                       |
 
 ## Dependency direction
 
@@ -74,7 +76,7 @@ cli.ts
        -> parse-options.ts, git-helpers.ts, seed.ts       (leaf utilities)
        -> doctor.ts, status.ts                            (subcommand handlers)
        -> worktree/index.ts -> parsing, selection, management
-       -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts
+       -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts, sentinel.ts
        -> config.ts, issues.ts, receipt.ts, ...           (supporting modules)
 ```
 
@@ -87,3 +89,14 @@ Modules import from leaf utilities and supporting modules. `ralphai.ts` is the r
 - **New feedback or iteration logic:** Modify `src/runner.ts`.
 - **New plan selection or dependency logic:** Modify `src/plan-detection.ts`.
 - **New config key:** Add to `src/config.ts` and update `docs/cli-reference.md`.
+
+## Agent communication protocol
+
+The runner communicates with AI agents through structured XML sentinel tags embedded in agent stdout. A per-plan cryptographic nonce (UUID) is generated by the runner and injected into the agent prompt. The agent must echo this nonce back inside sentinel tags for the runner to recognize them:
+
+- **Completion:** `<promise nonce="UUID">COMPLETE</promise>`
+- **Learnings:** `<learnings nonce="UUID">...</learnings>`
+- **Progress:** `<progress nonce="UUID">...</progress>`
+- **PR summary:** `<pr-summary nonce="UUID">...</pr-summary>`
+
+Bare tags without the correct nonce are ignored. This prevents false positives from tool output (test runners, grep, cat) that happens to contain sentinel strings. The nonce generation and detection logic lives in `src/sentinel.ts`.

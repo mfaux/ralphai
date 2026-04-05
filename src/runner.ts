@@ -28,10 +28,9 @@ import {
   type OutputMessage,
 } from "./ipc-protocol.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
-import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
+import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
-import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
-import { extractPrSummary } from "./pr-summary.ts";
+import { appendProgressBlock } from "./progress.ts";
 import {
   generateNonce,
   detectCompletion,
@@ -883,12 +882,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Process learnings block (before completion check) ---
-      // Try nonce-stamped extraction first; fall back to bare extraction
-      // for backward compatibility with agents that haven't adopted the
-      // nonce protocol yet (e.g., during migration).
-      const learningsBlock =
-        extractNoncedBlock(output, "learnings", nonce) ??
-        extractLearningsBlock(output);
+      // Only recognize nonce-stamped tags to prevent false positives from
+      // tool output that happens to contain bare sentinel strings.
+      const learningsBlock = extractNoncedBlock(output, "learnings", nonce);
       if (learningsBlock === null) {
         console.log("WARNING: No <learnings> block found in agent output.");
       } else {
@@ -906,10 +902,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Extract and append progress block ---
-      // Try nonce-stamped extraction first; fall back to bare extraction.
-      const progressContent =
-        extractNoncedBlock(output, "progress", nonce) ??
-        extractProgressBlock(output);
+      // Only recognize nonce-stamped tags to prevent false positives.
+      const progressContent = extractNoncedBlock(output, "progress", nonce);
       if (progressContent) {
         appendProgressBlock(progressFile, iterationNumber, progressContent);
         console.log(
@@ -1094,11 +1088,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         completedPlans.push(basename(planFile));
 
         // Extract agent-generated PR description
-        // Try nonce-stamped extraction first; fall back to bare extraction.
+        // Only recognize nonce-stamped tags to prevent false positives.
         const prSummary =
-          extractNoncedBlock(output, "pr-summary", nonce) ??
-          extractPrSummary(output) ??
-          undefined;
+          extractNoncedBlock(output, "pr-summary", nonce) ?? undefined;
         if (prSummary) lastPrSummary = prSummary;
 
         // Remove PID file and close IPC server before archiving so they
