@@ -5,7 +5,10 @@ import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { runRalphai } from "./ralphai.ts";
-import { runInteractive } from "./interactive/menu.ts";
+import type { MenuContext } from "./tui/menu-items.ts";
+import { resolveConfig, DEFAULTS } from "./config.ts";
+import type { ResolvedConfig } from "./config.ts";
+import { peekGithubIssues, peekPrdIssues } from "./issues.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 import { getConfigFilePath } from "./config.ts";
@@ -73,6 +76,137 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ralphai run plan.md   ${DIM}# run a specific plan file${RESET}`);
 }
 
+// ---------------------------------------------------------------------------
+// TUI helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the MenuContext needed by the TUI main menu.
+ *
+ * Resolves config, peeks at GitHub issues, and assembles the context.
+ * Errors in config resolution are swallowed — the menu proceeds with
+ * defaults.
+ */
+function buildMenuContext(cwd: string): {
+  menuContext: MenuContext;
+  resolvedConfig: ResolvedConfig | undefined;
+} {
+  let hasGitHubIssues = false;
+  let standaloneLabel = DEFAULTS.standaloneLabel;
+  let issuePrdLabel = DEFAULTS.prdLabel;
+  let issueRepo = "";
+  let resolvedConfig: ResolvedConfig | undefined;
+
+  try {
+    const { config } = resolveConfig({
+      cwd,
+      envVars: process.env,
+      cliArgs: [],
+    });
+    resolvedConfig = config;
+    hasGitHubIssues = config.issueSource.value === "github";
+    standaloneLabel = config.standaloneLabel.value;
+    issuePrdLabel = config.prdLabel.value;
+    issueRepo = config.issueRepo.value;
+  } catch {
+    // Config resolution failure — proceed with defaults
+  }
+
+  // Peek at GitHub issue count (for menu item labels)
+  let githubIssueCount: number | undefined;
+  if (hasGitHubIssues) {
+    const regularPeek = peekGithubIssues({
+      cwd,
+      issueSource: "github",
+      standaloneLabel,
+      issueRepo,
+      issuePrdLabel,
+    });
+    const prdPeek = peekPrdIssues({
+      cwd,
+      issueSource: "github",
+      standaloneLabel,
+      issueRepo,
+      issuePrdLabel,
+    });
+    githubIssueCount = (regularPeek.count || 0) + (prdPeek.count || 0);
+  }
+
+  const menuContext: MenuContext = {
+    hasGitHubIssues,
+    githubIssueCount,
+    githubConfig: hasGitHubIssues
+      ? { cwd, standaloneLabel, issueRepo, issuePrdLabel }
+      : undefined,
+    resolvedConfig,
+  };
+
+  return { menuContext, resolvedConfig };
+}
+
+/**
+ * Run the TUI loop.
+ *
+ * Renders the TUI main menu and handles results:
+ * - "run" → dispatch to runRalphai and exit
+ * - "dispatch" → run command and re-enter TUI (e.g., view-status, settings)
+ * - "quit" → exit
+ */
+async function runTuiLoop(cwd: string): Promise<void> {
+  // Dynamic imports — keeps .tsx out of the module graph for Node
+  // subprocess tests that use --experimental-strip-types.
+  const React = (await import("react")).default;
+  const { renderTui, TuiRouter } = await import("./tui/app.tsx");
+  type TuiResult = import("./tui/app.tsx").TuiResult;
+
+  while (true) {
+    // Build fresh context each iteration so state is always current
+    const { menuContext, resolvedConfig } = buildMenuContext(cwd);
+
+    // Use a fallback config for the wizard if config resolution failed
+    const wizardConfig: ResolvedConfig =
+      resolvedConfig ?? buildFallbackConfig();
+
+    const result: TuiResult = await renderTui(
+      React.createElement(TuiRouter, {
+        initialScreen: { tag: "menu", cwd, menuContext },
+        config: wizardConfig,
+      }),
+    );
+
+    switch (result.action) {
+      case "quit":
+        return;
+
+      case "run":
+        await runRalphai(result.args);
+        return;
+
+      case "dispatch":
+        // Run the command and return to the TUI menu
+        await runRalphai(result.args);
+        continue;
+    }
+  }
+}
+
+/**
+ * Build a minimal fallback ResolvedConfig when config resolution fails.
+ *
+ * Every key uses the default value with source "default".
+ */
+function buildFallbackConfig(): ResolvedConfig {
+  const config: Record<string, { value: unknown; source: string }> = {};
+  for (const [key, value] of Object.entries(DEFAULTS)) {
+    config[key] = { value, source: "default" };
+  }
+  return config as unknown as ResolvedConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -118,7 +252,7 @@ async function main(): Promise<void> {
         }
       }
 
-      await runInteractive(process.cwd());
+      await runTuiLoop(process.cwd());
       return;
     }
     // Non-interactive: show help text

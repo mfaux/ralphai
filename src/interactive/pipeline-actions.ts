@@ -1,20 +1,18 @@
 /**
- * Pipeline management action handlers for the interactive menu.
+ * Pipeline management helpers for the interactive menu.
  *
- * Provides "Resume stalled plan", "Stop running plan", "Reset plan",
- * and "Recent activity" actions. Each has a menu item helper
- * (label/hint/disabled) and an action handler that uses `@clack/prompts`
- * for sub-selections.
+ * Provides pure helper functions that filter plans by liveness state
+ * and build menu item descriptors (label, hint, disabled) from pipeline
+ * state. Also provides recent-activity reading/formatting utilities.
+ *
+ * No I/O or rendering — all clack-based action handlers have been
+ * removed in favour of the Ink-based TUI screens.
  */
 
-import * as clack from "@clack/prompts";
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import type { PipelineState, InProgressPlan } from "../pipeline-state.ts";
-import { runRalphai, resetPlanBySlug } from "../ralphai.ts";
-import { runRalphaiStop } from "../stop.ts";
 import { parseReceipt } from "../receipt.ts";
-import { getRepoPipelineDirs } from "../global-state.ts";
 import { DIM, RESET, TEXT } from "../utils.ts";
 
 // ---------------------------------------------------------------------------
@@ -131,193 +129,6 @@ export function stalledWarning(state: PipelineState): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Action handlers
-// ---------------------------------------------------------------------------
-
-/**
- * Handle the "Resume stalled plan" action.
- *
- * If one stalled plan: delegates immediately to the runner with resume.
- * If multiple: shows a `clack.select` to pick which one to resume.
- * Ctrl+C or "Back" returns to the main menu.
- *
- * @returns `"continue"` to re-show the main menu, `"exit"` when handing
- *   off to the runner.
- */
-export async function handleResumeStalled(
-  state: PipelineState,
-): Promise<"continue" | "exit"> {
-  const stalled = stalledPlans(state);
-
-  if (stalled.length === 0) {
-    return "continue";
-  }
-
-  let slug: string;
-
-  if (stalled.length === 1) {
-    slug = stalled[0]!.slug;
-  } else {
-    const options = stalled.map((plan) => ({
-      value: plan.slug,
-      label: plan.filename,
-      hint: plan.scope ? `scope: ${plan.scope}` : undefined,
-    }));
-
-    options.push({
-      value: "__back__",
-      label: "Back",
-      hint: undefined,
-    });
-
-    const selected = await clack.select({
-      message: "Pick a stalled plan to resume:",
-      options,
-    });
-
-    if (clack.isCancel(selected)) {
-      return "continue";
-    }
-
-    if (selected === "__back__") {
-      return "continue";
-    }
-
-    slug = selected as string;
-  }
-
-  // Delegate to runner with resume behavior: run --plan <slug>.md --resume
-  await runRalphai(["run", "--plan", `${slug}.md`, "--resume"]);
-  return "exit";
-}
-
-/**
- * Handle the "Stop running plan" action.
- *
- * If one running plan: confirms and stops it.
- * If multiple: shows a `clack.select` to pick which one to stop.
- * Ctrl+C or "Back" returns to the main menu.
- *
- * @returns `"continue"` — always returns to the menu after stopping.
- */
-export async function handleStopRunning(
-  state: PipelineState,
-  cwd: string,
-): Promise<"continue"> {
-  const running = runningPlans(state);
-
-  if (running.length === 0) {
-    return "continue";
-  }
-
-  let slug: string;
-
-  if (running.length === 1) {
-    const plan = running[0]!;
-    const confirmed = await clack.confirm({
-      message: `Stop '${plan.slug}' (PID ${(plan.liveness as { tag: "running"; pid: number }).pid})?`,
-    });
-
-    if (clack.isCancel(confirmed) || !confirmed) {
-      return "continue";
-    }
-
-    slug = plan.slug;
-  } else {
-    const options: { value: string; label: string; hint?: string }[] =
-      running.map((plan) => {
-        const pid = (plan.liveness as { tag: "running"; pid: number }).pid;
-        return {
-          value: plan.slug,
-          label: plan.filename,
-          hint: `PID ${pid}`,
-        };
-      });
-
-    options.push({
-      value: "__back__",
-      label: "Back",
-    });
-
-    const selected = await clack.select({
-      message: "Pick a running plan to stop:",
-      options,
-    });
-
-    if (clack.isCancel(selected)) {
-      return "continue";
-    }
-
-    if (selected === "__back__") {
-      return "continue";
-    }
-
-    slug = selected as string;
-  }
-
-  runRalphaiStop({ cwd, dryRun: false, slug });
-  return "continue";
-}
-
-/**
- * Handle the "Reset plan" action.
- *
- * Shows in-progress plans, lets user pick one, delegates to
- * `resetPlanBySlug` to move the plan back to backlog. Returns to the
- * menu.
- *
- * @returns `"continue"` — always returns to the menu after resetting.
- */
-export async function handleResetPlan(
-  state: PipelineState,
-  cwd: string,
-): Promise<"continue"> {
-  const plans = resettablePlans(state);
-
-  if (plans.length === 0) {
-    return "continue";
-  }
-
-  const options = plans.map((plan) => {
-    const parts: string[] = [];
-    if (plan.scope) parts.push(`scope: ${plan.scope}`);
-    if (plan.liveness.tag === "stalled") parts.push("stalled");
-    if (plan.liveness.tag === "running") parts.push("running");
-    if (plan.liveness.tag === "in_progress") parts.push("in progress");
-    return {
-      value: plan.slug,
-      label: plan.filename,
-      hint: parts.length > 0 ? parts.join(" · ") : undefined,
-    };
-  });
-
-  options.push({
-    value: "__back__",
-    label: "Back",
-    hint: undefined,
-  });
-
-  const selected = await clack.select({
-    message: "Pick a plan to reset:",
-    options,
-  });
-
-  if (clack.isCancel(selected)) {
-    return "continue";
-  }
-
-  if (selected === "__back__") {
-    return "continue";
-  }
-
-  const slug = selected as string;
-
-  // Delegate to the simplified reset function
-  resetPlanBySlug(cwd, slug);
-  return "continue";
-}
-
-// ---------------------------------------------------------------------------
 // Recent activity
 // ---------------------------------------------------------------------------
 
@@ -403,37 +214,4 @@ export function formatArchivedPlan(plan: ArchivedPlan): string {
     return `  ${check} ${plan.slug}  ${DIM}${plan.prUrl}${RESET}`;
   }
   return `  ${check} ${plan.slug}`;
-}
-
-/**
- * Handle the "Recent activity" action.
- *
- * Reads up to 10 most recently archived plans and displays them with
- * slug and PR URL (if present). Waits for a keypress to return to menu.
- *
- * @returns `"continue"` — always returns to the menu.
- */
-export async function handleRecentActivity(cwd: string): Promise<"continue"> {
-  const { archiveDir } = getRepoPipelineDirs(cwd);
-  const plans = readArchivedPlans(archiveDir);
-
-  if (plans.length === 0) {
-    console.log(`\n${DIM}No completed plans found.${RESET}`);
-    return "continue";
-  }
-
-  console.log();
-  console.log(`${TEXT}Recent activity:${RESET}`);
-  for (const plan of plans) {
-    console.log(formatArchivedPlan(plan));
-  }
-  console.log();
-
-  // Wait for user to acknowledge before returning to menu
-  await clack.text({
-    message: `${DIM}Press Enter to return to menu${RESET}`,
-    defaultValue: "",
-  });
-
-  return "continue";
 }

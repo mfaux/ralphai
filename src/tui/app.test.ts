@@ -30,6 +30,9 @@ import {
   TuiRouter,
   type Screen,
 } from "./app.tsx";
+import type { MenuContext } from "./menu-items.ts";
+
+const defaultMenuContext: MenuContext = { hasGitHubIssues: false };
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -125,12 +128,20 @@ describe("initialScreenFrom", () => {
   });
 
   it("works with doctor screen", () => {
-    const screen: Screen = { tag: "doctor", cwd: "/tmp" };
+    const screen: Screen = {
+      tag: "doctor",
+      cwd: "/tmp",
+      menuContext: defaultMenuContext,
+    };
     expect(initialScreenFrom(screen)).toBe(screen);
   });
 
   it("works with clean screen", () => {
-    const screen: Screen = { tag: "clean", cwd: "/tmp" };
+    const screen: Screen = {
+      tag: "clean",
+      cwd: "/tmp",
+      menuContext: defaultMenuContext,
+    };
     expect(initialScreenFrom(screen)).toBe(screen);
   });
 
@@ -199,14 +210,22 @@ describe("Screen type", () => {
   });
 
   it("can construct a doctor screen", () => {
-    const screen: Screen = { tag: "doctor", cwd: "/home/user/project" };
+    const screen: Screen = {
+      tag: "doctor",
+      cwd: "/home/user/project",
+      menuContext: defaultMenuContext,
+    };
     if (screen.tag === "doctor") {
       expect(screen.cwd).toBe("/home/user/project");
     }
   });
 
   it("can construct a clean screen", () => {
-    const screen: Screen = { tag: "clean", cwd: "/home/user/project" };
+    const screen: Screen = {
+      tag: "clean",
+      cwd: "/home/user/project",
+      menuContext: defaultMenuContext,
+    };
     if (screen.tag === "clean") {
       expect(screen.cwd).toBe("/home/user/project");
     }

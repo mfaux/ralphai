@@ -6,9 +6,9 @@
  * layer so agent output streams cleanly in the terminal.
  *
  * Screen flow:
- * - Main menu (not yet implemented — will be in a later slice)
- * - Issue picker → confirm screen
- * - Backlog picker → confirm screen (not yet implemented)
+ * - Main menu → sub-screens or TUI exit
+ * - Issue picker → TUI exit (with run args) | back to menu
+ * - Plan picker → TUI exit (with run args) | reset + back | back to menu
  * - Confirm screen → TUI exit (with run args) | back | options wizard
  * - Options wizard → TUI exit (with run args) | cancel → previous screen
  * - Doctor / Clean / Stop → back to main menu
@@ -23,10 +23,29 @@ import React, { useState, useCallback } from "react";
 import { render, useApp } from "ink";
 
 import type { ResolvedConfig } from "../config.ts";
+import type { PipelineState } from "../pipeline-state.ts";
+import {
+  stalledPlans,
+  resettablePlans,
+} from "../interactive/pipeline-actions.ts";
+import {
+  unmetDependencies,
+  findNextPlanName,
+} from "../interactive/run-actions.ts";
+import { resetPlanBySlug } from "../ralphai.ts";
 import { ConfirmScreen, type ConfirmScreenData } from "./screens/confirm.tsx";
 import { WizardScreen, type TargetChoice } from "./screens/wizard.tsx";
 import { DoctorScreen } from "./screens/doctor.tsx";
 import { CleanScreen } from "./screens/clean.tsx";
+import { StopScreen } from "./screens/stop.tsx";
+import { IssuePicker } from "./screens/issue-picker.tsx";
+import { MainMenuScreen } from "./screens/main-menu.tsx";
+import {
+  PlanPickerScreen,
+  type PlanPickerItem,
+} from "./screens/plan-picker.tsx";
+import type { MenuContext } from "./menu-items.ts";
+import type { ListGithubIssuesOptions } from "../interactive/github-issues.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,8 +54,17 @@ import { CleanScreen } from "./screens/clean.tsx";
 /** Outcome of the TUI session — what the CLI should do after unmount. */
 export type TuiResult =
   | { action: "run"; args: string[] }
-  | { action: "options"; args: string[] }
+  | { action: "dispatch"; args: string[] }
   | { action: "quit" };
+
+/**
+ * Plan picker mode — determines what happens when a plan is selected.
+ *
+ * - "run": exit TUI with `["run", "--plan", file]`
+ * - "resume": exit TUI with `["run", "--plan", slug.md, "--resume"]`
+ * - "reset": call `resetPlanBySlug()` and return to menu
+ */
+export type PlanPickerMode = "run" | "resume" | "reset";
 
 /**
  * Screen routing state.
@@ -45,6 +73,7 @@ export type TuiResult =
  * (where present) enables Esc/cancel to return to the originating screen.
  */
 export type Screen =
+  | { tag: "menu"; cwd: string; menuContext: MenuContext }
   | { tag: "confirm"; data: ConfirmScreenData }
   | {
       tag: "wizard";
@@ -53,8 +82,23 @@ export type Screen =
       targetChoices?: TargetChoice[];
       previousScreen?: Screen;
     }
-  | { tag: "doctor"; cwd: string }
-  | { tag: "clean"; cwd: string }
+  | {
+      tag: "plan-picker";
+      title: string;
+      plans: PlanPickerItem[];
+      mode: PlanPickerMode;
+      cwd: string;
+      menuContext: MenuContext;
+    }
+  | {
+      tag: "issue-picker";
+      listOptions: ListGithubIssuesOptions;
+      cwd: string;
+      menuContext: MenuContext;
+    }
+  | { tag: "stop"; state: PipelineState; cwd: string; menuContext: MenuContext }
+  | { tag: "doctor"; cwd: string; menuContext: MenuContext }
+  | { tag: "clean"; cwd: string; menuContext: MenuContext }
   | { tag: "quit" };
 
 // ---------------------------------------------------------------------------
@@ -84,6 +128,89 @@ export function targetChoiceFromRunArgs(runArgs: string[]): TargetChoice {
  */
 export function initialScreenFrom(screen: Screen): Screen {
   return screen;
+}
+
+/**
+ * Build `PlanPickerItem[]` from backlog plans in pipeline state.
+ */
+export function backlogPickerItems(state: PipelineState): PlanPickerItem[] {
+  return state.backlog.map((plan) => {
+    const parts: string[] = [];
+    if (plan.scope) parts.push(`scope: ${plan.scope}`);
+    const unmet = unmetDependencies(plan, state.completedSlugs);
+    if (unmet.length > 0) {
+      const depNames = unmet.map((d) => d.replace(/\.md$/, "")).join(", ");
+      parts.push(`waiting on ${depNames}`);
+    }
+    return {
+      value: plan.filename,
+      label: plan.filename,
+      hint: parts.length > 0 ? parts.join(" \u00b7 ") : undefined,
+    };
+  });
+}
+
+/**
+ * Build `PlanPickerItem[]` from stalled plans in pipeline state.
+ */
+export function stalledPickerItems(state: PipelineState): PlanPickerItem[] {
+  return stalledPlans(state).map((plan) => ({
+    value: plan.slug,
+    label: plan.filename,
+    hint: plan.scope ? `scope: ${plan.scope}` : undefined,
+  }));
+}
+
+/**
+ * Build `PlanPickerItem[]` from resettable plans in pipeline state.
+ */
+export function resetPickerItems(state: PipelineState): PlanPickerItem[] {
+  return resettablePlans(state).map((plan) => {
+    const parts: string[] = [];
+    if (plan.scope) parts.push(`scope: ${plan.scope}`);
+    if (plan.liveness.tag === "stalled") parts.push("stalled");
+    if (plan.liveness.tag === "running") parts.push("running");
+    if (plan.liveness.tag === "in_progress") parts.push("in progress");
+    return {
+      value: plan.slug,
+      label: plan.filename,
+      hint: parts.length > 0 ? parts.join(" \u00b7 ") : undefined,
+    };
+  });
+}
+
+/**
+ * Build `TargetChoice[]` for the wizard's target step.
+ *
+ * Offers: auto-detect, backlog plans (if any), and GitHub issues (if configured).
+ */
+export function buildWizardTargetChoices(
+  state: PipelineState,
+  ctx: MenuContext,
+): TargetChoice[] {
+  const choices: TargetChoice[] = [];
+
+  const nextPlan = findNextPlanName(state);
+  choices.push({
+    label: nextPlan ? `Auto-detect (${nextPlan})` : "Auto-detect (next plan)",
+    args: [],
+  });
+
+  for (const plan of state.backlog) {
+    choices.push({
+      label: plan.filename,
+      args: ["--plan", plan.filename],
+    });
+  }
+
+  if (ctx.hasGitHubIssues) {
+    choices.push({
+      label: "Pull from GitHub",
+      args: [], // wizard doesn't support github target yet — treated as auto-detect
+    });
+  }
+
+  return choices;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,11 +251,14 @@ export interface TuiRouterProps {
  * wiring each screen's callbacks to state updates or TUI exit.
  *
  * Key transitions:
+ * - Menu item select → screen transition or TUI exit
  * - Confirm `Enter` → exit TUI with `{ action: "run", args }`
  * - Confirm `o`     → wizard screen (pre-selected target from confirm args)
  * - Wizard done     → exit TUI with `{ action: "run", args }`
- * - Wizard cancel   → return to previous screen (or quit)
- * - Doctor / Clean  → back = quit (until main menu exists)
+ * - Wizard cancel   → return to previous screen (or menu)
+ * - Plan picker     → exit TUI or reset + back to menu
+ * - Issue picker    → exit TUI with run args
+ * - Doctor / Clean / Stop → back to main menu
  */
 export function TuiRouter({
   initialScreen,
@@ -136,6 +266,133 @@ export function TuiRouter({
 }: TuiRouterProps): React.ReactNode {
   const exitTui = useExitTui();
   const [screen, setScreen] = useState<Screen>(initialScreen);
+
+  // Helper to build a menu screen from current screen's context
+  const menuScreenFrom = useCallback((s: Screen): Screen => {
+    // Extract cwd and menuContext from the current screen
+    const cwd = "cwd" in s ? (s.cwd as string) : "";
+    const menuContext: MenuContext =
+      "menuContext" in s
+        ? (s.menuContext as MenuContext)
+        : { hasGitHubIssues: false };
+    return { tag: "menu", cwd, menuContext };
+  }, []);
+
+  // --- Main menu callbacks ---
+
+  const handleMenuSelect = useCallback(
+    (value: string, state: PipelineState) => {
+      if (screen.tag !== "menu") return;
+      const { cwd, menuContext } = screen;
+
+      switch (value) {
+        case "run-next":
+          exitTui({ action: "run", args: ["run"] });
+          break;
+
+        case "pick-from-backlog": {
+          const plans = backlogPickerItems(state);
+          setScreen({
+            tag: "plan-picker",
+            title: "Pick a plan to run:",
+            plans,
+            mode: "run",
+            cwd,
+            menuContext,
+          });
+          break;
+        }
+
+        case "pick-from-github": {
+          if (menuContext.githubConfig) {
+            setScreen({
+              tag: "issue-picker",
+              listOptions: menuContext.githubConfig,
+              cwd,
+              menuContext,
+            });
+          }
+          break;
+        }
+
+        case "run-with-options": {
+          const targetChoices = buildWizardTargetChoices(state, menuContext);
+          setScreen({
+            tag: "wizard",
+            config,
+            targetChoices,
+            previousScreen: screen,
+          });
+          break;
+        }
+
+        case "resume-stalled": {
+          const stalled = stalledPlans(state);
+          if (stalled.length === 1) {
+            const slug = stalled[0]!.slug;
+            exitTui({
+              action: "run",
+              args: ["run", "--plan", `${slug}.md`, "--resume"],
+            });
+          } else if (stalled.length > 1) {
+            const plans = stalledPickerItems(state);
+            setScreen({
+              tag: "plan-picker",
+              title: "Pick a stalled plan to resume:",
+              plans,
+              mode: "resume",
+              cwd,
+              menuContext,
+            });
+          }
+          break;
+        }
+
+        case "stop-running":
+          setScreen({
+            tag: "stop",
+            state,
+            cwd,
+            menuContext,
+          });
+          break;
+
+        case "reset-plan": {
+          const plans = resetPickerItems(state);
+          setScreen({
+            tag: "plan-picker",
+            title: "Pick a plan to reset:",
+            plans,
+            mode: "reset",
+            cwd,
+            menuContext,
+          });
+          break;
+        }
+
+        case "view-status":
+          exitTui({ action: "dispatch", args: ["status"] });
+          break;
+
+        case "doctor":
+          setScreen({ tag: "doctor", cwd, menuContext });
+          break;
+
+        case "clean":
+          setScreen({ tag: "clean", cwd, menuContext });
+          break;
+
+        case "settings":
+          exitTui({ action: "dispatch", args: ["config"] });
+          break;
+
+        case "quit":
+          exitTui({ action: "quit" });
+          break;
+      }
+    },
+    [screen, config, exitTui],
+  );
 
   // --- Confirm screen callbacks ---
 
@@ -147,8 +404,14 @@ export function TuiRouter({
   );
 
   const handleConfirmBack = useCallback(() => {
-    exitTui({ action: "quit" });
-  }, [exitTui]);
+    // If we have a menu context, return to menu; otherwise quit
+    const menu = menuScreenFrom(screen);
+    if (menu.tag === "menu" && menu.cwd) {
+      setScreen(menu);
+    } else {
+      exitTui({ action: "quit" });
+    }
+  }, [screen, exitTui, menuScreenFrom]);
 
   const handleConfirmOptions = useCallback(
     (args: string[]) => {
@@ -176,19 +439,105 @@ export function TuiRouter({
     if (screen.tag === "wizard" && screen.previousScreen) {
       setScreen(screen.previousScreen);
     } else {
-      exitTui({ action: "quit" });
+      const menu = menuScreenFrom(screen);
+      if (menu.tag === "menu" && menu.cwd) {
+        setScreen(menu);
+      } else {
+        exitTui({ action: "quit" });
+      }
     }
-  }, [screen, exitTui]);
+  }, [screen, exitTui, menuScreenFrom]);
+
+  // --- Plan picker callbacks ---
+
+  const handlePlanPickerSelect = useCallback(
+    (value: string) => {
+      if (screen.tag !== "plan-picker") return;
+
+      switch (screen.mode) {
+        case "run":
+          exitTui({
+            action: "run",
+            args: ["run", "--plan", value],
+          });
+          break;
+
+        case "resume":
+          exitTui({
+            action: "run",
+            args: ["run", "--plan", `${value}.md`, "--resume"],
+          });
+          break;
+
+        case "reset":
+          resetPlanBySlug(screen.cwd, value);
+          // Return to menu with fresh state
+          setScreen({
+            tag: "menu",
+            cwd: screen.cwd,
+            menuContext: screen.menuContext,
+          });
+          break;
+      }
+    },
+    [screen, exitTui],
+  );
+
+  const handlePlanPickerBack = useCallback(() => {
+    const menu = menuScreenFrom(screen);
+    setScreen(menu);
+  }, [screen, menuScreenFrom]);
+
+  // --- Issue picker callbacks ---
+
+  const handleIssueSelect = useCallback(
+    (args: string[]) => {
+      exitTui({ action: "run", args });
+    },
+    [exitTui],
+  );
+
+  const handleIssueBack = useCallback(() => {
+    const menu = menuScreenFrom(screen);
+    setScreen(menu);
+  }, [screen, menuScreenFrom]);
+
+  // --- Stop screen callbacks ---
+
+  const handleStopDone = useCallback(() => {
+    const menu = menuScreenFrom(screen);
+    setScreen(menu);
+  }, [screen, menuScreenFrom]);
+
+  const handleStopBack = useCallback(() => {
+    const menu = menuScreenFrom(screen);
+    setScreen(menu);
+  }, [screen, menuScreenFrom]);
 
   // --- Doctor / Clean callbacks ---
 
   const handleToolBack = useCallback(() => {
-    exitTui({ action: "quit" });
-  }, [exitTui]);
+    const menu = menuScreenFrom(screen);
+    if (menu.tag === "menu" && menu.cwd) {
+      setScreen(menu);
+    } else {
+      exitTui({ action: "quit" });
+    }
+  }, [screen, exitTui, menuScreenFrom]);
 
   // --- Render ---
 
   switch (screen.tag) {
+    case "menu":
+      return (
+        <MainMenuScreen
+          key={Date.now()} // Force remount on return to refresh state
+          cwd={screen.cwd}
+          menuContext={screen.menuContext}
+          onSelect={handleMenuSelect}
+        />
+      );
+
     case "confirm":
       return (
         <ConfirmScreen
@@ -207,6 +556,35 @@ export function TuiRouter({
           targetChoices={screen.targetChoices}
           onDone={handleWizardDone}
           onCancel={handleWizardCancel}
+        />
+      );
+
+    case "plan-picker":
+      return (
+        <PlanPickerScreen
+          title={screen.title}
+          plans={screen.plans}
+          onSelect={handlePlanPickerSelect}
+          onBack={handlePlanPickerBack}
+        />
+      );
+
+    case "issue-picker":
+      return (
+        <IssuePicker
+          listOptions={screen.listOptions}
+          onSelect={handleIssueSelect}
+          onBack={handleIssueBack}
+        />
+      );
+
+    case "stop":
+      return (
+        <StopScreen
+          state={screen.state}
+          cwd={screen.cwd}
+          onDone={handleStopDone}
+          onBack={handleStopBack}
         />
       );
 
