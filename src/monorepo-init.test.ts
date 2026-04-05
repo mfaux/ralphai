@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
-import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ describe("workspace detection in init", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("detects pnpm monorepo workspaces", () => {
+  it("detects pnpm monorepo workspaces", async () => {
     // Create pnpm-workspace.yaml
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
@@ -50,13 +50,17 @@ describe("workspace detection in init", () => {
     );
 
     const output = stripLogo(
-      runCli(["init", "--yes"], ctx.dir, testEnv()).stdout +
-        runCli(["init", "--yes"], ctx.dir, testEnv()).stderr,
+      (await runCliInProcess(["init", "--yes"], ctx.dir, testEnv())).stdout +
+        (await runCliInProcess(["init", "--yes"], ctx.dir, testEnv())).stderr,
     );
 
     // Re-run cleanly (first run creates .ralphai)
     // Use a fresh approach: init, then check output
-    const result = runCli(["init", "--yes", "--force"], ctx.dir, testEnv());
+    const result = await runCliInProcess(
+      ["init", "--yes", "--force"],
+      ctx.dir,
+      testEnv(),
+    );
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("2 packages");
@@ -64,7 +68,7 @@ describe("workspace detection in init", () => {
     expect(combined).toContain("@org/api");
   });
 
-  it("detects npm/yarn workspaces from package.json", () => {
+  it("detects npm/yarn workspaces from package.json", async () => {
     writeFileSync(
       join(ctx.dir, "package.json"),
       JSON.stringify({
@@ -82,14 +86,14 @@ describe("workspace detection in init", () => {
       JSON.stringify({ name: "@org/shared" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("1 packages");
     expect(combined).toContain("@org/shared");
   });
 
-  it("shows no workspace info for single-project repos", () => {
+  it("shows no workspace info for single-project repos", async () => {
     writeFileSync(
       join(ctx.dir, "package.json"),
       JSON.stringify({
@@ -98,14 +102,14 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).not.toContain("Workspaces");
     expect(combined).not.toContain("packages");
   });
 
-  it("shows no workspace info when globs match nothing", () => {
+  it("shows no workspace info when globs match nothing", async () => {
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
       "packages:\n  - 'packages/*'\n",
@@ -119,13 +123,13 @@ describe("workspace detection in init", () => {
       JSON.stringify({ name: "empty-monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).not.toContain("Workspaces");
   });
 
-  it("--yes mode does not add workspaces to config", () => {
+  it("--yes mode does not add workspaces to config", async () => {
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
       "packages:\n  - 'packages/*'\n",
@@ -147,13 +151,13 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.workspaces).toBeUndefined();
   });
 
-  it("--yes mode prints auto-filter hint for monorepos", () => {
+  it("--yes mode prints auto-filter hint for monorepos", async () => {
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
       "packages:\n  - 'packages/*'\n",
@@ -175,7 +179,7 @@ describe("workspace detection in init", () => {
       }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("auto-filtered by scope");
@@ -193,7 +197,7 @@ describe("pnpm-workspace.yaml parsing", () => {
     return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
   }
 
-  it("handles quoted globs in pnpm-workspace.yaml", () => {
+  it("handles quoted globs in pnpm-workspace.yaml", async () => {
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
       'packages:\n  - "apps/*"\n',
@@ -212,14 +216,14 @@ describe("pnpm-workspace.yaml parsing", () => {
       JSON.stringify({ name: "monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("1 packages");
     expect(combined).toContain("frontend");
   });
 
-  it("handles multiple glob patterns", () => {
+  it("handles multiple glob patterns", async () => {
     writeFileSync(
       join(ctx.dir, "pnpm-workspace.yaml"),
       "packages:\n  - 'packages/*'\n  - 'apps/*'\n",
@@ -244,7 +248,7 @@ describe("pnpm-workspace.yaml parsing", () => {
       JSON.stringify({ name: "monorepo" }),
     );
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("2 packages");
@@ -264,7 +268,7 @@ describe("workspace display truncation", () => {
     return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
   }
 
-  it("truncates workspace names when more than 10 are detected", () => {
+  it("truncates workspace names when more than 10 are detected", async () => {
     // Create a .sln file with 15 projects to trigger truncation
     const projectLines: string[] = [];
     for (let i = 1; i <= 15; i++) {
@@ -274,7 +278,7 @@ describe("workspace display truncation", () => {
     }
     writeFileSync(join(ctx.dir, "App.sln"), projectLines.join("\n") + "\n");
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const combined = result.stdout + result.stderr;
 
     expect(combined).toContain("15 packages");

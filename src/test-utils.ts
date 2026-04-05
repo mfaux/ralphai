@@ -120,13 +120,22 @@ export function runCliOutput(
 export async function runCliInProcess(
   args: string[],
   cwd?: string,
-  _env?: Record<string, string>,
+  env?: Record<string, string>,
   _timeout?: number,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const originalExit = process.exit;
   const originalLog = console.log;
   const originalError = console.error;
   const originalCwd = process.cwd();
+
+  // Save original env values so we can restore them
+  const savedEnv: Record<string, string | undefined> = {};
+  if (env) {
+    for (const key of Object.keys(env)) {
+      savedEnv[key] = process.env[key];
+      process.env[key] = env[key];
+    }
+  }
 
   let exitCode = 0;
   let capturedExitCode: number | undefined;
@@ -172,6 +181,15 @@ export async function runCliInProcess(
     console.log = originalLog;
     console.error = originalError;
     process.chdir(originalCwd);
+
+    // Restore original env values
+    for (const [key, val] of Object.entries(savedEnv)) {
+      if (val === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = val;
+      }
+    }
   }
 
   return {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runCli, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
 
 describe("package manager detection", () => {
@@ -14,7 +14,7 @@ describe("package manager detection", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("detects pnpm from pnpm-lock.yaml and populates feedbackCommands", () => {
+  it("detects pnpm from pnpm-lock.yaml and populates feedbackCommands", async () => {
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -28,7 +28,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -39,7 +39,7 @@ describe("package manager detection", () => {
     ]);
   });
 
-  it("detects npm from package-lock.json and populates feedbackCommands", () => {
+  it("detects npm from package-lock.json and populates feedbackCommands", async () => {
     writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -50,14 +50,14 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["npm run build", "npm test"]);
   });
 
-  it("detects yarn from yarn.lock and populates feedbackCommands", () => {
+  it("detects yarn from yarn.lock and populates feedbackCommands", async () => {
     writeFileSync(join(ctx.dir, "yarn.lock"), "");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -71,7 +71,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -82,7 +82,7 @@ describe("package manager detection", () => {
     ]);
   });
 
-  it("detects bun from bun.lockb and populates feedbackCommands", () => {
+  it("detects bun from bun.lockb and populates feedbackCommands", async () => {
     writeFileSync(join(ctx.dir, "bun.lockb"), "");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -96,7 +96,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -107,7 +107,7 @@ describe("package manager detection", () => {
     ]);
   });
 
-  it("detects deno from deno.json and reads tasks", () => {
+  it("detects deno from deno.json and reads tasks", async () => {
     writeFileSync(
       join(ctx.dir, "deno.json"),
       JSON.stringify(
@@ -117,7 +117,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -129,7 +129,7 @@ describe("package manager detection", () => {
     ]);
   });
 
-  it("detects PM from packageManager field when no lock file exists", () => {
+  it("detects PM from packageManager field when no lock file exists", async () => {
     writeFileSync(
       join(ctx.dir, "package.json"),
       JSON.stringify(
@@ -143,28 +143,28 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
   });
 
-  it("only includes scripts that actually exist in package.json", () => {
+  it("only includes scripts that actually exist in package.json", async () => {
     writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
     writeFileSync(
       join(ctx.dir, "package.json"),
       JSON.stringify({ name: "test", scripts: { test: "jest" } }, null, 2),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual(["npm test"]);
   });
 
-  it("defaults feedbackCommands to empty array when no scripts exist", () => {
+  it("defaults feedbackCommands to empty array when no scripts exist", async () => {
     // pnpm project with only "start" script → no feedback commands detected
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
@@ -176,23 +176,23 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
-  it("defaults feedbackCommands to empty array for non-JS projects", () => {
+  it("defaults feedbackCommands to empty array for non-JS projects", async () => {
     // No package.json, no deno.json — nothing to detect
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
-  it("defaults feedbackCommands to empty array when no matching scripts detected", () => {
+  it("defaults feedbackCommands to empty array when no matching scripts detected", async () => {
     // pnpm project with no matching scripts → feedbackCommands is empty array
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
@@ -204,23 +204,23 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
-  it("feedbackCommands is empty array for non-JS projects (no package.json)", () => {
+  it("feedbackCommands is empty array for non-JS projects (no package.json)", async () => {
     // No package.json, no deno.json — nothing to detect
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
-  it("feedbackCommands is empty array when no matching scripts detected", () => {
+  it("feedbackCommands is empty array when no matching scripts detected", async () => {
     // pnpm project with no matching scripts → feedbackCommands is empty array
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
@@ -232,14 +232,14 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([]);
   });
 
-  it("detects type-check and format:check scripts", () => {
+  it("detects type-check and format:check scripts", async () => {
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -259,7 +259,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -272,7 +272,7 @@ describe("package manager detection", () => {
     ]);
   });
 
-  it("lock file takes priority over packageManager field", () => {
+  it("lock file takes priority over packageManager field", async () => {
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
       join(ctx.dir, "package.json"),
@@ -287,7 +287,7 @@ describe("package manager detection", () => {
       ),
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
