@@ -853,3 +853,68 @@ describe("pullPrdSubIssue — PRD in-progress label on parent", () => {
     expect(prdEditCall).toContain("--add-label");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression guard: drain path uses subissue labels for transitionPull
+// ---------------------------------------------------------------------------
+
+describe("pullPrdSubIssue — subissue label family in transitionPull", () => {
+  it("calls transitionPull with subissue labels (not standalone) for sub-issues", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
+
+    const editCalls: string[] = [];
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === "gh --version" || cmd === "gh auth status") {
+        return "ok";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
+        editCalls.push(cmd);
+        return "";
+      }
+      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
+      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
+        return JSON.stringify(subIssues);
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
+        return "";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
+        return "Sub A";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
+        return "Sub A body";
+      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
+        return "https://github.com/owner/repo/issues/201";
+      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
+        return JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        });
+      if (cmd.includes("gh api graphql"))
+        return JSON.stringify({
+          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
+        });
+      throw new Error(`Unexpected command: ${cmd}`);
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+
+    // Find the edit call for sub-issue #201 (not the PRD parent #100)
+    const subIssueEditCall = editCalls.find((c) =>
+      c.includes("gh issue edit 201"),
+    );
+    expect(subIssueEditCall).toBeDefined();
+
+    // Verify subissue labels were used
+    expect(subIssueEditCall).toContain(
+      '--add-label "ralphai-subissue:in-progress"',
+    );
+    expect(subIssueEditCall).toContain('--remove-label "ralphai-subissue"');
+
+    // Should NOT contain standalone labels in the sub-issue transition
+    expect(subIssueEditCall).not.toContain("ralphai-standalone:in-progress");
+    expect(subIssueEditCall).not.toContain(
+      '--remove-label "ralphai-standalone"',
+    );
+  });
+});

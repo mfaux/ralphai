@@ -72,7 +72,8 @@ import {
   fetchIssueTitleByNumber,
   fetchIssueWithLabels,
   discoverParentIssue,
-  prdBranchName,
+  issueBranchName,
+  commitTypeFromTitle,
   pullGithubIssueByNumber,
   pullGithubIssues,
   pullPrdSubIssue,
@@ -1687,8 +1688,8 @@ async function runIssueTarget(
       process.exit(1);
     }
 
-    const issueSlug = slugify(issueTitle);
-    const branch = `feat/${issueSlug}`;
+    const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
+    const branch = issueBranchName(issueTitle);
 
     console.log();
     console.log("========================================");
@@ -1826,8 +1827,8 @@ async function runIssueTarget(
   }
 
   const issueTitle = issueInfo.title;
-  const issueSlug = slugify(issueTitle);
-  const branch = `feat/${issueSlug}`;
+  const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
+  const branch = issueBranchName(issueTitle);
 
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
@@ -1925,8 +1926,8 @@ async function runPrdIssueTarget(
 ): Promise<void> {
   const { isDryRun, setupCommand } = flags;
   const { prd, subIssues, allCompleted } = discovery;
-  const prdSlug = slugify(prd.title);
-  const branch = `feat/${prdSlug}`;
+  const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
+  const branch = issueBranchName(prd.title);
 
   // --- All sub-issues already completed ---
   if (allCompleted) {
@@ -2431,8 +2432,8 @@ async function runRalphaiInManagedWorktree(
         process.exit(1);
       }
 
-      const prdSlug = slugify(prdIssue.title);
-      const branch = prdBranchName(prdIssue.title);
+      const prdSlug = slugify(commitTypeFromTitle(prdIssue.title).description);
+      const branch = issueBranchName(prdIssue.title);
 
       if (isDryRun) {
         console.log();

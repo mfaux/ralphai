@@ -183,6 +183,11 @@ export function transitionStuck(
  *
  * Used by `ralphai reset` to return an issue to the pickup queue.
  * Removes both in-progress and stuck labels, adds the intake label.
+ *
+ * The optional `extraRemoveLabels` parameter allows callers to defensively
+ * remove labels from a second family (e.g. removing standalone state labels
+ * when resetting a sub-issue, in case the wrong family was applied).
+ * `gh issue edit --remove-label` is a no-op for labels that aren't present.
  */
 export function transitionReset(
   issue: IssueMeta,
@@ -191,15 +196,18 @@ export function transitionReset(
   stuckLabel: string,
   cwd: string,
   dryRun = false,
+  extraRemoveLabels: string[] = [],
 ): LabelTransitionResult {
   if (dryRun) {
     return dryRunSkip(`Issue #${issue.number}: reset to ${intakeLabel}`);
   }
-  const result = execQuiet(
+  let cmd =
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${intakeLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`,
-    cwd,
-  );
+    `--add-label "${intakeLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`;
+  for (const label of extraRemoveLabels) {
+    cmd += ` --remove-label "${label}"`;
+  }
+  const result = execQuiet(cmd, cwd);
   if (result === null) {
     return {
       ok: false,

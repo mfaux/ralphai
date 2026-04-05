@@ -9,7 +9,11 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
-import { checkGhAvailable, detectIssueRepo } from "./issues.ts";
+import {
+  checkGhAvailable,
+  commitTypeFromTitle,
+  detectIssueRepo,
+} from "./issues.ts";
 import { transitionDone } from "./label-lifecycle.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
 import {
@@ -20,6 +24,20 @@ import {
   categorizeCommits,
   formatCommitsByCategory,
 } from "./pr-description.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a PR title from an issue/PRD title, ensuring a conventional-commit
+ * prefix.  If the title already starts with one (e.g. `"fix: broken login"`),
+ * it is returned as-is; otherwise `"feat: "` is prepended.
+ */
+function formatPrTitle(title: string): string {
+  const { type, description } = commitTypeFromTitle(title);
+  return `${type}: ${description}`;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -311,7 +329,7 @@ export function createContinuousPr(
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
-    ? `feat: ${prd.title}`
+    ? formatPrTitle(prd.title)
     : `ralphai: ${firstPlanDescription}`;
 
   const prUrl = execQuiet(
@@ -517,7 +535,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     prRepo,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const prTitle = `feat: ${prd.title}`;
+  const prTitle = formatPrTitle(prd.title);
 
   if (existingPrUrl) {
     // Update existing PR body
