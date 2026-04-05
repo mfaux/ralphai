@@ -9,9 +9,7 @@
  * - `{ isPrd: true, prd, subIssues: [], allCompleted: false }` — no sub-issues
  * - `{ isPrd: false, issue }` — not a PRD, standalone issue
  */
-import { execSync } from "child_process";
-
-import { checkGhAvailable } from "./issues.ts";
+import { execQuiet, checkGhAvailable } from "./exec.ts";
 import { DEFAULTS } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -49,23 +47,6 @@ export interface PrdDiscoveryResultIssue {
 export type PrdDiscoveryResult =
   | PrdDiscoveryResultPrd
   | PrdDiscoveryResultIssue;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Run a command and return trimmed stdout, or null on any error. */
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Discovery

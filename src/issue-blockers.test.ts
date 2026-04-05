@@ -1,36 +1,26 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-import { execSync as realExecSync } from "child_process";
-import * as realChildProcess from "child_process";
-import { issueDepSlug, buildIssuePlanContent } from "./issues.ts";
+import { setExecImpl } from "./exec.ts";
+import {
+  issueDepSlug,
+  buildIssuePlanContent,
+  fetchBlockersViaGraphQL,
+} from "./issues.ts";
 
 // ---------------------------------------------------------------------------
 // fetchBlockersViaGraphQL — queries GitHub GraphQL API for blocking issues
 // ---------------------------------------------------------------------------
 
-// Mock child_process so we can intercept `gh api graphql` calls.
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    return realExecSync(...args);
-  },
-}));
-
-// Import AFTER mocking so the module picks up our mock.
-const { fetchBlockersViaGraphQL } = await import("./issues.ts");
+let restoreExec: () => void;
 
 describe("fetchBlockersViaGraphQL", () => {
   beforeEach(() => {
+    restoreExec = setExecImpl(mockExecSync as any);
     mockExecSync.mockReset();
   });
 
   afterEach(() => {
-    mockExecSync.mockReset();
+    restoreExec();
   });
 
   it("returns blocker issue numbers from GraphQL response", () => {

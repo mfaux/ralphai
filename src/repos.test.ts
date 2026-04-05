@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import {
   runCli,
-  runCliOutput,
+  runCliOutputInProcess,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
@@ -13,26 +13,32 @@ describe("repos command", () => {
   const ctx = useTempGitDir();
   const env = () => ({ RALPHAI_HOME: join(ctx.dir, ".ralphai-home") });
 
-  it("shows 'No repos found' when no repos exist", () => {
-    const output = stripLogo(runCliOutput(["repos"], ctx.dir, env()));
+  it("shows 'No repos found' when no repos exist", async () => {
+    const output = stripLogo(
+      await runCliOutputInProcess(["repos"], ctx.dir, env()),
+    );
     expect(output).toContain("No repos found");
   });
 
-  it("lists an initialized repo", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+  it("lists an initialized repo", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
-    const output = stripLogo(runCliOutput(["repos"], ctx.dir, env()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["repos"], ctx.dir, env()),
+    );
     expect(output).toContain("Repos");
     expect(output).toContain(ctx.dir);
   });
 
-  it("--help shows usage with --clean flag", () => {
-    const output = stripLogo(runCliOutput(["repos", "--help"], ctx.dir, env()));
+  it("--help shows usage with --clean flag", async () => {
+    const output = stripLogo(
+      await runCliOutputInProcess(["repos", "--help"], ctx.dir, env()),
+    );
     expect(output).toContain("--clean");
     expect(output).toContain("stale");
   });
 
-  it("--clean removes stale repos with dead paths", () => {
+  it("--clean removes stale repos with dead paths", async () => {
     const home = join(ctx.dir, ".ralphai-home");
 
     // Create a fake stale repo entry (path that doesn't exist, empty pipeline)
@@ -44,13 +50,15 @@ describe("repos command", () => {
     );
 
     // Verify it shows up as stale
-    const beforeOutput = stripLogo(runCliOutput(["repos"], ctx.dir, env()));
+    const beforeOutput = stripLogo(
+      await runCliOutputInProcess(["repos"], ctx.dir, env()),
+    );
     expect(beforeOutput).toContain("_path-deadbeef1234");
     expect(beforeOutput).toContain("[stale]");
 
     // Run --clean
     const cleanOutput = stripLogo(
-      runCliOutput(["repos", "--clean"], ctx.dir, env()),
+      await runCliOutputInProcess(["repos", "--clean"], ctx.dir, env()),
     );
     expect(cleanOutput).toContain("Removed");
     expect(cleanOutput).toContain("_path-deadbeef1234");
@@ -59,7 +67,7 @@ describe("repos command", () => {
     expect(existsSync(staleDir)).toBe(false);
   });
 
-  it("--clean preserves stale repos that have plans", () => {
+  it("--clean preserves stale repos that have plans", async () => {
     const home = join(ctx.dir, ".ralphai-home");
 
     // Create a stale repo with a backlog plan
@@ -74,7 +82,7 @@ describe("repos command", () => {
 
     // Run --clean
     const cleanOutput = stripLogo(
-      runCliOutput(["repos", "--clean"], ctx.dir, env()),
+      await runCliOutputInProcess(["repos", "--clean"], ctx.dir, env()),
     );
 
     // Should NOT have been removed (not in the "Removed" message)
@@ -84,9 +92,9 @@ describe("repos command", () => {
     expect(cleanOutput).toContain("_path-hasplans1234");
   });
 
-  it("--clean reports nothing when no stale repos exist", () => {
+  it("--clean reports nothing when no stale repos exist", async () => {
     const output = stripLogo(
-      runCliOutput(["repos", "--clean"], ctx.dir, env()),
+      await runCliOutputInProcess(["repos", "--clean"], ctx.dir, env()),
     );
     expect(output).toContain("No stale repos to remove");
   });

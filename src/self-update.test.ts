@@ -188,8 +188,8 @@ describe("update notification banner", () => {
     );
 
     try {
-      // Use "init --yes" which goes through runRalphai() and then hits
-      // the notification code path in main().
+      // Use "init --yes" which goes through main() where the
+      // notification code path runs — requires subprocess.
       const result = runCli(["init", "--yes"], ctx.dir, {
         RALPHAI_HOME: ralphaiHome,
       });

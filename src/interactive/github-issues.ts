@@ -13,8 +13,8 @@
  * size limit.
  */
 
-import { execSync } from "child_process";
-import { checkGhAvailable, detectIssueRepo } from "../issues.ts";
+import { execQuiet, checkGhAvailable } from "../exec.ts";
+import { detectIssueRepo } from "../issues.ts";
 import { DEFAULTS } from "../config.ts";
 import type { PrdSubIssue } from "../prd-discovery.ts";
 
@@ -61,19 +61,6 @@ export type ListGithubIssuesResult = ListSuccess | ListError;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Run a command and return trimmed stdout, or null on any error. */
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Fetch open sub-issues for a PRD via the REST API.

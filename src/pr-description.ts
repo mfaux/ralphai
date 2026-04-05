@@ -8,7 +8,7 @@
  * agent's `<pr-summary>` block or the plan description as fallback),
  * followed by issue references and a technical changes breakdown.
  */
-import { execSync } from "child_process";
+import { execQuiet } from "./exec.ts";
 import { formatLearningsForPr } from "./learnings.ts";
 
 // ---------------------------------------------------------------------------
@@ -28,18 +28,6 @@ export interface CategorizedCommits {
 // ---------------------------------------------------------------------------
 // Git helpers (read-only)
 // ---------------------------------------------------------------------------
-
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 /** Raw one-line commit log between two refs. */
 export function buildCommitLog(

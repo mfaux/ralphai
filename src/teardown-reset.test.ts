@@ -3,8 +3,8 @@ import { existsSync, rmSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
 import {
-  runCli,
-  runCliOutput,
+  runCliInProcess,
+  runCliOutputInProcess,
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
@@ -17,8 +17,8 @@ describe("reset command", () => {
     return { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
   }
 
-  it("reset --yes moves in-progress plans back to backlog", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset --yes moves in-progress plans back to backlog", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Simulate an in-progress plan
     const { wipDir: inProgressDir, backlogDir } = getRepoPipelineDirs(
@@ -30,7 +30,7 @@ describe("reset command", () => {
     writeFileSync(join(planDir, "prd-my-feature.md"), "# My Feature");
 
     const output = stripLogo(
-      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv()),
     );
 
     expect(output).toContain("Pipeline reset");
@@ -42,8 +42,8 @@ describe("reset command", () => {
     expect(existsSync(join(inProgressDir, "prd-my-feature"))).toBe(false);
   });
 
-  it("reset --yes deletes progress files", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset --yes deletes progress files", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
@@ -54,15 +54,15 @@ describe("reset command", () => {
       "## Progress Log\n### Task 1:\n**Status:** Complete",
     );
 
-    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
+    await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv());
 
     expect(existsSync(join(inProgressDir, "prd-test", "progress.md"))).toBe(
       false,
     );
   });
 
-  it("reset --yes deletes receipt files", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset --yes deletes receipt files", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
@@ -73,15 +73,15 @@ describe("reset command", () => {
       "started_at=2025-01-15T10:30:00Z\nbranch=ralphai/test\nslug=test",
     );
 
-    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
+    await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv());
 
     expect(existsSync(join(inProgressDir, "prd-test", "receipt.txt"))).toBe(
       false,
     );
   });
 
-  it("reset --yes handles multiple plans, progress, and receipts", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset --yes handles multiple plans, progress, and receipts", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: inProgressDir, backlogDir } = getRepoPipelineDirs(
       ctx.dir,
@@ -98,7 +98,7 @@ describe("reset command", () => {
     writeFileSync(join(planDirB, "receipt.txt"), "slug=feature-b");
 
     const output = stripLogo(
-      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv()),
     );
 
     expect(output).toContain("2 plans moved to backlog");
@@ -116,39 +116,43 @@ describe("reset command", () => {
     expect(remaining).toEqual([]);
   });
 
-  it("reset --yes reports nothing to reset when pipeline is clean", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset --yes reports nothing to reset when pipeline is clean", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const output = stripLogo(
-      runCliOutput(["reset", "--yes"], ctx.dir, testEnv()),
+      await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv()),
     );
 
     expect(output).toContain("Nothing to reset");
   });
 
-  it("reset errors when config does not exist", () => {
-    const result = runCli(["reset", "--yes"], ctx.dir, testEnv());
+  it("reset errors when config does not exist", async () => {
+    const result = await runCliInProcess(
+      ["reset", "--yes"],
+      ctx.dir,
+      testEnv(),
+    );
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
   });
 
-  it("reset preserves in-progress directory", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+  it("reset preserves in-progress directory", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const { wipDir: inProgressDir } = getRepoPipelineDirs(ctx.dir, testEnv());
     const planDir = join(inProgressDir, "prd-test");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-test.md"), "# Test");
 
-    runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
+    await runCliOutputInProcess(["reset", "--yes"], ctx.dir, testEnv());
 
     // Directory should still exist
     expect(existsSync(inProgressDir)).toBe(true);
   });
 
-  it("reset --yes force-removes dirty worktrees and deletes unmerged branches", () => {
+  it("reset --yes force-removes dirty worktrees and deletes unmerged branches", async () => {
     // Set up git identity for commits
     execSync(
       'git config user.email "test@test.com" && git config user.name "Test"',
@@ -160,7 +164,7 @@ describe("reset command", () => {
       stdio: "ignore",
     });
 
-    runCliOutput(["init", "--yes"], ctx.dir, testEnv());
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Create a worktree on a ralphai/* branch
     const wtPath = join(ctx.dir, "wt-dirty");
@@ -174,7 +178,11 @@ describe("reset command", () => {
     execSync("git add dirty-file.txt", { cwd: wtPath, stdio: "ignore" });
 
     // Reset should force-remove the dirty worktree
-    const output = runCliOutput(["reset", "--yes"], ctx.dir, testEnv());
+    const output = await runCliOutputInProcess(
+      ["reset", "--yes"],
+      ctx.dir,
+      testEnv(),
+    );
     expect(output).toContain("Pipeline reset");
     expect(existsSync(wtPath)).toBe(false);
 

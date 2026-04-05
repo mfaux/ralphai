@@ -34,22 +34,11 @@ async function runIsolated(
 }
 
 // Files that call mock.module() on built-in Node modules (child_process, fs)
-// or third-party modules (@clack/prompts).
+// or third-party / internal modules (@clack/prompts, ./issues.ts, etc.).
 // These must run in separate processes to prevent mock leaks.
 const ISOLATED = [
-  "src/fetch-prd-issue.test.ts",
-  "src/interactive/github-issues.test.ts",
+  "src/interactive/maintenance-actions.test.ts",
   "src/interactive/run-wizard.test.ts",
-  "src/issue-blockers.test.ts",
-  "src/label-lifecycle.test.ts",
-  "src/parent-prd-discovery.test.ts",
-  "src/pr-lifecycle-stdin.test.ts",
-  "src/pr-lifecycle-subissue.test.ts",
-  "src/prd-done-detection.test.ts",
-  "src/prd-discovery.test.ts",
-  "src/pull-issue-by-number.test.ts",
-  "src/pull-prd-sub-issue.test.ts",
-  "src/reset-labels.test.ts",
   "src/runner-github-drain.test.ts",
 ];
 

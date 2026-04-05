@@ -1,41 +1,19 @@
 /**
  * Tests for listGithubIssues() — fetching and classifying GitHub issues.
  *
- * Uses mock.module to control `child_process.execSync` so we can test
- * the GitHub API interaction without requiring a real repo or gh CLI.
- *
- * IMPORTANT: This file must be in the ISOLATED list in scripts/test.ts
- * because mock.module() leaks across test files in the same bun process.
+ * Uses setExecImpl() from exec.ts to swap execSync with a mock,
+ * verifying the GitHub API interaction without requiring a real repo or gh CLI.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { setExecImpl } from "../exec.ts";
+import { listGithubIssues } from "./github-issues.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    // Git remote detection — return a fake repo URL
-    if (typeof cmd === "string" && cmd.includes("git remote get-url origin")) {
-      return mockExecSync(...args);
-    }
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { listGithubIssues } = await import("./github-issues.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,7 +125,12 @@ const defaultOptions = {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("listGithubIssues", () => {

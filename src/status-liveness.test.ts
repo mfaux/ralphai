@@ -9,7 +9,7 @@
 import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runCli, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 
 describe("status runner liveness", () => {
@@ -46,8 +46,8 @@ describe("status runner liveness", () => {
     }
   }
 
-  it("shows [running PID N] when runner.pid exists and process is alive", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("shows [running PID N] when runner.pid exists and process is alive", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // Use the current test process PID — guaranteed to be alive
@@ -55,7 +55,7 @@ describe("status runner liveness", () => {
       pid: String(process.pid),
     });
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -64,14 +64,14 @@ describe("status runner liveness", () => {
     expect(output).not.toContain("[stalled]");
   });
 
-  it("shows [stalled] when runner.pid exists but process is dead", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("shows [stalled] when runner.pid exists but process is dead", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // Use a PID that almost certainly doesn't exist
     createInProgressPlan(ipDir, "prd-dead-runner", { pid: "999999999" });
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -79,14 +79,14 @@ describe("status runner liveness", () => {
     expect(output).not.toContain("[running PID");
   });
 
-  it("shows [in progress] when no runner.pid file exists", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("shows [in progress] when no runner.pid file exists", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // No pid option → no runner.pid file created
     createInProgressPlan(ipDir, "prd-no-pid");
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);
@@ -95,8 +95,8 @@ describe("status runner liveness", () => {
     expect(output).not.toContain("[stalled]");
   });
 
-  it("shows outcome tag when receipt has outcome, ignoring runner.pid", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("shows outcome tag when receipt has outcome, ignoring runner.pid", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
 
     // Has both a runner.pid and an outcome — outcome should take precedence
@@ -105,7 +105,7 @@ describe("status runner liveness", () => {
       outcome: "stuck",
     });
 
-    const result = runCli(["status"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
 
     expect(result.exitCode).toBe(0);

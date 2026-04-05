@@ -1,7 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
-import { useTempDir, useTempGitDir, runCli, stripLogo } from "./test-utils.ts";
+import {
+  useTempDir,
+  useTempGitDir,
+  runCliInProcess,
+  stripLogo,
+} from "./test-utils.ts";
 import {
   parseSolutionProjects,
   detectDotnetProject,
@@ -330,14 +335,14 @@ describe("init --yes dotnet monorepo", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("detects workspaces from .sln and shows workspace count", () => {
+  it("detects workspaces from .sln and shows workspace count", async () => {
     const content = slnContent([
       { name: "Api", path: "src\\Api\\Api.csproj" },
       { name: "Domain", path: "src\\Domain\\Domain.csproj" },
     ]);
     writeFileSync(join(ctx.dir, "MySolution.sln"), content);
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("dotnet (solution)");
@@ -346,7 +351,7 @@ describe("init --yes dotnet monorepo", () => {
     expect(output).toContain("Domain");
   });
 
-  it("init --yes with .NET + Node merges feedback commands", () => {
+  it("init --yes with .NET + Node merges feedback commands", async () => {
     // Node setup
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
@@ -359,7 +364,7 @@ describe("init --yes dotnet monorepo", () => {
     // .NET setup
     writeFileSync(join(ctx.dir, "MyApp.sln"), slnContent([]));
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     // Should contain both node and dotnet feedback commands
@@ -369,7 +374,7 @@ describe("init --yes dotnet monorepo", () => {
     expect(config.feedbackCommands).toContain("dotnet test");
   });
 
-  it("init --yes does not write workspaces to config for .NET monorepo", () => {
+  it("init --yes does not write workspaces to config for .NET monorepo", async () => {
     const content = slnContent([
       { name: "Api", path: "src\\Api\\Api.csproj" },
       { name: "Domain", path: "src\\Domain\\Domain.csproj" },
@@ -377,13 +382,13 @@ describe("init --yes dotnet monorepo", () => {
     ]);
     writeFileSync(join(ctx.dir, "MySolution.sln"), content);
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.workspaces).toBeUndefined();
   });
 
-  it("init --yes with mixed repo shows all workspaces from both ecosystems", () => {
+  it("init --yes with mixed repo shows all workspaces from both ecosystems", async () => {
     // Node workspace setup
     writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     writeFileSync(
@@ -405,7 +410,7 @@ describe("init --yes dotnet monorepo", () => {
     const slnText = slnContent([{ name: "Api", path: "src\\Api\\Api.csproj" }]);
     writeFileSync(join(ctx.dir, "MyApp.sln"), slnText);
 
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     // Should mention both Node and .NET workspaces

@@ -1,13 +1,15 @@
 /**
  * GitHub Issues integration: pull issues as plan files, detect repos, slugify.
  *
- * Uses child_process.execSync for `gh` CLI calls, matching the sequential
+ * Uses exec helpers from exec.ts for `gh` CLI calls, matching the sequential
  * nature of the runner loop. The `read_issue_frontmatter()` function is
  * already in frontmatter.ts.
  */
-import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { execQuiet, checkGhAvailable } from "./exec.ts";
+// Re-export so consumers that imported checkGhAvailable from issues.ts still work
+export { checkGhAvailable } from "./exec.ts";
 import { DEFAULTS } from "./config.ts";
 import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import { transitionPull, prdTransitionInProgress } from "./label-lifecycle.ts";
@@ -77,40 +79,9 @@ export interface PeekIssueResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Run a command and return trimmed stdout, or null on any error. */
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Core functions
 // ---------------------------------------------------------------------------
-
-/**
- * Check whether the `gh` CLI is installed and authenticated.
- * Returns true if both checks pass.
- */
-export function checkGhAvailable(): boolean {
-  try {
-    execSync("gh --version", { stdio: ["pipe", "pipe", "pipe"] });
-  } catch {
-    return false;
-  }
-  try {
-    execSync("gh auth status", { stdio: ["pipe", "pipe", "pipe"] });
-  } catch {
-    return false;
-  }
-  return true;
-}
 
 /**
  * Detect the GitHub repository (owner/repo) from config or the git remote.

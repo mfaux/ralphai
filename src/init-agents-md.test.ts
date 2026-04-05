@@ -1,7 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { runCliOutput, stripLogo, useTempGitDir } from "./test-utils.ts";
+import {
+  runCliOutputInProcess,
+  stripLogo,
+  useTempGitDir,
+} from "./test-utils.ts";
 
 describe("init AGENTS.md integration", () => {
   const ctx = useTempGitDir();
@@ -9,8 +13,8 @@ describe("init AGENTS.md integration", () => {
   /** Per-test RALPHAI_HOME so config goes to a temp dir, not ~/.ralphai. */
   const env = () => ({ RALPHAI_HOME: join(ctx.dir, ".ralphai-home") });
 
-  it("creates AGENTS.md when it does not exist", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+  it("creates AGENTS.md when it does not exist", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("# Agent Instructions");
@@ -21,13 +25,13 @@ describe("init AGENTS.md integration", () => {
     expect(agentsMd).not.toContain(".ralphai/PLANNING.md");
   });
 
-  it("appends Ralphai section to existing AGENTS.md", () => {
+  it("appends Ralphai section to existing AGENTS.md", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Agent Instructions\n\nExisting content here.\n",
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     // Original content is preserved
@@ -37,13 +41,13 @@ describe("init AGENTS.md integration", () => {
     expect(agentsMd).toContain("autonomous execution");
   });
 
-  it("does not duplicate Ralphai section if already present", () => {
+  it("does not duplicate Ralphai section if already present", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Agent Instructions\n\n## Ralphai\n\nAlready configured.\n",
     );
 
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     // Should still have exactly one ## Ralphai heading
@@ -53,54 +57,60 @@ describe("init AGENTS.md integration", () => {
     expect(agentsMd).toContain("Already configured.");
   });
 
-  it("shows AGENTS.md as created in output when file is new", () => {
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir, env()));
+  it("shows AGENTS.md as created in output when file is new", async () => {
+    const output = stripLogo(
+      await runCliOutputInProcess(["init", "--yes"], ctx.dir, env()),
+    );
 
     expect(output).toContain("AGENTS.md");
     expect(output).toContain("created");
   });
 
-  it("shows AGENTS.md as updated in output when appending", () => {
+  it("shows AGENTS.md as updated in output when appending", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Agent Instructions\n\nExisting.\n",
     );
 
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir, env()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["init", "--yes"], ctx.dir, env()),
+    );
 
     expect(output).toContain("AGENTS.md");
     expect(output).toContain("updated");
   });
 
-  it("does not mention AGENTS.md in output when section already exists", () => {
+  it("does not mention AGENTS.md in output when section already exists", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Agent Instructions\n\n## Ralphai\n\nAlready there.\n",
     );
 
-    const output = stripLogo(runCliOutput(["init", "--yes"], ctx.dir, env()));
+    const output = stripLogo(
+      await runCliOutputInProcess(["init", "--yes"], ctx.dir, env()),
+    );
 
     // Should not show AGENTS.md in the Created: list
     expect(output).not.toMatch(/AGENTS\.md\s+.*(?:created|updated)/);
   });
 
-  it("is idempotent: reinit with --force does not duplicate section", () => {
+  it("is idempotent: reinit with --force does not duplicate section", async () => {
     // First init creates AGENTS.md
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
     const afterFirst = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(afterFirst).toContain("## Ralphai");
 
     // Second init with --force should not duplicate
-    runCliOutput(["init", "--yes", "--force"], ctx.dir, env());
+    await runCliOutputInProcess(["init", "--yes", "--force"], ctx.dir, env());
 
     const afterSecond = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     const matches = afterSecond.match(/^## Ralphai\b/gm);
     expect(matches).toHaveLength(1);
   });
 
-  it("created AGENTS.md contains the expected snippet content", () => {
-    runCliOutput(["init", "--yes"], ctx.dir, env());
+  it("created AGENTS.md contains the expected snippet content", async () => {
+    await runCliOutputInProcess(["init", "--yes"], ctx.dir, env());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain(

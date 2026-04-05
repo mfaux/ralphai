@@ -8,45 +8,30 @@
  * This prevents shell metacharacters (backticks, `$`, etc.) in
  * agent-generated PR summaries from being interpreted by the shell.
  *
- * Uses mock.module to control `child_process.execSync` so we can
- * inspect the commands and stdin input without hitting real git/gh.
+ * Uses setExecImpl() to swap execSync with a mock so we can inspect
+ * the commands and stdin input without hitting real git/gh.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { execSync as realExecSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { setExecImpl } from "./exec.ts";
 import { useTempDir } from "./test-utils.ts";
-
-// ---------------------------------------------------------------------------
-// Mock child_process.execSync — intercept all commands
-// ---------------------------------------------------------------------------
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
-
-const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-    // Pass through non-gh commands (git)
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const {
+import {
   createPr,
   createContinuousPr,
   updateContinuousPr,
   finalizeContinuousPr,
   createPrdPr,
   pushBranch,
-} = await import("./pr-lifecycle.ts");
+} from "./pr-lifecycle.ts";
+
+// ---------------------------------------------------------------------------
+// Mock setup — swap execSync via DI
+// ---------------------------------------------------------------------------
+
+const mockExecSync = mock();
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,8 +95,25 @@ const DANGEROUS_BODY =
   "test script instead of bypassing it with bare `bun test`. Also handles " +
   '$(whoami) and "double quotes" correctly.';
 
+/**
+ * Wrapping mock that intercepts only `gh` commands and passes everything
+ * else (git push, git remote, etc.) through to real execSync.
+ */
+function ghOnlyExec(...args: Parameters<typeof realExecSync>) {
+  const [cmd, options] = args;
+  if (typeof cmd === "string" && cmd.startsWith("gh ")) {
+    return mockExecSync(...args);
+  }
+  return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
+}
+
 beforeEach(() => {
+  restoreExec = setExecImpl(ghOnlyExec as typeof realExecSync);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 // ---------------------------------------------------------------------------

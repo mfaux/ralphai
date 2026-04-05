@@ -1,13 +1,13 @@
 /**
  * PR lifecycle: archive completed plans, push branches, create/update/finalize PRs.
  *
- * Uses child_process.execSync for git and gh CLI calls. Functions return
+ * Uses exec helpers from exec.ts for git and gh CLI calls. Functions return
  * structured results instead of printing directly, letting the caller
  * decide how to display output.
  */
-import { execSync } from "child_process";
 import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
+import { execQuiet, execWithStdin } from "./exec.ts";
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import {
   checkGhAvailable,
@@ -95,39 +95,6 @@ export interface ArchiveRunOptions {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function execQuiet(cmd: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Run a command and pipe `body` to its stdin.
- *
- * Used for `gh pr create --body-file -` and `gh pr edit --body-file -` so
- * the PR body never passes through shell interpolation. This avoids
- * corruption when the body contains backticks, `$`, or other shell
- * metacharacters (e.g. agent-generated Markdown with inline code).
- */
-function execWithStdin(cmd: string, body: string, cwd: string): string | null {
-  try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      input: body,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Push

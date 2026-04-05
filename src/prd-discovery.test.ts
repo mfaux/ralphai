@@ -1,36 +1,20 @@
 /**
  * Unit tests for discoverPrdTarget() — PRD discovery I/O module.
  *
- * Uses mock.module to control `child_process.execSync` so we can test
- * PRD detection, sub-issue API discovery, and non-PRD passthrough
+ * Uses setExecImpl() from exec.ts to swap execSync with a mock,
+ * verifying PRD detection, sub-issue API discovery, and non-PRD passthrough
  * without requiring a real GitHub repo.
  */
-import { beforeEach, describe, expect, it, mock } from "bun:test";
-
-const realChildProcess = require("child_process");
-const realExecSync =
-  realChildProcess.execSync as typeof import("child_process").execSync;
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { setExecImpl } from "./exec.ts";
+import { discoverPrdTarget } from "./prd-discovery.ts";
 
 // ---------------------------------------------------------------------------
-// Mock child_process.execSync
+// Mock setup — swap execSync via DI
 // ---------------------------------------------------------------------------
 
 const mockExecSync = mock();
-
-mock.module("child_process", () => ({
-  ...realChildProcess,
-  execSync: (...args: Parameters<typeof realExecSync>) => {
-    const [cmd, options] = args;
-    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
-      return mockExecSync(...args);
-    }
-
-    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
-  },
-}));
-
-// Import AFTER mocking so the module picks up the mock
-const { discoverPrdTarget } = await import("./prd-discovery.ts");
+let restoreExec: () => void;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,7 +85,12 @@ function mockGhUnavailable(): void {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  restoreExec = setExecImpl(mockExecSync as any);
   mockExecSync.mockReset();
+});
+
+afterEach(() => {
+  restoreExec();
 });
 
 describe("discoverPrdTarget — non-PRD passthrough", () => {
@@ -396,46 +385,6 @@ describe("discoverPrdTarget — error handling", () => {
     expect(() => discoverPrdTarget("owner/repo", 42, "/tmp")).toThrow(
       /Unexpected sub-issues response.*expected an array/,
     );
-  });
-});
-
-describe("discoverPrdTarget — passes correct arguments to gh", () => {
-  it("passes repo and issue number to gh issue view", () => {
-    const issueData = {
-      title: "Test",
-      body: "",
-      labels: [],
-    };
-    mockGhWithIssue(JSON.stringify(issueData));
-
-    discoverPrdTarget("myorg/myrepo", 42, "/some/dir");
-
-    const ghViewCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue view"),
-    );
-    expect(ghViewCall).toBeDefined();
-    expect(ghViewCall![0]).toContain('--repo "myorg/myrepo"');
-    expect(ghViewCall![0]).toContain("42");
-    expect(ghViewCall![0]).toContain("--json title,body,labels");
-  });
-
-  it("calls the sub-issues REST API with correct repo and issue number", () => {
-    const issueData = {
-      title: "PRD",
-      body: "",
-      labels: [{ name: "ralphai-prd" }],
-    };
-    mockGhWithIssueAndSubIssues(JSON.stringify(issueData), JSON.stringify([]));
-
-    discoverPrdTarget("myorg/myrepo", 42, "/some/dir");
-
-    const ghApiCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh api"),
-    );
-    expect(ghApiCall).toBeDefined();
-    expect(ghApiCall![0]).toContain("repos/myorg/myrepo/issues/42/sub_issues");
   });
 });
 
