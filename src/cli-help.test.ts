@@ -2,15 +2,20 @@ import { describe, it, expect } from "bun:test";
 import { join, dirname } from "path";
 import { execFileSync } from "child_process";
 import { fileURLToPath } from "url";
-import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import {
+  runCli,
+  runCliInProcess,
+  stripLogo,
+  useTempGitDir,
+} from "./test-utils.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("CLI help and flags", () => {
   const ctx = useTempGitDir();
 
-  it("(no subcommand) shows help text listing all subcommands", () => {
-    const result = runCli([], ctx.dir);
+  it("(no subcommand) shows help text listing all subcommands", async () => {
+    const result = await runCliInProcess([], ctx.dir);
     const output = stripLogo(result.stdout);
     expect(result.exitCode).toBe(0);
     expect(output).toContain("Core");
@@ -24,8 +29,8 @@ describe("CLI help and flags", () => {
     expect(output).toContain("reset");
   });
 
-  it("run errors when .ralphai/ does not exist", () => {
-    const result = runCli(["run"], ctx.dir);
+  it("run errors when .ralphai/ does not exist", async () => {
+    const result = await runCliInProcess(["run"], ctx.dir);
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not set up");
     expect(result.stderr).toContain("ralphai init");
@@ -41,8 +46,8 @@ describe("CLI help and flags", () => {
     expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it("--help shows usage information with grouped command headings", () => {
-    const result = runCli(["--help"]);
+  it("--help shows usage information with grouped command headings", async () => {
+    const result = await runCliInProcess(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Usage:");
     expect(result.stdout).toContain("ralphai");
@@ -72,8 +77,8 @@ describe("CLI help and flags", () => {
   // Subcommand --help
   // -------------------------------------------------------------------------
 
-  it("init --help shows init-specific flags", () => {
-    const result = runCli(["init", "--help"]);
+  it("init --help shows init-specific flags", async () => {
+    const result = await runCliInProcess(["init", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("--yes");
@@ -82,8 +87,8 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("--agent-command");
   });
 
-  it("status --help shows status usage", () => {
-    const result = runCli(["status", "--help"]);
+  it("status --help shows status usage", async () => {
+    const result = await runCliInProcess(["status", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("status");
     expect(result.stdout).toContain("--once");
@@ -91,57 +96,62 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("--no-color");
   });
 
-  it("status --once prints once and exits", () => {
+  it("status --once prints once and exits", async () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
-    runCli(["init", "--yes"], ctx.dir, env);
-    const result = runCli(["status", "--once"], ctx.dir, env, 10000);
+    await runCliInProcess(["init", "--yes"], ctx.dir, env);
+    const result = await runCliInProcess(
+      ["status", "--once"],
+      ctx.dir,
+      env,
+      10000,
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Pipeline");
   });
 
-  it("stop --help shows stop usage", () => {
-    const result = runCli(["stop", "--help"]);
+  it("stop --help shows stop usage", async () => {
+    const result = await runCliInProcess(["stop", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("stop");
     expect(result.stdout).toContain("--all");
     expect(result.stdout).toContain("--dry-run");
   });
 
-  it("help text lists stop", () => {
-    const result = runCli(["--help"]);
+  it("help text lists stop", async () => {
+    const result = await runCliInProcess(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("stop");
   });
 
-  it("reset --help shows reset usage and flags", () => {
-    const result = runCli(["reset", "--help"]);
+  it("reset --help shows reset usage and flags", async () => {
+    const result = await runCliInProcess(["reset", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("reset");
     expect(result.stdout).toContain("--yes");
   });
 
-  it("update --help shows update usage", () => {
-    const result = runCli(["update", "--help"]);
+  it("update --help shows update usage", async () => {
+    const result = await runCliInProcess(["update", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("update");
   });
 
-  it("uninstall --help shows uninstall usage and flags", () => {
-    const result = runCli(["uninstall", "--help"]);
+  it("uninstall --help shows uninstall usage and flags", async () => {
+    const result = await runCliInProcess(["uninstall", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("uninstall");
     expect(result.stdout).toContain("--yes");
     expect(result.stdout).toContain("--global");
   });
 
-  it("run --help does not show removed --prd flag", () => {
-    const result = runCli(["run", "--help"]);
+  it("run --help does not show removed --prd flag", async () => {
+    const result = await runCliInProcess(["run", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("--prd");
   });
 
-  it("run --help shows [<target>] usage with examples", () => {
-    const result = runCli(["run", "--help"]);
+  it("run --help shows [<target>] usage with examples", async () => {
+    const result = await runCliInProcess(["run", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ralphai run [<target>]");
     // Issue number example
@@ -171,8 +181,8 @@ describe("CLI help and flags", () => {
     expect(result.stdout).not.toContain("ralphai worktree clean");
   });
 
-  it("--help does not show subcommand-specific flags", () => {
-    const result = runCli(["--help"]);
+  it("--help does not show subcommand-specific flags", async () => {
+    const result = await runCliInProcess(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("--turns");
     expect(result.stdout).not.toContain("--dry-run");
@@ -183,27 +193,27 @@ describe("CLI help and flags", () => {
   // Unknown flag rejection
   // -------------------------------------------------------------------------
 
-  it("init --invalid-flag exits with error", () => {
-    const result = runCli(["init", "--invalid-flag"], ctx.dir);
+  it("init --invalid-flag exits with error", async () => {
+    const result = await runCliInProcess(["init", "--invalid-flag"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
     expect(result.stderr).toContain("--invalid-flag");
   });
 
-  it("status --bad-opt exits with error", () => {
-    const result = runCli(["status", "--bad-opt"], ctx.dir);
+  it("status --bad-opt exits with error", async () => {
+    const result = await runCliInProcess(["status", "--bad-opt"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
   });
 
-  it("reset --nope exits with error", () => {
-    const result = runCli(["reset", "--nope"], ctx.dir);
+  it("reset --nope exits with error", async () => {
+    const result = await runCliInProcess(["reset", "--nope"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
   });
 
-  it("uninstall --wrong exits with error", () => {
-    const result = runCli(["uninstall", "--wrong"], ctx.dir);
+  it("uninstall --wrong exits with error", async () => {
+    const result = await runCliInProcess(["uninstall", "--wrong"], ctx.dir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag");
   });
@@ -245,8 +255,8 @@ describe("CLI help and flags", () => {
   // backlog-dir command (removed — now shows guidance)
   // -------------------------------------------------------------------------
 
-  it("help text does not list removed backlog-dir", () => {
-    const result = runCli(["--help"]);
+  it("help text does not list removed backlog-dir", async () => {
+    const result = await runCliInProcess(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("backlog-dir");
   });

@@ -3,6 +3,11 @@
  *
  * Tests CLI integration (help text, non-TTY error, flag recognition) via
  * runCli, and unit tests for runConfigWizard by mocking @clack/prompts.
+ *
+ * This file uses mock.module("@clack/prompts"), so it must run in an
+ * isolated process (listed in ISOLATED in scripts/test.ts).  The CLI
+ * integration tests therefore use runCli (subprocess) instead of
+ * runCliInProcess to avoid mock.module poisoning the in-process imports.
  */
 
 import { describe, it, expect, mock, beforeEach } from "bun:test";

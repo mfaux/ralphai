@@ -4,7 +4,7 @@ import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
-import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
+import { runCliInProcess, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,8 +22,8 @@ describe("init command", () => {
     return getConfigFilePath(ctx.dir, testEnv());
   }
 
-  it("init --yes writes config to global state", () => {
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes writes config to global state", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
@@ -33,8 +33,8 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, "ralphai.json"))).toBe(false);
   });
 
-  it("init --yes creates no repo-local files except optional AGENTS.md", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes creates no repo-local files except optional AGENTS.md", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // No .ralphai/ directory should be created
     expect(existsSync(join(ctx.dir, ".ralphai"))).toBe(false);
@@ -43,25 +43,25 @@ describe("init command", () => {
     expect(existsSync(join(ctx.dir, "AGENTS.md"))).toBe(true);
   });
 
-  it("init --yes does not modify .gitignore", () => {
+  it("init --yes does not modify .gitignore", async () => {
     // Create a pre-existing .gitignore
     writeFileSync(join(ctx.dir, ".gitignore"), "node_modules\n");
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const gitignore = readFileSync(join(ctx.dir, ".gitignore"), "utf-8");
     expect(gitignore).toBe("node_modules\n");
   });
 
-  it("init --yes does not create .gitignore when none exists", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes does not create .gitignore when none exists", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // .gitignore should not be created by init
     expect(existsSync(join(ctx.dir, ".gitignore"))).toBe(false);
   });
 
-  it("init --yes generates config with auto-detected or default agent command", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes generates config with auto-detected or default agent command", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -76,8 +76,8 @@ describe("init command", () => {
     expect(parsed.iterationTimeout).toBe(0);
   });
 
-  it("init --yes writes all config keys with defaults", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes writes all config keys with defaults", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -105,8 +105,12 @@ describe("init command", () => {
     expect(parsed.issueCommentProgress).toBe(true);
   });
 
-  it("init --yes --agent-command uses the provided agent command", () => {
-    runCli(["init", "--yes", "--agent-command=claude -p"], ctx.dir, testEnv());
+  it("init --yes --agent-command uses the provided agent command", async () => {
+    await runCliInProcess(
+      ["init", "--yes", "--agent-command=claude -p"],
+      ctx.dir,
+      testEnv(),
+    );
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
@@ -116,8 +120,8 @@ describe("init command", () => {
     expect(parsed.autoCommit).toBe(false);
   });
 
-  it("init --yes warns when agent command binary is not in PATH", () => {
-    const result = runCli(
+  it("init --yes warns when agent command binary is not in PATH", async () => {
+    const result = await runCliInProcess(
       ["init", "--yes", "--agent-command=nonexistent-agent-xyz -p"],
       ctx.dir,
       testEnv(),
@@ -129,9 +133,9 @@ describe("init command", () => {
     expect(existsSync(configPath())).toBe(true);
   });
 
-  it("init --yes warns when no feedback commands are detected", () => {
+  it("init --yes warns when no feedback commands are detected", async () => {
     // ctx.dir has no package.json, so detectFeedbackCommands returns ""
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = result.stdout + result.stderr;
     expect(output).toContain("No build/test/lint scripts detected");
     expect(output).toContain("feedbackCommands");
@@ -139,8 +143,8 @@ describe("init command", () => {
     expect(existsSync(configPath())).toBe(true);
   });
 
-  it("init --yes prints detection summary with detected values", () => {
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes prints detection summary with detected values", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
     // Summary should contain the header and detected values
     expect(output).toContain("Detected:");
@@ -154,8 +158,8 @@ describe("init command", () => {
     expect(output).toMatch(/Project:.*\(none\)/);
   });
 
-  it("init --yes detection summary shows custom agent command", () => {
-    const result = runCli(
+  it("init --yes detection summary shows custom agent command", async () => {
+    const result = await runCliInProcess(
       ["init", "--yes", "--agent-command=my-agent --flag"],
       ctx.dir,
       testEnv(),
@@ -165,8 +169,8 @@ describe("init command", () => {
     expect(output).toContain("my-agent --flag");
   });
 
-  it("success output contains next steps", () => {
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("success output contains next steps", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
@@ -176,15 +180,15 @@ describe("init command", () => {
     expect(output).toContain("hello-world.md");
   });
 
-  it("init --yes works without package.json", () => {
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes works without package.json", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
     expect(output).toContain("ralphai run");
   });
 
-  it("init --yes <target-dir> writes config for the target directory", () => {
+  it("init --yes <target-dir> writes config for the target directory", async () => {
     // Create a separate target directory
     const targetDir = join(
       tmpdir(),
@@ -197,7 +201,11 @@ describe("init command", () => {
 
     try {
       // Run CLI from ctx.dir but point at targetDir
-      const result = runCli(["init", "--yes", targetDir], ctx.dir, env);
+      const result = await runCliInProcess(
+        ["init", "--yes", targetDir],
+        ctx.dir,
+        env,
+      );
       const output = stripLogo(result.stdout || result.stderr);
 
       expect(output).toContain("Ralphai initialized");
@@ -237,8 +245,8 @@ describe("init command", () => {
   // AGENTS.md tests
   // -------------------------------------------------------------------------
 
-  it("init --yes creates AGENTS.md with Ralphai section", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes creates AGENTS.md with Ralphai section", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("## Ralphai");
@@ -248,26 +256,26 @@ describe("init command", () => {
     expect(agentsMd).not.toContain(".ralphai/PLANNING.md");
   });
 
-  it("init --yes appends Ralphai section to existing AGENTS.md", () => {
+  it("init --yes appends Ralphai section to existing AGENTS.md", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Existing Instructions\n\nSome content.\n",
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     expect(agentsMd).toContain("# Existing Instructions");
     expect(agentsMd).toContain("## Ralphai");
   });
 
-  it("init --yes does not duplicate Ralphai section in AGENTS.md", () => {
+  it("init --yes does not duplicate Ralphai section in AGENTS.md", async () => {
     writeFileSync(
       join(ctx.dir, "AGENTS.md"),
       "# Instructions\n\n## Ralphai\n\nExisting section.\n",
     );
 
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const agentsMd = readFileSync(join(ctx.dir, "AGENTS.md"), "utf-8");
     // Section should not be duplicated
@@ -279,8 +287,8 @@ describe("init command", () => {
   // --force tests
   // -------------------------------------------------------------------------
 
-  it("init --force --yes overwrites existing config", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --force --yes overwrites existing config", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     // Write custom config
     writeConfigFile(
@@ -290,7 +298,11 @@ describe("init command", () => {
     );
 
     // Force re-init
-    const result = runCli(["init", "--force", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(
+      ["init", "--force", "--yes"],
+      ctx.dir,
+      testEnv(),
+    );
     const output = stripLogo(result.stdout || result.stderr);
 
     expect(output).toContain("Ralphai initialized");
@@ -306,17 +318,17 @@ describe("init command", () => {
   // Init idempotency tests
   // -------------------------------------------------------------------------
 
-  it("init --yes errors when already configured", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init --yes errors when already configured", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     // Second init should fail
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("already configured");
   });
 
-  it("init error message suggests init --force", () => {
-    runCli(["init", "--yes"], ctx.dir, testEnv());
-    const result = runCli(["init", "--yes"], ctx.dir, testEnv());
+  it("init error message suggests init --force", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     expect(result.stderr).toContain("ralphai init --force");
   });
 });

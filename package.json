@@ -15,6 +15,7 @@
     "build": "obuild",
     "dev": "node --experimental-strip-types src/cli.ts",
     "test": "bun scripts/test.ts",
+    "test:fast": "bun scripts/test.ts --fast",
     "type-check": "tsc --noEmit",
     "format": "prettier --write 'src/**/*.ts'",
     "dogfood": "obuild && node bin/cli.mjs"
