@@ -19,6 +19,7 @@ const ISOLATED = [
   "src/issue-blockers.test.ts",
   "src/label-lifecycle.test.ts",
   "src/parent-prd-discovery.test.ts",
+  "src/pr-lifecycle-stdin.test.ts",
   "src/pr-lifecycle-subissue.test.ts",
   "src/prd-done-detection.test.ts",
   "src/prd-discovery.test.ts",

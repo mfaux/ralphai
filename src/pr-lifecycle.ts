@@ -114,6 +114,27 @@ function execQuiet(cmd: string, cwd: string): string | null {
   }
 }
 
+/**
+ * Run a command and pipe `body` to its stdin.
+ *
+ * Used for `gh pr create --body-file -` and `gh pr edit --body-file -` so
+ * the PR body never passes through shell interpolation. This avoids
+ * corruption when the body contains backticks, `$`, or other shell
+ * metacharacters (e.g. agent-generated Markdown with inline code).
+ */
+function execWithStdin(cmd: string, body: string, cwd: string): string | null {
+  try {
+    return execSync(cmd, {
+      cwd,
+      encoding: "utf-8",
+      input: body,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Push
 // ---------------------------------------------------------------------------
@@ -240,9 +261,10 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
-  const prUrl = execQuiet(
+  const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(planDescription)}" --body "${esc(prBody)}" --draft`,
+      `--title "${esc(planDescription)}" --body-file - --draft`,
+    prBody,
     cwd,
   );
   if (!prUrl) {
@@ -332,9 +354,10 @@ export function createContinuousPr(
     ? formatPrTitle(prd.title)
     : `ralphai: ${firstPlanDescription}`;
 
-  const prUrl = execQuiet(
+  const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body "${esc(prBody)}" --draft`,
+      `--title "${esc(prTitle)}" --body-file - --draft`,
+    prBody,
     cwd,
   );
   if (!prUrl) {
@@ -380,9 +403,8 @@ export function updateContinuousPr(
       learnings: options.learnings,
     },
   );
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   if (
-    execQuiet(`gh pr edit "${prUrl}" --body "${esc(prBody)}"`, cwd) === null
+    execWithStdin(`gh pr edit "${prUrl}" --body-file -`, prBody, cwd) === null
   ) {
     return { ok: false, message: "Failed to update PR body" };
   }
@@ -414,10 +436,8 @@ export function finalizeContinuousPr(
       learnings: options.learnings,
     },
   );
-  const esc = (s: string) => s.replace(/"/g, '\\"');
-
   if (
-    execQuiet(`gh pr edit "${prUrl}" --body "${esc(prBody)}"`, cwd) === null
+    execWithStdin(`gh pr edit "${prUrl}" --body-file -`, prBody, cwd) === null
   ) {
     return { ok: false, message: "Failed to refresh final draft PR body" };
   }
@@ -540,8 +560,9 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   if (existingPrUrl) {
     // Update existing PR body
     if (
-      execQuiet(
-        `gh pr edit "${existingPrUrl}" --body "${esc(prBody)}"`,
+      execWithStdin(
+        `gh pr edit "${existingPrUrl}" --body-file -`,
+        prBody,
         cwd,
       ) === null
     ) {
@@ -559,9 +580,10 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   }
 
   // Create new draft PR
-  const prUrl = execQuiet(
+  const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body "${esc(prBody)}" --draft`,
+      `--title "${esc(prTitle)}" --body-file - --draft`,
+    prBody,
     cwd,
   );
   if (!prUrl) {
