@@ -22,6 +22,7 @@ const ISOLATED = [
   "src/prd-discovery.test.ts",
   "src/pull-prd-sub-issue.test.ts",
   "src/runner-github-drain.test.ts",
+  "src/tui/hooks/use-pipeline-state.test.ts",
 ];
 
 function findTestFiles(dir: string): string[] {
