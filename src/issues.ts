@@ -634,6 +634,10 @@ interface FetchAndWriteOptions {
   standaloneLabel: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
+  /** Optional subissue intake label (e.g. "ralphai-subissue"). */
+  subissueLabel?: string;
+  /** Optional subissue in-progress label (e.g. "ralphai-subissue:in-progress"). */
+  subissueInProgressLabel?: string;
 }
 
 /**
@@ -675,6 +679,15 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   // Discover parent PRD (non-fatal — plan is still usable without it)
   const prd = discoverParentPrd(repo, issueNumber, cwd, opts.issuePrdLabel);
 
+  // Select the correct label family: sub-issues (prd present and subissue
+  // labels provided) use subissue labels, standalone issues use standalone.
+  const isSubIssue =
+    prd !== undefined && opts.subissueLabel && opts.subissueInProgressLabel;
+  const effectiveIntakeLabel = isSubIssue ? opts.subissueLabel! : issueLabel;
+  const effectiveInProgressLabel = isSubIssue
+    ? opts.subissueInProgressLabel!
+    : issueInProgressLabel;
+
   // Query native GitHub blocking relationships via GraphQL (fail-open)
   const blockers = fetchBlockersViaGraphQL(repo, issueNumber, cwd);
 
@@ -699,8 +712,8 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   // Update issue labels: add in-progress, remove intake label
   transitionPull(
     { number: Number(issueNumber), repo },
-    issueLabel,
-    issueInProgressLabel,
+    effectiveIntakeLabel,
+    effectiveInProgressLabel,
     cwd,
   );
 
@@ -947,10 +960,13 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     issueNumber: String(subIssueNumber),
     backlogDir,
     cwd,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneLabel: issueLabel,
+    standaloneInProgressLabel: options.standaloneInProgressLabel,
+    standaloneLabel: options.standaloneLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
+    subissueLabel: options.subissueLabel,
+    subissueInProgressLabel:
+      options.subissueInProgressLabel ?? subissueLabels?.inProgress,
   });
 }
 
@@ -1184,6 +1200,8 @@ export function pullGithubIssueByNumber(
     standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
+    subissueLabel: options.subissueLabel,
+    subissueInProgressLabel: options.subissueInProgressLabel,
   });
 }
 

@@ -136,13 +136,26 @@ export function restoreIssueLabels(
     };
   }
 
-  // Reverse the label transition: remove in-progress and stuck, add intake
+  // Reverse the label transition: remove in-progress and stuck, add intake.
+  // For sub-issues, also defensively remove standalone state labels in case
+  // the wrong family was applied (the pullGithubIssueByNumber bug).
+  // gh issue edit --remove-label is a no-op for labels that aren't present.
+  const extraRemoveLabels: string[] = [];
+  if (isSubIssue && options.subissueLabel) {
+    // We're resetting a sub-issue with subissue labels — also remove
+    // any standalone state labels that may have been erroneously applied.
+    extraRemoveLabels.push(options.standaloneInProgressLabel);
+    extraRemoveLabels.push(options.standaloneStuckLabel);
+  }
+
   const transitionResult = transitionReset(
     { number: fm.issue, repo },
     issueLabel,
     issueInProgressLabel,
     issueStuckLabel,
     cwd,
+    false,
+    extraRemoveLabels,
   );
 
   return {
