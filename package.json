@@ -16,7 +16,7 @@
     "dev": "node --experimental-strip-types src/cli.ts",
     "test": "bun scripts/test.ts",
     "type-check": "tsc --noEmit",
-    "format": "prettier --write 'src/**/*.ts'",
+    "format": "prettier --write 'src/**/*.{ts,tsx}'",
     "dogfood": "obuild && node bin/cli.mjs"
   },
   "keywords": [
