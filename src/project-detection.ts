@@ -371,8 +371,10 @@ export function detectFeedbackCommands(cwd: string): string {
       const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
       const scripts = pkg.scripts;
       if (scripts && typeof scripts === "object") {
-        // For test, npm/pnpm/yarn/bun all support the short form (e.g. "pnpm test")
-        const testShorthand = ["npm", "pnpm", "yarn", "bun"];
+        // For test, npm/pnpm/yarn support the short form (e.g. "pnpm test").
+        // Bun projects often route test behavior through a custom `test` script,
+        // so preserve `bun run test` instead of bypassing the script with `bun test`.
+        const testShorthand = ["npm", "pnpm", "yarn"];
         for (const script of SCRIPT_CANDIDATES) {
           if (!(script in scripts)) continue;
           if (script === "test" && testShorthand.includes(pm.manager)) {

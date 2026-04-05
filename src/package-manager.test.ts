@@ -102,7 +102,7 @@ describe("package manager detection", () => {
     const parsed = JSON.parse(config);
     expect(parsed.feedbackCommands).toEqual([
       "bun run build",
-      "bun test",
+      "bun run test",
       "bun run lint",
     ]);
   });

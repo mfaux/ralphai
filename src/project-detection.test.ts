@@ -163,6 +163,32 @@ describe("detectProject", () => {
       "deno test",
     ]);
   });
+
+  it("uses bun run test for bun projects with a test script", () => {
+    writeFileSync(join(ctx.dir, "bun.lockb"), "");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: {
+          build: "tsc",
+          test: "bun scripts/test.ts",
+          lint: "eslint .",
+        },
+      }),
+    );
+
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.ecosystem).toBe("node");
+    expect(project!.label).toBe("bun");
+    expect(project!.runPrefix).toBe("bun run");
+    expect(project!.feedbackCommands).toEqual([
+      "bun run build",
+      "bun run test",
+      "bun run lint",
+    ]);
+  });
 });
 
 describe("detectNodeProject", () => {
