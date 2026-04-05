@@ -2,12 +2,17 @@
  * Tests for the run wizard.
  *
  * Tests CLI integration (help text, non-TTY error, flag recognition) via
- * runCliInProcess, and unit tests for runConfigWizard by mocking @clack/prompts.
+ * runCli, and unit tests for runConfigWizard by mocking @clack/prompts.
+ *
+ * This file uses mock.module("@clack/prompts"), so it must run in an
+ * isolated process (listed in ISOLATED in scripts/test.ts).  The CLI
+ * integration tests therefore use runCli (subprocess) instead of
+ * runCliInProcess to avoid mock.module poisoning the in-process imports.
  */
 
 import { describe, it, expect, mock, beforeEach } from "bun:test";
 import { join } from "path";
-import { runCliInProcess, useTempGitDir } from "../test-utils.ts";
+import { runCli, useTempGitDir } from "../test-utils.ts";
 import type { ResolvedConfig, ConfigSource } from "../config.ts";
 import { DEFAULTS } from "../config.ts";
 
@@ -38,8 +43,8 @@ function makeConfig(
 // ---------------------------------------------------------------------------
 
 describe("run --help wizard flag", () => {
-  it("run --help lists --wizard, -w", async () => {
-    const result = await runCliInProcess(["run", "--help"]);
+  it("run --help lists --wizard, -w", () => {
+    const result = runCli(["run", "--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--wizard");
     expect(result.stdout).toContain("-w");
@@ -47,8 +52,8 @@ describe("run --help wizard flag", () => {
 });
 
 describe("ralphai --help mentions wizard", () => {
-  it("ralphai --help run description mentions wizard mode", async () => {
-    const result = await runCliInProcess(["--help"]);
+  it("ralphai --help run description mentions wizard mode", () => {
+    const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("wizard");
   });
@@ -62,33 +67,33 @@ describe("--wizard non-TTY error", () => {
   const ctx = useTempGitDir();
   const env = () => ({ RALPHAI_HOME: join(ctx.dir, ".ralphai-home") });
 
-  it("ralphai run --wizard in non-TTY prints error with guidance", async () => {
-    // runCliInProcess runs in a non-TTY context
-    await runCliInProcess(["init", "--yes"], ctx.dir, env());
-    const result = await runCliInProcess(["run", "--wizard"], ctx.dir, env());
+  it("ralphai run --wizard in non-TTY prints error with guidance", () => {
+    // runCli runs in a pipe (non-TTY) context
+    runCli(["init", "--yes"], ctx.dir, env());
+    const result = runCli(["run", "--wizard"], ctx.dir, env());
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("--wizard");
     expect(result.stderr).toContain("TTY");
   });
 
-  it("ralphai run -w in non-TTY prints error with guidance", async () => {
-    await runCliInProcess(["init", "--yes"], ctx.dir, env());
-    const result = await runCliInProcess(["run", "-w"], ctx.dir, env());
+  it("ralphai run -w in non-TTY prints error with guidance", () => {
+    runCli(["init", "--yes"], ctx.dir, env());
+    const result = runCli(["run", "-w"], ctx.dir, env());
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("--wizard");
     expect(result.stderr).toContain("TTY");
   });
 
-  it("--wizard is not rejected as an unknown flag", async () => {
-    await runCliInProcess(["init", "--yes"], ctx.dir, env());
-    const result = await runCliInProcess(["run", "--wizard"], ctx.dir, env());
+  it("--wizard is not rejected as an unknown flag", () => {
+    runCli(["init", "--yes"], ctx.dir, env());
+    const result = runCli(["run", "--wizard"], ctx.dir, env());
     // Should get the TTY error, not "Unrecognized argument"
     expect(result.stderr).not.toContain("Unrecognized argument");
   });
 
-  it("-w is not rejected as an unknown flag", async () => {
-    await runCliInProcess(["init", "--yes"], ctx.dir, env());
-    const result = await runCliInProcess(["run", "-w"], ctx.dir, env());
+  it("-w is not rejected as an unknown flag", () => {
+    runCli(["init", "--yes"], ctx.dir, env());
+    const result = runCli(["run", "-w"], ctx.dir, env());
     expect(result.stderr).not.toContain("Unrecognized argument");
   });
 });

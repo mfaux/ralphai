@@ -33,11 +33,13 @@ async function runIsolated(
   return { file, ok: exitCode === 0, output };
 }
 
-// Files that call mock.module() on built-in Node modules (child_process, fs).
+// Files that call mock.module() on built-in Node modules (child_process, fs)
+// or third-party modules (@clack/prompts).
 // These must run in separate processes to prevent mock leaks.
 const ISOLATED = [
   "src/fetch-prd-issue.test.ts",
   "src/interactive/github-issues.test.ts",
+  "src/interactive/run-wizard.test.ts",
   "src/issue-blockers.test.ts",
   "src/label-lifecycle.test.ts",
   "src/parent-prd-discovery.test.ts",
