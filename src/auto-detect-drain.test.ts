@@ -71,7 +71,7 @@ function addPlans(
   for (const plan of plans) {
     writeFileSync(
       join(backlogDir, `${plan.slug}.md`),
-      `# Plan: ${plan.title}\n\n### Task 1: Do it\n`,
+      `# Plan: ${plan.title}\n\nImplement the feature.\n`,
     );
   }
   return backlogDir;
@@ -89,7 +89,7 @@ function addPrdSubIssuePlan(
   mkdirSync(backlogDir, { recursive: true });
   writeFileSync(
     join(backlogDir, `${slug}.md`),
-    `---\nsource: github\nissue: ${issueNumber}\nissue-url: https://github.com/test/repo/issues/${issueNumber}\nprd: ${prdNumber}\n---\n\n# Plan: ${slug}\n\n### Task 1: Do it\n`,
+    `---\nsource: github\nissue: ${issueNumber}\nissue-url: https://github.com/test/repo/issues/${issueNumber}\nprd: ${prdNumber}\n---\n\n# Plan: ${slug}\n\nImplement the feature.\n`,
   );
   return backlogDir;
 }

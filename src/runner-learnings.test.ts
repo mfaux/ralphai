@@ -127,7 +127,7 @@ describe("runRunner — in-memory learnings", () => {
 
     writeFileSync(
       join(backlogDir, "learn1.md"),
-      "# Plan: Learn Test\n\n## Implementation Tasks\n\n### Task 1: Test\n",
+      "# Plan: Learn Test\n\nImplement the learning test feature.\n",
     );
 
     // Agent outputs a learning and COMPLETE marker
@@ -178,7 +178,7 @@ describe("runRunner — in-memory learnings", () => {
 
     writeFileSync(
       join(backlogDir, "learn2.md"),
-      "# Plan: No Learn\n\n## Implementation Tasks\n\n### Task 1: Test\n",
+      "# Plan: No Learn\n\nImplement the no-learn test feature.\n",
     );
 
     // Agent outputs <learnings>none</learnings>
@@ -221,7 +221,7 @@ describe("runRunner — in-memory learnings", () => {
 
     writeFileSync(
       join(backlogDir, "learn3.md"),
-      "# Plan: Missing Block\n\n## Implementation Tasks\n\n### Task 1: Test\n",
+      "# Plan: Missing Block\n\nImplement the missing-block test feature.\n",
     );
 
     // Agent outputs COMPLETE but no <learnings> block at all
@@ -266,7 +266,7 @@ describe("runRunner — in-memory learnings", () => {
 
     writeFileSync(
       join(backlogDir, "learn4.md"),
-      "# Plan: Empty Block\n\n## Implementation Tasks\n\n### Task 1: Test\n",
+      "# Plan: Empty Block\n\nImplement the empty-block test feature.\n",
     );
 
     // Agent outputs <learnings> with only whitespace (extractLearningsBlock

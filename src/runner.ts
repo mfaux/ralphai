@@ -47,6 +47,7 @@ import {
   checkAllPrdSubIssuesDone,
 } from "./issues.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
+import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
 import {
   detectPlan,
   detectPlanFormat,
@@ -798,6 +799,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     let completed = false;
     let stuck = false;
 
+    // Completion gate: tracks consecutive rejections to prevent infinite loops.
+    // After maxGateRejections consecutive rejections the COMPLETE is accepted.
+    let gateRejectionCount = 0;
+    const maxGateRejections = 2;
+    let lastGateRejection: string | undefined;
+
     // Detect plan format once per plan; the result flows into the
     // iteration log header and future downstream consumers.
     const planContent = readFileSync(planFile, "utf-8");
@@ -828,6 +835,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         scopeHint,
         learnings: accumulatedLearnings,
         planFormat,
+        gateRejection: lastGateRejection,
       });
 
       // --- Spawn agent (with output log persistence) ---
@@ -1014,6 +1022,43 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
       // --- Check for completion ---
       if (output.includes("<promise>COMPLETE</promise>")) {
+        // --- Completion gate: verify before accepting ---
+        const gateResult = runCompletionGate({
+          progressFile,
+          planFormat,
+          totalTasks,
+          feedbackCommands,
+          cwd,
+        });
+
+        if (!gateResult.passed && gateRejectionCount < maxGateRejections) {
+          gateRejectionCount++;
+          lastGateRejection = formatGateRejection(gateResult);
+          console.log();
+          console.log(
+            `Completion gate rejected (${gateRejectionCount}/${maxGateRejections}): ${gateResult.reason}`,
+          );
+          for (const detail of gateResult.details) {
+            console.log(`  - ${detail}`);
+          }
+          console.log("Re-invoking agent to address the issues above.");
+          continue;
+        }
+
+        if (!gateResult.passed) {
+          // Max rejections reached — accept anyway but warn
+          console.log();
+          console.log(
+            `WARNING: Completion gate still failing after ${maxGateRejections} rejections — accepting COMPLETE anyway.`,
+          );
+          for (const detail of gateResult.details) {
+            console.log(`  - ${detail}`);
+          }
+        }
+
+        // Clear gate state on acceptance
+        lastGateRejection = undefined;
+
         console.log();
         console.log(
           `Plan complete after ${iterationNumber} iterations: ${planDesc}`,

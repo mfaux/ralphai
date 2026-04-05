@@ -30,6 +30,8 @@ export interface AssemblePromptOptions {
   learnings: string[];
   /** Detected plan format — drives prompt wording for step 2 and progress blocks. */
   planFormat?: PlanFormat;
+  /** Completion gate rejection message from the previous iteration (if any). */
+  gateRejection?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     scopeHint,
     learnings,
     planFormat = "tasks",
+    gateRejection,
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -149,8 +152,13 @@ Ralphai extracts this block and appends it to the progress file automatically. D
   const learningsSection =
     learningsContext.length > 0 ? `\n${learningsContext}\n` : "";
 
+  // --- Gate rejection section (injected prominently when present) ---
+  const gateSection = gateRejection
+    ? `\n<completion-gate-rejection>\n${gateRejection}\n</completion-gate-rejection>\n`
+    : "";
+
   // --- Assemble the prompt ---
-  return `${fileRefs}${scopeHint}${learningsSection}
+  return `${fileRefs}${scopeHint}${gateSection}${learningsSection}
 1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${learningsHint}
 2. ${step2}
 3. Implement it with small, focused changes. Testing strategy depends on task type:
@@ -166,6 +174,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
 6. ${commitInstruction}
 Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
 If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
+IMPORTANT: Ralphai runs an independent completion gate after you output COMPLETE. It verifies that (1) the progress file shows ${completionRef}, and (2) all feedback commands pass when run externally. If the gate rejects, you will be re-invoked to fix the issues. Only claim COMPLETE when you are confident all work is done and all feedback commands pass.
 When you output COMPLETE, also include a <pr-summary> block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 <pr-summary>
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.

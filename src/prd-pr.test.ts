@@ -121,7 +121,7 @@ describe("skipPrCreation flag", () => {
 
     writeFileSync(
       join(backlogDir, "skip-pr.md"),
-      "# Plan: Skip PR\n\n### Task 1: Do\n",
+      "# Plan: Skip PR\n\nImplement the skip PR feature.\n",
     );
 
     const opts: RunnerOptions = {
@@ -154,7 +154,7 @@ describe("skipPrCreation flag", () => {
 
     writeFileSync(
       join(backlogDir, "with-pr.md"),
-      "# Plan: With PR\n\n### Task 1: Do\n",
+      "# Plan: With PR\n\nImplement the with PR feature.\n",
     );
 
     const opts: RunnerOptions = {

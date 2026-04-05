@@ -98,7 +98,7 @@ describe("runRunner — resume", () => {
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
       planFile,
-      "# Plan: Resume Missing Progress\n\n## Implementation Tasks\n\n### Task 1: Complete resume fix\n",
+      "# Plan: Resume Missing Progress\n\nImplement the resume fix.\n",
     );
 
     const agentScript = `bash -c 'if [ ! -f "${progressFile}" ]; then echo "missing progress file" >&2; exit 11; fi; printf "<promise>COMPLETE</promise>\n<learnings>none</learnings>\n"'`;
