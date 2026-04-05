@@ -95,7 +95,7 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
 // ---------------------------------------------------------------------------
 // skipPrCreation flag

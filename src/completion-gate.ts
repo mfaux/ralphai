@@ -208,9 +208,18 @@ export function runCompletionGate(
 /**
  * Format a gate rejection into a context string that can be prepended
  * to the next agent prompt, so the agent knows why COMPLETE was rejected.
+ *
+ * @param outcome - The gate check result.
+ * @param nonce   - Per-iteration nonce for sentinel tags. When provided,
+ *                  the rejection message uses nonce-stamped `<promise>` tags.
  */
-export function formatGateRejection(outcome: GateOutcome): string {
+export function formatGateRejection(
+  outcome: GateOutcome,
+  nonce?: string,
+): string {
   if (outcome.passed) return "";
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
+  const promiseSentinel = `<promise${nonceAttr}>COMPLETE</promise>`;
   const lines = [
     "IMPORTANT: Your previous COMPLETE signal was rejected by the completion gate.",
     outcome.reason,
@@ -218,7 +227,7 @@ export function formatGateRejection(outcome: GateOutcome): string {
     "Details:",
     ...outcome.details.map((d) => `  - ${d}`),
     "",
-    "Fix the issues above and try again. Do NOT output <promise>COMPLETE</promise> until all tasks are finished and all feedback commands pass.",
+    `Fix the issues above and try again. Do NOT output ${promiseSentinel} until all tasks are finished and all feedback commands pass.`,
   ];
   return lines.join("\n");
 }

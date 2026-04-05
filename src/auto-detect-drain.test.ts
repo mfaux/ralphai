@@ -49,7 +49,7 @@ function createTmpGitRepo(): string {
  * Fast agent that immediately completes, producing the COMPLETE signal,
  * a learnings block, and a progress block.
  */
-const completeAgent = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings>none</learnings>"; echo "<progress>"; echo "- [x] Done"; echo "</progress>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"; echo "<progress nonce=\\"$N\\">"; echo "- [x] Done"; echo "</progress>"'`;
 
 /** Initialize ralphai with a fast-completing agent. */
 function initWithAgent(dir: string, env: Record<string, string>): void {

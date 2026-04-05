@@ -101,13 +101,11 @@ describe("assemblePrompt", () => {
     );
   });
 
-  it("includes learnings block template", () => {
+  it("includes learnings block template (bare tags when no nonce)", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("<learnings>");
     expect(prompt).toContain("<learnings>none</learnings>");
-    expect(prompt).toContain(
-      "The <learnings> block is mandatory in every response",
-    );
+    expect(prompt).toContain("block is mandatory in every response");
   });
 
   it("includes scope hint when provided", () => {
@@ -319,7 +317,7 @@ describe("assemblePrompt", () => {
     expect(prompt).not.toContain("all tasks complete");
   });
 
-  it("preserves COMPLETE signal for checkboxes format", () => {
+  it("preserves COMPLETE signal for checkboxes format (bare when no nonce)", () => {
     const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
     expect(prompt).toContain("<promise>COMPLETE</promise>");
     expect(prompt).toContain(
@@ -327,7 +325,7 @@ describe("assemblePrompt", () => {
     );
   });
 
-  it("preserves COMPLETE signal for tasks format", () => {
+  it("preserves COMPLETE signal for tasks format (bare when no nonce)", () => {
     const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
     expect(prompt).toContain("<promise>COMPLETE</promise>");
     expect(prompt).toContain(
@@ -339,5 +337,49 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
     expect(prompt).toContain("- [x] Validate input length is within bounds");
     expect(prompt).toContain("Do NOT write progress.md directly");
+  });
+
+  // --- Nonce-stamped sentinel tags ---
+
+  it("includes nonce-stamped COMPLETE sentinel when nonce is provided", () => {
+    const nonce = "test-nonce-xyz";
+    const prompt = assemblePrompt(baseOptions({ nonce }));
+    expect(prompt).toContain(`<promise nonce="${nonce}">COMPLETE</promise>`);
+    // Must NOT contain bare <promise>COMPLETE</promise>
+    expect(prompt).not.toContain("<promise>COMPLETE</promise>");
+  });
+
+  it("includes nonce-stamped learnings tags when nonce is provided", () => {
+    const nonce = "learn-nonce-42";
+    const prompt = assemblePrompt(baseOptions({ nonce }));
+    expect(prompt).toContain(`<learnings nonce="${nonce}">`);
+    expect(prompt).toContain(`<learnings nonce="${nonce}">none</learnings>`);
+    // Must NOT contain bare <learnings>
+    expect(prompt).not.toMatch(/<learnings>(?!\.)/);
+  });
+
+  it("includes nonce-stamped progress tags when nonce is provided", () => {
+    const nonce = "prog-nonce-99";
+    const prompt = assemblePrompt(baseOptions({ nonce }));
+    expect(prompt).toContain(`<progress nonce="${nonce}">`);
+    expect(prompt).toContain("</progress>");
+  });
+
+  it("includes nonce-stamped pr-summary tags when nonce is provided", () => {
+    const nonce = "pr-nonce-77";
+    const prompt = assemblePrompt(baseOptions({ nonce }));
+    expect(prompt).toContain(`<pr-summary nonce="${nonce}">`);
+    expect(prompt).toContain("</pr-summary>");
+  });
+
+  it("includes nonce-stamped tags for all sentinel types in checkboxes format", () => {
+    const nonce = "checkbox-nonce";
+    const prompt = assemblePrompt(
+      baseOptions({ nonce, planFormat: "checkboxes" }),
+    );
+    expect(prompt).toContain(`<promise nonce="${nonce}">COMPLETE</promise>`);
+    expect(prompt).toContain(`<learnings nonce="${nonce}">`);
+    expect(prompt).toContain(`<progress nonce="${nonce}">`);
+    expect(prompt).toContain(`<pr-summary nonce="${nonce}">`);
   });
 });

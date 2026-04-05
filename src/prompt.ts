@@ -32,6 +32,14 @@ export interface AssemblePromptOptions {
   planFormat?: PlanFormat;
   /** Completion gate rejection message from the previous iteration (if any). */
   gateRejection?: string;
+  /**
+   * Per-iteration nonce for sentinel tag authentication. When provided,
+   * all sentinel tags in the prompt (`<promise>`, `<learnings>`,
+   * `<progress>`, `<pr-summary>`) include a `nonce` attribute. The
+   * runner only recognizes tags whose nonce matches, preventing false
+   * positives from tool output that happens to contain bare sentinel strings.
+   */
+  nonce?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +83,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     learnings,
     planFormat = "tasks",
     gateRejection,
+    nonce,
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -113,6 +122,19 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const completeInstruction =
     "but ONLY after committing. Never output COMPLETE with uncommitted changes.";
 
+  // --- Nonce-stamped sentinel tags ---
+  // When a nonce is provided, all sentinel tags include it so the runner
+  // can distinguish genuine agent output from tool noise.
+  const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
+  const promiseOpen = `<promise${nonceAttr}>`;
+  const promiseClose = "</promise>";
+  const learningsOpen = `<learnings${nonceAttr}>`;
+  const learningsClose = "</learnings>";
+  const progressOpen = `<progress${nonceAttr}>`;
+  const progressClose = "</progress>";
+  const prSummaryOpen = `<pr-summary${nonceAttr}>`;
+  const prSummaryClose = "</pr-summary>";
+
   // --- Format-aware step 2 and progress block ---
   const step2 = isCheckboxes
     ? "Pick the next group of unchecked items from the plan that form a coherent commit. You may satisfy multiple related items in one iteration (e.g., related error cases that share implementation)."
@@ -123,29 +145,29 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : "all tasks complete";
 
   const progressBlock = isCheckboxes
-    ? `REQUIRED: Also include a <progress> block at the very end of your response (after learnings). Use this exact format for the items you completed this iteration:
+    ? `REQUIRED: Also include a ${progressOpen}...${progressClose} block at the very end of your response (after learnings). Use this exact format for the items you completed this iteration:
 - [x] <item description>
 - [x] <item description>
 This format is required — ralphai parses it to track task completion.
 If the task was not fully completed this iteration, include a brief summary of partial progress instead.
 Example:
-<progress>
+${progressOpen}
 - [x] Validate input length is within bounds
 - [x] Return descriptive error for empty input
-</progress>
+${progressClose}
 Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`
-    : `REQUIRED: Also include a <progress> block at the very end of your response (after learnings). Use this exact format for the task you completed this iteration:
+    : `REQUIRED: Also include a ${progressOpen}...${progressClose} block at the very end of your response (after learnings). Use this exact format for the task you completed this iteration:
 ### Task N: <title>
 **Status:** Complete
 <summary of what was done, including which subtasks were completed>
 This format is required — ralphai parses it to track task completion.
 If the task was not fully completed this iteration, include a brief summary of partial progress instead.
 Example:
-<progress>
+${progressOpen}
 ### Task 3: Add validation
 **Status:** Complete
 Implemented input validation (3.1), error messages (3.2), and updated tests (3.3).
-</progress>
+${progressClose}
 Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
 
   // --- Learnings context section (injected before instructions when non-empty) ---
@@ -173,18 +195,18 @@ Ralphai extracts this block and appends it to the progress file automatically. D
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.
 6. ${commitInstruction}
 Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
-If ${completionRef}, output <promise>COMPLETE</promise> — ${completeInstruction}
+If ${completionRef}, output ${promiseOpen}COMPLETE${promiseClose} — ${completeInstruction}
 IMPORTANT: Ralphai runs an independent completion gate after you output COMPLETE. It verifies that (1) the progress file shows ${completionRef}, and (2) all feedback commands pass when run externally. If the gate rejects, you will be re-invoked to fix the issues. Only claim COMPLETE when you are confident all work is done and all feedback commands pass.
-When you output COMPLETE, also include a <pr-summary> block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
-<pr-summary>
+When you output COMPLETE, also include a ${prSummaryOpen}...${prSummaryClose} block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
+${prSummaryOpen}
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
-</pr-summary>
-REQUIRED: At the very end of your response, include a <learnings> block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. Use:
-<learnings>
+${prSummaryClose}
+REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. Use:
+${learningsOpen}
 Your freeform prose lesson here.
-</learnings>
+${learningsClose}
 If no learnings this iteration, use:
-<learnings>none</learnings>
-The <learnings> block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
+${learningsOpen}none${learningsClose}
+The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
 ${progressBlock}`;
 }

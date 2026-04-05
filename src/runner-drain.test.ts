@@ -98,8 +98,8 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'echo "<progress>"; echo "### Task 1: Done"; echo "**Status:** Complete"; echo "Finished."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"'`;
-const stuckAgent = `bash -c 'echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Done"; echo "**Status:** Complete"; echo "Finished."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+const stuckAgent = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
 // ---------------------------------------------------------------------------
 // Drain behavior
@@ -303,12 +303,13 @@ describe("exit summary", () => {
     // Agent that completes on "aaa-good" but gets stuck on "bbb-stuck"
     // Use a script that checks the plan file being processed
     const scriptContent = `#!/bin/bash
+N=$RALPHAI_NONCE
 if grep -q "Good Plan" "$1" 2>/dev/null; then
-  echo "<promise>COMPLETE</promise>"
-  echo "<learnings><entry>status: none</entry></learnings>"
+  echo "<promise nonce=\\"$N\\">COMPLETE</promise>"
+  echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"
 else
   echo "doing nothing"
-  echo "<learnings><entry>status: none</entry></learnings>"
+  echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"
 fi
 `;
     // Simpler: agent that always completes — the stuck one will use a different
@@ -322,7 +323,7 @@ fi
     const counterFile = join(dir, ".agent-counter");
     writeFileSync(counterFile, "0");
     // Agent that completes on first call, then does nothing on subsequent calls
-    const mixedAgent = `bash -c 'count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress>"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise>COMPLETE</promise>"; echo "<learnings><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings><entry>status: none</entry></learnings>"; fi'`;
+    const mixedAgent = `bash -c 'N=$RALPHAI_NONCE; count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; fi'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({

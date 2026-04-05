@@ -32,6 +32,11 @@ import { extractLearningsBlock, parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
 import { extractPrSummary } from "./pr-summary.ts";
+import {
+  generateNonce,
+  detectCompletion,
+  extractNoncedBlock,
+} from "./sentinel.ts";
 import { deriveLabels } from "./labels.ts";
 import {
   transitionStuck,
@@ -164,6 +169,10 @@ function ensureProgressFile(progressFile: string): void {
  *
  * Returns { output, exitCode, timedOut }.
  *
+ * When `nonce` is provided, it is set as the `RALPHAI_NONCE` environment
+ * variable in the agent subprocess so mock agents in tests can easily
+ * echo nonce-stamped sentinel tags.
+ *
  * Exported for testing.
  */
 export function spawnAgent(
@@ -173,6 +182,7 @@ export function spawnAgent(
   cwd: string,
   outputLogPath?: string,
   ipcBroadcast?: (msg: IpcMessage) => void,
+  nonce?: string,
 ): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Split the agent command respecting quotes
@@ -197,9 +207,11 @@ export function spawnAgent(
       cwd: string;
       stdio: ["pipe", "pipe", "pipe"];
       signal?: AbortSignal;
+      env?: Record<string, string | undefined>;
     } = {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
+      env: nonce ? { ...process.env, RALPHAI_NONCE: nonce } : undefined,
     };
 
     if (iterationTimeout > 0) {
@@ -811,6 +823,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const { format: planFormat, totalTasks } = detectPlanFormat(planContent);
     let iterationNumber = 0;
 
+    // Generate a per-plan nonce for sentinel tag authentication.
+    // Injected into the prompt so agents echo it back; the runner
+    // only recognizes tags whose nonce matches, preventing false
+    // positives from tool output that contains bare sentinel strings.
+    const nonce = generateNonce();
+
     while (!interrupted) {
       iterationNumber++;
       const completedTasks = countCompletedTasks(progressFile, planFormat);
@@ -836,6 +854,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         learnings: accumulatedLearnings,
         planFormat,
         gateRejection: lastGateRejection,
+        nonce,
       });
 
       // --- Spawn agent (with output log persistence) ---
@@ -853,6 +872,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         cwd,
         outputLogPath,
         ipcServer ? (msg) => ipcServer!.broadcast(msg) : undefined,
+        nonce,
       );
 
       if (timedOut) {
@@ -863,7 +883,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Process learnings block (before completion check) ---
-      const learningsBlock = extractLearningsBlock(output);
+      // Try nonce-stamped extraction first; fall back to bare extraction
+      // for backward compatibility with agents that haven't adopted the
+      // nonce protocol yet (e.g., during migration).
+      const learningsBlock =
+        extractNoncedBlock(output, "learnings", nonce) ??
+        extractLearningsBlock(output);
       if (learningsBlock === null) {
         console.log("WARNING: No <learnings> block found in agent output.");
       } else {
@@ -881,7 +906,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Extract and append progress block ---
-      const progressContent = extractProgressBlock(output);
+      // Try nonce-stamped extraction first; fall back to bare extraction.
+      const progressContent =
+        extractNoncedBlock(output, "progress", nonce) ??
+        extractProgressBlock(output);
       if (progressContent) {
         appendProgressBlock(progressFile, iterationNumber, progressContent);
         console.log(
@@ -1021,7 +1049,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Check for completion ---
-      if (output.includes("<promise>COMPLETE</promise>")) {
+      if (detectCompletion(output, nonce)) {
         // --- Completion gate: verify before accepting ---
         const gateResult = runCompletionGate({
           progressFile,
@@ -1033,7 +1061,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
         if (!gateResult.passed && gateRejectionCount < maxGateRejections) {
           gateRejectionCount++;
-          lastGateRejection = formatGateRejection(gateResult);
+          lastGateRejection = formatGateRejection(gateResult, nonce);
           console.log();
           console.log(
             `Completion gate rejected (${gateRejectionCount}/${maxGateRejections}): ${gateResult.reason}`,
@@ -1066,7 +1094,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         completedPlans.push(basename(planFile));
 
         // Extract agent-generated PR description
-        const prSummary = extractPrSummary(output) ?? undefined;
+        // Try nonce-stamped extraction first; fall back to bare extraction.
+        const prSummary =
+          extractNoncedBlock(output, "pr-summary", nonce) ??
+          extractPrSummary(output) ??
+          undefined;
         if (prSummary) lastPrSummary = prSummary;
 
         // Remove PID file and close IPC server before archiving so they
