@@ -16,6 +16,7 @@
 ### Fixes
 
 - **PR body uses plan description** — PR bodies now contain the plan's description and a commit log instead of dumping raw plan file content.
+- **Nonce-stamped agent sentinels** — runner completion and metadata extraction now require a per-iteration nonce on `<promise>`, `<learnings>`, `<progress>`, and `<pr-summary>` tags so tool output cannot falsely signal plan completion. Bun project detection also preserves `bun run test` when a `test` script exists, so feedback loops use the repo's intended test runner instead of bypassing it with bare `bun test`.
 
 ## 0.6.0
 

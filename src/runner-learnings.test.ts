@@ -131,7 +131,7 @@ describe("runRunner — in-memory learnings", () => {
     );
 
     // Agent outputs a learning and COMPLETE marker
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings>Always check return values before using them.</learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">Always check return values before using them.</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
@@ -182,7 +182,7 @@ describe("runRunner — in-memory learnings", () => {
     );
 
     // Agent outputs <learnings>none</learnings>
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings>none</learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
@@ -225,7 +225,7 @@ describe("runRunner — in-memory learnings", () => {
     );
 
     // Agent outputs COMPLETE but no <learnings> block at all
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
@@ -271,7 +271,7 @@ describe("runRunner — in-memory learnings", () => {
 
     // Agent outputs <learnings> with only whitespace (extractLearningsBlock
     // returns null for empty content)
-    const agentScript = `bash -c 'echo "<promise>COMPLETE</promise>"; echo "<learnings>   </learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">   </learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({

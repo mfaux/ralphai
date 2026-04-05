@@ -101,7 +101,7 @@ describe("runRunner — resume", () => {
       "# Plan: Resume Missing Progress\n\nImplement the resume fix.\n",
     );
 
-    const agentScript = `bash -c 'if [ ! -f "${progressFile}" ]; then echo "missing progress file" >&2; exit 11; fi; printf "<promise>COMPLETE</promise>\n<learnings>none</learnings>\n"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; if [ ! -f "${progressFile}" ]; then echo "missing progress file" >&2; exit 11; fi; printf "<promise nonce=\\"$N\\">COMPLETE</promise>\n<learnings nonce=\\"$N\\">none</learnings>\n"'`;
 
     const opts: RunnerOptions = {
       config: makeResolvedConfig({

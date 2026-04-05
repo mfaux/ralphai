@@ -1,0 +1,341 @@
+/**
+ * Tests for PR body shell-safety in pr-lifecycle.ts.
+ *
+ * Verifies that `createPr`, `createContinuousPr`, `updateContinuousPr`,
+ * `finalizeContinuousPr`, and `createPrdPr` pipe the PR body via stdin
+ * (`--body-file -`) instead of interpolating it into a shell command.
+ *
+ * This prevents shell metacharacters (backticks, `$`, etc.) in
+ * agent-generated PR summaries from being interpreted by the shell.
+ *
+ * Uses mock.module to control `child_process.execSync` so we can
+ * inspect the commands and stdin input without hitting real git/gh.
+ */
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
+import { useTempDir } from "./test-utils.ts";
+
+// ---------------------------------------------------------------------------
+// Mock child_process.execSync — intercept all commands
+// ---------------------------------------------------------------------------
+
+const realChildProcess = require("child_process");
+const realExecSync =
+  realChildProcess.execSync as typeof import("child_process").execSync;
+
+const mockExecSync = mock();
+
+mock.module("child_process", () => ({
+  ...realChildProcess,
+  execSync: (...args: Parameters<typeof realExecSync>) => {
+    const [cmd, options] = args;
+    if (typeof cmd === "string" && cmd.startsWith("gh ")) {
+      return mockExecSync(...args);
+    }
+    // Pass through non-gh commands (git)
+    return realExecSync(cmd, options as Parameters<typeof realExecSync>[1]);
+  },
+}));
+
+// Import AFTER mocking so the module picks up the mock
+const {
+  createPr,
+  createContinuousPr,
+  updateContinuousPr,
+  finalizeContinuousPr,
+  createPrdPr,
+  pushBranch,
+} = await import("./pr-lifecycle.ts");
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const ctx = useTempDir();
+
+function initRepo(dir: string): void {
+  realExecSync("git init -b main", { cwd: dir, stdio: "ignore" });
+  realExecSync('git config user.email "test@test.com"', {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  realExecSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
+  writeFileSync(join(dir, "init.txt"), "init\n");
+  realExecSync('git add -A && git commit -m "init"', {
+    cwd: dir,
+    stdio: "ignore",
+  });
+}
+
+/** Set up a repo with a remote so pushBranch succeeds, plus a feature branch. */
+function initRepoWithRemoteAndBranch(dir: string, branch: string): string {
+  const remoteDir = join(dir, "remote.git");
+  const repoDir = join(dir, "repo");
+  mkdirSync(remoteDir, { recursive: true });
+  realExecSync("git init --bare", { cwd: remoteDir, stdio: "ignore" });
+  realExecSync(`git clone "${remoteDir}" repo`, {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  realExecSync('git config user.email "test@test.com"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  realExecSync('git config user.name "Test"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  writeFileSync(join(repoDir, "init.txt"), "init\n");
+  realExecSync('git add -A && git commit -m "init"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  realExecSync("git push", { cwd: repoDir, stdio: "ignore" });
+  realExecSync(`git checkout -b "${branch}"`, {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  writeFileSync(join(repoDir, "feature.txt"), "feature\n");
+  realExecSync('git add -A && git commit -m "feat: add feature"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  return repoDir;
+}
+
+/** Body containing shell metacharacters that would break interpolation. */
+const DANGEROUS_BODY =
+  "Fix Bun feedback command detection so Ralphai uses a project's intended " +
+  "test script instead of bypassing it with bare `bun test`. Also handles " +
+  '$(whoami) and "double quotes" correctly.';
+
+beforeEach(() => {
+  mockExecSync.mockReset();
+});
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("PR body shell-safety", () => {
+  it("createPr pipes body via stdin with --body-file -", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "ralphai/test-plan");
+
+    // Mock gh pr create to return a URL (as string, matching encoding: "utf-8")
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr create")) {
+        return "https://github.com/o/r/pull/1";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const result = createPr({
+      branch: "ralphai/test-plan",
+      baseBranch: "main",
+      planDescription: "fix: test plan",
+      cwd: repoDir,
+      summary: DANGEROUS_BODY,
+    });
+
+    expect(result.ok).toBe(true);
+
+    // Find the gh pr create call
+    const prCreateCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr create"),
+    );
+    expect(prCreateCall).toBeDefined();
+
+    const cmd = prCreateCall![0] as string;
+    const opts = prCreateCall![1] as { input?: string };
+
+    // Should use --body-file - instead of --body "..."
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+
+    // Body should be passed via stdin (input option)
+    expect(opts.input).toContain(DANGEROUS_BODY);
+  });
+
+  it("createContinuousPr pipes body via stdin", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "ralphai/continuous");
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr create")) {
+        return "https://github.com/o/r/pull/2";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const backlogDir = join(repoDir, "backlog");
+    mkdirSync(backlogDir, { recursive: true });
+
+    const result = createContinuousPr({
+      branch: "ralphai/continuous",
+      baseBranch: "main",
+      firstPlanDescription: "fix: continuous plan",
+      completedPlans: ["plan-a"],
+      backlogDir,
+      cwd: repoDir,
+    });
+
+    expect(result.ok).toBe(true);
+    const prCreateCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr create"),
+    );
+    expect(prCreateCall).toBeDefined();
+
+    const cmd = prCreateCall![0] as string;
+    const opts = prCreateCall![1] as { input?: string };
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+    expect(typeof opts.input).toBe("string");
+  });
+
+  it("updateContinuousPr pipes body via stdin on edit", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "ralphai/update");
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr edit")) {
+        return "ok";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const backlogDir = join(repoDir, "backlog");
+    mkdirSync(backlogDir, { recursive: true });
+
+    const result = updateContinuousPr({
+      branch: "ralphai/update",
+      baseBranch: "main",
+      prUrl: "https://github.com/o/r/pull/3",
+      completedPlans: ["plan-a"],
+      backlogDir,
+      cwd: repoDir,
+    });
+
+    expect(result.ok).toBe(true);
+    const prEditCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr edit"),
+    );
+    expect(prEditCall).toBeDefined();
+
+    const cmd = prEditCall![0] as string;
+    const opts = prEditCall![1] as { input?: string };
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+    expect(typeof opts.input).toBe("string");
+  });
+
+  it("finalizeContinuousPr pipes body via stdin on edit", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "ralphai/finalize");
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr edit")) {
+        return "ok";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const backlogDir = join(repoDir, "backlog");
+    mkdirSync(backlogDir, { recursive: true });
+
+    const result = finalizeContinuousPr({
+      branch: "ralphai/finalize",
+      baseBranch: "main",
+      prUrl: "https://github.com/o/r/pull/4",
+      completedPlans: ["plan-a"],
+      backlogDir,
+      cwd: repoDir,
+    });
+
+    expect(result.ok).toBe(true);
+    const prEditCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr edit"),
+    );
+    expect(prEditCall).toBeDefined();
+
+    const cmd = prEditCall![0] as string;
+    const opts = prEditCall![1] as { input?: string };
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+    expect(typeof opts.input).toBe("string");
+  });
+
+  it("createPrdPr pipes body via stdin on create", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "feat/prd-test");
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr view")) {
+        // No existing PR
+        throw new Error("no PR");
+      }
+      if (typeof cmd === "string" && cmd.includes("gh pr create")) {
+        return "https://github.com/o/r/pull/5";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const result = createPrdPr({
+      branch: "feat/prd-test",
+      baseBranch: "main",
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10, 11],
+      stuckSubIssues: [],
+      cwd: repoDir,
+    });
+
+    expect(result.ok).toBe(true);
+    const prCreateCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr create"),
+    );
+    expect(prCreateCall).toBeDefined();
+
+    const cmd = prCreateCall![0] as string;
+    const opts = prCreateCall![1] as { input?: string };
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+    expect(typeof opts.input).toBe("string");
+  });
+
+  it("createPrdPr pipes body via stdin on edit (existing PR)", () => {
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "feat/prd-update");
+
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (typeof cmd === "string" && cmd.includes("gh pr view")) {
+        return "https://github.com/o/r/pull/6";
+      }
+      if (typeof cmd === "string" && cmd.includes("gh pr edit")) {
+        return "ok";
+      }
+      throw new Error(`Unexpected gh command: ${cmd}`);
+    });
+
+    const result = createPrdPr({
+      branch: "feat/prd-update",
+      baseBranch: "main",
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [11],
+      cwd: repoDir,
+    });
+
+    expect(result.ok).toBe(true);
+    const prEditCall = mockExecSync.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" && call[0].includes("gh pr edit"),
+    );
+    expect(prEditCall).toBeDefined();
+
+    const cmd = prEditCall![0] as string;
+    const opts = prEditCall![1] as { input?: string };
+    expect(cmd).toContain("--body-file -");
+    expect(cmd).not.toContain('--body "');
+    expect(typeof opts.input).toBe("string");
+  });
+});
