@@ -54,13 +54,7 @@ function defaultOptions(
     cwd: dir,
     issueSource: "github",
     standaloneLabel: "ralphai-standalone",
-    standaloneInProgressLabel: "ralphai-standalone:in-progress",
-    standaloneDoneLabel: "ralphai-standalone:done",
-    standaloneStuckLabel: "ralphai-standalone:stuck",
     subissueLabel: "ralphai-subissue",
-    subissueInProgressLabel: "ralphai-subissue:in-progress",
-    subissueDoneLabel: "ralphai-subissue:done",
-    subissueStuckLabel: "ralphai-subissue:stuck",
     issueRepo: "owner/repo",
     issueCommentProgress: false,
     issueNumber: 201,
@@ -140,27 +134,24 @@ describe("pullGithubIssueByNumber — sub-issue label selection", () => {
     const result = pullGithubIssueByNumber(defaultOptions(dir));
     expect(result.pulled).toBe(true);
 
-    // Verify the transitionPull call used subissue labels, NOT standalone
+    // Verify the transitionPull call used shared state labels
     const editCalls = ghEditCalls();
     expect(editCalls.length).toBe(1);
     const cmd = editCalls[0]!;
 
-    // Should use subissue labels
-    expect(cmd).toContain('--add-label "ralphai-subissue:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-subissue"');
-
-    // Should NOT contain standalone labels in the edit call
-    expect(cmd).not.toContain("ralphai-standalone:in-progress");
-    expect(cmd).not.toContain('--remove-label "ralphai-standalone"');
+    // Should use shared in-progress label (same for all families)
+    expect(cmd).toContain('--add-label "in-progress"');
+    // Family label is not touched during pull
+    expect(cmd).not.toContain("--remove-label");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Cycle 2: Standalone issue (no PRD parent) should use standalone labels
+// Cycle 2: Standalone issue (no PRD parent) uses same shared labels
 // ---------------------------------------------------------------------------
 
 describe("pullGithubIssueByNumber — standalone label selection", () => {
-  it("uses standalone labels when issue has no PRD parent", () => {
+  it("uses the same shared labels when issue has no PRD parent", () => {
     mockGhCommands({
       'gh issue view 42 --repo "owner/repo" --json title --jq': () =>
         "Standalone bug",
@@ -187,15 +178,13 @@ describe("pullGithubIssueByNumber — standalone label selection", () => {
     const result = pullGithubIssueByNumber(opts);
     expect(result.pulled).toBe(true);
 
-    // Verify standalone labels were used
+    // Verify shared state labels were used
     const editCalls = ghEditCalls();
     expect(editCalls.length).toBe(1);
     const cmd = editCalls[0]!;
 
-    expect(cmd).toContain('--add-label "ralphai-standalone:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone"');
-
-    // Should NOT contain subissue labels
-    expect(cmd).not.toContain("ralphai-subissue");
+    expect(cmd).toContain('--add-label "in-progress"');
+    // Family label is not touched during pull
+    expect(cmd).not.toContain("--remove-label");
   });
 });

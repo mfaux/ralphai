@@ -2,11 +2,15 @@
  * Label lifecycle module — centralises all `gh issue edit` label
  * transitions for GitHub issues tracked by Ralphai.
  *
+ * Labels use a two-label scheme: a family label (e.g. `ralphai-standalone`)
+ * persists through all states, while a shared state label (`in-progress`,
+ * `done`, `stuck`) is added/removed as the issue progresses.
+ *
  * Every label transition in the system flows through this module:
- *   pull:  intake → in-progress
- *   done:  in-progress → done
- *   stuck: in-progress → stuck
- *   reset: in-progress/stuck → intake
+ *   pull:  add in-progress  (family label stays)
+ *   done:  remove in-progress, add done
+ *   stuck: remove in-progress, add stuck
+ *   reset: remove in-progress + stuck  (family label stays)
  *
  * PRD parent propagation helpers:
  *   prdInProgress: add in-progress label to PRD parent
@@ -20,6 +24,7 @@
  * returns a successful result without executing any `gh issue edit` calls.
  */
 import { execSync } from "child_process";
+import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,36 +82,33 @@ function dryRunSkip(description: string): LabelTransitionResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Pull transition: intake → in-progress.
+ * Pull transition: add in-progress.
  *
- * Used when an issue is picked up from the backlog.
+ * Used when an issue is picked up from the backlog. The family label
+ * stays; only the shared `in-progress` label is added.
  */
 export function transitionPull(
   issue: IssueMeta,
-  intakeLabel: string,
-  inProgressLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
-    return dryRunSkip(
-      `Issue #${issue.number}: ${intakeLabel} → ${inProgressLabel}`,
-    );
+    return dryRunSkip(`Issue #${issue.number}: add ${IN_PROGRESS_LABEL}`);
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${inProgressLabel}" --remove-label "${intakeLabel}"`,
+      `--add-label "${IN_PROGRESS_LABEL}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label swap failed for issue #${issue.number} (pull: ${intakeLabel} → ${inProgressLabel})`,
+      message: `Label add failed for issue #${issue.number} (pull: add ${IN_PROGRESS_LABEL})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: ${intakeLabel} → ${inProgressLabel}`,
+    message: `Issue #${issue.number}: added ${IN_PROGRESS_LABEL}`,
   };
 }
 
@@ -117,30 +119,28 @@ export function transitionPull(
  */
 export function transitionDone(
   issue: IssueMeta,
-  inProgressLabel: string,
-  doneLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
     return dryRunSkip(
-      `Issue #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
+      `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${doneLabel}" --remove-label "${inProgressLabel}"`,
+      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label swap failed for issue #${issue.number} (done: ${inProgressLabel} → ${doneLabel})`,
+      message: `Label swap failed for issue #${issue.number} (done: ${IN_PROGRESS_LABEL} → ${DONE_LABEL})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
+    message: `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
   };
 }
 
@@ -151,62 +151,49 @@ export function transitionDone(
  */
 export function transitionStuck(
   issue: IssueMeta,
-  inProgressLabel: string,
-  stuckLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
     return dryRunSkip(
-      `Issue #${issue.number}: ${inProgressLabel} → ${stuckLabel}`,
+      `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${stuckLabel}" --remove-label "${inProgressLabel}"`,
+      `--add-label "${STUCK_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label swap failed for issue #${issue.number} (stuck: ${inProgressLabel} → ${stuckLabel})`,
+      message: `Label swap failed for issue #${issue.number} (stuck: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: ${inProgressLabel} → ${stuckLabel}`,
+    message: `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL}`,
   };
 }
 
 /**
- * Reset transition: in-progress/stuck → intake.
+ * Reset transition: remove in-progress + stuck.
  *
  * Used by `ralphai reset` to return an issue to the pickup queue.
- * Removes both in-progress and stuck labels, adds the intake label.
- *
- * The optional `extraRemoveLabels` parameter allows callers to defensively
- * remove labels from a second family (e.g. removing standalone state labels
- * when resetting a sub-issue, in case the wrong family was applied).
- * `gh issue edit --remove-label` is a no-op for labels that aren't present.
+ * Removes both in-progress and stuck labels. The family label stays
+ * (it was never removed during pull).
  */
 export function transitionReset(
   issue: IssueMeta,
-  intakeLabel: string,
-  inProgressLabel: string,
-  stuckLabel: string,
   cwd: string,
   dryRun = false,
-  extraRemoveLabels: string[] = [],
 ): LabelTransitionResult {
   if (dryRun) {
-    return dryRunSkip(`Issue #${issue.number}: reset to ${intakeLabel}`);
+    return dryRunSkip(`Issue #${issue.number}: remove state labels`);
   }
-  let cmd =
+  const cmd =
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-    `--add-label "${intakeLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`;
-  for (const label of extraRemoveLabels) {
-    cmd += ` --remove-label "${label}"`;
-  }
+    `--remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`;
   const result = execQuiet(cmd, cwd);
   if (result === null) {
     return {
@@ -233,27 +220,26 @@ export function transitionReset(
  */
 export function prdTransitionInProgress(
   issue: IssueMeta,
-  prdInProgressLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
-    return dryRunSkip(`PRD #${issue.number}: add ${prdInProgressLabel}`);
+    return dryRunSkip(`PRD #${issue.number}: add ${IN_PROGRESS_LABEL}`);
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${prdInProgressLabel}"`,
+      `--add-label "${IN_PROGRESS_LABEL}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Failed to add ${prdInProgressLabel} to PRD #${issue.number}`,
+      message: `Failed to add ${IN_PROGRESS_LABEL} to PRD #${issue.number}`,
     };
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: added ${prdInProgressLabel}`,
+    message: `PRD #${issue.number}: added ${IN_PROGRESS_LABEL}`,
   };
 }
 
@@ -265,19 +251,17 @@ export function prdTransitionInProgress(
  */
 export function prdTransitionDone(
   issue: IssueMeta,
-  prdInProgressLabel: string,
-  prdDoneLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
     return dryRunSkip(
-      `PRD #${issue.number}: ${prdInProgressLabel} → ${prdDoneLabel}`,
+      `PRD #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${prdDoneLabel}" --remove-label "${prdInProgressLabel}"`,
+      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
     cwd,
   );
   if (result === null) {
@@ -288,7 +272,7 @@ export function prdTransitionDone(
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: ${prdInProgressLabel} → ${prdDoneLabel}`,
+    message: `PRD #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
   };
 }
 
@@ -301,26 +285,25 @@ export function prdTransitionDone(
  */
 export function prdTransitionStuck(
   issue: IssueMeta,
-  prdStuckLabel: string,
   cwd: string,
   dryRun = false,
 ): LabelTransitionResult {
   if (dryRun) {
-    return dryRunSkip(`PRD #${issue.number}: add ${prdStuckLabel}`);
+    return dryRunSkip(`PRD #${issue.number}: add ${STUCK_LABEL}`);
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${prdStuckLabel}"`,
+      `--add-label "${STUCK_LABEL}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Failed to add ${prdStuckLabel} to PRD #${issue.number}`,
+      message: `Failed to add ${STUCK_LABEL} to PRD #${issue.number}`,
     };
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: added ${prdStuckLabel}`,
+    message: `PRD #${issue.number}: added ${STUCK_LABEL}`,
   };
 }

@@ -3,9 +3,13 @@
  *
  * Uses mock.module to control `child_process.execSync` so we can verify
  * `gh issue edit` calls without requiring a real GitHub repo.
+ *
+ * restoreIssueLabels reads frontmatter to find the issue number/repo,
+ * then calls transitionReset to remove the shared state labels
+ * (in-progress, stuck). The family label is never touched.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { mkdirSync, writeFileSync } from "fs";
+import { writeFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 
@@ -90,7 +94,7 @@ beforeEach(() => {
 });
 
 describe("restoreIssueLabels", () => {
-  it("calls gh issue edit to restore intake label for a GitHub-sourced plan", () => {
+  it("calls gh issue edit to remove state labels for a GitHub-sourced plan", () => {
     mockGhAvailable();
 
     const planPath = writePlanFile(
@@ -101,9 +105,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -119,9 +120,8 @@ describe("restoreIssueLabels", () => {
     const cmd = ghEditCalls[0]![0] as string;
     expect(cmd).toContain("gh issue edit 42");
     expect(cmd).toContain('--repo "owner/repo"');
-    expect(cmd).toContain('--add-label "ralphai-standalone"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
+    expect(cmd).toContain('--remove-label "in-progress"');
+    expect(cmd).toContain('--remove-label "stuck"');
   });
 
   it("does not call gh issue edit for a non-GitHub plan", () => {
@@ -135,9 +135,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -172,9 +169,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -199,9 +193,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -221,9 +212,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "",
       cwd: ctx.dir,
     });
@@ -244,9 +232,6 @@ describe("restoreIssueLabels", () => {
 
     const result = restoreIssueLabels({
       planPath: join(ctx.dir, "nonexistent.md"),
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
@@ -256,11 +241,11 @@ describe("restoreIssueLabels", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sub-issue reset tests
+// Sub-issue reset uses the same shared state labels
 // ---------------------------------------------------------------------------
 
-describe("restoreIssueLabels — sub-issue label selection", () => {
-  it("uses subissue labels when plan has prd frontmatter and subissue labels are provided", () => {
+describe("restoreIssueLabels — sub-issue reset", () => {
+  it("removes the same shared state labels for sub-issue plans", () => {
     mockGhAvailable();
 
     const planPath = writePlanFile(
@@ -271,19 +256,12 @@ describe("restoreIssueLabels — sub-issue label selection", () => {
 
     const result = restoreIssueLabels({
       planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
-      subissueLabel: "ralphai-subissue",
-      subissueInProgressLabel: "ralphai-subissue:in-progress",
-      subissueStuckLabel: "ralphai-subissue:stuck",
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
 
     expect(result.restored).toBe(true);
 
-    // Verify gh issue edit was called with subissue labels
     const ghEditCalls = mockExecSync.mock.calls.filter(
       (call: unknown[]) =>
         typeof call[0] === "string" && call[0].includes("gh issue edit"),
@@ -291,134 +269,53 @@ describe("restoreIssueLabels — sub-issue label selection", () => {
     expect(ghEditCalls.length).toBe(1);
     const cmd = ghEditCalls[0]![0] as string;
     expect(cmd).toContain("gh issue edit 201");
-    // Primary: subissue intake label is restored
-    expect(cmd).toContain('--add-label "ralphai-subissue"');
-    // Removes subissue state labels
-    expect(cmd).toContain('--remove-label "ralphai-subissue:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-subissue:stuck"');
-    // Defensive: also removes standalone state labels (cross-family cleanup)
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
+    // Removes shared state labels — same for all families
+    expect(cmd).toContain('--remove-label "in-progress"');
+    expect(cmd).toContain('--remove-label "stuck"');
   });
 
-  it("uses standalone labels when plan has no prd frontmatter even with subissue labels provided", () => {
+  it("uses the same transition for standalone and sub-issue plans", () => {
     mockGhAvailable();
 
-    const planPath = writePlanFile(
+    // Standalone plan
+    const standalonePath = writePlanFile(
       ctx.dir,
-      "gh-42-standalone-issue",
+      "gh-42-standalone",
       githubPlanContent(42),
     );
 
-    const result = restoreIssueLabels({
-      planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
-      subissueLabel: "ralphai-subissue",
-      subissueInProgressLabel: "ralphai-subissue:in-progress",
-      subissueStuckLabel: "ralphai-subissue:stuck",
+    const standaloneResult = restoreIssueLabels({
+      planPath: standalonePath,
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
+    expect(standaloneResult.restored).toBe(true);
 
-    expect(result.restored).toBe(true);
-
-    // Verify gh issue edit was called with standalone labels
-    const ghEditCalls = mockExecSync.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue edit"),
-    );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-    expect(cmd).toContain("gh issue edit 42");
-    expect(cmd).toContain('--add-label "ralphai-standalone"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
-    // Standalone issues don't need cross-family cleanup (subissue labels
-    // would never be erroneously applied to a standalone issue)
-    expect(cmd).not.toContain("ralphai-subissue");
-  });
-
-  it("falls back to standalone labels for sub-issue when subissue labels not provided", () => {
+    mockExecSync.mockReset();
     mockGhAvailable();
 
-    const planPath = writePlanFile(
+    // Sub-issue plan
+    const subIssuePath = writePlanFile(
       ctx.dir,
-      "gh-201-sub-no-labels",
+      "gh-201-subissue",
       githubSubIssuePlanContent(201, 100),
     );
 
-    // Do NOT pass subissue label options — should fall back to standalone
-    const result = restoreIssueLabels({
-      planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
+    const subIssueResult = restoreIssueLabels({
+      planPath: subIssuePath,
       issueRepo: "owner/repo",
       cwd: ctx.dir,
     });
+    expect(subIssueResult.restored).toBe(true);
 
-    expect(result.restored).toBe(true);
-
+    // Both should use the same gh issue edit pattern (shared state labels)
     const ghEditCalls = mockExecSync.mock.calls.filter(
       (call: unknown[]) =>
         typeof call[0] === "string" && call[0].includes("gh issue edit"),
     );
     expect(ghEditCalls.length).toBe(1);
     const cmd = ghEditCalls[0]![0] as string;
-    // Falls back to standalone since subissue labels not provided
-    expect(cmd).toContain('--add-label "ralphai-standalone"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Cross-family reset cleanup
-// ---------------------------------------------------------------------------
-
-describe("restoreIssueLabels — cross-family label cleanup", () => {
-  it("removes labels from both families for sub-issues, cleaning up erroneously-applied standalone labels", () => {
-    mockGhAvailable();
-
-    // This simulates the bug scenario: a sub-issue that had
-    // ralphai-standalone:in-progress erroneously applied instead
-    // of ralphai-subissue:in-progress. Reset should remove both.
-    const planPath = writePlanFile(
-      ctx.dir,
-      "gh-201-cross-family",
-      githubSubIssuePlanContent(201, 100),
-    );
-
-    const result = restoreIssueLabels({
-      planPath,
-      standaloneLabel: "ralphai-standalone",
-      standaloneInProgressLabel: "ralphai-standalone:in-progress",
-      standaloneStuckLabel: "ralphai-standalone:stuck",
-      subissueLabel: "ralphai-subissue",
-      subissueInProgressLabel: "ralphai-subissue:in-progress",
-      subissueStuckLabel: "ralphai-subissue:stuck",
-      issueRepo: "owner/repo",
-      cwd: ctx.dir,
-    });
-
-    expect(result.restored).toBe(true);
-
-    const ghEditCalls = mockExecSync.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh issue edit"),
-    );
-    expect(ghEditCalls.length).toBe(1);
-    const cmd = ghEditCalls[0]![0] as string;
-
-    // Primary family: subissue intake restored, subissue state labels removed
-    expect(cmd).toContain('--add-label "ralphai-subissue"');
-    expect(cmd).toContain('--remove-label "ralphai-subissue:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-subissue:stuck"');
-
-    // Defensive cleanup: standalone state labels also removed
-    // (these may have been erroneously applied by the old bug)
-    expect(cmd).toContain('--remove-label "ralphai-standalone:in-progress"');
-    expect(cmd).toContain('--remove-label "ralphai-standalone:stuck"');
+    expect(cmd).toContain('--remove-label "in-progress"');
+    expect(cmd).toContain('--remove-label "stuck"');
   });
 });

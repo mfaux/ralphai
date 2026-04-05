@@ -49,8 +49,6 @@ function defaultOptions(dir: string): PullIssueOptions {
     cwd: dir,
     issueSource: "github",
     standaloneLabel: "ralphai-standalone",
-    standaloneInProgressLabel: "ralphai-standalone:in-progress",
-    standaloneDoneLabel: "ralphai-standalone:done",
     issueRepo: "",
     issueCommentProgress: false,
   };

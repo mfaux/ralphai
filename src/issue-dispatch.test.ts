@@ -38,9 +38,9 @@ describe("classifyIssue", () => {
     }
   });
 
-  it("classifies ralphai-standalone:in-progress as standalone", () => {
+  it("classifies issue with ralphai-standalone and in-progress as standalone", () => {
     const result = classifyIssue(
-      ["ralphai-standalone:in-progress"],
+      ["ralphai-standalone", "in-progress"],
       defaultConfig,
     );
     expect(result.ok).toBe(true);
@@ -58,9 +58,9 @@ describe("classifyIssue", () => {
     }
   });
 
-  it("classifies ralphai-subissue:in-progress as subissue", () => {
+  it("classifies issue with ralphai-subissue and in-progress as subissue", () => {
     const result = classifyIssue(
-      ["ralphai-subissue:in-progress"],
+      ["ralphai-subissue", "in-progress"],
       defaultConfig,
     );
     expect(result.ok).toBe(true);
@@ -78,8 +78,8 @@ describe("classifyIssue", () => {
     }
   });
 
-  it("classifies ralphai-prd:in-progress as prd", () => {
-    const result = classifyIssue(["ralphai-prd:in-progress"], defaultConfig);
+  it("classifies issue with ralphai-prd and in-progress as prd", () => {
+    const result = classifyIssue(["ralphai-prd", "in-progress"], defaultConfig);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.family).toBe("prd");
@@ -104,34 +104,6 @@ describe("classifyIssue", () => {
     if (!result.ok) {
       expect(result.reason).toBe("no-label");
     }
-  });
-
-  // Scenario 34: Old ralphai label is not recognized (hard cutover)
-  it("does NOT recognize the old 'ralphai' label", () => {
-    const result = classifyIssue(["ralphai"], defaultConfig);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe("no-label");
-    }
-  });
-
-  it("does NOT recognize old 'ralphai:in-progress' label", () => {
-    const result = classifyIssue(["ralphai:in-progress"], defaultConfig);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe("no-label");
-    }
-  });
-
-  // Done and stuck labels should NOT be classified (only intake and in-progress)
-  it("does NOT classify ralphai-standalone:done as dispatchable", () => {
-    const result = classifyIssue(["ralphai-standalone:done"], defaultConfig);
-    expect(result.ok).toBe(false);
-  });
-
-  it("does NOT classify ralphai-standalone:stuck as dispatchable", () => {
-    const result = classifyIssue(["ralphai-standalone:stuck"], defaultConfig);
-    expect(result.ok).toBe(false);
   });
 
   // Priority: standalone checked first
@@ -172,13 +144,13 @@ describe("classifyIssue", () => {
     }
   });
 
-  it("custom config in-progress labels work", () => {
+  it("custom config with in-progress shared label works", () => {
     const custom: LabelConfig = {
       standaloneLabel: "my-bot",
       subissueLabel: "my-bot-sub",
       prdLabel: "my-bot-prd",
     };
-    const result = classifyIssue(["my-bot-sub:in-progress"], custom);
+    const result = classifyIssue(["my-bot-sub", "in-progress"], custom);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.family).toBe("subissue");

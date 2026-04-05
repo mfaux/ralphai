@@ -374,9 +374,9 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                        |
 | `iterationTimeout`     | `0`                    | `RALPHAI_ITERATION_TIMEOUT`      | Per-agent-invocation timeout in seconds (0 = no timeout)             |
 | `issueSource`          | `"none"`               | `RALPHAI_ISSUE_SOURCE`           | Issue source (`"github"` or `"none"`); `init` defaults to `"github"` |
-| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Base name for standalone issue labels (4 states derived)             |
-| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Base name for PRD sub-issue labels (4 states derived)                |
-| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Base name for PRD parent labels (4 states derived)                   |
+| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Family label for standalone issues                                   |
+| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Family label for PRD sub-issues                                      |
+| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Family label for PRD parent issues                                   |
 | `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                |
 | `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                              |
 

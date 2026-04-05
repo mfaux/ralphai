@@ -52,13 +52,7 @@ function defaultOptions(dir: string): PullIssueOptions {
     cwd: dir,
     issueSource: "github",
     standaloneLabel: "ralphai-standalone",
-    standaloneInProgressLabel: "ralphai-standalone:in-progress",
-    standaloneDoneLabel: "ralphai-standalone:done",
-    standaloneStuckLabel: "ralphai-standalone:stuck",
     subissueLabel: "ralphai-subissue",
-    subissueInProgressLabel: "ralphai-subissue:in-progress",
-    subissueDoneLabel: "ralphai-subissue:done",
-    subissueStuckLabel: "ralphai-subissue:stuck",
     issueRepo: "owner/repo",
     issueCommentProgress: false,
   };
@@ -270,10 +264,9 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
         JSON.stringify(subIssues),
       // #201 has in-progress label
       'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai-subissue:in-progress",
+        "in-progress",
       // #202 has done label
-      'gh issue view 202 --repo "owner/repo" --json labels': () =>
-        "ralphai-subissue:done",
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "done",
       // #203 has no skip labels
       'gh issue view 203 --repo "owner/repo" --json labels': () => "",
       'gh issue view 203 --repo "owner/repo" --json title --jq': () =>
@@ -314,9 +307,8 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
       "gh api repos/owner/repo/issues/100/sub_issues": () =>
         JSON.stringify(subIssues),
       'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai-subissue:in-progress",
-      'gh issue view 202 --repo "owner/repo" --json labels': () =>
-        "ralphai-subissue:done",
+        "in-progress",
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "done",
     });
 
     const dir = makeTempDir();
@@ -339,8 +331,7 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
       "gh api repos/owner/repo/issues/100/sub_issues": () =>
         JSON.stringify(subIssues),
       // #201 has stuck label — should be skipped
-      'gh issue view 201 --repo "owner/repo" --json labels': () =>
-        "ralphai-subissue:stuck",
+      'gh issue view 201 --repo "owner/repo" --json labels': () => "stuck",
       // #202 has no skip labels
       'gh issue view 202 --repo "owner/repo" --json labels': () => "",
       'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
@@ -743,111 +734,7 @@ describe("pullPrdSubIssue — PRD in-progress label on parent", () => {
 
     // Verify an edit call was made to add the in-progress label to PRD parent #100
     const prdEditCall = editCalls.find(
-      (c) => c.includes("100") && c.includes("ralphai-prd:in-progress"),
-    );
-    expect(prdEditCall).toBeDefined();
-    expect(prdEditCall).toContain("--add-label");
-  });
-
-  it("uses custom issuePrdInProgressLabel when provided", () => {
-    const prdIssues = [{ number: 100, title: "Feature PRD" }];
-    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
-
-    const editCalls: string[] = [];
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd === "gh --version" || cmd === "gh auth status") {
-        return "ok";
-      }
-      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
-        editCalls.push(cmd);
-        return "";
-      }
-      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
-      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
-        return JSON.stringify(subIssues);
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
-        return "";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
-        return "Sub A";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
-        return "Sub A body";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
-        return "https://github.com/owner/repo/issues/201";
-      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
-        return JSON.stringify({
-          number: 100,
-          labels: [{ name: "ralphai-prd" }],
-        });
-      if (cmd.includes("gh api graphql"))
-        return JSON.stringify({
-          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
-        });
-      throw new Error(`Unexpected command: ${cmd}`);
-    });
-
-    const dir = makeTempDir();
-    const opts = {
-      ...defaultOptions(dir),
-      issuePrdInProgressLabel: "custom-prd:wip",
-    };
-    const result = pullPrdSubIssue(opts);
-    expect(result.pulled).toBe(true);
-
-    // Verify the custom label was used
-    const prdEditCall = editCalls.find(
-      (c) => c.includes("100") && c.includes("custom-prd:wip"),
-    );
-    expect(prdEditCall).toBeDefined();
-    expect(prdEditCall).toContain("--add-label");
-  });
-
-  it("uses custom issuePrdInProgressLabel when provided", () => {
-    const prdIssues = [{ number: 100, title: "Feature PRD" }];
-    const subIssues = [{ number: 201, title: "Sub A", state: "open" }];
-
-    const editCalls: string[] = [];
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd === "gh --version" || cmd === "gh auth status") {
-        return "ok";
-      }
-      if (typeof cmd === "string" && cmd.includes("gh issue edit")) {
-        editCalls.push(cmd);
-        return "";
-      }
-      if (cmd.includes("gh issue list")) return JSON.stringify(prdIssues);
-      if (cmd.includes("gh api repos/owner/repo/issues/100/sub_issues"))
-        return JSON.stringify(subIssues);
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json labels"))
-        return "";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json title"))
-        return "Sub A";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json body"))
-        return "Sub A body";
-      if (cmd.includes("gh issue view 201") && cmd.includes("--json url"))
-        return "https://github.com/owner/repo/issues/201";
-      if (cmd.includes("gh api repos/owner/repo/issues/201/parent"))
-        return JSON.stringify({
-          number: 100,
-          labels: [{ name: "ralphai-prd" }],
-        });
-      if (cmd.includes("gh api graphql"))
-        return JSON.stringify({
-          data: { repository: { issue: { blockedBy: { nodes: [] } } } },
-        });
-      throw new Error(`Unexpected command: ${cmd}`);
-    });
-
-    const dir = makeTempDir();
-    const opts = {
-      ...defaultOptions(dir),
-      issuePrdInProgressLabel: "custom-prd:wip",
-    };
-    const result = pullPrdSubIssue(opts);
-    expect(result.pulled).toBe(true);
-
-    // Verify the custom label was used
-    const prdEditCall = editCalls.find(
-      (c) => c.includes("100") && c.includes("custom-prd:wip"),
+      (c) => c.includes("100") && c.includes('"in-progress"'),
     );
     expect(prdEditCall).toBeDefined();
     expect(prdEditCall).toContain("--add-label");
@@ -905,16 +792,9 @@ describe("pullPrdSubIssue — subissue label family in transitionPull", () => {
     );
     expect(subIssueEditCall).toBeDefined();
 
-    // Verify subissue labels were used
-    expect(subIssueEditCall).toContain(
-      '--add-label "ralphai-subissue:in-progress"',
-    );
-    expect(subIssueEditCall).toContain('--remove-label "ralphai-subissue"');
-
-    // Should NOT contain standalone labels in the sub-issue transition
-    expect(subIssueEditCall).not.toContain("ralphai-standalone:in-progress");
-    expect(subIssueEditCall).not.toContain(
-      '--remove-label "ralphai-standalone"',
-    );
+    // Verify shared state labels were used (same for all families)
+    expect(subIssueEditCall).toContain('--add-label "in-progress"');
+    // Family label is not touched during pull
+    expect(subIssueEditCall).not.toContain("--remove-label");
   });
 });

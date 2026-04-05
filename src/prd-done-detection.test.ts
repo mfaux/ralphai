@@ -4,6 +4,9 @@
  *
  * Uses mock.module to control `child_process.execSync` so we can test
  * the full flow without requiring a real GitHub repo or gh CLI.
+ *
+ * The shared "done" label is used for all issue families (standalone,
+ * subissue, PRD). checkAllPrdSubIssuesDone checks for this fixed label.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
@@ -37,7 +40,6 @@ const { checkAllPrdSubIssuesDone } = await import("./issues.ts");
 
 const REPO = "acme/widgets";
 const PRD_NUMBER = 100;
-const DONE_LABEL = "ralphai-subissue:done";
 
 /**
  * Build a command router that dispatches gh calls to handler functions.
@@ -77,12 +79,7 @@ describe("checkAllPrdSubIssuesDone", () => {
         ]),
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(true);
   });
 
@@ -93,16 +90,11 @@ describe("checkAllPrdSubIssuesDone", () => {
           { number: 201, state: "open" },
           { number: 202, state: "open" },
         ]),
-      "gh issue view 201": () => "ralphai-subissue:done",
-      "gh issue view 202": () => "ralphai-subissue:done",
+      "gh issue view 201": () => "done",
+      "gh issue view 202": () => "done",
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(true);
   });
 
@@ -113,15 +105,10 @@ describe("checkAllPrdSubIssuesDone", () => {
           { number: 201, state: "closed" },
           { number: 202, state: "open" },
         ]),
-      "gh issue view 202": () => "ralphai-subissue:done",
+      "gh issue view 202": () => "done",
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(true);
   });
 
@@ -132,16 +119,11 @@ describe("checkAllPrdSubIssuesDone", () => {
           { number: 201, state: "open" },
           { number: 202, state: "open" },
         ]),
-      "gh issue view 201": () => "ralphai-subissue:done",
-      "gh issue view 202": () => "ralphai-subissue:in-progress",
+      "gh issue view 201": () => "done",
+      "gh issue view 202": () => "in-progress",
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -152,12 +134,7 @@ describe("checkAllPrdSubIssuesDone", () => {
       "gh issue view 201": () => "",
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -168,12 +145,7 @@ describe("checkAllPrdSubIssuesDone", () => {
       },
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -182,12 +154,7 @@ describe("checkAllPrdSubIssuesDone", () => {
       "gh api repos/acme/widgets/issues/100/sub_issues": () => "not json",
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -197,12 +164,7 @@ describe("checkAllPrdSubIssuesDone", () => {
         JSON.stringify([]),
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -212,12 +174,7 @@ describe("checkAllPrdSubIssuesDone", () => {
         JSON.stringify({ error: "not found" }),
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
   });
 
@@ -230,30 +187,8 @@ describe("checkAllPrdSubIssuesDone", () => {
       },
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
-  });
-
-  it("works with custom done labels", () => {
-    const customDoneLabel = "my-custom:done";
-    mockGhCommands({
-      "gh api repos/acme/widgets/issues/100/sub_issues": () =>
-        JSON.stringify([{ number: 201, state: "open" }]),
-      "gh issue view 201": () => "my-custom:done",
-    });
-
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      customDoneLabel,
-      "/tmp",
-    );
-    expect(result).toBe(true);
   });
 
   it("short-circuits on first non-done open sub-issue", () => {
@@ -266,21 +201,16 @@ describe("checkAllPrdSubIssuesDone", () => {
           { number: 202, state: "open" },
         ]),
       "gh issue view": (cmd: string) => {
-        if (cmd.includes("201")) return "ralphai-subissue:in-progress";
+        if (cmd.includes("201")) return "in-progress";
         if (cmd.includes("202")) {
           issue202Checked = true;
-          return "ralphai-subissue:done";
+          return "done";
         }
         throw new Error(`Unexpected: ${cmd}`);
       },
     });
 
-    const result = checkAllPrdSubIssuesDone(
-      REPO,
-      PRD_NUMBER,
-      DONE_LABEL,
-      "/tmp",
-    );
+    const result = checkAllPrdSubIssuesDone(REPO, PRD_NUMBER, "/tmp");
     expect(result).toBe(false);
     expect(issue202Checked).toBe(false);
   });
@@ -300,14 +230,8 @@ describe("stuck stickiness — design verification", () => {
 
     const subIssue = { number: 201, repo: "org/repo" };
 
-    // Reset the sub-issue: subissue labels are restored
-    const result = transitionReset(
-      subIssue,
-      "ralphai-subissue",
-      "ralphai-subissue:in-progress",
-      "ralphai-subissue:stuck",
-      "/tmp",
-    );
+    // Reset the sub-issue: removes shared state labels
+    const result = transitionReset(subIssue, "/tmp");
     expect(result.ok).toBe(true);
 
     // Verify only ONE gh issue edit call was made — for the sub-issue
@@ -321,13 +245,10 @@ describe("stuck stickiness — design verification", () => {
     expect(ghCalls).toHaveLength(1);
     // The call targets the sub-issue (#201), NOT the PRD parent
     expect(ghCalls[0]).toContain("gh issue edit 201");
-    // It restores subissue labels — no PRD labels involved
-    expect(ghCalls[0]).toContain('--add-label "ralphai-subissue"');
-    expect(ghCalls[0]).toContain(
-      '--remove-label "ralphai-subissue:in-progress"',
-    );
-    expect(ghCalls[0]).toContain('--remove-label "ralphai-subissue:stuck"');
-    // PRD stuck label is NOT touched
+    // It removes shared state labels
+    expect(ghCalls[0]).toContain('--remove-label "in-progress"');
+    expect(ghCalls[0]).toContain('--remove-label "stuck"');
+    // PRD labels are NOT touched
     expect(ghCalls[0]).not.toContain("ralphai-prd");
   });
 });

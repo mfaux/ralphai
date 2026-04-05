@@ -9,7 +9,7 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DEFAULTS } from "./config.ts";
-import { deriveLabels } from "./labels.ts";
+import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import { transitionPull, prdTransitionInProgress } from "./label-lifecycle.ts";
 // ---------------------------------------------------------------------------
 // Types
@@ -23,30 +23,16 @@ export interface PullIssueOptions {
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
   issueSource: string;
-  /** Label to filter open issues by (e.g. "ralphai-standalone"). */
+  /** Family label to filter open standalone issues by (e.g. "ralphai-standalone"). */
   standaloneLabel: string;
-  /** Label applied when an issue is picked up (e.g. "ralphai-standalone:in-progress"). */
-  standaloneInProgressLabel: string;
-  /** Label applied when an issue is completed (e.g. "ralphai-standalone:done"). */
-  standaloneDoneLabel: string;
-  /** Label applied when an issue is stuck (e.g. "ralphai-standalone:stuck"). */
-  standaloneStuckLabel?: string;
-  /** Sub-issue intake label (e.g. "ralphai-subissue"). Used by pullPrdSubIssue(). */
+  /** Sub-issue family label (e.g. "ralphai-subissue"). Used by pullPrdSubIssue(). */
   subissueLabel?: string;
-  /** Sub-issue in-progress label (e.g. "ralphai-subissue:in-progress"). */
-  subissueInProgressLabel?: string;
-  /** Sub-issue done label (e.g. "ralphai-subissue:done"). */
-  subissueDoneLabel?: string;
-  /** Sub-issue stuck label (e.g. "ralphai-subissue:stuck"). */
-  subissueStuckLabel?: string;
   /** Explicit owner/repo (empty = auto-detect from git remote). */
   issueRepo: string;
   /** Whether to post a progress comment on the issue. */
   issueCommentProgress: boolean;
-  /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
+  /** Family label that marks an issue as a PRD (e.g. "ralphai-prd"). */
   issuePrdLabel?: string;
-  /** Label applied to PRD parent when drain processing starts (e.g. "ralphai-prd:in-progress"). */
-  issuePrdInProgressLabel?: string;
 }
 
 /** Result of a pullGithubIssues() call. */
@@ -659,14 +645,10 @@ interface FetchAndWriteOptions {
   issueNumber: string;
   backlogDir: string;
   cwd: string;
-  standaloneInProgressLabel: string;
-  standaloneLabel: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
-  /** Optional subissue intake label (e.g. "ralphai-subissue"). */
+  /** Optional subissue family label (e.g. "ralphai-subissue"). */
   subissueLabel?: string;
-  /** Optional subissue in-progress label (e.g. "ralphai-subissue:in-progress"). */
-  subissueInProgressLabel?: string;
 }
 
 /**
@@ -675,15 +657,7 @@ interface FetchAndWriteOptions {
  * and pullGithubIssueByNumber().
  */
 function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
-  const {
-    repo,
-    issueNumber,
-    backlogDir,
-    cwd,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneLabel: issueLabel,
-    issueCommentProgress,
-  } = opts;
+  const { repo, issueNumber, backlogDir, cwd, issueCommentProgress } = opts;
 
   const title = execQuiet(
     `gh issue view ${issueNumber} --repo "${repo}" --json title --jq '.title'`,
@@ -708,15 +682,6 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   // Discover parent PRD (non-fatal — plan is still usable without it)
   const prd = discoverParentPrd(repo, issueNumber, cwd, opts.issuePrdLabel);
 
-  // Select the correct label family: sub-issues (prd present and subissue
-  // labels provided) use subissue labels, standalone issues use standalone.
-  const isSubIssue =
-    prd !== undefined && opts.subissueLabel && opts.subissueInProgressLabel;
-  const effectiveIntakeLabel = isSubIssue ? opts.subissueLabel! : issueLabel;
-  const effectiveInProgressLabel = isSubIssue
-    ? opts.subissueInProgressLabel!
-    : issueInProgressLabel;
-
   // Query native GitHub blocking relationships via GraphQL (fail-open)
   const blockers = fetchBlockersViaGraphQL(repo, issueNumber, cwd);
 
@@ -738,13 +703,8 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   });
   writeFileSync(planPath, planContent, "utf-8");
 
-  // Update issue labels: add in-progress, remove intake label
-  transitionPull(
-    { number: Number(issueNumber), repo },
-    effectiveIntakeLabel,
-    effectiveInProgressLabel,
-    cwd,
-  );
+  // Update issue labels: add in-progress (family label stays)
+  transitionPull({ number: Number(issueNumber), repo }, cwd);
 
   if (issueCommentProgress) {
     execQuiet(
@@ -777,7 +737,6 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     cwd,
     issueSource,
     standaloneLabel: issueLabel,
-    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
   } = options;
@@ -822,8 +781,6 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     issueNumber: number,
     backlogDir,
     cwd,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
   });
@@ -845,17 +802,6 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
 export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   const { backlogDir, cwd, issueSource, issueRepo, issueCommentProgress } =
     options;
-
-  // Sub-issues use the subissue label family when provided, falling back
-  // to the standalone labels for backward compatibility.
-  const subissueLabels = options.subissueLabel
-    ? deriveLabels(options.subissueLabel)
-    : null;
-  const issueLabel = subissueLabels?.intake ?? options.standaloneLabel;
-  const issueInProgressLabel =
-    subissueLabels?.inProgress ?? options.standaloneInProgressLabel;
-  const issueDoneLabel = subissueLabels?.done ?? options.standaloneDoneLabel;
-  const issueStuckLabel = subissueLabels?.stuck ?? options.standaloneStuckLabel;
 
   const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
 
@@ -947,8 +893,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // Find the first open sub-issue that hasn't already been picked up
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
-  const skipLabels = [issueInProgressLabel, issueDoneLabel];
-  if (issueStuckLabel) skipLabels.push(issueStuckLabel);
+  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(
@@ -975,27 +920,16 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   );
 
   // Best-effort: mark the PRD parent as in-progress when we first pull a sub-issue.
-  const prdInProgressLabel =
-    options.issuePrdInProgressLabel ??
-    deriveLabels(DEFAULTS.prdLabel).inProgress;
-  prdTransitionInProgress(
-    { number: prd.number, repo },
-    prdInProgressLabel,
-    cwd,
-  );
+  prdTransitionInProgress({ number: prd.number, repo }, cwd);
 
   return fetchAndWriteIssuePlan({
     repo,
     issueNumber: String(subIssueNumber),
     backlogDir,
     cwd,
-    standaloneInProgressLabel: options.standaloneInProgressLabel,
-    standaloneLabel: options.standaloneLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
     subissueLabel: options.subissueLabel,
-    subissueInProgressLabel:
-      options.subissueInProgressLabel ?? subissueLabels?.inProgress,
   });
 }
 
@@ -1201,8 +1135,6 @@ export function pullGithubIssueByNumber(
     backlogDir,
     cwd,
     issueSource,
-    standaloneLabel: issueLabel,
-    standaloneInProgressLabel: issueInProgressLabel,
     issueRepo,
     issueCommentProgress,
     issueNumber,
@@ -1233,12 +1165,9 @@ export function pullGithubIssueByNumber(
     issueNumber: String(issueNumber),
     backlogDir,
     cwd,
-    standaloneInProgressLabel: issueInProgressLabel,
-    standaloneLabel: issueLabel,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
     subissueLabel: options.subissueLabel,
-    subissueInProgressLabel: options.subissueInProgressLabel,
   });
 }
 
@@ -1259,7 +1188,6 @@ export function pullGithubIssueByNumber(
 export function checkAllPrdSubIssuesDone(
   repo: string,
   prdNumber: number,
-  subissueDoneLabel: string,
   cwd: string,
 ): boolean {
   // Fetch all sub-issues via the native REST API
@@ -1289,7 +1217,7 @@ export function checkAllPrdSubIssuesDone(
       cwd,
     );
     const labels = labelsRaw ? labelsRaw.split(",") : [];
-    if (!labels.includes(subissueDoneLabel)) {
+    if (!labels.includes(DONE_LABEL)) {
       return false;
     }
   }
