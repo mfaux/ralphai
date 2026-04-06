@@ -284,6 +284,7 @@ export function App({
           state={pipeline.state}
           loading={pipeline.loading}
           menuContext={menuContext}
+          resolvedConfig={resolvedConfig}
           onAction={handleMenuAction}
           isActive={true}
         />

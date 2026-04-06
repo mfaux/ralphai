@@ -6,18 +6,26 @@
  * Disabled items are dimmed and cannot be selected. Each enabled item
  * shows a cursor indicator (❯) when highlighted.
  *
+ * On wide terminals (≥120 columns), a contextual detail pane is shown
+ * alongside the menu via `SplitLayout`, displaying information relevant
+ * to the currently highlighted item.
+ *
  * The screen also handles single-key hotkeys: when the menu is active,
  * pressing a hotkey letter fires the corresponding action immediately
  * without requiring arrow-key navigation.
  */
 
-import { useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
 
 import type { PipelineState } from "../../pipeline-state.ts";
 import type { MenuItem, MenuGroup, MenuContext } from "../menu-items.ts";
 import { buildMenuItems } from "../menu-items.ts";
+import type { ResolvedConfig } from "../../config.ts";
 import { PipelineHeader } from "../components/header.tsx";
+import { SplitLayout } from "../components/split-layout.tsx";
+import type { SplitLayoutProps } from "../components/split-layout.tsx";
+import { DetailPane } from "../components/detail-pane.tsx";
 import { SelectableList } from "../components/selectable-list.tsx";
 import type {
   ListItem,
@@ -35,10 +43,17 @@ export interface MenuScreenProps {
   loading?: boolean;
   /** Extra context for menu item construction. */
   menuContext?: MenuContext;
+  /** Resolved config for the settings detail pane content. */
+  resolvedConfig?: ResolvedConfig;
   /** Called when the user selects a menu item (via Enter or hotkey). */
   onAction: (action: string) => void;
   /** Whether this screen is active (receives keyboard input). @default true */
   isActive?: boolean;
+  /**
+   * Options for the terminal size hook used by SplitLayout.
+   * Override in tests to inject a fake terminal size.
+   */
+  terminalSizeOptions?: SplitLayoutProps["terminalSizeOptions"];
 }
 
 // ---------------------------------------------------------------------------
@@ -163,8 +178,10 @@ export function MenuScreen({
   state,
   loading = false,
   menuContext,
+  resolvedConfig,
   onAction,
   isActive = true,
+  terminalSizeOptions,
 }: MenuScreenProps) {
   // Build menu items from pipeline state (use empty state while loading)
   const effectiveState: PipelineState = state ?? {
@@ -185,6 +202,14 @@ export function MenuScreen({
 
   // Build hotkey map for single-key activation
   const hotkeyMap = useMemo(() => buildHotkeyMap(menuItems), [menuItems]);
+
+  // Track the currently highlighted menu item value for the detail pane
+  const [highlightedValue, setHighlightedValue] = useState<string>("");
+
+  // Handle cursor changes from SelectableList
+  const handleCursorChange = useCallback((value: string) => {
+    setHighlightedValue(value);
+  }, []);
 
   // Handle hotkey input (runs alongside SelectableList's own input handler)
   useInput(
@@ -227,17 +252,38 @@ export function MenuScreen({
     [onAction],
   );
 
-  return (
+  // Left pane: the menu content (header + selectable list)
+  const menuContent = (
     <Box flexDirection="column">
       <PipelineHeader state={state} />
       <Box marginTop={1}>
         <SelectableList
           items={listItems}
           onSelect={handleSelect}
+          onCursorChange={handleCursorChange}
           isActive={isActive}
           renderItem={renderItem}
         />
       </Box>
     </Box>
+  );
+
+  // Right pane: the contextual detail pane
+  const detailContent = (
+    <DetailPane
+      highlightedValue={highlightedValue}
+      state={state}
+      stateLoading={loading}
+      menuContext={menuContext}
+      resolvedConfig={resolvedConfig}
+    />
+  );
+
+  return (
+    <SplitLayout
+      left={menuContent}
+      right={detailContent}
+      terminalSizeOptions={terminalSizeOptions}
+    />
   );
 }
