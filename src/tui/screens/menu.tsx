@@ -16,7 +16,8 @@ import { Box, Text, useInput } from "ink";
 
 import type { PipelineState } from "../../pipeline-state.ts";
 import type { MenuItem, MenuGroup, MenuContext } from "../menu-items.ts";
-import { buildMenuItems, buildHeaderLine } from "../menu-items.ts";
+import { buildMenuItems } from "../menu-items.ts";
+import { PipelineHeader } from "../components/header.tsx";
 import { SelectableList } from "../components/selectable-list.tsx";
 import type {
   ListItem,
@@ -174,9 +175,6 @@ export function MenuScreen({
   // Build hotkey map for single-key activation
   const hotkeyMap = useMemo(() => buildHotkeyMap(menuItems), [menuItems]);
 
-  // Header line
-  const headerLine = useMemo(() => buildHeaderLine(state), [state]);
-
   // Handle hotkey input (runs alongside SelectableList's own input handler)
   useInput(
     useCallback(
@@ -220,7 +218,7 @@ export function MenuScreen({
 
   return (
     <Box flexDirection="column">
-      <Text>{headerLine}</Text>
+      <PipelineHeader state={state} />
       <Box marginTop={1}>
         <SelectableList
           items={listItems}
