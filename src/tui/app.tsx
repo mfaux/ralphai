@@ -19,7 +19,12 @@ import { useApp } from "ink";
 
 import type { MenuContext } from "./menu-items.ts";
 import type { Screen, DispatchResult, RunConfig } from "./types.ts";
-import { isActionType, resolveAction, toConfirmNav } from "./types.ts";
+import {
+  isActionType,
+  resolveAction,
+  toConfirmNav,
+  toOptionsNav,
+} from "./types.ts";
 import type { ResolvedConfig } from "../config.ts";
 import { usePipelineState } from "./hooks/use-pipeline-state.ts";
 import type { UsePipelineStateOptions } from "./hooks/use-pipeline-state.ts";
@@ -242,10 +247,14 @@ export function App({
     (action: string) => {
       const result = handleAction(action);
       if (!result) return; // unknown action -- ignore
-      // Menu actions that produce exit-to-runner (e.g. "run-next")
-      // are routed through the confirm screen. Other results
-      // (navigate, stay, exit) pass through unchanged.
-      dispatch(toConfirmNav(result, runConfig, { type: "menu" }));
+      // "run-with-options" routes through the options wizard instead
+      // of the confirm screen. All other exit-to-runner actions
+      // (e.g. "run-next") route through confirm.
+      if (action === "run-with-options") {
+        dispatch(toOptionsNav(result, runConfig, { type: "menu" }));
+      } else {
+        dispatch(toConfirmNav(result, runConfig, { type: "menu" }));
+      }
     },
     [dispatch, runConfig],
   );

@@ -9,7 +9,7 @@
 import { describe, it, expect } from "bun:test";
 import { handleAction } from "./app.tsx";
 import type { ActionType } from "./types.ts";
-import { ACTION_TYPES, toConfirmNav } from "./types.ts";
+import { ACTION_TYPES, toConfirmNav, toOptionsNav } from "./types.ts";
 import type { RunConfig } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -70,11 +70,7 @@ describe("handleAction", () => {
   });
 
   describe("stay actions", () => {
-    const stayActions: ActionType[] = [
-      "resume-stalled",
-      "run-with-options",
-      "settings",
-    ];
+    const stayActions: ActionType[] = ["resume-stalled", "settings"];
 
     for (const action of stayActions) {
       it(`${action} returns stay`, () => {
@@ -82,6 +78,29 @@ describe("handleAction", () => {
         expect(result).toEqual({ type: "stay" });
       });
     }
+  });
+
+  describe("options action", () => {
+    it("run-with-options returns exit-to-runner (intercepted by App via toOptionsNav)", () => {
+      const result = handleAction("run-with-options");
+      expect(result).toEqual({ type: "exit-to-runner", args: ["run"] });
+
+      // The App component wraps this through toOptionsNav, producing
+      // a navigate-to-options result. Verify the full flow:
+      const config: RunConfig = {
+        agentCommand: "claude-code",
+        feedbackCommands: "bun test",
+      };
+      const optioned = toOptionsNav(result!, config, { type: "menu" });
+      expect(optioned.type).toBe("navigate");
+      if (optioned.type === "navigate") {
+        expect(optioned.screen.type).toBe("options");
+        if (optioned.screen.type === "options") {
+          expect(optioned.screen.backScreen?.type).toBe("menu");
+          expect(optioned.screen.data.runArgs).toEqual(["run"]);
+        }
+      }
+    });
   });
 
   describe("navigate actions", () => {

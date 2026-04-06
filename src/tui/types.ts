@@ -7,9 +7,10 @@
  * of the screen-router state machine in `app.tsx`.
  *
  * Also provides `RunConfig` and the pure helpers that wire every run
- * path through the confirmation screen:
+ * path through the confirmation or options screens:
  * - `buildConfirmDataFromArgs` — builds `ConfirmData` from CLI args + config
  * - `toConfirmNav` — wraps an `exit-to-runner` result as a navigate-to-confirm
+ * - `toOptionsNav` — wraps an `exit-to-runner` result as a navigate-to-options
  */
 
 import type { ConfirmData } from "./screens/confirm.tsx";
@@ -147,11 +148,17 @@ export function resolveAction(action: ActionType): DispatchResult {
     case "clean":
       return { type: "navigate", screen: { type: "clean" } };
 
+    // --- Actions that exit the TUI and launch the runner (options) ---
+    // "run-with-options" produces exit-to-runner with default ["run"]
+    // args. The App component intercepts this via `toOptionsNav()`
+    // to navigate to the options wizard instead of the confirm screen.
+    case "run-with-options":
+      return { type: "exit-to-runner", args: ["run"] };
+
     // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
     // These will be updated to `{ type: "navigate", screen: ... }` as
     // their respective screens are implemented.
     case "resume-stalled":
-    case "run-with-options":
     case "settings":
       return { type: "stay" };
   }
@@ -261,6 +268,33 @@ export function toConfirmNav(
     type: "navigate",
     screen: {
       type: "confirm",
+      data: buildConfirmDataFromArgs(result.args, config),
+      backScreen,
+    },
+  };
+}
+
+/**
+ * Convert an `exit-to-runner` dispatch result into a navigate-to-options
+ * dispatch result.
+ *
+ * Used by the `App` component when the user selects "Run with options"
+ * from the main menu. Routes directly to the wizard with default run
+ * args (no pre-selected target), skipping the confirm screen.
+ *
+ * Returns the original result unchanged if it is not `exit-to-runner`.
+ */
+export function toOptionsNav(
+  result: DispatchResult,
+  config: RunConfig,
+  backScreen: Screen,
+): DispatchResult {
+  if (result.type !== "exit-to-runner") return result;
+
+  return {
+    type: "navigate",
+    screen: {
+      type: "options",
       data: buildConfirmDataFromArgs(result.args, config),
       backScreen,
     },

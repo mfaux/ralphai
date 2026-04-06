@@ -14,6 +14,7 @@ import {
   branchFromRunArgs,
   buildConfirmDataFromArgs,
   toConfirmNav,
+  toOptionsNav,
 } from "./types.ts";
 import type { ActionType, DispatchResult, Screen, RunConfig } from "./types.ts";
 import type { ConfirmData } from "./screens/confirm.tsx";
@@ -112,14 +113,18 @@ describe("resolveAction", () => {
         expect(result.args).toEqual(["run"]);
       }
     });
+
+    it('run-with-options returns exit-to-runner with ["run"]', () => {
+      const result = resolveAction("run-with-options");
+      expect(result.type).toBe("exit-to-runner");
+      if (result.type === "exit-to-runner") {
+        expect(result.args).toEqual(["run"]);
+      }
+    });
   });
 
   describe("stay actions (future sub-screens)", () => {
-    const stayActions: ActionType[] = [
-      "resume-stalled",
-      "run-with-options",
-      "settings",
-    ];
+    const stayActions: ActionType[] = ["resume-stalled", "settings"];
 
     for (const action of stayActions) {
       it(`${action} returns stay`, () => {
@@ -518,6 +523,89 @@ describe("toConfirmNav", () => {
 });
 
 // ---------------------------------------------------------------------------
+// toOptionsNav
+// ---------------------------------------------------------------------------
+
+describe("toOptionsNav", () => {
+  const config: RunConfig = {
+    agentCommand: "claude-code",
+    feedbackCommands: "bun test",
+  };
+
+  it("converts exit-to-runner to navigate-to-options", () => {
+    const result: DispatchResult = {
+      type: "exit-to-runner",
+      args: ["run"],
+    };
+    const backScreen: Screen = { type: "menu" };
+    const converted = toOptionsNav(result, config, backScreen);
+
+    expect(converted.type).toBe("navigate");
+    if (converted.type === "navigate") {
+      expect(converted.screen.type).toBe("options");
+      if (converted.screen.type === "options") {
+        expect(converted.screen.data.title).toBe("Auto-detect (next plan)");
+        expect(converted.screen.data.agentCommand).toBe("claude-code");
+        expect(converted.screen.data.runArgs).toEqual(["run"]);
+        expect(converted.screen.backScreen).toBe(backScreen);
+      }
+    }
+  });
+
+  it("sets backScreen to menu for menu-originated actions", () => {
+    const result: DispatchResult = {
+      type: "exit-to-runner",
+      args: ["run"],
+    };
+    const backScreen: Screen = { type: "menu" };
+    const converted = toOptionsNav(result, config, backScreen);
+
+    if (converted.type === "navigate" && converted.screen.type === "options") {
+      expect(converted.screen.backScreen?.type).toBe("menu");
+    }
+  });
+
+  it("passes through stay results unchanged", () => {
+    const result: DispatchResult = { type: "stay" };
+    const converted = toOptionsNav(result, config, { type: "menu" });
+    expect(converted).toEqual({ type: "stay" });
+  });
+
+  it("passes through exit results unchanged", () => {
+    const result: DispatchResult = { type: "exit" };
+    const converted = toOptionsNav(result, config, { type: "menu" });
+    expect(converted).toEqual({ type: "exit" });
+  });
+
+  it("passes through navigate results unchanged", () => {
+    const result: DispatchResult = {
+      type: "navigate",
+      screen: { type: "backlog-picker" },
+    };
+    const converted = toOptionsNav(result, config, { type: "menu" });
+    expect(converted).toEqual(result);
+  });
+
+  it("builds correct ConfirmData from run args and config", () => {
+    const result: DispatchResult = {
+      type: "exit-to-runner",
+      args: ["run"],
+    };
+    const converted = toOptionsNav(result, config, { type: "menu" });
+
+    if (converted.type === "navigate" && converted.screen.type === "options") {
+      expect(converted.screen.data).toEqual({
+        title: "Auto-detect (next plan)",
+        agentCommand: "claude-code",
+        branch: "(auto)",
+        feedbackCommands: "bun test",
+        runArgs: ["run"],
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end transition flows
 // ---------------------------------------------------------------------------
 
@@ -540,6 +628,24 @@ describe("transition flows", () => {
       if (confirmNav.screen.type === "confirm") {
         expect(confirmNav.screen.data.title).toBe("Auto-detect (next plan)");
         expect(confirmNav.screen.backScreen?.type).toBe("menu");
+      }
+    }
+  });
+
+  it("run-with-options menu action → options screen with back to menu", () => {
+    // Menu produces run-with-options → resolveAction → exit-to-runner
+    const actionResult = resolveAction("run-with-options");
+    expect(actionResult.type).toBe("exit-to-runner");
+
+    // App wraps with toOptionsNav → navigate to options
+    const optionsNav = toOptionsNav(actionResult, config, { type: "menu" });
+    expect(optionsNav.type).toBe("navigate");
+    if (optionsNav.type === "navigate") {
+      expect(optionsNav.screen.type).toBe("options");
+      if (optionsNav.screen.type === "options") {
+        expect(optionsNav.screen.data.title).toBe("Auto-detect (next plan)");
+        expect(optionsNav.screen.data.runArgs).toEqual(["run"]);
+        expect(optionsNav.screen.backScreen?.type).toBe("menu");
       }
     }
   });
