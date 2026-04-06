@@ -9,7 +9,8 @@
 import { describe, it, expect } from "bun:test";
 import { handleAction } from "./app.tsx";
 import type { ActionType } from "./types.ts";
-import { ACTION_TYPES } from "./types.ts";
+import { ACTION_TYPES, toConfirmNav } from "./types.ts";
+import type { RunConfig } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // handleAction
@@ -47,9 +48,24 @@ describe("handleAction", () => {
   });
 
   describe("runner actions", () => {
-    it("run-next returns exit-to-runner", () => {
+    it("run-next returns exit-to-runner (intercepted by App via toConfirmNav)", () => {
       const result = handleAction("run-next");
       expect(result).toEqual({ type: "exit-to-runner", args: ["run"] });
+
+      // The App component wraps this through toConfirmNav, producing
+      // a navigate-to-confirm result. Verify the full flow:
+      const config: RunConfig = {
+        agentCommand: "claude-code",
+        feedbackCommands: "bun test",
+      };
+      const confirmed = toConfirmNav(result!, config, { type: "menu" });
+      expect(confirmed.type).toBe("navigate");
+      if (confirmed.type === "navigate") {
+        expect(confirmed.screen.type).toBe("confirm");
+        if (confirmed.screen.type === "confirm") {
+          expect(confirmed.screen.backScreen?.type).toBe("menu");
+        }
+      }
     });
   });
 

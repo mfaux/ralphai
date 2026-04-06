@@ -5,6 +5,11 @@
  * the main menu (via Enter key or hotkey). The `Screen` union represents
  * the set of screens the TUI can display. Together they form the core
  * of the screen-router state machine in `app.tsx`.
+ *
+ * Also provides `RunConfig` and the pure helpers that wire every run
+ * path through the confirmation screen:
+ * - `buildConfirmDataFromArgs` — builds `ConfirmData` from CLI args + config
+ * - `toConfirmNav` — wraps an `exit-to-runner` result as a navigate-to-confirm
  */
 
 import type { ConfirmData } from "./screens/confirm.tsx";
@@ -109,6 +114,9 @@ export type DispatchResult =
 export function resolveAction(action: ActionType): DispatchResult {
   switch (action) {
     // --- Actions that exit the TUI and launch the runner ---
+    // "run-next" is intentionally kept as exit-to-runner here.
+    // The App component wraps this through the confirm screen via
+    // `toConfirmNav()` at dispatch time.
     case "run-next":
       return { type: "exit-to-runner", args: ["run"] };
 
@@ -135,4 +143,114 @@ export function resolveAction(action: ActionType): DispatchResult {
     case "settings":
       return { type: "stay" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Run config — config fields needed by the confirmation screen
+// ---------------------------------------------------------------------------
+
+/**
+ * Subset of resolved configuration needed to build the confirmation
+ * screen's display data. Passed through `AppProps` so the App can
+ * construct `ConfirmData` when intercepting `exit-to-runner` results
+ * from pickers and menu actions.
+ */
+export interface RunConfig {
+  /** Agent command (e.g. "claude-code", "aider"). */
+  agentCommand: string;
+  /** Feedback commands (e.g. "bun run build && bun test"). */
+  feedbackCommands: string;
+}
+
+// ---------------------------------------------------------------------------
+// Confirm-screen wiring helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a human-readable title from CLI run args.
+ *
+ * - `["run"]` → "Auto-detect (next plan)"
+ * - `["run", "42"]` → "Issue #42"
+ * - `["run", "--plan", "feat-login.md"]` → "feat-login.md"
+ *
+ * Falls back to joining the args for unexpected shapes.
+ */
+export function titleFromRunArgs(args: string[]): string {
+  // Strip leading "run" if present
+  const rest = args[0] === "run" ? args.slice(1) : args;
+
+  if (rest.length === 0) return "Auto-detect (next plan)";
+
+  // --plan <filename>
+  const planIdx = rest.indexOf("--plan");
+  if (planIdx !== -1 && planIdx + 1 < rest.length) {
+    return rest[planIdx + 1]!;
+  }
+
+  // Bare number → issue
+  if (rest.length === 1 && /^\d+$/.test(rest[0]!)) {
+    return `Issue #${rest[0]}`;
+  }
+
+  return rest.join(" ");
+}
+
+/**
+ * Derive a branch name from CLI run args.
+ *
+ * This is a best-effort heuristic — the real branch name is computed
+ * by the runner. Shows "(auto)" when no specific target is given.
+ *
+ * - `["run"]` → "(auto)"
+ * - `["run", "42"]` → "(auto)"
+ * - `["run", "--plan", "feat-login.md"]` → "(auto)"
+ */
+export function branchFromRunArgs(_args: string[]): string {
+  return "(auto)";
+}
+
+/**
+ * Build `ConfirmData` from CLI run args and the run configuration.
+ *
+ * Pure function — exported for testing.
+ */
+export function buildConfirmDataFromArgs(
+  args: string[],
+  config: RunConfig,
+): ConfirmData {
+  return {
+    title: titleFromRunArgs(args),
+    agentCommand: config.agentCommand,
+    branch: branchFromRunArgs(args),
+    feedbackCommands: config.feedbackCommands,
+    runArgs: args,
+  };
+}
+
+/**
+ * Convert an `exit-to-runner` dispatch result into a navigate-to-confirm
+ * dispatch result.
+ *
+ * Used by the `App` component to intercept run results from pickers and
+ * menu actions and route them through the confirmation screen. The
+ * `backScreen` is set so Esc returns to the screen that produced the
+ * result.
+ *
+ * Returns the original result unchanged if it is not `exit-to-runner`.
+ */
+export function toConfirmNav(
+  result: DispatchResult,
+  config: RunConfig,
+  backScreen: Screen,
+): DispatchResult {
+  if (result.type !== "exit-to-runner") return result;
+
+  return {
+    type: "navigate",
+    screen: {
+      type: "confirm",
+      data: buildConfirmDataFromArgs(result.args, config),
+      backScreen,
+    },
+  };
 }

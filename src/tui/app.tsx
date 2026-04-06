@@ -18,8 +18,8 @@ import { useState, useCallback, useMemo } from "react";
 import { useApp } from "ink";
 
 import type { MenuContext } from "./menu-items.ts";
-import type { Screen, DispatchResult } from "./types.ts";
-import { isActionType, resolveAction } from "./types.ts";
+import type { Screen, DispatchResult, RunConfig } from "./types.ts";
+import { isActionType, resolveAction, toConfirmNav } from "./types.ts";
 import { usePipelineState } from "./hooks/use-pipeline-state.ts";
 import type { UsePipelineStateOptions } from "./hooks/use-pipeline-state.ts";
 import { useGithubIssues } from "./hooks/use-github-issues.ts";
@@ -55,6 +55,12 @@ export interface AppProps {
    * `githubOpts.peekOptions`.
    */
   issueListOptions?: ListGithubIssuesOptions;
+  /**
+   * Run configuration used to populate the confirmation screen.
+   * Contains agent command and feedback commands from resolved config.
+   * Defaults to empty strings when not provided.
+   */
+  runConfig?: RunConfig;
   /**
    * Called when the TUI wants to hand off to the agent runner.
    * The caller should exit Ink and run the given CLI args.
@@ -99,6 +105,7 @@ export function App({
   githubOpts,
   hasGitHubIssues = false,
   issueListOptions,
+  runConfig = { agentCommand: "", feedbackCommands: "" },
   onExitToRunner,
 }: AppProps) {
   const { exit } = useApp();
@@ -128,8 +135,10 @@ export function App({
   /**
    * Central dispatch for `DispatchResult` values.
    *
-   * Used by picker screens (which produce `DispatchResult` directly)
-   * and by `handleMenuAction` (which maps an action string first).
+   * Handles navigation, exit, and runner handoff. This is the "inner"
+   * dispatch that processes results as-is. Screens that should route
+   * through the confirmation screen first use `dispatchViaConfirm`
+   * (which wraps `exit-to-runner` results with `toConfirmNav`).
    */
   const dispatch = useCallback(
     (result: DispatchResult) => {
@@ -161,13 +170,30 @@ export function App({
     [exit, onExitToRunner, pipeline.refresh],
   );
 
+  /**
+   * Create a dispatch callback that intercepts `exit-to-runner` results
+   * and redirects them through the confirmation screen.
+   *
+   * `backScreen` determines where Esc on the confirm screen navigates.
+   * Non-runner results (stay, exit, navigate) pass through unchanged.
+   */
+  const dispatchViaConfirm = useCallback(
+    (backScreen: Screen) => (result: DispatchResult) => {
+      dispatch(toConfirmNav(result, runConfig, backScreen));
+    },
+    [dispatch, runConfig],
+  );
+
   const handleMenuAction = useCallback(
     (action: string) => {
       const result = handleAction(action);
       if (!result) return; // unknown action -- ignore
-      dispatch(result);
+      // Menu actions that produce exit-to-runner (e.g. "run-next")
+      // are routed through the confirm screen. Other results
+      // (navigate, stay, exit) pass through unchanged.
+      dispatch(toConfirmNav(result, runConfig, { type: "menu" }));
     },
-    [dispatch],
+    [dispatch, runConfig],
   );
 
   // -----------------------------------------------------------------------
@@ -210,7 +236,7 @@ export function App({
               issueRepo: "",
             }
           }
-          onResult={dispatch}
+          onResult={dispatchViaConfirm({ type: "issue-picker" })}
           isActive={true}
         />
       );
@@ -220,7 +246,7 @@ export function App({
         <BacklogPickerScreen
           backlog={pipeline.state?.backlog ?? []}
           completedSlugs={pipeline.state?.completedSlugs ?? []}
-          onResult={dispatch}
+          onResult={dispatchViaConfirm({ type: "backlog-picker" })}
           isActive={true}
         />
       );

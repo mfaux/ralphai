@@ -39,6 +39,13 @@ describe("buildAppProps", () => {
     expect(props.githubOpts).toBeUndefined();
     expect(props.issueListOptions).toBeUndefined();
   });
+
+  it("includes runConfig with defaults when config resolution fails", () => {
+    const props = buildAppProps("/nonexistent/path");
+    expect(props.runConfig).toBeDefined();
+    expect(props.runConfig!.agentCommand).toBe("");
+    expect(props.runConfig!.feedbackCommands).toBe("");
+  });
 });
 
 // ---------------------------------------------------------------------------
