@@ -16,6 +16,7 @@ import type { PipelineState } from "../pipeline-state.ts";
 import {
   buildHeaderLine,
   buildMenuItems,
+  isPipelineEmpty,
   type MenuItem,
   type MenuContext,
 } from "./menu-items.ts";
@@ -830,5 +831,54 @@ describe("buildMenuItems — GitHub error state", () => {
 
     expect(pick.label).toBe("Pick from GitHub (5 issues)");
     expect(pick.disabled).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isPipelineEmpty
+// ---------------------------------------------------------------------------
+
+describe("isPipelineEmpty", () => {
+  it("returns true when all pipeline sections are empty", () => {
+    const state = makeState();
+    expect(isPipelineEmpty(state)).toBe(true);
+  });
+
+  it("returns false when backlog has plans", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when in-progress has plans", () => {
+    const state = makeState({ inProgress: makeInProgress(1) });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when completed has slugs", () => {
+    const state = makeState({ completedSlugs: ["done-a"] });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when all sections have data", () => {
+    const state = makeState({
+      backlog: makeBacklog(2),
+      inProgress: makeInProgress(1),
+      completedSlugs: ["done-a"],
+    });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns true when worktrees/problems exist but plans are empty", () => {
+    // Worktrees and problems don't count as pipeline content
+    const state = makeState({
+      worktrees: [
+        {
+          entry: { path: "/tmp/wt", branch: "main" },
+          hasActivePlan: false,
+        },
+      ],
+      problems: [{ message: "some warning" }],
+    });
+    expect(isPipelineEmpty(state)).toBe(true);
   });
 });

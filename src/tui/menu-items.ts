@@ -94,6 +94,24 @@ export function buildHeaderLine(state: PipelineState): string {
 }
 
 // ---------------------------------------------------------------------------
+// Empty pipeline detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns `true` when the pipeline is completely empty — no backlog plans,
+ * no in-progress plans, and no completed plans.
+ *
+ * Used by the menu screen to display a helpful getting-started hint.
+ */
+export function isPipelineEmpty(state: PipelineState): boolean {
+  return (
+    state.backlog.length === 0 &&
+    state.inProgress.length === 0 &&
+    state.completedSlugs.length === 0
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Menu item construction
 // ---------------------------------------------------------------------------
 

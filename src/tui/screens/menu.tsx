@@ -20,7 +20,7 @@ import { Box, Text, useInput } from "ink";
 
 import type { PipelineState } from "../../pipeline-state.ts";
 import type { MenuItem, MenuGroup, MenuContext } from "../menu-items.ts";
-import { buildMenuItems } from "../menu-items.ts";
+import { buildMenuItems, isPipelineEmpty } from "../menu-items.ts";
 import type { ResolvedConfig } from "../../config.ts";
 import { PipelineHeader } from "../components/header.tsx";
 import { SplitLayout } from "../components/split-layout.tsx";
@@ -72,6 +72,19 @@ const GROUP_LABELS: Record<MenuGroup, string> = {
  * are always disabled so the cursor skips over them.
  */
 const GROUP_HEADER_PREFIX = "__group__";
+
+// ---------------------------------------------------------------------------
+// Empty state hint
+// ---------------------------------------------------------------------------
+
+/**
+ * Hint lines shown when the pipeline is completely empty.
+ * Guides the user toward getting started with ralphai.
+ */
+export const EMPTY_STATE_HINTS = [
+  "Add .md plans to ./backlog/ to begin, or pick an issue from GitHub.",
+  'Run "ralphai init" to set up your project configuration.',
+] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers (exported for testing)
@@ -192,6 +205,9 @@ export function MenuScreen({
     problems: [],
   };
 
+  // Detect empty pipeline (not loading, state available, all sections empty)
+  const pipelineEmpty = state !== null && isPipelineEmpty(effectiveState);
+
   const menuItems = useMemo(
     () => buildMenuItems(effectiveState, menuContext),
     [effectiveState, menuContext],
@@ -252,10 +268,19 @@ export function MenuScreen({
     [onAction],
   );
 
-  // Left pane: the menu content (header + selectable list)
+  // Left pane: the menu content (header + optional hint + selectable list)
   const menuContent = (
     <Box flexDirection="column">
       <PipelineHeader state={state} />
+      {pipelineEmpty ? (
+        <Box flexDirection="column" marginTop={1}>
+          {EMPTY_STATE_HINTS.map((hint, i) => (
+            <Text key={i} dimColor>
+              {hint}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
       <Box marginTop={1}>
         <SelectableList
           items={listItems}

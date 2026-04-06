@@ -15,7 +15,12 @@ import { describe, it, expect } from "bun:test";
 import type { PipelineState } from "../../pipeline-state.ts";
 import type { MenuItem, MenuContext } from "../menu-items.ts";
 import { buildMenuItems } from "../menu-items.ts";
-import { buildListItems, buildHotkeyMap, isGroupHeader } from "./menu.tsx";
+import {
+  buildListItems,
+  buildHotkeyMap,
+  isGroupHeader,
+  EMPTY_STATE_HINTS,
+} from "./menu.tsx";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -334,5 +339,32 @@ describe("buildHotkeyMap", () => {
     const map = buildHotkeyMap(menuItems);
 
     expect(map.get("s")).toBe("stop-running");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EMPTY_STATE_HINTS
+// ---------------------------------------------------------------------------
+
+describe("EMPTY_STATE_HINTS", () => {
+  it("contains at least one hint", () => {
+    expect(EMPTY_STATE_HINTS.length).toBeGreaterThan(0);
+  });
+
+  it("all hints are non-empty strings", () => {
+    for (const hint of EMPTY_STATE_HINTS) {
+      expect(typeof hint).toBe("string");
+      expect(hint.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("includes guidance about adding plans to backlog", () => {
+    const combined = EMPTY_STATE_HINTS.join(" ");
+    expect(combined).toContain("backlog");
+  });
+
+  it("includes guidance about ralphai init", () => {
+    const combined = EMPTY_STATE_HINTS.join(" ");
+    expect(combined).toContain("ralphai init");
   });
 });
