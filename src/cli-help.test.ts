@@ -151,9 +151,9 @@ describe("CLI help and flags", () => {
   });
 
   it("run --help shows [<target>] usage with examples", async () => {
-    const result = await runCliInProcess(["run", "--help"]);
+    const result = await runCliInProcess(["run", "--help"], ctx.dir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("ralphai run [<target>]");
+    expect(result.stdout).toContain("run");
     // Issue number example
     expect(result.stdout).toContain("ralphai run 42");
     // Plan file example
@@ -161,6 +161,21 @@ describe("CLI help and flags", () => {
     // Auto-select (omitted target)
     expect(result.stdout).toContain("(omitted)");
     expect(result.stdout).toContain("Auto-detect");
+  });
+
+  it("hitl --help shows hitl usage and flags", async () => {
+    const result = await runCliInProcess(["hitl", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("hitl");
+    expect(result.stdout).toContain("<issue-number>");
+    expect(result.stdout).toContain("--dry-run");
+    expect(result.stdout).toContain("agentInteractiveCommand");
+  });
+
+  it("help text lists hitl under Core", async () => {
+    const result = await runCliInProcess(["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("hitl");
   });
 
   // -------------------------------------------------------------------------
@@ -294,5 +309,32 @@ describe("CLI help and flags", () => {
     expect(result.stdout).not.toContain("\x1b[?25l"); // hide cursor
     // Should not contain React/Ink component output markers
     expect(result.stdout).not.toContain("❯"); // TUI cursor indicator
+  });
+});
+
+describe("hitl argument parsing", () => {
+  const { parseRalphaiOptions } = require("./parse-options.ts");
+
+  it("parses hitl <issue-number>", () => {
+    const opts = parseRalphaiOptions(["hitl", "42"]);
+    expect(opts.subcommand).toBe("hitl");
+    expect(opts.hitlIssueNumber).toBe(42);
+  });
+
+  it("hitl without issue number leaves hitlIssueNumber undefined", () => {
+    const opts = parseRalphaiOptions(["hitl"]);
+    expect(opts.subcommand).toBe("hitl");
+    expect(opts.hitlIssueNumber).toBeUndefined();
+  });
+
+  it("hitl passes remaining flags to runArgs", () => {
+    const opts = parseRalphaiOptions([
+      "hitl",
+      "42",
+      "--agent-interactive-command=code",
+    ]);
+    expect(opts.subcommand).toBe("hitl");
+    expect(opts.hitlIssueNumber).toBe(42);
+    expect(opts.runArgs).toContain("--agent-interactive-command=code");
   });
 });

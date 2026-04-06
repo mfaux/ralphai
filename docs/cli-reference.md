@@ -10,6 +10,7 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
+| `hitl`         | Open interactive agent session for a HITL sub-issue                    |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
@@ -211,6 +212,39 @@ Label issues with the configured standalone intake label (`ralphai-standalone` b
 #### Sub-Issues
 
 Label issues with `ralphai-subissue` and ensure they have a parent PRD relationship on GitHub. Ralphai discovers the parent PRD and processes the sub-issue through the PRD flow on the parent's shared branch. Validation catches misconfigurations: orphaned sub-issues or parents missing the PRD label are skipped with a warning.
+
+## Hitl
+
+```
+ralphai hitl <issue-number> [--dry-run]
+```
+
+Open an interactive agent session for a HITL (human-in-the-loop) sub-issue. This is the primary interface for humans to collaborate with the agent on complex tasks that can't be fully automated.
+
+```
+<issue-number>        GitHub issue number of the HITL sub-issue
+--dry-run, -n         Preview what would happen without spawning the agent
+```
+
+**Requires:** `agentInteractiveCommand` must be configured (in `config.json` or via `RALPHAI_AGENT_INTERACTIVE_COMMAND` env var).
+
+Orchestration flow:
+
+1. Discovers the parent PRD via the sub-issue's parent relationship
+2. Creates or reuses the PRD's worktree (same branch as `ralphai run`)
+3. Assembles a prompt from the sub-issue body
+4. Spawns the agent interactively with full terminal pass-through (`stdio: "inherit"`)
+
+Label management on exit:
+
+- **Clean exit (code 0):** Removes the `ralphai-subissue-hitl` label and adds `done`
+- **Abnormal exit (non-zero, Ctrl+C):** Leaves all labels unchanged
+
+Validation errors with descriptive messages when:
+
+- The issue has no parent
+- The parent lacks the PRD label
+- `agentInteractiveCommand` is not configured
 
 ## Clean
 

@@ -16,7 +16,8 @@ export type RalphaiSubcommand =
   | "doctor"
   | "repos"
   | "config"
-  | "seed";
+  | "seed"
+  | "hitl";
 
 export type WorktreeSubcommand = "run" | "list" | "clean";
 
@@ -48,6 +49,7 @@ export interface RalphaiOptions {
   runArgs: string[];
   worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
+  hitlIssueNumber?: number; // positional arg for `hitl` subcommand
 }
 
 export interface WizardAnswers {
@@ -80,6 +82,7 @@ export const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "repos",
   "config",
   "seed", // hidden — not listed in showRalphaiHelp()
+  "hitl",
 ]);
 
 export function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -102,11 +105,14 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
   const runArgs: string[] = [];
   let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
+  let hitlIssueNumber: number | undefined;
 
   let collectingRunArgs = false;
   let collectingConfigArgs = false;
+  let collectingHitlArgs = false;
   let expectingRunTarget = false;
   let expectingStopSlug = false;
+  let expectingHitlIssue = false;
   let stopSlug: string | undefined;
 
   for (const arg of args) {
@@ -146,6 +152,27 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
       }
       // Anything else is an unknown flag (will be caught by strict parsing)
       unknownFlags.push(arg);
+      continue;
+    }
+
+    // After `hitl` subcommand, collect issue number and remaining args
+    if (collectingHitlArgs) {
+      if (arg === "--help" || arg === "-h") {
+        // Let the main dispatcher handle --help
+        continue;
+      }
+      if (expectingHitlIssue && !arg.startsWith("-")) {
+        const num = parseInt(arg, 10);
+        if (!Number.isNaN(num) && num > 0) {
+          hitlIssueNumber = num;
+          expectingHitlIssue = false;
+        } else {
+          unknownFlags.push(arg);
+        }
+        continue;
+      }
+      // Remaining args are passed through as runArgs (for config overrides)
+      runArgs.push(arg);
       continue;
     }
 
@@ -206,6 +233,11 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
         if (subcommand === "config") {
           collectingConfigArgs = true;
         }
+        // For `hitl`, next positional is the issue number, then remaining are runArgs
+        if (subcommand === "hitl") {
+          collectingHitlArgs = true;
+          expectingHitlIssue = true;
+        }
       } else {
         targetDir = arg;
       }
@@ -236,6 +268,7 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
     runArgs,
     worktreeOptions,
     unknownFlags,
+    hitlIssueNumber,
   };
 }
 

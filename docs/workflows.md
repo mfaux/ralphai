@@ -52,6 +52,29 @@ Or let the drain loop auto-pull when the local backlog is empty — Ralphai chec
 
 Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
 
+## Working on HITL sub-issues
+
+Some sub-issues require human collaboration — design decisions, manual testing, security review. Label these with `ralphai-subissue-hitl` (configurable via `issueHitlLabel`) and use the `hitl` command:
+
+```bash
+ralphai hitl 55           # open interactive session for sub-issue #55
+```
+
+Ralphai discovers the parent PRD, creates or reuses the PRD worktree, assembles a prompt from the sub-issue body, and spawns your agent interactively with full terminal pass-through. You get the agent's TUI and can collaborate directly.
+
+On clean exit (code 0), the HITL label is removed and `done` is added. On abnormal exit (Ctrl+C, non-zero code), labels are left unchanged so you can resume later.
+
+**Prerequisites:**
+
+- `agentInteractiveCommand` must be configured (e.g. `opencode`, `claude`)
+- The sub-issue must have a parent PRD (with the `ralphai-prd` label)
+
+**Dry-run:**
+
+```bash
+ralphai hitl 55 --dry-run    # preview without spawning agent or touching labels
+```
+
 ## Parallel runs
 
 ```bash

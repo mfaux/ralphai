@@ -61,6 +61,7 @@ import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
+import { runHitl } from "./hitl.ts";
 
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { extractDependsOn } from "./frontmatter.ts";
@@ -918,6 +919,45 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// hitl — interactive agent session for HITL sub-issues
+// ---------------------------------------------------------------------------
+
+function showHitlHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai hitl <issue-number> [options]`);
+  console.log();
+  console.log(
+    "Open an interactive agent session for a HITL (human-in-the-loop) sub-issue.",
+  );
+  console.log(
+    "Discovers the parent PRD, resolves the worktree, assembles the prompt,",
+  );
+  console.log(
+    "and spawns the agent interactively so you get the full TUI experience.",
+  );
+  console.log();
+  console.log(`${TEXT}Arguments:${RESET}`);
+  console.log(
+    `  ${TEXT}<issue-number>${RESET}   ${DIM}GitHub issue number of the HITL sub-issue${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--dry-run, -n${RESET}    ${DIM}Preview what would happen without spawning the agent${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Requires:${RESET}`);
+  console.log(
+    `  ${TEXT}agentInteractiveCommand${RESET}  ${DIM}Set in config or RALPHAI_AGENT_INTERACTIVE_COMMAND env var${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}On exit:${RESET}`);
+  console.log(
+    `  ${DIM}Clean exit (code 0): removes HITL label, adds done label${RESET}`,
+  );
+  console.log(`  ${DIM}Abnormal exit: labels unchanged${RESET}`);
+}
+
+// ---------------------------------------------------------------------------
 
 function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
@@ -925,6 +965,9 @@ function showRalphaiHelp(): void {
   console.log(`${TEXT}Core${RESET}`);
   console.log(
     `  ${TEXT}run${RESET}         ${DIM}Run a plan in an isolated worktree (use --wizard/-w to configure interactively)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}hitl${RESET}        ${DIM}Open interactive agent session for a HITL sub-issue${RESET}`,
   );
   console.log(
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
@@ -1053,7 +1096,11 @@ export async function runRalphai(args: string[]): Promise<void> {
   }
 
   // --- Early git-repo guard for commands that require a working tree ---
-  const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>(["run", "init"]);
+  const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>([
+    "run",
+    "init",
+    "hitl",
+  ]);
   if (
     options.subcommand &&
     GIT_REQUIRED_COMMANDS.has(options.subcommand) &&
@@ -1175,6 +1222,25 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "seed":
       runSeed(cwd);
+      break;
+    case "hitl":
+      if (helpRequested) {
+        showHitlHelp();
+        return;
+      }
+      if (!options.hitlIssueNumber) {
+        console.error(`${TEXT}Usage:${RESET} ralphai hitl <issue-number>`);
+        console.error(
+          `\n${DIM}Provide the GitHub issue number of the HITL sub-issue.${RESET}`,
+        );
+        process.exit(1);
+      }
+      await runHitl({
+        issueNumber: options.hitlIssueNumber,
+        cwd,
+        dryRun: isDryRunGlobal,
+        runArgs: options.runArgs,
+      });
       break;
     default:
       showRalphaiHelp();

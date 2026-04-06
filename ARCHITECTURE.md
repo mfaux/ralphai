@@ -27,6 +27,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/doctor.ts`        | `ralphai doctor` -- health checks and diagnostics.                                   |
 | `src/status.ts`        | `ralphai status` -- pipeline state rendering with optional auto-refresh.             |
 | `src/seed.ts`          | `ralphai seed` -- sample plan management.                                            |
+| `src/hitl.ts`          | `ralphai hitl` -- interactive agent session for HITL sub-issues.                     |
 
 ## TUI subsystem (`src/tui/`)
 
@@ -104,7 +105,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 cli.ts
   -> ralphai.ts  (dispatcher, wizard, scaffold, run orchestration)
        -> parse-options.ts, git-helpers.ts, seed.ts       (leaf utilities)
-       -> doctor.ts, status.ts                            (subcommand handlers)
+       -> doctor.ts, status.ts, hitl.ts                   (subcommand handlers)
        -> worktree/index.ts -> parsing, selection, management
        -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts, sentinel.ts
        -> config.ts, issues.ts, receipt.ts, ...           (supporting modules)
