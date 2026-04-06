@@ -29,6 +29,7 @@ import {
 import {
   getRepoPipelineDirs,
   resolveRepoByNameOrPath,
+  removeStaleRepos,
 } from "./global-state.ts";
 import {
   detectFeedbackCommands,
@@ -1058,6 +1059,17 @@ export async function runRalphai(args: string[]): Promise<void> {
       `${DIM}Use ${TEXT}ralphai repos${DIM} to see your initialized repos.${RESET}`,
     );
     process.exit(1);
+  }
+
+  // Housekeeping: remove stale repo entries (dead paths with empty pipelines).
+  // Skip on --help (keep help output fast) and --dry-run (no side effects).
+  const isDryRunGlobal = args.includes("--dry-run") || args.includes("-n");
+  if (!helpRequested && !isDryRunGlobal) {
+    try {
+      removeStaleRepos();
+    } catch {
+      // Non-fatal — don't block the command if cleanup fails.
+    }
   }
 
   switch (options.subcommand) {
