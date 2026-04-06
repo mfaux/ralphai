@@ -30,6 +30,9 @@ import { IssuePickerScreen } from "./screens/issue-picker.tsx";
 import { BacklogPickerScreen } from "./screens/backlog-picker.tsx";
 import { ConfirmScreen } from "./screens/confirm.tsx";
 import { OptionsScreen } from "./screens/options.tsx";
+import { StopScreen } from "./screens/stop.tsx";
+import { runningPlans } from "../interactive/pipeline-actions.ts";
+import { runRalphaiStop } from "../stop.ts";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -66,6 +69,11 @@ export interface AppProps {
    * The caller should exit Ink and run the given CLI args.
    */
   onExitToRunner?: (args: string[]) => void;
+  /**
+   * Injected stop function for the stop screen. Defaults to
+   * `runRalphaiStop` — override in tests.
+   */
+  stopPlan?: (cwd: string, slug: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,9 +115,19 @@ export function App({
   issueListOptions,
   runConfig = { agentCommand: "", feedbackCommands: "" },
   onExitToRunner,
+  stopPlan: injectedStopPlan,
 }: AppProps) {
   const { exit } = useApp();
   const [screen, setScreen] = useState<Screen>({ type: "menu" });
+
+  // Default stop function — calls runRalphaiStop with the slug
+  const stopPlan = useMemo(
+    () =>
+      injectedStopPlan ??
+      ((cwd: string, slug: string) =>
+        runRalphaiStop({ cwd, dryRun: false, slug })),
+    [injectedStopPlan],
+  );
 
   // --- Async data hooks ---
   const pipeline = usePipelineState(pipelineOpts);
@@ -267,6 +285,17 @@ export function App({
           data={screen.data}
           onResult={dispatch}
           backScreen={screen.backScreen}
+          isActive={true}
+        />
+      );
+
+    case "stop":
+      return (
+        <StopScreen
+          runningPlans={pipeline.state ? runningPlans(pipeline.state) : []}
+          cwd={pipelineOpts.cwd}
+          onResult={dispatch}
+          stopPlan={stopPlan}
           isActive={true}
         />
       );

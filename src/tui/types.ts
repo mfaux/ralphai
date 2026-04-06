@@ -80,7 +80,8 @@ export type Screen =
   | { type: "issue-picker" }
   | { type: "backlog-picker" }
   | { type: "confirm"; data: ConfirmData; backScreen?: Screen }
-  | { type: "options"; data: ConfirmData; backScreen?: Screen };
+  | { type: "options"; data: ConfirmData; backScreen?: Screen }
+  | { type: "stop" };
 
 // ---------------------------------------------------------------------------
 // Dispatch result
@@ -130,12 +131,15 @@ export function resolveAction(action: ActionType): DispatchResult {
     case "pick-from-github":
       return { type: "navigate", screen: { type: "issue-picker" } };
 
+    // --- Actions that navigate to sub-screens ---
+    case "stop-running":
+      return { type: "navigate", screen: { type: "stop" } };
+
     // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
     // These will be updated to `{ type: "navigate", screen: ... }` as
     // their respective screens are implemented.
     case "resume-stalled":
     case "run-with-options":
-    case "stop-running":
     case "reset-plan":
     case "view-status":
     case "doctor":

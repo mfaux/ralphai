@@ -73,7 +73,6 @@ describe("handleAction", () => {
     const stayActions: ActionType[] = [
       "resume-stalled",
       "run-with-options",
-      "stop-running",
       "reset-plan",
       "view-status",
       "doctor",
@@ -103,6 +102,14 @@ describe("handleAction", () => {
       expect(result).toEqual({
         type: "navigate",
         screen: { type: "issue-picker" },
+      });
+    });
+
+    it("stop-running navigates to stop screen", () => {
+      const result = handleAction("stop-running");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "stop" },
       });
     });
   });
