@@ -88,6 +88,58 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Run all feedback loops: bun run build, bun test");
   });
 
+  // --- Wrapper path ---
+
+  it("references wrapper script in step 4 when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).toContain("`" + "./_ralphai_feedback.sh" + "`");
+    expect(prompt).toContain("Run the feedback wrapper:");
+  });
+
+  it("explains wrapper behavior (summary on pass, full output on failure) when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).toContain("one-line summary");
+    expect(prompt).toContain("full output");
+  });
+
+  it("does not list raw commands when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).not.toContain(
+      "Run all feedback loops: bun run build, bun test",
+    );
+  });
+
+  it("falls back to raw commands when wrapperPath is absent", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ feedbackCommands: "bun run build,bun test" }),
+    );
+    expect(prompt).toContain("Run all feedback loops: bun run build, bun test");
+    expect(prompt).not.toContain("_ralphai_feedback.sh");
+  });
+
+  it("falls back to generic feedback text when wrapperPath is absent and no commands", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackCommands: "" }));
+    expect(prompt).toContain(
+      "Run your project's build, test, and lint commands",
+    );
+    expect(prompt).not.toContain("_ralphai_feedback.sh");
+  });
+
   it("includes commit instruction", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Stage and commit ALL changes");
@@ -184,6 +236,27 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Do not log one-off typos or dead ends");
   });
 
+  // --- Richer learnings guidance ---
+
+  it("learnings prompt asks for file paths, APIs/signatures, architecture constraints, and error resolutions", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("File paths modified or discovered");
+    expect(prompt).toContain("Exported APIs and their signatures");
+    expect(prompt).toContain("Architecture constraints or patterns observed");
+    expect(prompt).toContain(
+      "Error messages encountered and how they were resolved",
+    );
+  });
+
+  it("learnings guidance remains freeform prose (no structured schema)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("freeform prose");
+    // Should not introduce structured YAML/JSON fields
+    expect(prompt).not.toContain("file_paths:");
+    expect(prompt).not.toContain("apis:");
+    expect(prompt).not.toContain('"file_paths"');
+  });
+
   it("commit step is always step 6 regardless of learnings", () => {
     const withoutLearnings = assemblePrompt(baseOptions({ learnings: [] }));
     expect(withoutLearnings).toContain("6. Stage and commit ALL changes");
@@ -272,12 +345,50 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("2. Find the highest-priority incomplete task");
   });
 
-  it("instructs agent to complete only one task per iteration", () => {
+  // --- Continue-if-small wording ---
+
+  it("includes continue-if-small guidance in tasks format step 2", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("includes continue-if-small guidance in default format step 2", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("does not include continue-if-small in checkboxes format step 2", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).not.toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("continue-if-small wording does not change COMPLETE signal behavior", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain("<promise>COMPLETE</promise>");
+    expect(prompt).toContain(
+      "but ONLY after committing. Never output COMPLETE with uncommitted changes",
+    );
+    // The unless-trivially-small caveat is in the one-task-per-iteration paragraph
+    expect(prompt).toContain(
+      "Do not continue to the next task unless it is trivially small",
+    );
+  });
+
+  it("instructs agent to complete only one task per iteration (with trivially-small exception)", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Complete ONLY the task identified in step 2");
     expect(prompt).toContain("you will be re-invoked with updated progress");
     expect(prompt).toContain(
       "do not attempt to complete the entire plan in one pass",
+    );
+    expect(prompt).toContain(
+      "Do not continue to the next task unless it is trivially small",
     );
   });
 
@@ -381,5 +492,47 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain(`<learnings nonce="${nonce}">`);
     expect(prompt).toContain(`<progress nonce="${nonce}">`);
     expect(prompt).toContain(`<pr-summary nonce="${nonce}">`);
+  });
+
+  // --- Feedback scope hints ---
+
+  it("includes scope-aware guidance when feedbackScope is set", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    expect(prompt).toContain("Scope hint:");
+    expect(prompt).toContain("focused in `src/foo/`");
+  });
+
+  it("suggests a scoped test command pattern when feedbackScope is set", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    expect(prompt).toContain("`bun test src/foo/`");
+  });
+
+  it("advises running full suite before COMPLETE when feedbackScope is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ feedbackScope: "src/components" }),
+    );
+    expect(prompt).toContain("full feedback suite before signaling COMPLETE");
+  });
+
+  it("omits scope guidance when feedbackScope is empty", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "" }));
+    expect(prompt).not.toContain("Scope hint:");
+    expect(prompt).not.toContain("focused in");
+  });
+
+  it("omits scope guidance when feedbackScope is undefined", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("Scope hint:");
+    expect(prompt).not.toContain("focused in");
+  });
+
+  it("places scope hint adjacent to feedback step (step 4)", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    // The scope hint should appear between step 4 and step 5
+    const step4Idx = prompt.indexOf("4. ");
+    const scopeIdx = prompt.indexOf("Scope hint:");
+    const step5Idx = prompt.indexOf("5. Documentation:");
+    expect(step4Idx).toBeLessThan(scopeIdx);
+    expect(scopeIdx).toBeLessThan(step5Idx);
   });
 });

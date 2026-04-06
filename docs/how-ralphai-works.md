@@ -20,6 +20,8 @@ Iteration 10 gets the same quality of context as iteration 1.
 
 Each iteration, the agent runs your project's real build, test, and lint commands. The retry loop is agent-internal: Ralphai provides the feedback commands in the prompt, and the agent runs them, fixes errors, and iterates within a single session.
 
+When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the worktree, the prompt tells the agent to run the wrapper instead of listing raw commands. The wrapper provides concise output on success and full diagnostics on failure (see [Feedback Wrapper Script](#feedback-wrapper-script) below). When the wrapper is absent (e.g. on Windows), the prompt falls back to listing raw commands directly.
+
 ```
     ┌─────────────────────────────────────┐
     │            Fresh session            │
@@ -64,6 +66,20 @@ Ralphai supports two tiers of feedback commands:
 **PR-tier commands** (`prFeedbackCommands`) are slower checks like E2E tests or integration suites. They are _not_ included in the agent prompt and do not run during normal iterations. They only execute when the agent signals completion, at which point the completion gate runs both tiers. This avoids burning time on expensive checks every iteration while still ensuring they pass before a PR is created.
 
 Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` and `prFeedbackCommands` in `config.json`. During init, Ralphai detects PR-tier candidates from common script names like `test:e2e`, `test:integration`, `cypress`, and `playwright`.
+
+### Feedback Wrapper Script
+
+When a worktree is created or reused, Ralphai generates a shell script called `_ralphai_feedback.sh` in the worktree root. This script wraps each configured loop-tier feedback command to optimize agent output:
+
+- **On success (exit 0):** prints a one-line summary with the command name and wall-clock duration, keeping the agent's context window lean.
+- **On failure (non-zero exit):** prints the full stdout/stderr so the agent can diagnose and fix the issue.
+- **On timeout:** kills the child process and prints partial output with a timeout message.
+
+The wrapper is regenerated on every `prepareWorktree()` call — including reused worktrees — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt falls back to listing raw commands).
+
+When the wrapper exists in the worktree, the runner passes its path to the prompt module via `wrapperPath`. The agent prompt then tells the agent to run `./_ralphai_feedback.sh` and explains its summary-on-pass / full-output-on-failure behavior. When the wrapper is absent, the prompt lists raw commands as before — this keeps backward compatibility with Windows and any environment where the wrapper is not generated.
+
+The completion gate does **not** use the wrapper — it runs feedback commands directly and collects structured results. The wrapper is purely an agent-side UX optimization.
 
 ## Completion Gate
 
@@ -117,7 +133,7 @@ A plan file uses Markdown headings to define tasks and optional subtasks:
 
 **Subtasks** (`#### N.M:`) are optional breakdowns within a task. They help the agent stay focused on smaller steps. The agent completes all subtasks of a task before moving on.
 
-**One iteration, one task.** Each runner iteration starts a fresh agent session that works on exactly one task, including its subtasks.
+**One iteration, one task.** Each runner iteration starts a fresh agent session that works on exactly one task, including its subtasks. If the next task in the plan is trivially small, the agent may continue to it within the same iteration — this avoids burning a full context-reset cycle on minor follow-ups. The agent still signals COMPLETE normally when the next task is substantial.
 
 ## Worktree Execution Model
 
@@ -328,6 +344,25 @@ Commands pass through unchanged.
 
 In all cases, Ralphai adds a scope hint to the prompt so the agent focuses on files within the scoped directory.
 
+### Feedback Scope
+
+Feedback scope narrows the directory context for feedback hints in the agent prompt. It is resolved from two sources, with explicit frontmatter taking precedence:
+
+1. **Frontmatter** — `feedback-scope: <path>` in the plan's YAML frontmatter.
+2. **Auto-detection** — if no frontmatter is present, Ralphai parses the `## Relevant Files` markdown section, extracts file paths, and computes their longest common parent directory.
+
+When files span unrelated directories (no common parent), or when no `## Relevant Files` section exists, no feedback scope is inferred.
+
+```md
+---
+feedback-scope: src/components
+---
+```
+
+When a feedback scope is resolved, the agent prompt includes a **scope hint** near the feedback step. The hint tells the agent that the plan's changes are focused in a specific directory and suggests running targeted test commands (e.g. `bun test src/components/`) for faster iteration during development. The hint also advises running the full feedback suite before signaling COMPLETE to ensure nothing outside the scope is broken. This guidance is advisory — the agent still runs the full feedback suite as configured, but can optionally use scoped commands for quicker intermediate checks.
+
+When no feedback scope is available, the scope hint is omitted entirely and prompt behavior is unchanged.
+
 ### Doctor Validation
 
 `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Failures produce warnings, not hard errors.
@@ -382,6 +417,8 @@ scope: ui
 ## Learnings System
 
 Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review. Learnings are also injected into subsequent iterations as anti-repeat memory.
+
+The prompt asks agents to report specific categories of information in their learnings — file paths modified or discovered, exported APIs and their signatures, architecture constraints or patterns observed, and error messages encountered with how they were resolved. The format remains free-form prose; the categories are guidance, not schema enforcement. Vague or empty learnings still work — the guidance is best-effort.
 
 ## Progress Extraction
 

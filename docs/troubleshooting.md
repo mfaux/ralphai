@@ -131,3 +131,20 @@ When `ralphai run <number>` treats your PRD as a standalone issue, the issue is 
 2. The issue must have at least one **open** sub-issue. If all sub-issues are closed, Ralphai reports "all sub-issues are already completed."
 3. Run `gh issue view <number> --json labels` to verify the label is present.
 4. If the label doesn't exist in your repo yet, `ralphai run --prd=<number>` auto-creates it. The positional `ralphai run <number>` form does not.
+
+## "Agent keeps timing out on tests"
+
+When your test suite is large, the agent may spend most of its iteration budget running the full suite repeatedly. Use `feedback-scope` to help the agent iterate faster:
+
+1. Add `feedback-scope: <directory>` to the plan's YAML frontmatter, pointing to the directory where changes are concentrated:
+   ```md
+   ---
+   feedback-scope: src/components
+   ---
+   ```
+2. The agent prompt will include a scope hint suggesting targeted test commands (e.g. `bun test src/components/`) for quick intermediate checks.
+3. The agent still runs the full feedback suite before signaling COMPLETE.
+
+If you don't set `feedback-scope`, Ralphai tries to infer it from the `## Relevant Files` section in the plan. For plans that touch widely scattered files, consider splitting into smaller plans with narrower scope.
+
+You can also move slow tests (E2E, integration) to `prFeedbackCommands` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).

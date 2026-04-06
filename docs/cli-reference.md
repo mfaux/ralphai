@@ -383,6 +383,20 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                                              |
 | `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                                                            |
 
+### Plan Frontmatter Fields
+
+Plan files support these YAML frontmatter fields:
+
+| Field            | Description                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `scope`          | Monorepo package path (e.g. `packages/web`). Rewrites feedback commands to target the scoped package.                   |
+| `feedback-scope` | Directory path for narrowing feedback focus (e.g. `src/components`). Overrides auto-detection from `## Relevant Files`. |
+| `depends-on`     | List of plan slugs that must complete before this plan runs.                                                            |
+| `source`         | Origin of the plan (`github` or `manual`).                                                                              |
+| `issue`          | GitHub issue number associated with this plan.                                                                          |
+| `issue-url`      | Full URL of the GitHub issue.                                                                                           |
+| `prd`            | Parent PRD issue number.                                                                                                |
+
 ### Workspaces
 
 The `workspaces` key in `config.json` provides per-package feedback command overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value. Both `feedbackCommands` and `prFeedbackCommands` can be overridden per workspace.

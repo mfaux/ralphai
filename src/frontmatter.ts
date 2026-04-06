@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "fs";
 /** All known frontmatter fields from plan files. */
 export interface PlanFrontmatter {
   scope: string;
+  feedbackScope: string;
   dependsOn: string[];
   source: string;
   issue: number | undefined;
@@ -116,6 +117,22 @@ export function extractDependsOn(planPath: string): string[] {
 }
 
 /**
+ * Extract `feedback-scope` value from YAML frontmatter.
+ * Returns the feedback scope path (e.g. "src/components") or "" if not present.
+ */
+export function extractFeedbackScope(planPath: string): string {
+  const content = readPlanContent(planPath);
+  if (!content) return "";
+  const fm = extractFrontmatterBlock(content);
+  if (!fm) return "";
+
+  const match = fm.match(/^\s*feedback-scope:\s*(.+)$/m);
+  if (!match) return "";
+
+  return match[1]!.trim();
+}
+
+/**
  * Extract issue-related frontmatter fields from a plan file.
  * Returns source, issue number, and issue URL.
  */
@@ -160,6 +177,7 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
   if (!content) {
     return {
       scope: "",
+      feedbackScope: "",
       dependsOn: [],
       source: "",
       issue: undefined,
@@ -172,8 +190,9 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
   // Each reads the file independently, but for a plan file this is fine.
   // If performance ever matters, refactor to parse once.
   const scope = extractScope(planPath);
+  const feedbackScope = extractFeedbackScope(planPath);
   const dependsOn = extractDependsOn(planPath);
   const { source, issue, issueUrl, prd } = extractIssueFrontmatter(planPath);
 
-  return { scope, dependsOn, source, issue, issueUrl, prd };
+  return { scope, feedbackScope, dependsOn, source, issue, issueUrl, prd };
 }
