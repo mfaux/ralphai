@@ -1,21 +1,29 @@
 /**
- * TUI application root — screen router.
+ * TUI application root -- screen router with async data hooks.
  *
  * `App` manages which screen is visible, dispatches actions from the
  * `MenuScreen`, and handles transitions (exit, navigate, launch runner).
  *
- * The component accepts pipeline state and context as props so that the
- * caller (the CLI entry point) owns data fetching. This keeps `App`
- * deterministic and testable.
+ * Data loading is owned by the hooks inside `App`:
+ * - `usePipelineState` gathers pipeline state asynchronously on mount
+ *   and re-gathers on `refresh()`.
+ * - `useGithubIssues` peeks at GitHub issue counts on mount (cached
+ *   for the session).
+ *
+ * The menu renders immediately in a loading state while data loads in
+ * the background, so the TUI is interactive from the first frame.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useApp } from "ink";
 
-import type { PipelineState } from "../pipeline-state.ts";
 import type { MenuContext } from "./menu-items.ts";
-import type { Screen, ActionType, DispatchResult } from "./types.ts";
+import type { Screen, DispatchResult } from "./types.ts";
 import { isActionType, resolveAction } from "./types.ts";
+import { usePipelineState } from "./hooks/use-pipeline-state.ts";
+import type { UsePipelineStateOptions } from "./hooks/use-pipeline-state.ts";
+import { useGithubIssues } from "./hooks/use-github-issues.ts";
+import type { UseGithubIssuesOptions } from "./hooks/use-github-issues.ts";
 import { MenuScreen } from "./screens/menu.tsx";
 
 // ---------------------------------------------------------------------------
@@ -23,10 +31,19 @@ import { MenuScreen } from "./screens/menu.tsx";
 // ---------------------------------------------------------------------------
 
 export interface AppProps {
-  /** Current pipeline state (owned by the caller). */
-  state: PipelineState;
-  /** Extra context for menu item construction. */
-  menuContext?: MenuContext;
+  /**
+   * Options for the pipeline state hook.
+   * Must include `cwd` and optionally injected gather/list functions.
+   */
+  pipelineOpts: UsePipelineStateOptions;
+  /**
+   * Options for the GitHub issues hook.
+   * When `undefined`, GitHub issue loading is skipped entirely
+   * (e.g. when `issueSource` is not "github").
+   */
+  githubOpts?: UseGithubIssuesOptions;
+  /** Whether GitHub issues are configured as the issue source. */
+  hasGitHubIssues?: boolean;
   /**
    * Called when the TUI wants to hand off to the agent runner.
    * The caller should exit Ink and run the given CLI args.
@@ -50,22 +67,61 @@ export function handleAction(action: string): DispatchResult | null {
 }
 
 // ---------------------------------------------------------------------------
+// Stub hook for when GitHub issues are disabled
+// ---------------------------------------------------------------------------
+
+const EMPTY_GITHUB: UseGithubIssuesOptions = {
+  peekOptions: {
+    cwd: "",
+    issueSource: "none",
+    standaloneLabel: "",
+    issueRepo: "",
+  },
+};
+
+// ---------------------------------------------------------------------------
 // App component
 // ---------------------------------------------------------------------------
 
-export function App({ state, menuContext, onExitToRunner }: AppProps) {
+export function App({
+  pipelineOpts,
+  githubOpts,
+  hasGitHubIssues = false,
+  onExitToRunner,
+}: AppProps) {
   const { exit } = useApp();
   const [screen, setScreen] = useState<Screen>({ type: "menu" });
 
+  // --- Async data hooks ---
+  const pipeline = usePipelineState(pipelineOpts);
+  const github = useGithubIssues(githubOpts ?? EMPTY_GITHUB);
+
+  // Build the MenuContext from hook results
+  const menuContext = useMemo<MenuContext>(() => {
+    const ctx: MenuContext = {
+      hasGitHubIssues,
+    };
+
+    if (hasGitHubIssues) {
+      ctx.githubIssueCount = github.count;
+      ctx.githubIssueLoading = github.loading;
+      ctx.githubIssueError = github.error;
+    }
+
+    return ctx;
+  }, [hasGitHubIssues, github.count, github.loading, github.error]);
+
+  // --- Action dispatch ---
   const handleMenuAction = useCallback(
     (action: string) => {
       const result = handleAction(action);
-      if (!result) return; // unknown action — ignore
+      if (!result) return; // unknown action -- ignore
 
       switch (result.type) {
         case "stay":
-          // Remain on the current screen. The menu will re-render with
-          // fresh state when the caller provides updated props.
+          // Refresh pipeline state when returning from a sub-flow
+          // so the menu shows up-to-date data.
+          pipeline.refresh();
           break;
 
         case "exit":
@@ -86,7 +142,7 @@ export function App({ state, menuContext, onExitToRunner }: AppProps) {
           break;
       }
     },
-    [exit, onExitToRunner],
+    [exit, onExitToRunner, pipeline.refresh],
   );
 
   // -----------------------------------------------------------------------
@@ -97,7 +153,8 @@ export function App({ state, menuContext, onExitToRunner }: AppProps) {
     case "menu":
       return (
         <MenuScreen
-          state={state}
+          state={pipeline.state}
+          loading={pipeline.loading}
           menuContext={menuContext}
           onAction={handleMenuAction}
           isActive={true}

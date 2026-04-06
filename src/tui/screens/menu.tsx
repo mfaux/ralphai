@@ -29,8 +29,10 @@ import type {
 // ---------------------------------------------------------------------------
 
 export interface MenuScreenProps {
-  /** Current pipeline state. */
-  state: PipelineState;
+  /** Current pipeline state, or null while loading. */
+  state: PipelineState | null;
+  /** `true` while pipeline state is being gathered. */
+  loading?: boolean;
   /** Extra context for menu item construction. */
   menuContext?: MenuContext;
   /** Called when the user selects a menu item (via Enter or hotkey). */
@@ -159,14 +161,23 @@ function MenuListItem({
 
 export function MenuScreen({
   state,
+  loading = false,
   menuContext,
   onAction,
   isActive = true,
 }: MenuScreenProps) {
-  // Build menu items from pipeline state
+  // Build menu items from pipeline state (use empty state while loading)
+  const effectiveState: PipelineState = state ?? {
+    backlog: [],
+    inProgress: [],
+    completedSlugs: [],
+    worktrees: [],
+    problems: [],
+  };
+
   const menuItems = useMemo(
-    () => buildMenuItems(state, menuContext),
-    [state, menuContext],
+    () => buildMenuItems(effectiveState, menuContext),
+    [effectiveState, menuContext],
   );
 
   // Build flat list items with group headers

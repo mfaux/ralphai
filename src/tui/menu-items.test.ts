@@ -700,3 +700,135 @@ describe("buildMenuItems — hotkey assignments", () => {
     expect(settings.hotkey).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — GitHub loading indicator
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — GitHub loading indicator", () => {
+  it("pick-from-github shows 'loading...' hint and is disabled while loading", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub");
+    expect(pick.hint).toBe("loading\u2026");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("run-next shows 'loading...' hint when GitHub is loading and no local plans", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // run-next should show a hint that includes loading
+    expect(runNext.hint).toBe("loading\u2026");
+  });
+
+  it("run-next hint remains plan name when local plans exist, even if GitHub is loading", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // When a local plan is available, loading doesn't affect the label
+    expect(runNext.label).toBe("Run next plan (plan-1.md)");
+    expect(runNext.disabled).toBeFalsy();
+  });
+
+  it("loading indicators don't appear when hasGitHubIssues is false", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: false,
+      githubIssueLoading: true, // ignored when not configured
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(not configured)");
+    expect(pick.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — GitHub error state
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — GitHub error state", () => {
+  it("pick-from-github shows error hint and is disabled on error", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueError: "gh CLI not available",
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(gh CLI not available)");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("run-next shows GitHub error hint when no local plans", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueError: "gh CLI not available",
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // run-next still gets generic "will pull from GitHub" from runNextMenuItem,
+    // but our override replaces undefined hints with the error
+    expect(runNext.hint).toBe("(GitHub: gh CLI not available)");
+  });
+
+  it("error indicators don't appear when hasGitHubIssues is false", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: false,
+      githubIssueError: "some error", // ignored
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(not configured)");
+  });
+
+  it("loading state takes precedence over error state for pick-from-github", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+      githubIssueError: "stale error",
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("loading\u2026");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("successful count overrides loading/error for pick-from-github", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueCount: 5,
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub (5 issues)");
+    expect(pick.disabled).toBeFalsy();
+  });
+});

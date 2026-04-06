@@ -51,6 +51,10 @@ export interface MenuContext {
   hasGitHubIssues: boolean;
   /** Number of available GitHub issues (from peek). */
   githubIssueCount?: number;
+  /** `true` while the GitHub issue peek is in flight. */
+  githubIssueLoading?: boolean;
+  /** Error string from a failed GitHub issue peek. */
+  githubIssueError?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,15 +133,34 @@ export function buildMenuItems(
   });
 
   // --- START group ---
+
+  // When GitHub issues are loading or errored, override the context
+  // passed to item builders so they show appropriate hints.
+  const githubLoading = ctx.hasGitHubIssues && ctx.githubIssueLoading === true;
+  const githubError = ctx.hasGitHubIssues ? ctx.githubIssueError : undefined;
+
   const runNext = runNextMenuItem(
     state,
     ctx.hasGitHubIssues,
     ctx.githubIssueCount,
   );
+
+  // Override run-next hint when GitHub data is still loading or errored
+  // and the item is in a GitHub-dependent state (no local plan found).
+  // When a local plan is available, the label includes the plan name and
+  // the hint is irrelevant to GitHub, so we leave it alone.
+  const localPlanFound = runNext.label !== "Run next plan";
+  const runNextHint =
+    !localPlanFound && githubLoading
+      ? "loading\u2026"
+      : !localPlanFound && githubError
+        ? `(GitHub: ${githubError})`
+        : runNext.hint;
+
   items.push({
     value: "run-next",
     label: runNext.label,
-    hint: runNext.hint,
+    hint: runNextHint,
     group: "START",
     disabled: runNext.disabled,
     hotkey: "n",
@@ -153,7 +176,25 @@ export function buildMenuItems(
     hotkey: "b",
   });
 
-  const pickGithub = pickFromGithubMenuItem(ctx);
+  // Override pick-from-github item for loading/error states
+  let pickGithub: { label: string; hint?: string; disabled: boolean };
+
+  if (githubLoading) {
+    pickGithub = {
+      label: "Pick from GitHub",
+      hint: "loading…",
+      disabled: true,
+    };
+  } else if (githubError) {
+    pickGithub = {
+      label: "Pick from GitHub",
+      hint: `(${githubError})`,
+      disabled: true,
+    };
+  } else {
+    pickGithub = pickFromGithubMenuItem(ctx);
+  }
+
   items.push({
     value: "pick-from-github",
     label: pickGithub.label,
