@@ -32,6 +32,7 @@ import { ConfirmScreen } from "./screens/confirm.tsx";
 import { OptionsScreen } from "./screens/options.tsx";
 import { StopScreen } from "./screens/stop.tsx";
 import { ResetScreen } from "./screens/reset.tsx";
+import { StatusScreen } from "./screens/status.tsx";
 import {
   runningPlans,
   resettablePlans,
@@ -328,6 +329,15 @@ export function App({
           cwd={pipelineOpts.cwd}
           onResult={dispatch}
           resetPlan={resetPlanFn}
+          isActive={true}
+        />
+      );
+
+    case "status":
+      return (
+        <StatusScreen
+          state={pipeline.state}
+          onResult={dispatch}
           isActive={true}
         />
       );
