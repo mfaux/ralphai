@@ -24,7 +24,10 @@ import { usePipelineState } from "./hooks/use-pipeline-state.ts";
 import type { UsePipelineStateOptions } from "./hooks/use-pipeline-state.ts";
 import { useGithubIssues } from "./hooks/use-github-issues.ts";
 import type { UseGithubIssuesOptions } from "./hooks/use-github-issues.ts";
+import type { ListGithubIssuesOptions } from "../interactive/github-issues.ts";
 import { MenuScreen } from "./screens/menu.tsx";
+import { IssuePickerScreen } from "./screens/issue-picker.tsx";
+import { BacklogPickerScreen } from "./screens/backlog-picker.tsx";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,6 +47,12 @@ export interface AppProps {
   githubOpts?: UseGithubIssuesOptions;
   /** Whether GitHub issues are configured as the issue source. */
   hasGitHubIssues?: boolean;
+  /**
+   * Options for the full GitHub issue list (used by the issue picker
+   * screen). When `undefined`, the picker derives options from
+   * `githubOpts.peekOptions`.
+   */
+  issueListOptions?: ListGithubIssuesOptions;
   /**
    * Called when the TUI wants to hand off to the agent runner.
    * The caller should exit Ink and run the given CLI args.
@@ -87,6 +96,7 @@ export function App({
   pipelineOpts,
   githubOpts,
   hasGitHubIssues = false,
+  issueListOptions,
   onExitToRunner,
 }: AppProps) {
   const { exit } = useApp();
@@ -112,11 +122,15 @@ export function App({
   }, [hasGitHubIssues, github.count, github.loading, github.error]);
 
   // --- Action dispatch ---
-  const handleMenuAction = useCallback(
-    (action: string) => {
-      const result = handleAction(action);
-      if (!result) return; // unknown action -- ignore
 
+  /**
+   * Central dispatch for `DispatchResult` values.
+   *
+   * Used by picker screens (which produce `DispatchResult` directly)
+   * and by `handleMenuAction` (which maps an action string first).
+   */
+  const dispatch = useCallback(
+    (result: DispatchResult) => {
       switch (result.type) {
         case "stay":
           // Refresh pipeline state when returning from a sub-flow
@@ -145,6 +159,29 @@ export function App({
     [exit, onExitToRunner, pipeline.refresh],
   );
 
+  const handleMenuAction = useCallback(
+    (action: string) => {
+      const result = handleAction(action);
+      if (!result) return; // unknown action -- ignore
+      dispatch(result);
+    },
+    [dispatch],
+  );
+
+  // -----------------------------------------------------------------------
+  // Derived options for the issue picker screen
+  // -----------------------------------------------------------------------
+
+  const resolvedIssueListOptions = useMemo<
+    ListGithubIssuesOptions | undefined
+  >(() => {
+    if (issueListOptions) return issueListOptions;
+    if (!githubOpts) return undefined;
+    const { cwd, standaloneLabel, issueRepo, issuePrdLabel } =
+      githubOpts.peekOptions;
+    return { cwd, standaloneLabel, issueRepo, issuePrdLabel };
+  }, [issueListOptions, githubOpts]);
+
   // -----------------------------------------------------------------------
   // Screen router
   // -----------------------------------------------------------------------
@@ -157,6 +194,31 @@ export function App({
           loading={pipeline.loading}
           menuContext={menuContext}
           onAction={handleMenuAction}
+          isActive={true}
+        />
+      );
+
+    case "issue-picker":
+      return (
+        <IssuePickerScreen
+          listOptions={
+            resolvedIssueListOptions ?? {
+              cwd: "",
+              standaloneLabel: "",
+              issueRepo: "",
+            }
+          }
+          onResult={dispatch}
+          isActive={true}
+        />
+      );
+
+    case "backlog-picker":
+      return (
+        <BacklogPickerScreen
+          backlog={pipeline.state?.backlog ?? []}
+          completedSlugs={pipeline.state?.completedSlugs ?? []}
+          onResult={dispatch}
           isActive={true}
         />
       );

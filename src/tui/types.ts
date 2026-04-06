@@ -64,11 +64,14 @@ export function isActionType(value: string): value is ActionType {
 /**
  * Discriminated union of screens the TUI can display.
  *
- * Currently the only implemented screen is "menu". As the TUI grows,
- * new screens (e.g. "backlog-picker", "settings", "status") will be
- * added here with their own associated data.
+ * Each variant represents a distinct full-screen view. The `App`
+ * component uses a `switch` on `screen.type` to render the correct
+ * component.
  */
-export type Screen = { type: "menu" };
+export type Screen =
+  | { type: "menu" }
+  | { type: "issue-picker" }
+  | { type: "backlog-picker" };
 
 // ---------------------------------------------------------------------------
 // Dispatch result
@@ -109,12 +112,16 @@ export function resolveAction(action: ActionType): DispatchResult {
     case "quit":
       return { type: "exit" };
 
+    // --- Actions that navigate to picker sub-screens ---
+    case "pick-from-backlog":
+      return { type: "navigate", screen: { type: "backlog-picker" } };
+    case "pick-from-github":
+      return { type: "navigate", screen: { type: "issue-picker" } };
+
     // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
     // These will be updated to `{ type: "navigate", screen: ... }` as
     // their respective screens are implemented.
     case "resume-stalled":
-    case "pick-from-backlog":
-    case "pick-from-github":
     case "run-with-options":
     case "stop-running":
     case "reset-plan":

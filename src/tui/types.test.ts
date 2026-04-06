@@ -108,8 +108,6 @@ describe("resolveAction", () => {
   describe("stay actions (future sub-screens)", () => {
     const stayActions: ActionType[] = [
       "resume-stalled",
-      "pick-from-backlog",
-      "pick-from-github",
       "run-with-options",
       "stop-running",
       "reset-plan",
@@ -125,6 +123,24 @@ describe("resolveAction", () => {
         expect(result.type).toBe("stay");
       });
     }
+  });
+
+  describe("navigate actions (picker sub-screens)", () => {
+    it("pick-from-backlog navigates to backlog-picker", () => {
+      const result = resolveAction("pick-from-backlog");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "backlog-picker" },
+      });
+    });
+
+    it("pick-from-github navigates to issue-picker", () => {
+      const result = resolveAction("pick-from-github");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "issue-picker" },
+      });
+    });
   });
 
   it("every ActionType has a defined dispatch result", () => {

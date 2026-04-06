@@ -56,8 +56,6 @@ describe("handleAction", () => {
   describe("stay actions", () => {
     const stayActions: ActionType[] = [
       "resume-stalled",
-      "pick-from-backlog",
-      "pick-from-github",
       "run-with-options",
       "stop-running",
       "reset-plan",
@@ -73,6 +71,24 @@ describe("handleAction", () => {
         expect(result).toEqual({ type: "stay" });
       });
     }
+  });
+
+  describe("navigate actions", () => {
+    it("pick-from-backlog navigates to backlog-picker", () => {
+      const result = handleAction("pick-from-backlog");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "backlog-picker" },
+      });
+    });
+
+    it("pick-from-github navigates to issue-picker", () => {
+      const result = handleAction("pick-from-github");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "issue-picker" },
+      });
+    });
   });
 
   describe("consistency with menu items", () => {
