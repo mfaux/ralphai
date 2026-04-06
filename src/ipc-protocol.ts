@@ -12,6 +12,8 @@
  */
 
 import { join } from "path";
+import { tmpdir } from "os";
+import { createHash } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Message types
@@ -99,11 +101,40 @@ export function deserialize(line: string): IpcMessage | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Maximum safe socket path length in bytes.
+ *
+ * Linux `sun_path` is 108 bytes (including null terminator → 107 usable).
+ * macOS `sun_path` is 104 bytes (including null terminator → 103 usable).
+ * We use 103 as the safe cross-platform limit.
+ */
+const MAX_SOCKET_PATH_BYTES = 103;
+
+/**
  * Compute the IPC socket path for a plan.
  *
- * Layout: `<wipDir>/<slug>/runner.sock`
- * Co-located with `runner.pid` and other plan artifacts.
+ * Preferred layout: `<wipDir>/<slug>/runner.sock`
+ * (co-located with `runner.pid` and other plan artifacts).
+ *
+ * When the preferred path exceeds the Unix domain socket path length limit
+ * (104 bytes on macOS, 108 on Linux), falls back to a deterministic
+ * temp-directory path: `<tmpdir>/ralphai-<hash>.sock`.
+ *
+ * On Windows, named pipes have no path length restriction, so the
+ * preferred path is always used.
  */
 export function getSocketPath(wipDir: string, slug: string): string {
-  return join(wipDir, slug, "runner.sock");
+  const preferred = join(wipDir, slug, "runner.sock");
+
+  if (process.platform === "win32") return preferred;
+
+  if (Buffer.byteLength(preferred, "utf8") <= MAX_SOCKET_PATH_BYTES) {
+    return preferred;
+  }
+
+  // Deterministic hash so both server and client resolve the same path.
+  const hash = createHash("sha256")
+    .update(preferred)
+    .digest("hex")
+    .slice(0, 16);
+  return join(tmpdir(), `ralphai-${hash}.sock`);
 }

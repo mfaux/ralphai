@@ -4,6 +4,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { join } from "path";
+import { tmpdir } from "os";
 import {
   serialize,
   deserialize,
@@ -274,17 +275,63 @@ describe("multi-message chunk parsing", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSocketPath", () => {
-  test("returns path under wipDir/slug", () => {
-    const wipDir = join(
-      "/home/user/.ralphai/repos/my-repo/pipeline/in-progress",
-    );
+  test("returns co-located path when under the socket length limit", () => {
+    const wipDir = "/tmp/wip";
     const result = getSocketPath(wipDir, "my-plan");
     expect(result).toBe(join(wipDir, "my-plan", "runner.sock"));
   });
 
-  test("handles slug with special characters", () => {
-    const wipDir = join("/tmp/wip");
+  test("returns co-located path for typical short slug", () => {
+    const wipDir = "/tmp/wip";
     const result = getSocketPath(wipDir, "feat-add-auth-flow");
     expect(result).toBe(join(wipDir, "feat-add-auth-flow", "runner.sock"));
   });
+
+  describe.skipIf(process.platform === "win32")(
+    "Unix socket path length limit",
+    () => {
+      test("falls back to temp-dir path when path exceeds limit", () => {
+        const wipDir =
+          "/home/user/.ralphai/repos/github-com-some-org-some-long-repo-name/pipeline/in-progress";
+        const slug =
+          "gh-279-feat-menu-items-selectable-list-component-main-menu-screen";
+        const result = getSocketPath(wipDir, slug);
+
+        // Should NOT be the co-located path
+        const colocated = join(wipDir, slug, "runner.sock");
+        expect(result).not.toBe(colocated);
+
+        // Should be under tmpdir with a deterministic hash
+        expect(result).toMatch(
+          new RegExp(`^${tmpdir()}/ralphai-[0-9a-f]{16}\\.sock$`),
+        );
+
+        // Must fit within the Unix socket path limit
+        expect(Buffer.byteLength(result, "utf8")).toBeLessThanOrEqual(103);
+      });
+
+      test("produces deterministic path for the same inputs", () => {
+        const wipDir =
+          "/home/user/.ralphai/repos/some-very-long-repo-slug-name/pipeline/in-progress";
+        const slug = "gh-999-some-extremely-long-plan-slug-that-exceeds-limits";
+        const a = getSocketPath(wipDir, slug);
+        const b = getSocketPath(wipDir, slug);
+        expect(a).toBe(b);
+      });
+
+      test("produces different paths for different inputs", () => {
+        const wipDir =
+          "/home/user/.ralphai/repos/some-very-long-repo-slug-name/pipeline/in-progress";
+        const a = getSocketPath(
+          wipDir,
+          "gh-100-some-extremely-long-plan-slug-that-exceeds-limits-aaa",
+        );
+        const b = getSocketPath(
+          wipDir,
+          "gh-200-some-extremely-long-plan-slug-that-exceeds-limits-bbb",
+        );
+        expect(a).not.toBe(b);
+      });
+    },
+  );
 });
