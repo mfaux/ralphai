@@ -248,10 +248,14 @@ export function App({
       const result = handleAction(action);
       if (!result) return; // unknown action -- ignore
       // "run-with-options" routes through the options wizard instead
-      // of the confirm screen. All other exit-to-runner actions
-      // (e.g. "run-next") route through confirm.
+      // of the confirm screen. "settings" exits the TUI directly
+      // (no confirm screen) and runs `ralphai init --force`.
+      // All other exit-to-runner actions (e.g. "run-next") route
+      // through confirm.
       if (action === "run-with-options") {
         dispatch(toOptionsNav(result, runConfig, { type: "menu" }));
+      } else if (action === "settings") {
+        dispatch(result);
       } else {
         dispatch(toConfirmNav(result, runConfig, { type: "menu" }));
       }

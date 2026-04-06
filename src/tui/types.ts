@@ -155,11 +155,14 @@ export function resolveAction(action: ActionType): DispatchResult {
     case "run-with-options":
       return { type: "exit-to-runner", args: ["run"] };
 
+    // --- Actions that exit the TUI and launch a non-runner command ---
+    case "settings":
+      return { type: "exit-to-runner", args: ["init", "--force"] };
+
     // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
     // These will be updated to `{ type: "navigate", screen: ... }` as
     // their respective screens are implemented.
     case "resume-stalled":
-    case "settings":
       return { type: "stay" };
   }
 }

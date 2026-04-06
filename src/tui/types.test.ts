@@ -123,8 +123,18 @@ describe("resolveAction", () => {
     });
   });
 
+  describe("settings action", () => {
+    it('settings returns exit-to-runner with ["init", "--force"]', () => {
+      const result = resolveAction("settings");
+      expect(result).toEqual({
+        type: "exit-to-runner",
+        args: ["init", "--force"],
+      });
+    });
+  });
+
   describe("stay actions (future sub-screens)", () => {
-    const stayActions: ActionType[] = ["resume-stalled", "settings"];
+    const stayActions: ActionType[] = ["resume-stalled"];
 
     for (const action of stayActions) {
       it(`${action} returns stay`, () => {

@@ -415,7 +415,7 @@ function settingsDetail(resolvedConfig?: ResolvedConfig): DetailContent {
   if (!resolvedConfig) {
     return {
       title: "Settings",
-      lines: [{ text: "Press Enter to view or edit config", dim: true }],
+      lines: [{ text: "Press Enter to edit config (ralphai init)", dim: true }],
     };
   }
 

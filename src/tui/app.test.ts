@@ -70,7 +70,7 @@ describe("handleAction", () => {
   });
 
   describe("stay actions", () => {
-    const stayActions: ActionType[] = ["resume-stalled", "settings"];
+    const stayActions: ActionType[] = ["resume-stalled"];
 
     for (const action of stayActions) {
       it(`${action} returns stay`, () => {
@@ -78,6 +78,21 @@ describe("handleAction", () => {
         expect(result).toEqual({ type: "stay" });
       });
     }
+  });
+
+  describe("settings action", () => {
+    it('settings returns exit-to-runner with ["init", "--force"] (dispatched directly, no confirm screen)', () => {
+      const result = handleAction("settings");
+      expect(result).toEqual({
+        type: "exit-to-runner",
+        args: ["init", "--force"],
+      });
+
+      // Unlike run actions, settings dispatches directly — it does NOT
+      // go through toConfirmNav. The App component has a special case
+      // for "settings" that calls dispatch(result) directly so the
+      // TUI exits and `ralphai init --force` runs in the terminal.
+    });
   });
 
   describe("options action", () => {
