@@ -26,6 +26,12 @@ export interface AssemblePromptOptions {
   feedbackCommands: string;
   /** Monorepo scope hint (may be empty). */
   scopeHint: string;
+  /**
+   * Feedback scope: the common parent directory of files relevant to the plan.
+   * Used by downstream prompt wording to narrow feedback focus. May be empty
+   * when no scope could be inferred.
+   */
+  feedbackScope?: string;
   /** Accumulated learnings from prior iterations (in-memory). */
   learnings: string[];
   /** Detected plan format — drives prompt wording for step 2 and progress blocks. */

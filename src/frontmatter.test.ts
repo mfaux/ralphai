@@ -5,6 +5,7 @@ import {
   extractScope,
   extractDependsOn,
   extractIssueFrontmatter,
+  extractFeedbackScope,
   parseFrontmatter,
 } from "./frontmatter.ts";
 import { useTempDir } from "./test-utils.ts";
@@ -198,6 +199,48 @@ describe("extractIssueFrontmatter", () => {
 });
 
 // ---------------------------------------------------------------------------
+// extractFeedbackScope() unit tests
+// ---------------------------------------------------------------------------
+
+describe("extractFeedbackScope", () => {
+  const ctx = useTempDir();
+
+  it("extracts feedback-scope value", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nfeedback-scope: src/components\n---\n\n# Plan\n");
+    expect(extractFeedbackScope(p)).toBe("src/components");
+  });
+
+  it("returns empty string when feedback-scope is absent", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nscope: packages/web\n---\n\n# Plan\n");
+    expect(extractFeedbackScope(p)).toBe("");
+  });
+
+  it("returns empty string for no frontmatter", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "# Plan: No Frontmatter\n");
+    expect(extractFeedbackScope(p)).toBe("");
+  });
+
+  it("returns empty string for nonexistent file", () => {
+    expect(extractFeedbackScope(join(ctx.dir, "nope.md"))).toBe("");
+  });
+
+  it("handles trailing whitespace on value", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\nfeedback-scope: src/utils   \n---\n\n# Plan\n");
+    expect(extractFeedbackScope(p)).toBe("src/utils");
+  });
+
+  it("returns empty string for empty frontmatter block", () => {
+    const p = join(ctx.dir, "plan.md");
+    writeFileSync(p, "---\n---\n\n# Plan\n");
+    expect(extractFeedbackScope(p)).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // parseFrontmatter() unit tests
 // ---------------------------------------------------------------------------
 
@@ -214,6 +257,7 @@ describe("parseFrontmatter", () => {
         "issue: 99",
         "issue-url: https://github.com/org/repo/issues/99",
         "scope: packages/api",
+        "feedback-scope: src/components",
         "depends-on: [setup.md, infra.md]",
         "prd: 50",
         "---",
@@ -227,6 +271,7 @@ describe("parseFrontmatter", () => {
     expect(fm.issue).toBe(99);
     expect(fm.issueUrl).toBe("https://github.com/org/repo/issues/99");
     expect(fm.scope).toBe("packages/api");
+    expect(fm.feedbackScope).toBe("src/components");
     expect(fm.dependsOn).toEqual(["setup.md", "infra.md"]);
     expect(fm.prd).toBe(50);
   });
@@ -260,6 +305,7 @@ describe("parseFrontmatter", () => {
     writeFileSync(p, "# Just a heading\n");
     const fm = parseFrontmatter(p);
     expect(fm.scope).toBe("");
+    expect(fm.feedbackScope).toBe("");
     expect(fm.dependsOn).toEqual([]);
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();
@@ -270,6 +316,7 @@ describe("parseFrontmatter", () => {
   it("returns defaults for nonexistent file", () => {
     const fm = parseFrontmatter(join(ctx.dir, "nope.md"));
     expect(fm.scope).toBe("");
+    expect(fm.feedbackScope).toBe("");
     expect(fm.dependsOn).toEqual([]);
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();
@@ -282,6 +329,7 @@ describe("parseFrontmatter", () => {
     writeFileSync(p, "---\n---\n\n# Plan\n");
     const fm = parseFrontmatter(p);
     expect(fm.scope).toBe("");
+    expect(fm.feedbackScope).toBe("");
     expect(fm.dependsOn).toEqual([]);
     expect(fm.source).toBe("");
     expect(fm.issue).toBeUndefined();

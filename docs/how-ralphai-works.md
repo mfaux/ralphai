@@ -340,6 +340,21 @@ Commands pass through unchanged.
 
 In all cases, Ralphai adds a scope hint to the prompt so the agent focuses on files within the scoped directory.
 
+### Feedback Scope
+
+Feedback scope narrows the directory context for feedback hints in the agent prompt. It is resolved from two sources, with explicit frontmatter taking precedence:
+
+1. **Frontmatter** — `feedback-scope: <path>` in the plan's YAML frontmatter.
+2. **Auto-detection** — if no frontmatter is present, Ralphai parses the `## Relevant Files` markdown section, extracts file paths, and computes their longest common parent directory.
+
+When files span unrelated directories (no common parent), or when no `## Relevant Files` section exists, no feedback scope is inferred.
+
+```md
+---
+feedback-scope: src/components
+---
+```
+
 ### Doctor Validation
 
 `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Failures produce warnings, not hard errors.

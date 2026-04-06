@@ -61,8 +61,13 @@ import {
   type PipelineDirs,
   type BlockedPlanInfo,
 } from "./plan-detection.ts";
-import { extractScope, extractIssueFrontmatter } from "./frontmatter.ts";
+import {
+  extractScope,
+  extractIssueFrontmatter,
+  extractFeedbackScope,
+} from "./frontmatter.ts";
 import { resolveScope } from "./scope.ts";
+import { detectFeedbackScope } from "./scope-detection.ts";
 import {
   initReceipt,
   updateReceiptTasks,
@@ -787,6 +792,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const { format: planFormat, totalTasks } = detectPlanFormat(planContent);
     let iterationNumber = 0;
 
+    // Resolve feedback scope: explicit frontmatter overrides auto-detection.
+    const fmFeedbackScope = extractFeedbackScope(planFile);
+    const resolvedFeedbackScope =
+      fmFeedbackScope || detectFeedbackScope(planContent);
+
     // Generate a per-plan nonce for sentinel tag authentication.
     // Injected into the prompt so agents echo it back; the runner
     // only recognizes tags whose nonce matches, preventing false
@@ -815,6 +825,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         progressFile,
         feedbackCommands,
         scopeHint,
+        feedbackScope: resolvedFeedbackScope,
         learnings: accumulatedLearnings,
         planFormat,
         gateRejection: lastGateRejection,
