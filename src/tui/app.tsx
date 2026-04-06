@@ -31,8 +31,13 @@ import { BacklogPickerScreen } from "./screens/backlog-picker.tsx";
 import { ConfirmScreen } from "./screens/confirm.tsx";
 import { OptionsScreen } from "./screens/options.tsx";
 import { StopScreen } from "./screens/stop.tsx";
-import { runningPlans } from "../interactive/pipeline-actions.ts";
+import { ResetScreen } from "./screens/reset.tsx";
+import {
+  runningPlans,
+  resettablePlans,
+} from "../interactive/pipeline-actions.ts";
 import { runRalphaiStop } from "../stop.ts";
+import { resetPlanBySlug } from "../ralphai.ts";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -74,6 +79,11 @@ export interface AppProps {
    * `runRalphaiStop` — override in tests.
    */
   stopPlan?: (cwd: string, slug: string) => void;
+  /**
+   * Injected reset function for the reset screen. Defaults to
+   * `resetPlanBySlug` — override in tests.
+   */
+  resetPlan?: (cwd: string, slug: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +126,7 @@ export function App({
   runConfig = { agentCommand: "", feedbackCommands: "" },
   onExitToRunner,
   stopPlan: injectedStopPlan,
+  resetPlan: injectedResetPlan,
 }: AppProps) {
   const { exit } = useApp();
   const [screen, setScreen] = useState<Screen>({ type: "menu" });
@@ -127,6 +138,14 @@ export function App({
       ((cwd: string, slug: string) =>
         runRalphaiStop({ cwd, dryRun: false, slug })),
     [injectedStopPlan],
+  );
+
+  // Default reset function — calls resetPlanBySlug with cwd and slug
+  const resetPlanFn = useMemo(
+    () =>
+      injectedResetPlan ??
+      ((cwd: string, slug: string) => resetPlanBySlug(cwd, slug)),
+    [injectedResetPlan],
   );
 
   // --- Async data hooks ---
@@ -296,6 +315,19 @@ export function App({
           cwd={pipelineOpts.cwd}
           onResult={dispatch}
           stopPlan={stopPlan}
+          isActive={true}
+        />
+      );
+
+    case "reset":
+      return (
+        <ResetScreen
+          resettablePlans={
+            pipeline.state ? resettablePlans(pipeline.state) : []
+          }
+          cwd={pipelineOpts.cwd}
+          onResult={dispatch}
+          resetPlan={resetPlanFn}
           isActive={true}
         />
       );
