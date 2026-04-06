@@ -34,6 +34,7 @@ import { StopScreen } from "./screens/stop.tsx";
 import { ResetScreen } from "./screens/reset.tsx";
 import { StatusScreen } from "./screens/status.tsx";
 import { DoctorScreen } from "./screens/doctor.tsx";
+import { CleanScreen } from "./screens/clean.tsx";
 import {
   runningPlans,
   resettablePlans,
@@ -352,6 +353,15 @@ export function App({
     case "doctor":
       return (
         <DoctorScreen
+          cwd={pipelineOpts.cwd}
+          onResult={dispatch}
+          isActive={true}
+        />
+      );
+
+    case "clean":
+      return (
+        <CleanScreen
           cwd={pipelineOpts.cwd}
           onResult={dispatch}
           isActive={true}

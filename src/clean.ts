@@ -55,7 +55,7 @@ export interface CleanOptions {
   archive: boolean;
 }
 
-interface ArchiveSummary {
+export interface ArchiveSummary {
   planDirCount: number;
   planFiles: number;
   progressFiles: number;
@@ -66,7 +66,7 @@ interface ArchiveSummary {
 // Archive (purge) cleanup
 // ---------------------------------------------------------------------------
 
-function scanArchive(archiveDir: string): ArchiveSummary | null {
+export function scanArchive(archiveDir: string): ArchiveSummary | null {
   if (!existsSync(archiveDir)) return null;
 
   const entries = readdirSync(archiveDir, { withFileTypes: true });
@@ -92,7 +92,7 @@ function scanArchive(archiveDir: string): ArchiveSummary | null {
   };
 }
 
-function deleteArchive(archiveDir: string): void {
+export function deleteArchive(archiveDir: string): void {
   const entries = readdirSync(archiveDir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isDirectory()) {
@@ -123,12 +123,39 @@ function printArchiveSummary(label: string, summary: ArchiveSummary): void {
 // Worktree cleanup
 // ---------------------------------------------------------------------------
 
-interface WorktreeCleanResult {
+export interface WorktreeCleanResult {
   orphanCount: number;
   cleaned: number;
 }
 
-function cleanOrphanedWorktrees(cwd: string): WorktreeCleanResult {
+/**
+ * Count orphaned worktrees without any side effects.
+ *
+ * Used by the TUI to show a preview before confirmation.
+ * Returns 0 if not in a git repo or git is unavailable.
+ */
+export function countOrphanedWorktrees(cwd: string): number {
+  try {
+    const worktrees = listRalphaiWorktrees(cwd);
+    const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
+    let count = 0;
+    for (const wt of worktrees) {
+      let hasActivePlan: boolean;
+      if (wt.branch.startsWith("ralphai/")) {
+        const slug = wt.branch.replace("ralphai/", "");
+        hasActivePlan = planExistsForSlug(inProgressDir, slug);
+      } else {
+        hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
+      }
+      if (!hasActivePlan) count++;
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+export function cleanOrphanedWorktrees(cwd: string): WorktreeCleanResult {
   // Prune stale worktree entries first
   execSync("git worktree prune", { cwd, stdio: "inherit" });
 
@@ -226,23 +253,7 @@ export async function runClean(options: CleanOptions): Promise<void> {
   // We can't easily scan without prune side-effects, so we list them cheaply.
   let worktreeCount = 0;
   if (cleanWorktrees) {
-    try {
-      const worktrees = listRalphaiWorktrees(cwd);
-      const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
-      for (const wt of worktrees) {
-        let hasActivePlan: boolean;
-        if (wt.branch.startsWith("ralphai/")) {
-          const slug = wt.branch.replace("ralphai/", "");
-          hasActivePlan = planExistsForSlug(inProgressDir, slug);
-        } else {
-          hasActivePlan =
-            findPlansByBranch(inProgressDir, wt.branch).length > 0;
-        }
-        if (!hasActivePlan) worktreeCount++;
-      }
-    } catch {
-      // Not in a git repo or git not available — skip worktree cleanup
-    }
+    worktreeCount = countOrphanedWorktrees(cwd);
   }
 
   // Nothing to clean?

@@ -73,7 +73,6 @@ describe("handleAction", () => {
     const stayActions: ActionType[] = [
       "resume-stalled",
       "run-with-options",
-      "clean",
       "settings",
     ];
 
@@ -131,6 +130,14 @@ describe("handleAction", () => {
       expect(result).toEqual({
         type: "navigate",
         screen: { type: "doctor" },
+      });
+    });
+
+    it("clean navigates to clean screen", () => {
+      const result = handleAction("clean");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "clean" },
       });
     });
   });

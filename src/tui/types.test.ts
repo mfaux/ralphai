@@ -118,7 +118,6 @@ describe("resolveAction", () => {
     const stayActions: ActionType[] = [
       "resume-stalled",
       "run-with-options",
-      "clean",
       "settings",
     ];
 
@@ -176,6 +175,14 @@ describe("resolveAction", () => {
       expect(result).toEqual({
         type: "navigate",
         screen: { type: "doctor" },
+      });
+    });
+
+    it("clean navigates to clean screen", () => {
+      const result = resolveAction("clean");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "clean" },
       });
     });
   });
@@ -624,6 +631,15 @@ describe("transition flows", () => {
     expect(result).toEqual({
       type: "navigate",
       screen: { type: "status" },
+    });
+  });
+
+  it("clean → clean screen (no confirm interception)", () => {
+    const actionResult = resolveAction("clean");
+    const result = toConfirmNav(actionResult, config, { type: "menu" });
+    expect(result).toEqual({
+      type: "navigate",
+      screen: { type: "clean" },
     });
   });
 });
