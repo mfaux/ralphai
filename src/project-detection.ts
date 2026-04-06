@@ -30,8 +30,10 @@ export interface DetectedProject {
   label: string;
   /** Command prefix for running scripts, e.g. "pnpm", "dotnet" */
   runPrefix: string;
-  /** Auto-detected feedback commands */
+  /** Auto-detected feedback commands (fast, run every iteration) */
   feedbackCommands: string[];
+  /** Auto-detected PR-tier feedback commands (slow, run only before PR) */
+  prFeedbackCommands: string[];
   /** Package manager name (node ecosystem only) */
   manager?: PackageManager;
   /** Detected workspace packages (monorepos) */
@@ -324,6 +326,16 @@ const SCRIPT_CANDIDATES = [
   "format:check",
 ];
 
+/** Slow/E2E script names detected as PR-tier feedback commands. */
+const PR_SCRIPT_CANDIDATES = [
+  "test:e2e",
+  "test:integration",
+  "e2e",
+  "cypress",
+  "cypress:run",
+  "playwright",
+];
+
 /**
  * Detect feedback commands by inspecting the project's package.json scripts
  * (or deno.json tasks) and mapping them through the detected package manager.
@@ -387,6 +399,41 @@ export function detectFeedbackCommands(cwd: string): string {
     } catch {
       // ignore parse errors
     }
+  }
+
+  return commands.join(",");
+}
+
+/**
+ * Detect PR-tier feedback commands (slow E2E/integration tests) by inspecting
+ * the project's package.json scripts. Returns a comma-separated string suitable
+ * for the prFeedbackCommands config key, or an empty string if nothing is found.
+ *
+ * Only applies to Node.js ecosystems; non-Node ecosystems return "".
+ */
+export function detectPrFeedbackCommands(cwd: string): string {
+  const pm = detectPackageManager(cwd);
+  if (!pm) return "";
+
+  // PR-tier detection only for npm/pnpm/yarn/bun (not deno — deno tasks
+  // are typically fast enough for the loop)
+  if (pm.manager === "deno") return "";
+
+  const commands: string[] = [];
+  const pkgPath = join(cwd, "package.json");
+  if (!existsSync(pkgPath)) return "";
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    const scripts = pkg.scripts;
+    if (scripts && typeof scripts === "object") {
+      for (const script of PR_SCRIPT_CANDIDATES) {
+        if (script in scripts) {
+          commands.push(`${pm.runPrefix} ${script}`);
+        }
+      }
+    }
+  } catch {
+    // ignore parse errors
   }
 
   return commands.join(",");
@@ -479,11 +526,17 @@ export function detectNodeProject(cwd: string): DetectedProject | null {
     ? feedbackStr.split(",").map((c) => c.trim())
     : [];
 
+  const prFeedbackStr = detectPrFeedbackCommands(cwd);
+  const prFeedbackCommands = prFeedbackStr
+    ? prFeedbackStr.split(",").map((c) => c.trim())
+    : [];
+
   return {
     ecosystem: "node",
     label: pm.manager,
     runPrefix: pm.runPrefix,
     feedbackCommands,
+    prFeedbackCommands,
     manager: pm.manager,
   };
 }
@@ -569,6 +622,7 @@ export function detectDotnetProject(cwd: string): DetectedProject | null {
       label: "dotnet (solution)",
       runPrefix: "dotnet",
       feedbackCommands: ["dotnet build", "dotnet test"],
+      prFeedbackCommands: [],
       workspaces,
     };
   }
@@ -587,6 +641,7 @@ export function detectDotnetProject(cwd: string): DetectedProject | null {
       label: "dotnet (project)",
       runPrefix: "dotnet",
       feedbackCommands: ["dotnet build", "dotnet test"],
+      prFeedbackCommands: [],
     };
   }
 
@@ -607,6 +662,7 @@ export function detectGoProject(cwd: string): DetectedProject | null {
       label: "go module",
       runPrefix: "go",
       feedbackCommands: ["go build ./...", "go test ./..."],
+      prFeedbackCommands: [],
     };
   }
   return null;
@@ -626,6 +682,7 @@ export function detectRustProject(cwd: string): DetectedProject | null {
       label: "cargo",
       runPrefix: "cargo",
       feedbackCommands: ["cargo build", "cargo test"],
+      prFeedbackCommands: [],
     };
   }
   return null;
@@ -656,6 +713,7 @@ export function detectPythonProject(cwd: string): DetectedProject | null {
       label: "python (pyproject)",
       runPrefix: "python",
       feedbackCommands,
+      prFeedbackCommands: [],
     };
   }
 
@@ -665,6 +723,7 @@ export function detectPythonProject(cwd: string): DetectedProject | null {
       label: "python (setup.py)",
       runPrefix: "python",
       feedbackCommands: [],
+      prFeedbackCommands: [],
     };
   }
 
@@ -674,6 +733,7 @@ export function detectPythonProject(cwd: string): DetectedProject | null {
       label: "python (requirements.txt)",
       runPrefix: "python",
       feedbackCommands: [],
+      prFeedbackCommands: [],
     };
   }
 
@@ -695,6 +755,7 @@ export function detectJavaProject(cwd: string): DetectedProject | null {
       label: "maven",
       runPrefix: "mvn",
       feedbackCommands: ["mvn test"],
+      prFeedbackCommands: [],
     };
   }
 
@@ -707,6 +768,7 @@ export function detectJavaProject(cwd: string): DetectedProject | null {
       label: "gradle",
       runPrefix: "gradle",
       feedbackCommands: ["gradle test"],
+      prFeedbackCommands: [],
     };
   }
 
@@ -798,6 +860,7 @@ export function detectProject(cwd: string): DetectedProject | null {
     // Merge feedback commands from additional ecosystems
     for (const eco of additional) {
       primary.feedbackCommands.push(...eco.feedbackCommands);
+      primary.prFeedbackCommands.push(...eco.prFeedbackCommands);
     }
   }
 

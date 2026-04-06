@@ -55,6 +55,7 @@ export interface WizardAnswers {
   setupCommand: string;
   baseBranch: string;
   feedbackCommands: string;
+  prFeedbackCommands: string;
   autoCommit?: boolean;
   issueSource: "none" | "github";
   updateAgentsMd?: boolean;

@@ -12,6 +12,7 @@ import {
   detectPythonProject,
   detectJavaProject,
   detectFeedbackCommands,
+  detectPrFeedbackCommands,
   hasNodeSubstance,
 } from "./project-detection.ts";
 
@@ -620,5 +621,216 @@ describe("detectProject full priority", () => {
     const project = detectProject(ctx.dir);
     expect(project).not.toBeNull();
     expect(project!.ecosystem).toBe("java");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR feedback command detection
+// ---------------------------------------------------------------------------
+
+describe("detectPrFeedbackCommands", () => {
+  const ctx = useTempDir();
+
+  it("returns empty string for non-JS project", () => {
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("");
+  });
+
+  it("detects test:e2e script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { build: "tsc", "test:e2e": "playwright test" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm test:e2e");
+  });
+
+  it("detects e2e script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { e2e: "cypress run" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm e2e");
+  });
+
+  it("detects test:integration script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { "test:integration": "jest --config jest.integration.js" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm test:integration");
+  });
+
+  it("detects playwright script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { playwright: "playwright test" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm playwright");
+  });
+
+  it("detects cypress script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { cypress: "cypress open" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm cypress");
+  });
+
+  it("detects cypress:run script", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { "cypress:run": "cypress run" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("pnpm cypress:run");
+  });
+
+  it("detects multiple E2E scripts", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: {
+          "test:e2e": "playwright test",
+          "test:integration": "jest --integration",
+        },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe(
+      "pnpm test:e2e,pnpm test:integration",
+    );
+  });
+
+  it("returns empty string when no E2E scripts present", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { build: "tsc", test: "vitest" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("");
+  });
+
+  it("uses correct run prefix for npm projects", () => {
+    writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { "test:e2e": "playwright test" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("npm run test:e2e");
+  });
+
+  it("uses correct run prefix for bun projects", () => {
+    writeFileSync(join(ctx.dir, "bun.lockb"), "");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { "test:e2e": "playwright test" },
+      }),
+    );
+    expect(detectPrFeedbackCommands(ctx.dir)).toBe("bun run test:e2e");
+  });
+});
+
+describe("detectProject prFeedbackCommands", () => {
+  const ctx = useTempDir();
+
+  it("includes prFeedbackCommands for Node project with E2E scripts", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: {
+          build: "tsc",
+          test: "vitest",
+          "test:e2e": "playwright test",
+        },
+      }),
+    );
+
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
+    expect(project!.prFeedbackCommands).toEqual(["pnpm test:e2e"]);
+  });
+
+  it("returns empty prFeedbackCommands when no E2E scripts", () => {
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "test",
+        scripts: { build: "tsc", test: "vitest" },
+      }),
+    );
+
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
+  });
+
+  it("returns empty prFeedbackCommands for Go projects", () => {
+    writeFileSync(join(ctx.dir, "go.mod"), "module example.com/mymod\n");
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
+  });
+
+  it("returns empty prFeedbackCommands for Rust projects", () => {
+    writeFileSync(join(ctx.dir, "Cargo.toml"), '[package]\nname = "myapp"\n');
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
+  });
+
+  it("returns empty prFeedbackCommands for dotnet projects", () => {
+    writeFileSync(join(ctx.dir, "MyApp.sln"), "");
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
+  });
+
+  it("returns empty prFeedbackCommands for Python projects", () => {
+    writeFileSync(join(ctx.dir, "requirements.txt"), "flask\n");
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
+  });
+
+  it("returns empty prFeedbackCommands for Java projects", () => {
+    writeFileSync(join(ctx.dir, "pom.xml"), "<project></project>\n");
+    const project = detectProject(ctx.dir);
+    expect(project).not.toBeNull();
+    expect(project!.prFeedbackCommands).toEqual([]);
   });
 });

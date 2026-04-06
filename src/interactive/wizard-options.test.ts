@@ -55,9 +55,9 @@ function findOption(
 // ---------------------------------------------------------------------------
 
 describe("buildWizardOptions", () => {
-  it("returns exactly 7 options in the expected order", () => {
+  it("returns exactly 8 options in the expected order", () => {
     const options = buildWizardOptions(makeConfig());
-    expect(options).toHaveLength(7);
+    expect(options).toHaveLength(8);
     expect(options.map((o) => o.key)).toEqual([...WIZARD_KEYS]);
   });
 
@@ -155,6 +155,7 @@ describe("buildWizardOptions", () => {
         "agentCommand",
         "setupCommand",
         "feedbackCommands",
+        "prFeedbackCommands",
         "baseBranch",
       ] as const) {
         expect(findOption(options, key).prompt.kind).toBe("text");
@@ -239,6 +240,18 @@ describe("selectionsToFlags", () => {
     ]);
   });
 
+  it("produces --pr-feedback-commands=<value>", () => {
+    expect(
+      selectionsToFlags({ prFeedbackCommands: "bun run test:e2e" }),
+    ).toEqual(["--pr-feedback-commands=bun run test:e2e"]);
+  });
+
+  it("produces --pr-feedback-commands= for empty string", () => {
+    expect(selectionsToFlags({ prFeedbackCommands: "" })).toEqual([
+      "--pr-feedback-commands=",
+    ]);
+  });
+
   it("produces --base-branch=<value>", () => {
     expect(selectionsToFlags({ baseBranch: "develop" })).toEqual([
       "--base-branch=develop",
@@ -293,11 +306,12 @@ describe("selectionsToFlags", () => {
     ]);
   });
 
-  it("produces flags for all 7 keys", () => {
+  it("produces flags for all 8 keys", () => {
     const flags = selectionsToFlags({
       agentCommand: "opencode",
       setupCommand: "npm ci",
       feedbackCommands: "bun test",
+      prFeedbackCommands: "bun run test:e2e",
       baseBranch: "develop",
       maxStuck: "5",
       iterationTimeout: "300",
@@ -307,6 +321,7 @@ describe("selectionsToFlags", () => {
       "--agent-command=opencode",
       "--setup-command=npm ci",
       "--feedback-commands=bun test",
+      "--pr-feedback-commands=bun run test:e2e",
       "--base-branch=develop",
       "--max-stuck=5",
       "--iteration-timeout=300",
@@ -340,6 +355,14 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.feedbackCommands).toBe("bun test,bun run build");
   });
 
+  it("round-trips prFeedbackCommands", () => {
+    const flags = selectionsToFlags({
+      prFeedbackCommands: "bun run test:e2e",
+    });
+    const { overrides } = parseCLIArgs(flags);
+    expect(overrides.prFeedbackCommands).toBe("bun run test:e2e");
+  });
+
   it("round-trips baseBranch", () => {
     const flags = selectionsToFlags({ baseBranch: "develop" });
     const { overrides } = parseCLIArgs(flags);
@@ -370,11 +393,12 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.autoCommit).toBe("false");
   });
 
-  it("round-trips all 7 keys at once", () => {
+  it("round-trips all 8 keys at once", () => {
     const selections = {
       agentCommand: "opencode",
       setupCommand: "npm ci",
       feedbackCommands: "bun test",
+      prFeedbackCommands: "bun run test:e2e",
       baseBranch: "develop",
       maxStuck: "5",
       iterationTimeout: "300",
@@ -387,6 +411,7 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.agentCommand).toBe("opencode");
     expect(overrides.setupCommand).toBe("npm ci");
     expect(overrides.feedbackCommands).toBe("bun test");
+    expect(overrides.prFeedbackCommands).toBe("bun run test:e2e");
     expect(overrides.baseBranch).toBe("develop");
     expect(overrides.maxStuck).toBe(5);
     expect(overrides.iterationTimeout).toBe(300);
