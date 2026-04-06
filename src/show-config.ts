@@ -54,6 +54,8 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   prdLabel: "RALPHAI_PRD_LABEL",
   issueRepo: "RALPHAI_ISSUE_REPO",
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
+  issueHitlLabel: "RALPHAI_ISSUE_HITL_LABEL",
+  agentInteractiveCommand: "RALPHAI_AGENT_INTERACTIVE_COMMAND",
   autoCommit: "RALPHAI_AUTO_COMMIT",
 };
 
@@ -124,6 +126,18 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     "none",
   );
   lines.push(`  agentCommand       = ${agentCmdDisplay}  (${agentSrc})`);
+
+  const agentInteractiveCmd = config.agentInteractiveCommand.value;
+  const agentInteractiveCmdDisplay = agentInteractiveCmd || "<none>";
+  const agentInteractiveSrc = sourceLabel(
+    "agentInteractiveCommand",
+    config.agentInteractiveCommand.source,
+    input,
+    "none",
+  );
+  lines.push(
+    `  agentInteractiveCommand = ${agentInteractiveCmdDisplay}  (${agentInteractiveSrc})`,
+  );
 
   const setupCmd = config.setupCommand.value;
   const setupCmdDisplay = setupCmd || "<none>";
@@ -239,6 +253,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     );
     lines.push(
       `  issueCommentProgress = ${config.issueCommentProgress.value}  (${issueCommentSrc})`,
+    );
+
+    const issueHitlLabelSrc = sourceLabel(
+      "issueHitlLabel",
+      config.issueHitlLabel.source,
+      input,
+    );
+    lines.push(
+      `  issueHitlLabel     = ${config.issueHitlLabel.value}  (${issueHitlLabelSrc})`,
     );
   }
 

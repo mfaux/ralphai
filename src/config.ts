@@ -28,6 +28,8 @@ export interface RalphaiConfig {
   prdLabel: string;
   issueRepo: string;
   issueCommentProgress: string; // "true" | "false" — kept as string to match shell
+  issueHitlLabel: string;
+  agentInteractiveCommand: string;
   iterationTimeout: number;
   autoCommit: string; // "true" | "false"
   workspaces: Record<string, WorkspaceOverrides> | null;
@@ -70,6 +72,8 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   prdLabel: "ralphai-prd",
   issueRepo: "",
   issueCommentProgress: "true",
+  issueHitlLabel: "ralphai-subissue-hitl",
+  agentInteractiveCommand: "",
   iterationTimeout: 0,
   autoCommit: "false",
   workspaces: null,
@@ -178,6 +182,8 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "prdLabel",
   "issueRepo",
   "issueCommentProgress",
+  "issueHitlLabel",
+  "agentInteractiveCommand",
   "iterationTimeout",
   "autoCommit",
   "workspaces",
@@ -342,6 +348,21 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.issueCommentProgress = String(v);
   }
 
+  // issueHitlLabel (string, non-empty)
+  if ("issueHitlLabel" in obj) {
+    const v = String(obj.issueHitlLabel || "");
+    if (v === "") err("'issueHitlLabel' must be a non-empty label name");
+    values.issueHitlLabel = v;
+  }
+
+  // agentInteractiveCommand (string, can be empty)
+  if ("agentInteractiveCommand" in obj) {
+    const v = obj.agentInteractiveCommand;
+    if (typeof v !== "string")
+      err(`'agentInteractiveCommand' must be a string, got ${typeof v}`);
+    values.agentInteractiveCommand = v;
+  }
+
   // iterationTimeout (non-negative integer)
   if ("iterationTimeout" in obj) {
     const v = obj.iterationTimeout;
@@ -454,6 +475,8 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_PRD_LABEL", "prdLabel"],
   ["RALPHAI_ISSUE_REPO", "issueRepo"],
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
+  ["RALPHAI_ISSUE_HITL_LABEL", "issueHitlLabel"],
+  ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
 ];
 
@@ -544,6 +567,15 @@ export function applyEnvOverrides(
     overrides.issueCommentProgress = issueComment;
   }
 
+  // issueHitlLabel
+  const issueHitlLabel = get("RALPHAI_ISSUE_HITL_LABEL");
+  if (issueHitlLabel !== undefined) overrides.issueHitlLabel = issueHitlLabel;
+
+  // agentInteractiveCommand
+  const agentInteractiveCmd = get("RALPHAI_AGENT_INTERACTIVE_COMMAND");
+  if (agentInteractiveCmd !== undefined)
+    overrides.agentInteractiveCommand = agentInteractiveCmd;
+
   // autoCommit (boolean)
   const autoCommit = get("RALPHAI_AUTO_COMMIT");
   if (autoCommit !== undefined) {
@@ -628,6 +660,19 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-auto-commit") {
       overrides.autoCommit = "false";
       rawFlags.autoCommit = "--no-auto-commit";
+    } else if (arg.startsWith("--issue-hitl-label=")) {
+      const v = arg.slice("--issue-hitl-label=".length);
+      if (v === "") {
+        throw new ConfigError(
+          "ERROR: --issue-hitl-label requires a non-empty value (e.g. --issue-hitl-label='ralphai-subissue-hitl')",
+        );
+      }
+      overrides.issueHitlLabel = v;
+      rawFlags.issueHitlLabel = arg;
+    } else if (arg.startsWith("--agent-interactive-command=")) {
+      const v = arg.slice("--agent-interactive-command=".length);
+      overrides.agentInteractiveCommand = v;
+      rawFlags.agentInteractiveCommand = arg;
     }
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.
