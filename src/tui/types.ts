@@ -14,6 +14,8 @@
  */
 
 import type { ConfirmData } from "./screens/confirm.tsx";
+import type { PipelineState } from "../pipeline-state.ts";
+import { findNextPlanName } from "../interactive/run-actions.ts";
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -191,17 +193,27 @@ export interface RunConfig {
 /**
  * Derive a human-readable title from CLI run args.
  *
- * - `["run"]` → "Auto-detect (next plan)"
+ * - `["run"]` → next plan name from state, or "Auto-detect (next plan)"
  * - `["run", "42"]` → "Issue #42"
  * - `["run", "--plan", "feat-login.md"]` → "feat-login.md"
  *
- * Falls back to joining the args for unexpected shapes.
+ * When `state` is provided and the args indicate auto-detection,
+ * resolves the actual next plan name using the same dependency-aware
+ * algorithm the runner uses. Falls back to the generic label when no
+ * state is available or no ready plan is found.
  */
-export function titleFromRunArgs(args: string[]): string {
+export function titleFromRunArgs(
+  args: string[],
+  state?: PipelineState | null,
+): string {
   // Strip leading "run" if present
   const rest = args[0] === "run" ? args.slice(1) : args;
 
-  if (rest.length === 0) return "Auto-detect (next plan)";
+  if (rest.length === 0) {
+    const nextPlan = state ? findNextPlanName(state) : undefined;
+    if (nextPlan) return nextPlan.replace(/\.md$/, "");
+    return "Auto-detect (next plan)";
+  }
 
   // --plan <filename>
   const planIdx = rest.indexOf("--plan");
@@ -239,9 +251,10 @@ export function branchFromRunArgs(_args: string[]): string {
 export function buildConfirmDataFromArgs(
   args: string[],
   config: RunConfig,
+  state?: PipelineState | null,
 ): ConfirmData {
   return {
-    title: titleFromRunArgs(args),
+    title: titleFromRunArgs(args, state),
     agentCommand: config.agentCommand,
     branch: branchFromRunArgs(args),
     feedbackCommands: config.feedbackCommands,
@@ -264,6 +277,7 @@ export function toConfirmNav(
   result: DispatchResult,
   config: RunConfig,
   backScreen: Screen,
+  state?: PipelineState | null,
 ): DispatchResult {
   if (result.type !== "exit-to-runner") return result;
 
@@ -271,7 +285,7 @@ export function toConfirmNav(
     type: "navigate",
     screen: {
       type: "confirm",
-      data: buildConfirmDataFromArgs(result.args, config),
+      data: buildConfirmDataFromArgs(result.args, config, state),
       backScreen,
     },
   };
@@ -291,6 +305,7 @@ export function toOptionsNav(
   result: DispatchResult,
   config: RunConfig,
   backScreen: Screen,
+  state?: PipelineState | null,
 ): DispatchResult {
   if (result.type !== "exit-to-runner") return result;
 
@@ -298,7 +313,7 @@ export function toOptionsNav(
     type: "navigate",
     screen: {
       type: "options",
-      data: buildConfirmDataFromArgs(result.args, config),
+      data: buildConfirmDataFromArgs(result.args, config, state),
       backScreen,
     },
   };

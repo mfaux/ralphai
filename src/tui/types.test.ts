@@ -18,6 +18,7 @@ import {
 } from "./types.ts";
 import type { ActionType, DispatchResult, Screen, RunConfig } from "./types.ts";
 import type { ConfirmData } from "./screens/confirm.tsx";
+import type { PipelineState } from "../pipeline-state.ts";
 
 // ---------------------------------------------------------------------------
 // isActionType
@@ -364,6 +365,46 @@ describe("titleFromRunArgs", () => {
   it("handles large issue numbers", () => {
     expect(titleFromRunArgs(["run", "9999"])).toBe("Issue #9999");
   });
+
+  it("resolves next plan name from pipeline state for bare run", () => {
+    const state: PipelineState = {
+      backlog: [{ filename: "my-feature.md", scope: "", dependsOn: [] }],
+      inProgress: [],
+      completedSlugs: [],
+      worktrees: [],
+      problems: [],
+    };
+    expect(titleFromRunArgs(["run"], state)).toBe("my-feature");
+  });
+
+  it("skips blocked plans and resolves ready one from state", () => {
+    const state: PipelineState = {
+      backlog: [
+        { filename: "blocked.md", scope: "", dependsOn: ["dep-x"] },
+        { filename: "ready.md", scope: "", dependsOn: [] },
+      ],
+      inProgress: [],
+      completedSlugs: [],
+      worktrees: [],
+      problems: [],
+    };
+    expect(titleFromRunArgs(["run"], state)).toBe("ready");
+  });
+
+  it("falls back to auto-detect when state has no ready plan", () => {
+    const state: PipelineState = {
+      backlog: [{ filename: "blocked.md", scope: "", dependsOn: ["dep-x"] }],
+      inProgress: [],
+      completedSlugs: [],
+      worktrees: [],
+      problems: [],
+    };
+    expect(titleFromRunArgs(["run"], state)).toBe("Auto-detect (next plan)");
+  });
+
+  it("falls back to auto-detect when state is null", () => {
+    expect(titleFromRunArgs(["run"], null)).toBe("Auto-detect (next plan)");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -432,6 +473,18 @@ describe("buildConfirmDataFromArgs", () => {
     const data = buildConfirmDataFromArgs(["run"], emptyConfig);
     expect(data.agentCommand).toBe("");
     expect(data.feedbackCommands).toBe("");
+  });
+
+  it("resolves next plan name when state is provided", () => {
+    const state: PipelineState = {
+      backlog: [{ filename: "my-plan.md", scope: "", dependsOn: [] }],
+      inProgress: [],
+      completedSlugs: [],
+      worktrees: [],
+      problems: [],
+    };
+    const data = buildConfirmDataFromArgs(["run"], config, state);
+    expect(data.title).toBe("my-plan");
   });
 });
 

@@ -239,9 +239,9 @@ export function App({
    */
   const dispatchViaConfirm = useCallback(
     (backScreen: Screen) => (result: DispatchResult) => {
-      dispatch(toConfirmNav(result, runConfig, backScreen));
+      dispatch(toConfirmNav(result, runConfig, backScreen, pipeline.state));
     },
-    [dispatch, runConfig],
+    [dispatch, runConfig, pipeline.state],
   );
 
   const handleMenuAction = useCallback(
@@ -254,14 +254,18 @@ export function App({
       // All other exit-to-runner actions (e.g. "run-next") route
       // through confirm.
       if (action === "run-with-options") {
-        dispatch(toOptionsNav(result, runConfig, { type: "menu" }));
+        dispatch(
+          toOptionsNav(result, runConfig, { type: "menu" }, pipeline.state),
+        );
       } else if (action === "settings") {
         dispatch(result);
       } else {
-        dispatch(toConfirmNav(result, runConfig, { type: "menu" }));
+        dispatch(
+          toConfirmNav(result, runConfig, { type: "menu" }, pipeline.state),
+        );
       }
     },
-    [dispatch, runConfig],
+    [dispatch, runConfig, pipeline.state],
   );
 
   // -----------------------------------------------------------------------
