@@ -45,6 +45,13 @@ CI runs on both Ubuntu and Windows. Don't hardcode Unix paths or assume Linux-sp
 
 When pulling GitHub issues into plan files, native GitHub blocking relationships are queried via `Issue.blockedBy` GraphQL API (`gh api graphql`). The returned blocker issue numbers are written to `depends-on` frontmatter using issue-based slugs like `gh-42`. The GraphQL query is fail-open: if it fails, the plan proceeds with no `depends-on` entries. The dependency checker in `plan-detection.ts` supports these slugs via prefix matching: `gh-42` matches any file/directory starting with `gh-42-` in the pipeline directories.
 
+## Testing
+
+- **Speed tiers.** Tests fall into two tiers: fast (default) and slow. `bun run test` runs everything; `bun run test:fast` skips files in the `SLOW` array in `scripts/test.ts`. CI runs the full suite; use `test:fast` locally to keep the feedback loop under ~60s.
+- **What makes a test slow.** A test is slow if it creates real sockets (`net.connect`), runs full E2E runner loops, or heavily spawns child processes. Add these files to the `SLOW` array in `scripts/test.ts`.
+- **Prefer fast patterns.** Use `runCliInProcess` (from `src/test-utils.ts`) instead of `runCli` — it avoids ~300ms subprocess overhead per call. Use `useTempDir` over `useTempGitDir` when git isn't needed. Keep pure-logic tests (no I/O) separate from integration tests that touch the filesystem.
+- **Isolated tests.** Files that call `mock.module()` on built-in or third-party modules must be listed in the `ISOLATED` array in `scripts/test.ts` to prevent mock leaks across files. This is a bun limitation — remove the workaround if bun adds per-file mock isolation.
+
 ## Package Manager
 
 This project uses **bun**.
