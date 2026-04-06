@@ -34,7 +34,7 @@ export interface DoctorCheckResult {
   message: string;
 }
 
-function checkConfigExists(cwd: string): DoctorCheckResult {
+export function checkConfigExists(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (existsSync(configPath)) {
     return { status: "pass", message: "config initialized (global state)" };
@@ -42,7 +42,7 @@ function checkConfigExists(cwd: string): DoctorCheckResult {
   return { status: "fail", message: "config not found — run ralphai init" };
 }
 
-function checkConfigValid(cwd: string): DoctorCheckResult {
+export function checkConfigValid(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (!existsSync(configPath)) {
     return {
@@ -66,7 +66,7 @@ function checkConfigValid(cwd: string): DoctorCheckResult {
   }
 }
 
-function checkGitRepo(cwd: string): DoctorCheckResult {
+export function checkGitRepo(cwd: string): DoctorCheckResult {
   try {
     execSync("git rev-parse --git-dir", {
       cwd,
@@ -82,7 +82,7 @@ function checkGitRepo(cwd: string): DoctorCheckResult {
   }
 }
 
-function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
+export function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
   try {
     execSync("git diff --quiet HEAD", {
       cwd,
@@ -94,7 +94,7 @@ function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
   }
 }
 
-function checkBaseBranchExists(cwd: string): DoctorCheckResult {
+export function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   // Read baseBranch from config if available, else detect
   let baseBranch: string;
   const configPath = getConfigFilePath(cwd);
@@ -122,7 +122,7 @@ function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   }
 }
 
-function checkAgentCommand(cwd: string): DoctorCheckResult {
+export function checkAgentCommand(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   let agentCommand: string;
   try {
@@ -157,7 +157,7 @@ function checkAgentCommand(cwd: string): DoctorCheckResult {
   }
 }
 
-function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
+export function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   const configPath = getConfigFilePath(cwd);
   let feedbackCommands: string[];
   try {
@@ -195,7 +195,9 @@ function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   });
 }
 
-function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
+export function checkWorkspaceFeedbackCommands(
+  cwd: string,
+): DoctorCheckResult[] {
   const configPath = getConfigFilePath(cwd);
   let workspaces: Record<string, { feedbackCommands?: string[] }>;
   try {
@@ -237,7 +239,7 @@ function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
   return results;
 }
 
-function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
+export function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   const { backlogDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(backlogDir)) {
     return { status: "warn", message: "backlog: directory not found" };
@@ -252,7 +254,7 @@ function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   };
 }
 
-function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
+export function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
   const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(inProgressDir)) {
     return { status: "pass", message: "no orphaned receipts" };
@@ -275,6 +277,152 @@ function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
     };
   }
   return { status: "pass", message: "no orphaned receipts" };
+}
+
+// ---------------------------------------------------------------------------
+// Check descriptors — reusable by both CLI and TUI
+// ---------------------------------------------------------------------------
+
+/**
+ * Describes a single doctor check: a label for display plus a function
+ * that returns one or more `DoctorCheckResult` values.
+ *
+ * `gate` optionally names a prior check whose failure should cause this
+ * check to be skipped. The value is a key into the result map returned
+ * by `runDoctorChecks`.
+ */
+export interface DoctorCheck {
+  /** Unique key for this check (used for gating). */
+  key: string;
+  /** Human-readable label shown while the check is pending. */
+  label: string;
+  /** Run the check. May return one result or an array. */
+  run: (cwd: string) => DoctorCheckResult | DoctorCheckResult[];
+  /** Key of a prior check that must not have failed for this to run. */
+  gate?: string;
+}
+
+/**
+ * Build the ordered list of doctor checks.
+ *
+ * Pure function — returns descriptors only, does not execute anything.
+ * Consumers iterate the list, run each check, and handle gating via
+ * the `gate` field (skip if the referenced check's status was "fail").
+ */
+export function buildDoctorChecks(): DoctorCheck[] {
+  return [
+    {
+      key: "config-exists",
+      label: "Config initialized",
+      run: checkConfigExists,
+    },
+    {
+      key: "config-valid",
+      label: "Config valid",
+      run: checkConfigValid,
+    },
+    {
+      key: "git-repo",
+      label: "Git repository",
+      run: checkGitRepo,
+    },
+    {
+      key: "working-tree",
+      label: "Working tree clean",
+      run: checkWorkingTreeClean,
+      gate: "git-repo",
+    },
+    {
+      key: "base-branch",
+      label: "Base branch exists",
+      run: checkBaseBranchExists,
+      gate: "git-repo",
+    },
+    {
+      key: "agent-command",
+      label: "Agent command",
+      run: checkAgentCommand,
+      gate: "config-valid",
+    },
+    {
+      key: "feedback-commands",
+      label: "Feedback commands",
+      run: checkFeedbackCommands,
+      gate: "config-valid",
+    },
+    {
+      key: "workspace-feedback",
+      label: "Workspace feedback commands",
+      run: checkWorkspaceFeedbackCommands,
+      gate: "config-valid",
+    },
+    {
+      key: "backlog",
+      label: "Backlog plans",
+      run: checkBacklogHasPlans,
+      gate: "config-exists",
+    },
+    {
+      key: "orphaned-receipts",
+      label: "Orphaned receipts",
+      run: checkOrphanedReceipts,
+      gate: "config-exists",
+    },
+  ];
+}
+
+/**
+ * Result of a single check execution, including whether it was skipped.
+ */
+export type DoctorCheckOutcome =
+  | { status: "pending" }
+  | { status: "skipped"; reason: string }
+  | { status: "done"; results: DoctorCheckResult[] };
+
+/**
+ * Execute the doctor checks sequentially, respecting gating.
+ *
+ * Returns a map from check key to its outcome. Checks whose gate
+ * check failed are marked as "skipped".
+ *
+ * The optional `onResult` callback is invoked after each check
+ * completes, enabling live-updating UIs.
+ */
+export function runDoctorChecks(
+  cwd: string,
+  checks?: DoctorCheck[],
+  onResult?: (key: string, outcome: DoctorCheckOutcome) => void,
+): Map<string, DoctorCheckOutcome> {
+  const allChecks = checks ?? buildDoctorChecks();
+  const outcomes = new Map<string, DoctorCheckOutcome>();
+
+  for (const check of allChecks) {
+    // Check gate
+    if (check.gate) {
+      const gateOutcome = outcomes.get(check.gate);
+      if (gateOutcome?.status === "done") {
+        const hasFail = gateOutcome.results.some((r) => r.status === "fail");
+        if (hasFail) {
+          const outcome: DoctorCheckOutcome = {
+            status: "skipped",
+            reason: `${check.gate} failed`,
+          };
+          outcomes.set(check.key, outcome);
+          onResult?.(check.key, outcome);
+          continue;
+        }
+      }
+    }
+
+    // Run the check
+    const raw = check.run(cwd);
+    const results = Array.isArray(raw) ? raw : [raw];
+    const outcome: DoctorCheckOutcome = { status: "done", results };
+    outcomes.set(check.key, outcome);
+    onResult?.(check.key, outcome);
+  }
+
+  return outcomes;
 }
 
 // ---------------------------------------------------------------------------

@@ -83,7 +83,8 @@ export type Screen =
   | { type: "options"; data: ConfirmData; backScreen?: Screen }
   | { type: "stop" }
   | { type: "reset" }
-  | { type: "status" };
+  | { type: "status" }
+  | { type: "doctor" };
 
 // ---------------------------------------------------------------------------
 // Dispatch result
@@ -140,13 +141,14 @@ export function resolveAction(action: ActionType): DispatchResult {
       return { type: "navigate", screen: { type: "reset" } };
     case "view-status":
       return { type: "navigate", screen: { type: "status" } };
+    case "doctor":
+      return { type: "navigate", screen: { type: "doctor" } };
 
     // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
     // These will be updated to `{ type: "navigate", screen: ... }` as
     // their respective screens are implemented.
     case "resume-stalled":
     case "run-with-options":
-    case "doctor":
     case "clean":
     case "settings":
       return { type: "stay" };
