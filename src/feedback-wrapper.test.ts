@@ -148,7 +148,7 @@ describe("generateFeedbackWrapper", () => {
 // writeFeedbackWrapper — file I/O
 // ---------------------------------------------------------------------------
 
-describe("writeFeedbackWrapper", () => {
+describe.skipIf(process.platform === "win32")("writeFeedbackWrapper", () => {
   test("writes wrapper file to specified directory", () => {
     const dir = mkdtempSync(join(tmpdir(), "ralphai-fw-"));
     writeFeedbackWrapper(dir, ["bun test"]);
@@ -160,7 +160,6 @@ describe("writeFeedbackWrapper", () => {
   });
 
   test("sets executable permissions", () => {
-    if (process.platform === "win32") return;
     const dir = mkdtempSync(join(tmpdir(), "ralphai-fw-"));
     writeFeedbackWrapper(dir, ["bun test"]);
     const wrapperPath = join(dir, FEEDBACK_WRAPPER_FILENAME);
