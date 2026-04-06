@@ -19,6 +19,11 @@ import type { AppProps } from "./app.tsx";
 import { resolveConfig, DEFAULTS } from "../config.ts";
 import type { ResolvedConfig } from "../config.ts";
 import type { RunConfig } from "./types.ts";
+import {
+  installTerminalSafetyHandlers,
+  removeTerminalSafetyHandlers,
+  restoreTerminal,
+} from "./terminal-safety.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,20 +144,41 @@ export async function runTui(
     onExitToRunner,
   };
 
+  // Install terminal safety handlers before mounting Ink.
+  // These ensure the terminal is restored on SIGINT, SIGTERM,
+  // uncaught exceptions, and unhandled rejections.
+  let inkInstance: ReturnType<typeof render> | undefined;
+  installTerminalSafetyHandlers(() => {
+    try {
+      inkInstance?.unmount();
+    } catch {
+      // instance may not be mounted yet or already unmounted
+    }
+  });
+
   // Mount the Ink app
-  const instance = render(React.createElement(App, props));
+  inkInstance = render(React.createElement(App, props));
 
   // Wait for the app to exit (user quit) or for onExitToRunner to fire.
   // When the user quits via Esc/q, useApp().exit() is called which
   // resolves waitUntilExit(). When onExitToRunner fires, we unmount
   // manually.
-  const exitPromise = instance.waitUntilExit().then(() => undefined);
+  const exitPromise = inkInstance.waitUntilExit().then(() => undefined);
 
   const args = await Promise.race([runArgsPromise, exitPromise]);
 
   // If onExitToRunner resolved first, the app is still mounted — unmount it
   // so the terminal is clean for agent output.
-  instance.unmount();
+  inkInstance.unmount();
+
+  // Remove safety handlers after clean exit — the terminal is restored
+  // by Ink's unmount, and we don't want the handlers to interfere with
+  // post-TUI execution (e.g. the agent runner).
+  removeTerminalSafetyHandlers();
+
+  // Belt-and-suspenders: ensure terminal is restored even if Ink's
+  // unmount didn't fully clean up.
+  restoreTerminal();
 
   return { args };
 }
