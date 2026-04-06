@@ -221,3 +221,17 @@ ralphai run --feedback-commands='pnpm build,pnpm test' --pr-feedback-commands='p
 ```
 
 If a PR-tier command fails at the gate, Ralphai re-invokes the agent with the failure details so it can fix the issue before the PR is created. See [How Ralphai Works](how-ralphai-works.md#completion-gate) for details on the two-tier model.
+
+## Speed up iteration with feedback scope
+
+If your test suite is large and the plan only touches a specific directory, add `feedback-scope` frontmatter to the plan. The agent prompt will include a scope hint that suggests running targeted tests for faster intermediate checks:
+
+```md
+---
+feedback-scope: src/components
+---
+```
+
+With this set, the agent prompt suggests commands like `bun test src/components/` for quick iteration during development, while still advising the agent to run the full feedback suite before signaling COMPLETE.
+
+If you don't set `feedback-scope`, Ralphai tries to infer it automatically from the `## Relevant Files` section in the plan. When neither is available, no scope hint appears and behavior is unchanged.

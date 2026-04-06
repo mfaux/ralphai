@@ -493,4 +493,46 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain(`<progress nonce="${nonce}">`);
     expect(prompt).toContain(`<pr-summary nonce="${nonce}">`);
   });
+
+  // --- Feedback scope hints ---
+
+  it("includes scope-aware guidance when feedbackScope is set", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    expect(prompt).toContain("Scope hint:");
+    expect(prompt).toContain("focused in `src/foo/`");
+  });
+
+  it("suggests a scoped test command pattern when feedbackScope is set", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    expect(prompt).toContain("`bun test src/foo/`");
+  });
+
+  it("advises running full suite before COMPLETE when feedbackScope is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ feedbackScope: "src/components" }),
+    );
+    expect(prompt).toContain("full feedback suite before signaling COMPLETE");
+  });
+
+  it("omits scope guidance when feedbackScope is empty", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "" }));
+    expect(prompt).not.toContain("Scope hint:");
+    expect(prompt).not.toContain("focused in");
+  });
+
+  it("omits scope guidance when feedbackScope is undefined", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("Scope hint:");
+    expect(prompt).not.toContain("focused in");
+  });
+
+  it("places scope hint adjacent to feedback step (step 4)", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/foo" }));
+    // The scope hint should appear between step 4 and step 5
+    const step4Idx = prompt.indexOf("4. ");
+    const scopeIdx = prompt.indexOf("Scope hint:");
+    const step5Idx = prompt.indexOf("5. Documentation:");
+    expect(step4Idx).toBeLessThan(scopeIdx);
+    expect(scopeIdx).toBeLessThan(step5Idx);
+  });
 });

@@ -93,6 +93,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     progressFile,
     feedbackCommands,
     scopeHint,
+    feedbackScope,
     learnings,
     planFormat = "tasks",
     gateRejection,
@@ -131,6 +132,13 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : feedbackText
       ? `Run all feedback loops: ${feedbackText}. Fix any failures before continuing.`
       : `Run your project's build, test, and lint commands. Fix any failures before continuing.`;
+
+  // --- Feedback scope hint ---
+  // When a feedbackScope is provided, inject advisory guidance about
+  // the plan's focused directory and suggest targeted test commands.
+  const feedbackScopeHint = feedbackScope
+    ? `\n   **Scope hint:** This plan's changes are focused in \`${feedbackScope}/\`. For faster iteration, you can run targeted tests (e.g. \`bun test ${feedbackScope}/\`) while developing. Always run the full feedback suite before signaling COMPLETE to ensure nothing outside the scope is broken.`
+    : "";
 
   const commitInstruction =
     "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.";
@@ -203,7 +211,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
    - Bug fix: Write a failing test FIRST that reproduces the bug, then fix the code to make it pass.
    - New feature: Implement the feature, then add tests that cover the new code.
    - Refactor: Verify existing tests pass before and after. Only add tests if you discover coverage gaps.
-4. ${feedbackStep}
+4. ${feedbackStep}${feedbackScopeHint}
 5. Documentation: Review whether your changes affect any documentation. Update these files if they are outdated or incomplete:
    - README.md (commands, usage, feature descriptions)
    - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.

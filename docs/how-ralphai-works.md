@@ -359,6 +359,10 @@ feedback-scope: src/components
 ---
 ```
 
+When a feedback scope is resolved, the agent prompt includes a **scope hint** near the feedback step. The hint tells the agent that the plan's changes are focused in a specific directory and suggests running targeted test commands (e.g. `bun test src/components/`) for faster iteration during development. The hint also advises running the full feedback suite before signaling COMPLETE to ensure nothing outside the scope is broken. This guidance is advisory — the agent still runs the full feedback suite as configured, but can optionally use scoped commands for quicker intermediate checks.
+
+When no feedback scope is available, the scope hint is omitted entirely and prompt behavior is unchanged.
+
 ### Doctor Validation
 
 `ralphai doctor` validates per-workspace feedback commands when a `workspaces` config key exists. Failures produce warnings, not hard errors.
