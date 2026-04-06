@@ -14,6 +14,10 @@ import { Box, Text } from "ink";
 import type { PipelineState, InProgressPlan } from "../../pipeline-state.ts";
 import type { MenuContext } from "../menu-items.ts";
 import type { ResolvedConfig } from "../../config.ts";
+import {
+  findNextPlanName,
+  unmetDependencies,
+} from "../../interactive/run-actions.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -145,7 +149,7 @@ export function detailForItem(
       return settingsDetail(resolvedConfig);
 
     case "run-next":
-      return runNextDetail(state, stateLoading);
+      return runNextDetail(state, stateLoading, menuContext);
 
     case "resume-stalled":
       return resumeStalledDetail(state, stateLoading);
@@ -456,12 +460,39 @@ function settingsDetail(resolvedConfig?: ResolvedConfig): DetailContent {
 function runNextDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  menuContext?: MenuContext,
 ): DetailContent {
   if (stateLoading || !state) {
     return { title: "Run Next", lines: [], loading: true };
   }
 
   if (state.backlog.length === 0 && state.inProgress.length === 0) {
+    // No local plans at all — check if GitHub can supply one
+    if (menuContext?.hasGitHubIssues) {
+      if (menuContext.githubIssueLoading) {
+        return {
+          title: "Run Next",
+          lines: [
+            { text: "No local plans", dim: true },
+            { text: "Checking GitHub for issues…", dim: true },
+          ],
+          loading: true,
+        };
+      }
+      const count = menuContext.githubIssueCount ?? 0;
+      if (count > 0) {
+        return {
+          title: "Run Next",
+          lines: [
+            { text: "No local plans", dim: true },
+            {
+              text: `Will pull oldest of ${count} issue${count === 1 ? "" : "s"} from GitHub`,
+            },
+            { text: "Press Enter to start", dim: true },
+          ],
+        };
+      }
+    }
     return {
       title: "Run Next",
       lines: [
@@ -474,17 +505,59 @@ function runNextDetail(
     };
   }
 
+  // Find the dependency-aware next plan (mirrors the runner algorithm)
+  const nextPlanName = findNextPlanName(state);
+
+  if (nextPlanName) {
+    const plan = state.backlog.find((p) => p.filename === nextPlanName)!;
+    const name = plan.filename.replace(/\.md$/, "");
+    const lines: DetailLine[] = [{ text: name, bold: true }];
+
+    if (plan.scope) {
+      lines.push({ text: `  Scope: ${plan.scope}`, dim: true });
+    }
+
+    if (plan.dependsOn.length > 0) {
+      for (const dep of plan.dependsOn) {
+        lines.push({
+          text: `  ${formatDependency(dep, state.completedSlugs)}`,
+          color: state.completedSlugs.some(
+            (s) => s === dep || s.startsWith(`${dep}-`),
+          )
+            ? "green"
+            : undefined,
+          dim: !state.completedSlugs.some(
+            (s) => s === dep || s.startsWith(`${dep}-`),
+          ),
+        });
+      }
+    }
+
+    lines.push({ text: "Press Enter to start this plan", dim: true });
+    return { title: "Run Next", lines };
+  }
+
+  // Backlog exists but nothing is ready (all blocked by dependencies)
   if (state.backlog.length > 0) {
-    const next = state.backlog[0]!;
-    const name = next.filename.replace(/\.md$/, "");
+    const lines: DetailLine[] = [];
+    for (const plan of state.backlog) {
+      const name = plan.filename.replace(/\.md$/, "");
+      const unmet = unmetDependencies(plan, state.completedSlugs);
+      lines.push({ text: name });
+      lines.push({
+        text: `  Blocked by: ${unmet.join(", ")}`,
+        dim: true,
+        color: "yellow",
+      });
+    }
     return {
       title: "Run Next",
       lines: [
-        { text: `Next: ${name}`, bold: true },
         {
-          text: "Press Enter to start this plan",
-          dim: true,
+          text: "All backlog plans are blocked by unmet dependencies",
+          color: "yellow",
         },
+        ...lines,
       ],
     };
   }

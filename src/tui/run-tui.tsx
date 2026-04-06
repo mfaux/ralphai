@@ -26,6 +26,9 @@ import {
   ENTER_ALT_SCREEN,
 } from "./terminal-safety.ts";
 import { applyNoColorOverride } from "./color-support.ts";
+import { gatherPipelineState } from "../pipeline-state.ts";
+import { listRalphaiWorktrees } from "../worktree/parsing.ts";
+import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,7 +83,11 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     // Config resolution failure — proceed with defaults
   }
 
-  const pipelineOpts = { cwd };
+  const pipelineOpts = {
+    cwd,
+    gatherState: gatherPipelineState,
+    listWorktrees: listRalphaiWorktrees,
+  };
 
   const githubOpts = hasGitHubIssues
     ? {
@@ -91,6 +98,8 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
           issueRepo,
           issuePrdLabel,
         },
+        peekGithub: peekGithubIssues,
+        peekPrd: peekPrdIssues,
       }
     : undefined;
 

@@ -570,8 +570,40 @@ describe("detailForItem — run-next", () => {
       backlog: [{ filename: "next-plan.md", scope: "", dependsOn: [] }],
     });
     const detail = detailForItem("run-next", state, false);
-    expect(detail.lines[0]!.text).toContain("next-plan");
+    expect(detail.lines[0]!.text).toBe("next-plan");
     expect(detail.lines[0]!.bold).toBe(true);
+  });
+
+  it("shows scope when available", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "next-plan.md", scope: "packages/web", dependsOn: [] },
+      ],
+    });
+    const detail = detailForItem("run-next", state, false);
+    expect(detail.lines[0]!.text).toBe("next-plan");
+    expect(detail.lines[1]!.text).toContain("packages/web");
+  });
+
+  it("shows dependency status for next plan", () => {
+    const state = makeState({
+      backlog: [{ filename: "next-plan.md", scope: "", dependsOn: ["dep-a"] }],
+      completedSlugs: ["dep-a"],
+    });
+    const detail = detailForItem("run-next", state, false);
+    expect(detail.lines[0]!.text).toBe("next-plan");
+    expect(detail.lines[1]!.text).toContain("dep-a");
+    expect(detail.lines[1]!.color).toBe("green");
+  });
+
+  it("shows blocked plans when all backlog has unmet deps", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "blocked.md", scope: "", dependsOn: ["unfinished"] },
+      ],
+    });
+    const detail = detailForItem("run-next", state, false);
+    expect(detail.lines[0]!.text).toContain("blocked by unmet dependencies");
   });
 
   it("shows in-progress message when backlog is empty but plans running", () => {
@@ -580,6 +612,41 @@ describe("detailForItem — run-next", () => {
     });
     const detail = detailForItem("run-next", state, false);
     expect(detail.lines[0]!.text).toContain("all plans are in progress");
+  });
+
+  it("shows GitHub fallback when no local plans but issues available", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueCount: 7,
+    };
+    const detail = detailForItem("run-next", state, false, ctx);
+    expect(detail.lines.some((l) => l.text.includes("7 issues"))).toBe(true);
+  });
+
+  it("shows loading hint when GitHub issues are loading and no local plans", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const detail = detailForItem("run-next", state, false, ctx);
+    expect(detail.loading).toBe(true);
+    expect(detail.lines.some((l) => l.text.includes("Checking GitHub"))).toBe(
+      true,
+    );
+  });
+
+  it("skips first ready plan to find dependency-ready one", () => {
+    const state = makeState({
+      backlog: [
+        { filename: "blocked.md", scope: "", dependsOn: ["dep-x"] },
+        { filename: "ready.md", scope: "", dependsOn: [] },
+      ],
+    });
+    const detail = detailForItem("run-next", state, false);
+    expect(detail.lines[0]!.text).toBe("ready");
+    expect(detail.lines[0]!.bold).toBe(true);
   });
 });
 
