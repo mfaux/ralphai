@@ -118,7 +118,12 @@ async function main(): Promise<void> {
         }
       }
 
-      await runInteractive(process.cwd());
+      const cwd = process.cwd();
+      const { runTui } = await import("./tui/run-tui.tsx");
+      const result = await runTui({ cwd });
+      if (result.args) {
+        await runRalphai(result.args);
+      }
       return;
     }
     // Non-interactive: show help text

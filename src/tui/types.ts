@@ -7,6 +7,8 @@
  * of the screen-router state machine in `app.tsx`.
  */
 
+import type { ConfirmData } from "./screens/confirm.tsx";
+
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
@@ -71,7 +73,8 @@ export function isActionType(value: string): value is ActionType {
 export type Screen =
   | { type: "menu" }
   | { type: "issue-picker" }
-  | { type: "backlog-picker" };
+  | { type: "backlog-picker" }
+  | { type: "confirm"; data: ConfirmData; backScreen?: Screen };
 
 // ---------------------------------------------------------------------------
 // Dispatch result

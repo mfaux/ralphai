@@ -8,6 +8,7 @@
 import { describe, it, expect } from "bun:test";
 import { isActionType, resolveAction, ACTION_TYPES } from "./types.ts";
 import type { ActionType, DispatchResult, Screen } from "./types.ts";
+import type { ConfirmData } from "./screens/confirm.tsx";
 
 // ---------------------------------------------------------------------------
 // isActionType
@@ -161,6 +162,57 @@ describe("resolveAction", () => {
         const result = resolveAction(action);
         expect(result).not.toBeUndefined();
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Screen union: confirm variant
+// ---------------------------------------------------------------------------
+
+describe("Screen confirm variant", () => {
+  const sampleData: ConfirmData = {
+    title: "test-plan.md",
+    agentCommand: "claude",
+    branch: "feat/test",
+    feedbackCommands: "bun test",
+    runArgs: ["run"],
+  };
+
+  it("can be used in a navigate DispatchResult", () => {
+    const result: DispatchResult = {
+      type: "navigate",
+      screen: { type: "confirm", data: sampleData },
+    };
+    expect(result.type).toBe("navigate");
+    if (result.type === "navigate") {
+      expect(result.screen.type).toBe("confirm");
+    }
+  });
+
+  it("carries ConfirmData in the screen object", () => {
+    const screen: Screen = { type: "confirm", data: sampleData };
+    if (screen.type === "confirm") {
+      expect(screen.data.title).toBe("test-plan.md");
+      expect(screen.data.runArgs).toEqual(["run"]);
+    }
+  });
+
+  it("supports optional backScreen for navigation", () => {
+    const screen: Screen = {
+      type: "confirm",
+      data: sampleData,
+      backScreen: { type: "backlog-picker" },
+    };
+    if (screen.type === "confirm") {
+      expect(screen.backScreen?.type).toBe("backlog-picker");
+    }
+  });
+
+  it("backScreen defaults to undefined", () => {
+    const screen: Screen = { type: "confirm", data: sampleData };
+    if (screen.type === "confirm") {
+      expect(screen.backScreen).toBeUndefined();
     }
   });
 });
