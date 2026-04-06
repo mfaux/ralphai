@@ -113,6 +113,7 @@ import {
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,
+  writeFeedbackWrapper,
   listRalphaiWorktrees,
   selectPlanForWorktree,
 } from "./worktree/index.ts";
@@ -121,6 +122,7 @@ import type {
   SelectedWorktreePlan,
   GitHubFallbackOptions,
 } from "./worktree/index.ts";
+import { parseFeedbackCommands } from "./feedback-wrapper.ts";
 import { runConfigWizard } from "./interactive/run-wizard.ts";
 
 // ---------------------------------------------------------------------------
@@ -1595,6 +1597,7 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
+    feedbackCommands: string[];
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
@@ -1605,6 +1608,7 @@ async function runIssueTarget(
     hasHelp,
     hasShowConfig,
     setupCommand,
+    feedbackCommands,
     standaloneLabel,
     subissueLabel,
     prdLabel,
@@ -1742,6 +1746,7 @@ async function runIssueTarget(
       hasHelp,
       hasShowConfig,
       setupCommand,
+      feedbackCommands,
     });
   }
 
@@ -1789,6 +1794,7 @@ async function runIssueTarget(
       hasHelp,
       hasShowConfig,
       setupCommand,
+      feedbackCommands,
     });
   }
 
@@ -1818,9 +1824,8 @@ async function runIssueTarget(
     branch,
     baseBranch,
     setupCommand,
-  );
-
-  // Pull the issue into a plan file in the worktree's pipeline
+    feedbackCommands,
+  ); // Pull the issue into a plan file in the worktree's pipeline
   const worktreeConfig = resolveWorktreeConfig(
     resolvedWorktreeDir,
     cwd,
@@ -1895,9 +1900,10 @@ async function runPrdIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
+    feedbackCommands: string[];
   },
 ): Promise<void> {
-  const { isDryRun, setupCommand } = flags;
+  const { isDryRun, setupCommand, feedbackCommands } = flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
   const branch = issueBranchName(prd.title);
@@ -1953,6 +1959,7 @@ async function runPrdIssueTarget(
     branch,
     baseBranch,
     setupCommand,
+    feedbackCommands,
   );
 
   const worktreeConfig = resolveWorktreeConfig(
@@ -2254,6 +2261,11 @@ async function runRalphaiInManagedWorktree(
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
 
+  // Parse feedback commands for the wrapper script (written to worktree root)
+  const feedbackCommandsList = resolvedConfig
+    ? parseFeedbackCommands(resolvedConfig.feedbackCommands.value)
+    : [];
+
   // --- Interactive wizard: `--wizard` / `-w` ---
   if (hasWizard && !hasHelp) {
     if (!process.stdout.isTTY) {
@@ -2292,6 +2304,7 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
+      feedbackCommands: feedbackCommandsList,
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
@@ -2469,6 +2482,9 @@ async function runRalphaiInManagedWorktree(
         executeSetupCommand(setupCommand, resolvedWorktreeDir);
       }
 
+      // Write feedback wrapper script (mirrors prepareWorktree behavior)
+      writeFeedbackWrapper(resolvedWorktreeDir, feedbackCommandsList);
+
       console.log("Running ralphai in worktree...");
       const shouldResume = activeWorktree !== undefined;
       const hasResumeFlag =
@@ -2632,6 +2648,7 @@ async function runRalphaiInManagedWorktree(
             hasHelp: false,
             hasShowConfig: false,
             setupCommand,
+            feedbackCommands: feedbackCommandsList,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done
           break;
@@ -2651,6 +2668,7 @@ async function runRalphaiInManagedWorktree(
       branch,
       baseBranch,
       setupCommand,
+      feedbackCommandsList,
     );
 
     console.log("Running ralphai in worktree...");

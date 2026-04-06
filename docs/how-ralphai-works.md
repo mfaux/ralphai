@@ -65,6 +65,18 @@ Ralphai supports two tiers of feedback commands:
 
 Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` and `prFeedbackCommands` in `config.json`. During init, Ralphai detects PR-tier candidates from common script names like `test:e2e`, `test:integration`, `cypress`, and `playwright`.
 
+### Feedback Wrapper Script
+
+When a worktree is created or reused, Ralphai generates a shell script called `_ralphai_feedback.sh` in the worktree root. This script wraps each configured loop-tier feedback command to optimize agent output:
+
+- **On success (exit 0):** prints a one-line summary with the command name and wall-clock duration, keeping the agent's context window lean.
+- **On failure (non-zero exit):** prints the full stdout/stderr so the agent can diagnose and fix the issue.
+- **On timeout:** kills the child process and prints partial output with a timeout message.
+
+The wrapper is regenerated on every `prepareWorktree()` call — including reused worktrees — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt slice handles the fallback).
+
+The completion gate does **not** use the wrapper — it runs feedback commands directly and collects structured results. The wrapper is purely an agent-side UX optimization.
+
 ## Completion Gate
 
 When the agent signals that all tasks are complete, Ralphai runs a **completion gate** before creating a PR. The gate checks:

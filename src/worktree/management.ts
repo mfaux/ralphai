@@ -1,11 +1,15 @@
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, rmSync, renameSync } from "fs";
+import { existsSync, mkdirSync, rmSync, renameSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { TEXT, RESET } from "../utils.ts";
 import { getRepoPipelineDirs } from "../global-state.ts";
 import { planExistsForSlug } from "../plan-detection.ts";
 import { findPlansByBranch } from "../receipt.ts";
 import { extractExecStderr } from "../git-helpers.ts";
+import {
+  generateFeedbackWrapper,
+  FEEDBACK_WRAPPER_FILENAME,
+} from "../feedback-wrapper.ts";
 import type { RalphaiOptions } from "../parse-options.ts";
 import { listRalphaiWorktrees } from "./parsing.ts";
 
@@ -103,6 +107,11 @@ export function ensureRepoHasCommit(cwd: string): void {
 /**
  * Create or reuse a worktree for a given slug/branch.
  * Returns the resolved worktree directory path.
+ *
+ * When `feedbackCommands` is provided (and not on Windows), a feedback
+ * wrapper script is written to the worktree root after the setup command.
+ * The wrapper is regenerated on every call — including reused worktrees —
+ * so config changes are picked up without worktree recreation.
  */
 export function prepareWorktree(
   cwd: string,
@@ -110,6 +119,7 @@ export function prepareWorktree(
   branch: string,
   baseBranch: string,
   setupCommand: string,
+  feedbackCommands?: string[],
 ): string {
   const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
   const desiredWorktreeDir = join(worktreeBase, slug);
@@ -172,7 +182,29 @@ export function prepareWorktree(
     executeSetupCommand(setupCommand, resolvedWorktreeDir);
   }
 
+  // Write feedback wrapper script (skipped on Windows — the prompt slice
+  // handles the fallback). Regenerated on every call so config changes
+  // are picked up on reused worktrees.
+  writeFeedbackWrapper(resolvedWorktreeDir, feedbackCommands);
+
   return resolvedWorktreeDir;
+}
+
+/**
+ * Write the feedback wrapper script to the worktree root.
+ * Skipped on Windows (process.platform === "win32") and when no
+ * feedback commands are configured.
+ */
+export function writeFeedbackWrapper(
+  worktreeDir: string,
+  feedbackCommands?: string[],
+): void {
+  if (process.platform === "win32") return;
+  if (!feedbackCommands || feedbackCommands.length === 0) return;
+
+  const script = generateFeedbackWrapper(feedbackCommands);
+  const wrapperPath = join(worktreeDir, FEEDBACK_WRAPPER_FILENAME);
+  writeFileSync(wrapperPath, script, { mode: 0o755 });
 }
 
 export function listWorktrees(cwd: string): void {

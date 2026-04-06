@@ -62,6 +62,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/learnings.ts`         | Learnings extraction and persistence across iterations.                   |
 | `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction). |
 | `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.          |
+| `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script for agent-side feedback.  |
 | `src/process-utils.ts`     | Child process helpers.                                                    |
 | `src/utils.ts`             | Terminal color constants and shared formatting utilities.                 |
 | `src/ipc-server.ts`        | IPC server for agent communication.                                       |

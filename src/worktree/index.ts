@@ -18,6 +18,7 @@ export {
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,
+  writeFeedbackWrapper,
   listWorktrees,
   cleanWorktrees,
   runRalphaiWorktree,
