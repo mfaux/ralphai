@@ -288,7 +288,7 @@ describe("runCompletionGate — prFeedbackCommands", () => {
   test("PR-tier command timeout is treated as failure", () => {
     const progressFile = makeProgressFile(1);
     // Use a command that will be killed by timeout — sleep 10 with a very short timeout
-    // We can't easily test the 120s timeout, but we verify the error handling path
+    // We can't easily test the 300s timeout, but we verify the error handling path
     // by using a command that exits non-zero
     const result = runCompletionGate({
       progressFile,

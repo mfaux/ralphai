@@ -130,7 +130,7 @@ export function runFeedbackCommands(
         cwd,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
-        timeout: 120_000, // 2 minute timeout per command
+        timeout: 300_000, // 5 minute timeout per command
       });
       return { command, exitCode: 0, output: "", tier };
     } catch (err: unknown) {
