@@ -20,6 +20,8 @@ export interface ResolveScopeInput {
   planScope: string;
   /** Root-level feedback commands (comma-separated string). */
   rootFeedbackCommands: string;
+  /** Root-level PR-tier feedback commands (comma-separated string). */
+  rootPrFeedbackCommands: string;
   /** Workspace config JSON (stringified object keyed by scope path). */
   workspacesConfig?: string;
 }
@@ -28,6 +30,7 @@ export interface ResolveScopeResult {
   ecosystem: string;
   packageManager: string;
   feedbackCommands: string;
+  prFeedbackCommands: string;
   scopeHint: string;
 }
 
@@ -43,7 +46,13 @@ export interface ResolveScopeResult {
  * of the shell's `resolve_scoped_feedback()` + `build_scope_hint()`.
  */
 export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
-  const { cwd, planScope, rootFeedbackCommands, workspacesConfig } = input;
+  const {
+    cwd,
+    planScope,
+    rootFeedbackCommands,
+    rootPrFeedbackCommands,
+    workspacesConfig,
+  } = input;
 
   // No scope means pass everything through unchanged.
   if (!planScope) {
@@ -51,6 +60,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       ecosystem: detectProject(cwd)?.ecosystem ?? "unknown",
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
+      prFeedbackCommands: rootPrFeedbackCommands,
       scopeHint: "",
     };
   }
@@ -68,10 +78,18 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
         const fc = Array.isArray(wsEntry.feedbackCommands)
           ? wsEntry.feedbackCommands.join(",")
           : wsEntry.feedbackCommands;
+        // Use workspace prFeedbackCommands override if present, otherwise
+        // pass through the root value.
+        const pfc = wsEntry.prFeedbackCommands
+          ? Array.isArray(wsEntry.prFeedbackCommands)
+            ? wsEntry.prFeedbackCommands.join(",")
+            : wsEntry.prFeedbackCommands
+          : rootPrFeedbackCommands;
         return {
           ecosystem,
           packageManager: "",
           feedbackCommands: fc,
+          prFeedbackCommands: pfc,
           scopeHint: buildScopeHint(planScope),
         };
       }
@@ -80,37 +98,33 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     }
   }
 
-  // No root feedback commands means nothing to rewrite
-  if (!rootFeedbackCommands) {
-    return {
-      ecosystem,
-      packageManager: "",
-      feedbackCommands: "",
-      scopeHint: buildScopeHint(planScope),
-    };
-  }
-
   // Only node and dotnet ecosystems support scoped feedback
   if (ecosystem !== "node" && ecosystem !== "dotnet") {
     return {
       ecosystem,
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
+      prFeedbackCommands: rootPrFeedbackCommands,
       scopeHint: buildScopeHint(planScope),
     };
   }
 
-  const rootCommands = rootFeedbackCommands
-    .split(",")
-    .map((c) => c.trim())
-    .filter(Boolean);
+  // No root feedback commands AND no root PR commands — nothing to rewrite
+  if (!rootFeedbackCommands && !rootPrFeedbackCommands) {
+    return {
+      ecosystem,
+      packageManager: "",
+      feedbackCommands: "",
+      prFeedbackCommands: "",
+      scopeHint: buildScopeHint(planScope),
+    };
+  }
 
+  // Detect PM and package name (shared by both loop-tier and PR-tier rewriting)
   let pm: DetectedPM | null = null;
   let packageName = "";
-  let rewritten: string[];
 
   if (ecosystem === "node") {
-    // Read the scoped package's name from its package.json
     const pkgJsonPath = join(cwd, planScope, "package.json");
     if (existsSync(pkgJsonPath)) {
       try {
@@ -122,28 +136,32 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
         // Fall through — no package name
       }
     }
-
     pm = detectPackageManager(cwd);
-
-    if (pm && packageName) {
-      // Rewrite node commands via PM workspace filters, then also handle
-      // any dotnet commands that may have been merged from a mixed repo.
-      rewritten = deriveScopedFeedback(pm, rootCommands, packageName);
-      rewritten = deriveDotnetScopedFeedback(rewritten, planScope);
-    } else {
-      // No package name (e.g. .NET sub-project in mixed repo) — only
-      // rewrite dotnet commands.
-      rewritten = deriveDotnetScopedFeedback(rootCommands, planScope);
-    }
-  } else {
-    // Pure dotnet ecosystem
-    rewritten = deriveDotnetScopedFeedback(rootCommands, planScope);
   }
+
+  // Helper to rewrite a comma-separated command string using the detected
+  // PM / package name / ecosystem.
+  const rewrite = (raw: string): string => {
+    if (!raw) return "";
+    const cmds = raw
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+    let result: string[];
+    if (ecosystem === "node" && pm && packageName) {
+      result = deriveScopedFeedback(pm, cmds, packageName);
+      result = deriveDotnetScopedFeedback(result, planScope);
+    } else {
+      result = deriveDotnetScopedFeedback(cmds, planScope);
+    }
+    return result.join(",");
+  };
 
   return {
     ecosystem,
     packageManager: pm?.manager ?? "",
-    feedbackCommands: rewritten.join(","),
+    feedbackCommands: rewrite(rootFeedbackCommands),
+    prFeedbackCommands: rewrite(rootPrFeedbackCommands),
     scopeHint: buildScopeHint(planScope),
   };
 }

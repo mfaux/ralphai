@@ -479,6 +479,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     cwd,
     planScope,
     rootFeedbackCommands: config.feedbackCommands.value,
+    rootPrFeedbackCommands: config.prFeedbackCommands?.value ?? "",
     workspacesConfig: config.workspaces.value
       ? JSON.stringify(config.workspaces.value)
       : undefined,
@@ -694,6 +695,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       cwd,
       planScope,
       rootFeedbackCommands: config.feedbackCommands.value,
+      rootPrFeedbackCommands: config.prFeedbackCommands?.value ?? "",
       workspacesConfig: config.workspaces.value
         ? JSON.stringify(config.workspaces.value)
         : undefined,
@@ -703,9 +705,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const scopeHint = scopeResult.scopeHint;
 
     // PR-tier feedback commands: passed to the completion gate only (not the
-    // agent prompt). Scope resolution for monorepos is deferred to a separate
-    // slice — for now we use the root config value directly.
-    const prFeedbackCommands = config.prFeedbackCommands?.value ?? "";
+    // agent prompt). Scope-resolved for monorepos via resolveScope above.
+    const prFeedbackCommands = scopeResult.prFeedbackCommands;
 
     // --- Issue frontmatter (for PR creation and issue commenting) ---
     const issueFm = extractIssueFrontmatter(planFile);
