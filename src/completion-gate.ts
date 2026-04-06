@@ -33,12 +33,17 @@ export interface CompletionGateInput {
   feedbackResults: FeedbackResult[];
 }
 
+/** Feedback tier: loop-tier runs during each iteration; PR-tier runs only at the completion gate. */
+export type FeedbackTier = "loop" | "pr";
+
 /** Result of running a single feedback command. */
 export interface FeedbackResult {
   command: string;
   exitCode: number;
   /** Truncated stderr/stdout on failure (for logging). */
   output: string;
+  /** Which tier this command belongs to. Defaults to "loop" for backward compat. */
+  tier?: FeedbackTier;
 }
 
 /** Outcome of the completion gate. */
@@ -54,7 +59,8 @@ export type GateOutcome =
  * Evaluate the completion gate from pre-gathered inputs.
  *
  * Returns a pass/fail outcome. On failure, `reason` is a short summary
- * and `details` contains per-check diagnostic lines.
+ * and `details` contains per-check diagnostic lines. PR-tier failures
+ * are labeled distinctly so the agent knows which tier they belong to.
  */
 export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
   const details: string[] = [];
@@ -70,8 +76,9 @@ export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
   for (const result of input.feedbackResults) {
     if (result.exitCode !== 0) {
       const snippet = result.output ? `: ${result.output.slice(0, 200)}` : "";
+      const tierLabel = result.tier === "pr" ? " [PR-tier]" : "";
       details.push(
-        `Feedback command failed (exit ${result.exitCode}): ${result.command}${snippet}`,
+        `Feedback command failed${tierLabel} (exit ${result.exitCode}): ${result.command}${snippet}`,
       );
     }
   }
@@ -108,6 +115,7 @@ export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
 export function runFeedbackCommands(
   feedbackCommands: string,
   cwd: string,
+  tier: FeedbackTier = "loop",
 ): FeedbackResult[] {
   if (!feedbackCommands.trim()) return [];
 
@@ -124,7 +132,7 @@ export function runFeedbackCommands(
         stdio: ["pipe", "pipe", "pipe"],
         timeout: 120_000, // 2 minute timeout per command
       });
-      return { command, exitCode: 0, output: "" };
+      return { command, exitCode: 0, output: "", tier };
     } catch (err: unknown) {
       const exitCode =
         err && typeof err === "object" && "status" in err
@@ -142,6 +150,7 @@ export function runFeedbackCommands(
         command,
         exitCode,
         output: stderr || stdout,
+        tier,
       };
     }
   });
@@ -173,8 +182,10 @@ export interface RunCompletionGateOptions {
   planFormat: PlanFormat;
   /** Total tasks from the plan. */
   totalTasks: number;
-  /** Comma-separated feedback commands. */
+  /** Comma-separated loop-tier feedback commands. */
   feedbackCommands: string;
+  /** Comma-separated PR-tier feedback commands (run only at the gate, never in agent prompt). */
+  prFeedbackCommands?: string;
   /** Working directory for running feedback commands. */
   cwd: string;
 }
@@ -184,6 +195,8 @@ export interface RunCompletionGateOptions {
  * and evaluate.
  *
  * This is the main entry point called from the runner loop.
+ * Runs both loop-tier and PR-tier feedback commands (when configured),
+ * combining results for a single gate evaluation.
  */
 export function runCompletionGate(
   options: RunCompletionGateOptions,
@@ -193,15 +206,20 @@ export function runCompletionGate(
     options.planFormat,
   );
 
-  const feedbackResults = runFeedbackCommands(
+  const loopResults = runFeedbackCommands(
     options.feedbackCommands,
     options.cwd,
+    "loop",
   );
+
+  const prResults = options.prFeedbackCommands
+    ? runFeedbackCommands(options.prFeedbackCommands, options.cwd, "pr")
+    : [];
 
   return checkCompletionGate({
     completedTasks,
     totalTasks: options.totalTasks,
-    feedbackResults,
+    feedbackResults: [...loopResults, ...prResults],
   });
 }
 

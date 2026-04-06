@@ -702,6 +702,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const feedbackCommands = scopeResult.feedbackCommands;
     const scopeHint = scopeResult.scopeHint;
 
+    // PR-tier feedback commands: passed to the completion gate only (not the
+    // agent prompt). Scope resolution for monorepos is deferred to a separate
+    // slice — for now we use the root config value directly.
+    const prFeedbackCommands = config.prFeedbackCommands?.value ?? "";
+
     // --- Issue frontmatter (for PR creation and issue commenting) ---
     const issueFm = extractIssueFrontmatter(planFile);
 
@@ -1011,6 +1016,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           planFormat,
           totalTasks,
           feedbackCommands,
+          prFeedbackCommands,
           cwd,
         });
 
