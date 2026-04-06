@@ -5,7 +5,6 @@ import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { runRalphai } from "./ralphai.ts";
-import { runInteractive } from "./interactive/menu.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 import { getConfigFilePath } from "./config.ts";
