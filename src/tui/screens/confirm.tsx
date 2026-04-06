@@ -12,7 +12,8 @@
  *
  * Pure helpers are exported for unit testing:
  * - `buildConfirmLines` — builds the display lines from ConfirmData
- * - `confirmKeyHandler` — maps key input to a DispatchResult
+ * - `confirmKeyHandler` — maps key input to a ConfirmIntent
+ * - `resolveConfirmIntent` — maps a ConfirmIntent to a DispatchResult
  */
 
 import { useCallback } from "react";
@@ -123,6 +124,32 @@ export function confirmKeyHandler(
   return null;
 }
 
+/**
+ * Map a confirm-screen intent to a `DispatchResult`.
+ *
+ * - `confirm` → exit TUI, hand off CLI args to the runner
+ * - `back` → navigate to `backScreen` (previous screen)
+ * - `options` → placeholder stay (will navigate to options wizard later)
+ *
+ * Pure function — exported for testing.
+ */
+export function resolveConfirmIntent(
+  intent: ConfirmIntent,
+  data: Pick<ConfirmData, "runArgs">,
+  backScreen: Screen,
+): DispatchResult {
+  switch (intent) {
+    case "confirm":
+      return { type: "exit-to-runner", args: data.runArgs };
+    case "back":
+      return { type: "navigate", screen: backScreen };
+    case "options":
+      // Placeholder: will navigate to the run-with-options wizard
+      // once it is built. For now, this is a no-op.
+      return { type: "stay" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // ConfirmScreen component
 // ---------------------------------------------------------------------------
@@ -139,22 +166,9 @@ export function ConfirmScreen({
     (input: string, key: Key) => {
       const intent = confirmKeyHandler(input, key);
       if (!intent) return;
-
-      switch (intent) {
-        case "confirm":
-          onResult({ type: "exit-to-runner", args: data.runArgs });
-          break;
-        case "back":
-          onResult({ type: "navigate", screen: backScreen });
-          break;
-        case "options":
-          // Placeholder: will navigate to the run-with-options wizard
-          // once it is built. For now, this is a no-op.
-          onResult({ type: "stay" });
-          break;
-      }
+      onResult(resolveConfirmIntent(intent, data, backScreen));
     },
-    [data.runArgs, backScreen, onResult],
+    [data, backScreen, onResult],
   );
 
   useInput(handleInput, { isActive });
