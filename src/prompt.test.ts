@@ -88,6 +88,58 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Run all feedback loops: bun run build, bun test");
   });
 
+  // --- Wrapper path ---
+
+  it("references wrapper script in step 4 when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).toContain("`" + "./_ralphai_feedback.sh" + "`");
+    expect(prompt).toContain("Run the feedback wrapper:");
+  });
+
+  it("explains wrapper behavior (summary on pass, full output on failure) when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).toContain("one-line summary");
+    expect(prompt).toContain("full output");
+  });
+
+  it("does not list raw commands when wrapperPath is set", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackCommands: "bun run build,bun test",
+        wrapperPath: "./_ralphai_feedback.sh",
+      }),
+    );
+    expect(prompt).not.toContain(
+      "Run all feedback loops: bun run build, bun test",
+    );
+  });
+
+  it("falls back to raw commands when wrapperPath is absent", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ feedbackCommands: "bun run build,bun test" }),
+    );
+    expect(prompt).toContain("Run all feedback loops: bun run build, bun test");
+    expect(prompt).not.toContain("_ralphai_feedback.sh");
+  });
+
+  it("falls back to generic feedback text when wrapperPath is absent and no commands", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackCommands: "" }));
+    expect(prompt).toContain(
+      "Run your project's build, test, and lint commands",
+    );
+    expect(prompt).not.toContain("_ralphai_feedback.sh");
+  });
+
   it("includes commit instruction", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Stage and commit ALL changes");

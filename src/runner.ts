@@ -31,6 +31,7 @@ import {
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
+import { FEEDBACK_WRAPPER_FILENAME } from "./feedback-wrapper.ts";
 import { appendProgressBlock } from "./progress.ts";
 import {
   generateNonce,
@@ -820,6 +821,13 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Assemble prompt ---
+      // Check for the feedback wrapper script in the worktree. When it
+      // exists the prompt references the wrapper instead of raw commands.
+      const wrapperFile = join(cwd, FEEDBACK_WRAPPER_FILENAME);
+      const wrapperPath = existsSync(wrapperFile)
+        ? `./${FEEDBACK_WRAPPER_FILENAME}`
+        : undefined;
+
       const prompt = assemblePrompt({
         planFile,
         progressFile,
@@ -830,6 +838,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         planFormat,
         gateRejection: lastGateRejection,
         nonce,
+        wrapperPath,
       });
 
       // --- Spawn agent (with output log persistence) ---

@@ -46,6 +46,13 @@ export interface AssemblePromptOptions {
    * positives from tool output that happens to contain bare sentinel strings.
    */
   nonce?: string;
+  /**
+   * Path to the generated feedback wrapper script (e.g.
+   * `./_ralphai_feedback.sh`). When set, step 4 tells the agent to run
+   * the wrapper instead of listing raw commands. When absent (Windows,
+   * or wrapper not generated), step 4 falls back to raw commands.
+   */
+  wrapperPath?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +97,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     planFormat = "tasks",
     gateRejection,
     nonce,
+    wrapperPath,
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -118,9 +126,11 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     : "";
 
   // --- Mode-aware instructions ---
-  const feedbackStep = feedbackText
-    ? `Run all feedback loops: ${feedbackText}. Fix any failures before continuing.`
-    : `Run your project's build, test, and lint commands. Fix any failures before continuing.`;
+  const feedbackStep = wrapperPath
+    ? `Run the feedback wrapper: \`${wrapperPath}\`. This script runs all configured feedback commands sequentially. On success it prints a one-line summary per command; on failure it prints the full output so you can diagnose the issue. Fix any failures before continuing.`
+    : feedbackText
+      ? `Run all feedback loops: ${feedbackText}. Fix any failures before continuing.`
+      : `Run your project's build, test, and lint commands. Fix any failures before continuing.`;
 
   const commitInstruction =
     "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.";

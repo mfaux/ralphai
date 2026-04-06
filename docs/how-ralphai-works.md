@@ -20,6 +20,8 @@ Iteration 10 gets the same quality of context as iteration 1.
 
 Each iteration, the agent runs your project's real build, test, and lint commands. The retry loop is agent-internal: Ralphai provides the feedback commands in the prompt, and the agent runs them, fixes errors, and iterates within a single session.
 
+When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the worktree, the prompt tells the agent to run the wrapper instead of listing raw commands. The wrapper provides concise output on success and full diagnostics on failure (see [Feedback Wrapper Script](#feedback-wrapper-script) below). When the wrapper is absent (e.g. on Windows), the prompt falls back to listing raw commands directly.
+
 ```
     ┌─────────────────────────────────────┐
     │            Fresh session            │
@@ -73,7 +75,9 @@ When a worktree is created or reused, Ralphai generates a shell script called `_
 - **On failure (non-zero exit):** prints the full stdout/stderr so the agent can diagnose and fix the issue.
 - **On timeout:** kills the child process and prints partial output with a timeout message.
 
-The wrapper is regenerated on every `prepareWorktree()` call — including reused worktrees — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt slice handles the fallback).
+The wrapper is regenerated on every `prepareWorktree()` call — including reused worktrees — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt falls back to listing raw commands).
+
+When the wrapper exists in the worktree, the runner passes its path to the prompt module via `wrapperPath`. The agent prompt then tells the agent to run `./_ralphai_feedback.sh` and explains its summary-on-pass / full-output-on-failure behavior. When the wrapper is absent, the prompt lists raw commands as before — this keeps backward compatibility with Windows and any environment where the wrapper is not generated.
 
 The completion gate does **not** use the wrapper — it runs feedback commands directly and collects structured results. The wrapper is purely an agent-side UX optimization.
 
