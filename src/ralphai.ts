@@ -2242,6 +2242,8 @@ async function runPrdIssueTarget(
       prd,
       completedSubIssues,
       stuckSubIssues,
+      hitlSubIssues,
+      blockedSubIssues,
       cwd: resolvedWorktreeDir,
       issueRepo,
     });

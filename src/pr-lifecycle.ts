@@ -16,6 +16,7 @@ import {
 } from "./issues.ts";
 import { transitionDone } from "./label-lifecycle.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
+import type { BlockedSubIssue } from "./prd-hitl.ts";
 import {
   buildPrBody,
   buildContinuousPrBodyStructured,
@@ -389,6 +390,8 @@ export interface PrdPrBodyOptions {
   prd: { number: number; title: string };
   completedSubIssues: number[];
   stuckSubIssues: number[];
+  hitlSubIssues?: number[];
+  blockedSubIssues?: BlockedSubIssue[];
   baseBranch: string;
   headBranch: string;
   cwd: string;
@@ -402,6 +405,8 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
     prd,
     completedSubIssues,
     stuckSubIssues,
+    hitlSubIssues = [],
+    blockedSubIssues = [],
     baseBranch,
     headBranch,
     cwd,
@@ -414,7 +419,8 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
   // Title / description
   parts.push(`PRD #${prd.number}: ${prd.title}\n`);
 
-  // Closes references — PRD + completed sub-issues only (not stuck ones)
+  // Closes references — PRD + completed sub-issues only
+  // Exclude stuck, HITL, and blocked sub-issues from auto-close
   const closesBlock = buildClosesBlock({
     prdNumber: prd.number,
     issueNumbers: completedSubIssues,
@@ -433,10 +439,34 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
     parts.push("_None._");
   }
 
-  // Stuck sub-issues
-  if (stuckSubIssues.length > 0) {
+  // Stuck sub-issues (includes blocked-by-HITL with dependency notes)
+  const allStuck = [...stuckSubIssues];
+  const blockedByMap = new Map(
+    blockedSubIssues.map((b) => [b.number, b.blockedBy]),
+  );
+  // Add blocked sub-issues that aren't already in the stuck list
+  for (const b of blockedSubIssues) {
+    if (!allStuck.includes(b.number)) {
+      allStuck.push(b.number);
+    }
+  }
+  if (allStuck.length > 0) {
     parts.push("\n## Stuck Sub-Issues\n");
-    parts.push(...stuckSubIssues.map((n) => `- [ ] #${n}`));
+    parts.push(
+      ...allStuck.map((n) => {
+        const blockers = blockedByMap.get(n);
+        if (blockers && blockers.length > 0) {
+          return `- [ ] #${n} — blocked by HITL ${blockers.map((b) => `#${b}`).join(", ")}`;
+        }
+        return `- [ ] #${n}`;
+      }),
+    );
+  }
+
+  // Waiting on Human — HITL sub-issues that require human intervention
+  if (hitlSubIssues.length > 0) {
+    parts.push("\n## Waiting on Human\n");
+    parts.push(...hitlSubIssues.map((n) => `- [ ] #${n}`));
   }
 
   // Changes
@@ -454,6 +484,8 @@ export interface CreatePrdPrOptions {
   prd: { number: number; title: string };
   completedSubIssues: number[];
   stuckSubIssues: number[];
+  hitlSubIssues?: number[];
+  blockedSubIssues?: BlockedSubIssue[];
   cwd: string;
   issueRepo?: string;
 }
@@ -466,6 +498,8 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     prd,
     completedSubIssues,
     stuckSubIssues,
+    hitlSubIssues,
+    blockedSubIssues,
     cwd,
     issueRepo,
   } = options;
@@ -485,6 +519,8 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     prd,
     completedSubIssues,
     stuckSubIssues,
+    hitlSubIssues,
+    blockedSubIssues,
     baseBranch,
     headBranch: branch,
     cwd,
