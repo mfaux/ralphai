@@ -592,4 +592,31 @@ describe("transition flows", () => {
     const result = toConfirmNav(actionResult, config, { type: "menu" });
     expect(result).toEqual({ type: "exit" });
   });
+
+  it("stop-running → stop screen (no confirm interception)", () => {
+    const actionResult = resolveAction("stop-running");
+    const result = toConfirmNav(actionResult, config, { type: "menu" });
+    expect(result).toEqual({
+      type: "navigate",
+      screen: { type: "stop" },
+    });
+  });
+
+  it("reset-plan → reset screen (no confirm interception)", () => {
+    const actionResult = resolveAction("reset-plan");
+    const result = toConfirmNav(actionResult, config, { type: "menu" });
+    expect(result).toEqual({
+      type: "navigate",
+      screen: { type: "reset" },
+    });
+  });
+
+  it("view-status → status screen (no confirm interception)", () => {
+    const actionResult = resolveAction("view-status");
+    const result = toConfirmNav(actionResult, config, { type: "menu" });
+    expect(result).toEqual({
+      type: "navigate",
+      screen: { type: "status" },
+    });
+  });
 });

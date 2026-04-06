@@ -176,12 +176,11 @@ export function ResetScreen({
         handleBack();
         return;
       }
-      // Reset the plan and return to menu
+      // Reset the plan and return to menu with refreshed state
       if (resetPlan) {
         resetPlan(cwd, intent.slug);
       }
-      // Navigate back to menu (pipeline state will refresh)
-      onResult({ type: "stay" });
+      onResult({ type: "navigate", screen: { type: "menu" } });
     },
     [cwd, resetPlan, onResult, handleBack],
   );

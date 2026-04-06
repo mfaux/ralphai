@@ -182,12 +182,11 @@ export function StopScreen({
         handleBack();
         return;
       }
-      // Stop the plan and return to menu
+      // Stop the plan and return to menu with refreshed state
       if (stopPlan) {
         stopPlan(cwd, intent.slug);
       }
-      // Navigate back to menu (pipeline state will refresh)
-      onResult({ type: "stay" });
+      onResult({ type: "navigate", screen: { type: "menu" } });
     },
     [cwd, stopPlan, onResult, handleBack],
   );

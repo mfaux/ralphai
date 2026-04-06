@@ -192,6 +192,12 @@ export function App({
           break;
 
         case "navigate":
+          // Refresh pipeline data when navigating back to menu from a
+          // sub-flow so the menu shows up-to-date state (e.g. after
+          // stopping or resetting a plan).
+          if (result.screen.type === "menu") {
+            pipeline.refresh();
+          }
           setScreen(result.screen);
           break;
 
