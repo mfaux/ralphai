@@ -223,6 +223,25 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  // 3b. PR feedback commands (slow E2E/integration tests)
+  const detectedPrFeedback = project
+    ? project.prFeedbackCommands.join(",")
+    : "";
+  const prFeedbackCommands = await clack.text({
+    message:
+      "Slow commands to run only before creating a PR (e.g. E2E or integration tests):",
+    initialValue: detectedPrFeedback || undefined,
+    placeholder: detectedPrFeedback
+      ? undefined
+      : "e.g. npm run test:e2e, npm run cypress:run",
+    defaultValue: detectedPrFeedback || "",
+  });
+
+  if (clack.isCancel(prFeedbackCommands)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
   // 4. Setup command (runs in worktree before agent starts)
   const detectedSetup = detectSetupCommand(cwd);
   const setupCommand = await clack.text({
@@ -301,6 +320,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     setupCommand: setupCommand || "",
     baseBranch,
     feedbackCommands: feedbackCommands || "",
+    prFeedbackCommands: prFeedbackCommands || "",
     autoCommit,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
@@ -459,6 +479,13 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
         .filter((cmd) => cmd.length > 0)
     : [];
 
+  const prFeedbackCommands = answers.prFeedbackCommands
+    ? answers.prFeedbackCommands
+        .split(",")
+        .map((cmd) => cmd.trim())
+        .filter((cmd) => cmd.length > 0)
+    : [];
+
   const configObj: Record<
     string,
     | string
@@ -469,6 +496,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   > = {
     agentCommand: answers.agentCommand,
     feedbackCommands,
+    prFeedbackCommands,
     baseBranch: answers.baseBranch,
     setupCommand: answers.setupCommand ?? "",
     autoCommit: answers.autoCommit ?? false,
@@ -1243,6 +1271,9 @@ async function runRalphaiInit(
     const detectedFeedbackStr = detectedProject
       ? detectedProject.feedbackCommands.join(",")
       : "";
+    const detectedPrFeedbackStr = detectedProject
+      ? detectedProject.prFeedbackCommands.join(",")
+      : "";
     const detectedSetupStr = detectSetupCommand(cwd);
 
     answers = {
@@ -1250,6 +1281,7 @@ async function runRalphaiInit(
       setupCommand: detectedSetupStr,
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
+      prFeedbackCommands: detectedPrFeedbackStr,
       autoCommit: false,
       issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
@@ -1258,6 +1290,7 @@ async function runRalphaiInit(
 
     // Print detection summary so users can verify auto-detected values
     const feedbackDisplay = answers.feedbackCommands.trim() || "(none)";
+    const prFeedbackDisplay = answers.prFeedbackCommands.trim() || "(none)";
     const setupDisplay = answers.setupCommand.trim() || "(none)";
     console.log(`${DIM}Detected:${RESET}`);
     console.log(
@@ -1267,6 +1300,9 @@ async function runRalphaiInit(
       `  ${DIM}Branch:${RESET}    ${TEXT}${answers.baseBranch}${RESET}`,
     );
     console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
+    console.log(
+      `  ${DIM}PR feedback:${RESET} ${TEXT}${prFeedbackDisplay}${RESET}`,
+    );
     console.log(`  ${DIM}Setup:${RESET}     ${TEXT}${setupDisplay}${RESET}`);
     console.log(
       `  ${DIM}Project:${RESET}   ${TEXT}${detectedProject?.label ?? "(none)"}${RESET}`,
@@ -1420,6 +1456,7 @@ const CONFIG_FLAG_PATTERNS = [
   /^--agent-command=/,
   /^--setup-command=/,
   /^--feedback-commands=/,
+  /^--pr-feedback-commands=/,
   /^--base-branch=/,
   /^--max-stuck=/,
   /^--iteration-timeout=/,
@@ -1466,6 +1503,7 @@ function showRunHelp(): void {
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
     "  --setup-command=<command>        Command to run in worktree after creation (e.g. 'bun install')",
     "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
+    "  --pr-feedback-commands=<list>    Comma-separated PR feedback commands (run after PR creation)",
     "  --base-branch=<branch>           Override base branch (default: main)",
     "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
@@ -1476,13 +1514,15 @@ function showRunHelp(): void {
     "  --help, -h                       Show this help message",
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
-    "  Supported keys: agentCommand, setupCommand, feedbackCommands, baseBranch, maxStuck,",
+    "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
+    "                  baseBranch, maxStuck,",
     "                  autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
     "                  issueRepo, issueCommentProgress",
     "",
     "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
     "                   RALPHAI_FEEDBACK_COMMANDS,",
+    "                   RALPHAI_PR_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
     "                   RALPHAI_AUTO_COMMIT,",
     "                   RALPHAI_ITERATION_TIMEOUT,",

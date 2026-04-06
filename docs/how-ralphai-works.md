@@ -50,7 +50,48 @@ Each iteration, the agent runs your project's real build, test, and lint command
                  (fresh session)
 ```
 
-Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` in `config.json`.
+### Two-Tier Feedback Commands
+
+Ralphai supports two tiers of feedback commands:
+
+| Tier          | Config key           | When it runs                                    |
+| ------------- | -------------------- | ----------------------------------------------- |
+| **Loop-tier** | `feedbackCommands`   | Every agent iteration (build, unit tests, lint) |
+| **PR-tier**   | `prFeedbackCommands` | Only at the completion gate, before PR creation |
+
+**Loop-tier commands** (`feedbackCommands`) are included in the agent prompt and run every iteration. These should be fast — build, unit tests, and lint. The agent sees their output and fixes failures inline.
+
+**PR-tier commands** (`prFeedbackCommands`) are slower checks like E2E tests or integration suites. They are _not_ included in the agent prompt and do not run during normal iterations. They only execute when the agent signals completion, at which point the completion gate runs both tiers. This avoids burning time on expensive checks every iteration while still ensuring they pass before a PR is created.
+
+Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` and `prFeedbackCommands` in `config.json`. During init, Ralphai detects PR-tier candidates from common script names like `test:e2e`, `test:integration`, `cypress`, and `playwright`.
+
+## Completion Gate
+
+When the agent signals that all tasks are complete, Ralphai runs a **completion gate** before creating a PR. The gate checks:
+
+1. **Task completion** — all plan tasks are marked done in `progress.md`
+2. **Loop-tier feedback** — all `feedbackCommands` pass
+3. **PR-tier feedback** — all `prFeedbackCommands` pass
+
+If any check fails, the gate **rejects** and Ralphai re-invokes the agent with a fresh session that includes the rejection details. PR-tier failures are labeled `[PR-tier]` in the rejection message so the agent knows which commands failed and can fix them.
+
+```
+    Agent signals COMPLETE
+              ▼
+    ┌──────────────────┐
+    │ Completion gate  │
+    │  - task count    │
+    │  - loop-tier     │
+    │  - PR-tier       │
+    └────────┬─────────┘
+             ▼
+       ┌──────────┐       ┌──────────────────────┐
+       │ Passed?  │──no──▶│ Re-invoke agent with │
+       └────┬─────┘       │ rejection details    │
+            │ yes         └──────────────────────┘
+            ▼
+    Create/update PR
+```
 
 ## Plan Structure
 

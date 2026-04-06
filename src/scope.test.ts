@@ -84,9 +84,11 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "",
       rootFeedbackCommands: "pnpm test,pnpm run build",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.feedbackCommands).toBe("pnpm test,pnpm run build");
+    expect(result.prFeedbackCommands).toBe("");
     expect(result.ecosystem).toBe("node");
     expect(result.scopeHint).toBe("");
   });
@@ -111,6 +113,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/web",
       rootFeedbackCommands: "pnpm test,pnpm run build",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.ecosystem).toBe("node");
@@ -143,6 +146,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/lib",
       rootFeedbackCommands: "yarn test,yarn build",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.packageManager).toBe("yarn");
@@ -169,6 +173,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/api",
       rootFeedbackCommands: "npm run test,npm run build",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.packageManager).toBe("npm");
@@ -186,6 +191,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "src/MyProject",
       rootFeedbackCommands: "dotnet build,dotnet test",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.ecosystem).toBe("dotnet");
@@ -212,6 +218,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/web",
       rootFeedbackCommands: "make test,pnpm build",
+      rootPrFeedbackCommands: "",
     });
 
     // "make test" passes through unchanged, "pnpm build" is rewritten
@@ -227,6 +234,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "cmd/server",
       rootFeedbackCommands: "go build ./...,go test ./...",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.ecosystem).toBe("go");
@@ -239,6 +247,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "some/path",
       rootFeedbackCommands: "make test",
+      rootPrFeedbackCommands: "",
     });
 
     expect(result.ecosystem).toBe("unknown");
@@ -263,6 +272,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/special",
       rootFeedbackCommands: "pnpm test,pnpm build",
+      rootPrFeedbackCommands: "",
       workspacesConfig: wsConfig,
     });
 
@@ -291,6 +301,7 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/web",
       rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
       workspacesConfig: wsConfig,
     });
 
@@ -317,11 +328,267 @@ describe("resolveScope", () => {
       cwd: ctx.dir,
       planScope: "packages/web",
       rootFeedbackCommands: "pnpm test,dotnet build",
+      rootPrFeedbackCommands: "",
     });
 
     // pnpm command is rewritten, dotnet command gets scope appended
     expect(result.feedbackCommands).toBe(
       "pnpm --filter @repo/web test,dotnet build packages/web",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveScope() prFeedbackCommands tests
+// ---------------------------------------------------------------------------
+
+describe("resolveScope prFeedbackCommands", () => {
+  const ctx = useTempDir();
+
+  it("rewrites pnpm prFeedbackCommands for a scoped node package", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const pkgDir = join(ctx.dir, "packages", "web");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@app/web" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "pnpm test:e2e",
+    });
+
+    expect(result.prFeedbackCommands).toBe("pnpm --filter @app/web test:e2e");
+  });
+
+  it("rewrites yarn prFeedbackCommands for a scoped node package", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({
+        name: "root",
+        scripts: { test: "jest" },
+        workspaces: ["packages/*"],
+      }),
+    );
+    writeFileSync(join(ctx.dir, "yarn.lock"), "# yarn lockfile v1\n");
+
+    const pkgDir = join(ctx.dir, "packages", "lib");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@repo/lib" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/lib",
+      rootFeedbackCommands: "yarn test",
+      rootPrFeedbackCommands: "yarn test:e2e",
+    });
+
+    expect(result.prFeedbackCommands).toBe("yarn workspace @repo/lib test:e2e");
+  });
+
+  it("rewrites npm prFeedbackCommands for a scoped node package", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "jest" } }),
+    );
+    writeFileSync(join(ctx.dir, "package-lock.json"), "{}");
+
+    const pkgDir = join(ctx.dir, "packages", "api");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@repo/api" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/api",
+      rootFeedbackCommands: "npm run test",
+      rootPrFeedbackCommands: "npm run test:e2e",
+    });
+
+    expect(result.prFeedbackCommands).toBe("npm -w @repo/api run test:e2e");
+  });
+
+  it("rewrites bun prFeedbackCommands for a scoped node package", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "bun.lock"), "{}");
+
+    const pkgDir = join(ctx.dir, "packages", "web");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@repo/web" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "bun run test",
+      rootPrFeedbackCommands: "bun run test:e2e",
+    });
+
+    expect(result.prFeedbackCommands).toBe(
+      "bun --filter @repo/web run test:e2e",
+    );
+  });
+
+  it("rewrites dotnet prFeedbackCommands by appending project path", () => {
+    writeFileSync(join(ctx.dir, "MySolution.sln"), "");
+    const projDir = join(ctx.dir, "src", "MyProject");
+    mkdirSync(projDir, { recursive: true });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "src/MyProject",
+      rootFeedbackCommands: "dotnet build",
+      rootPrFeedbackCommands: "dotnet test",
+    });
+
+    expect(result.prFeedbackCommands).toBe("dotnet test src/MyProject");
+  });
+
+  it("uses workspace prFeedbackCommands override when present", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const wsConfig = JSON.stringify({
+      "packages/special": {
+        feedbackCommands: ["custom build"],
+        prFeedbackCommands: ["custom e2e"],
+      },
+    });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/special",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "pnpm test:e2e",
+      workspacesConfig: wsConfig,
+    });
+
+    expect(result.prFeedbackCommands).toBe("custom e2e");
+  });
+
+  it("falls through to root prFeedbackCommands when workspace override has no prFeedbackCommands", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const wsConfig = JSON.stringify({
+      "packages/special": {
+        feedbackCommands: ["custom build"],
+      },
+    });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/special",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "pnpm test:e2e",
+      workspacesConfig: wsConfig,
+    });
+
+    // Workspace override has feedbackCommands but no prFeedbackCommands,
+    // so prFeedbackCommands falls through to the root value.
+    expect(result.prFeedbackCommands).toBe("pnpm test:e2e");
+  });
+
+  it("passes through prFeedbackCommands unchanged when no scope", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "pnpm test:e2e",
+    });
+
+    expect(result.prFeedbackCommands).toBe("pnpm test:e2e");
+  });
+
+  it("passes through prFeedbackCommands unchanged for unsupported ecosystems", () => {
+    writeFileSync(join(ctx.dir, "go.mod"), "module example.com/mymod\n");
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "cmd/server",
+      rootFeedbackCommands: "go test ./...",
+      rootPrFeedbackCommands: "go test -race ./...",
+    });
+
+    expect(result.prFeedbackCommands).toBe("go test -race ./...");
+  });
+
+  it("returns empty string when prFeedbackCommands is empty", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const pkgDir = join(ctx.dir, "packages", "web");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@repo/web" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
+    });
+
+    expect(result.prFeedbackCommands).toBe("");
+  });
+
+  it("rewrites prFeedbackCommands even when rootFeedbackCommands is empty", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root", scripts: { test: "vitest" } }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const pkgDir = join(ctx.dir, "packages", "web");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@repo/web" }),
+    );
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "",
+      rootPrFeedbackCommands: "pnpm test:e2e",
+    });
+
+    expect(result.feedbackCommands).toBe("");
+    expect(result.prFeedbackCommands).toBe("pnpm --filter @repo/web test:e2e");
   });
 });

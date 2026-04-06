@@ -2,10 +2,10 @@
  * Scope CLI — thin wrapper around src/scope.ts for shell callers.
  *
  * Usage:
- *   node scope-cli.mjs <cwd> <planScope> <rootFeedbackCommands> [workspacesConfig]
+ *   node scope-cli.mjs <cwd> <planScope> <rootFeedbackCommands> <rootPrFeedbackCommands> [workspacesConfig]
  *
  * Writes a JSON object to stdout:
- *   { "ecosystem": "...", "packageManager": "...", "feedbackCommands": "...", "scopeHint": "..." }
+ *   { "ecosystem": "...", "packageManager": "...", "feedbackCommands": "...", "prFeedbackCommands": "...", "scopeHint": "..." }
  *
  * Exit codes:
  *   0 — success
@@ -15,11 +15,22 @@
 import { resolveScope } from "./scope.ts";
 
 const args = process.argv.slice(2);
-const [cwd, planScope, rootFeedbackCommands, workspacesConfig] = args;
+const [
+  cwd,
+  planScope,
+  rootFeedbackCommands,
+  rootPrFeedbackCommands,
+  workspacesConfig,
+] = args;
 
-if (!cwd || planScope === undefined || rootFeedbackCommands === undefined) {
+if (
+  !cwd ||
+  planScope === undefined ||
+  rootFeedbackCommands === undefined ||
+  rootPrFeedbackCommands === undefined
+) {
   process.stderr.write(
-    "Usage: scope-cli <cwd> <planScope> <rootFeedbackCommands> [workspacesConfig]\n",
+    "Usage: scope-cli <cwd> <planScope> <rootFeedbackCommands> <rootPrFeedbackCommands> [workspacesConfig]\n",
   );
   process.exit(2);
 }
@@ -28,6 +39,7 @@ const result = resolveScope({
   cwd,
   planScope,
   rootFeedbackCommands,
+  rootPrFeedbackCommands,
   workspacesConfig,
 });
 
