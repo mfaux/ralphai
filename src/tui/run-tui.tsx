@@ -24,6 +24,7 @@ import {
   removeTerminalSafetyHandlers,
   restoreTerminal,
 } from "./terminal-safety.ts";
+import { applyNoColorOverride } from "./color-support.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,6 +144,11 @@ export async function runTui(
     ...baseProps,
     onExitToRunner,
   };
+
+  // Bridge NO_COLOR env var to chalk before Ink mounts.
+  // Chalk's vendored supports-color already handles --no-color, but
+  // does not check the NO_COLOR env var. This ensures both paths work.
+  applyNoColorOverride();
 
   // Install terminal safety handlers before mounting Ink.
   // These ensure the terminal is restored on SIGINT, SIGTERM,
