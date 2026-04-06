@@ -5,7 +5,6 @@ import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { runRalphai } from "./ralphai.ts";
-import { runInteractive } from "./interactive/menu.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { checkForUpdate, spawnUpdateCheck } from "./self-update.ts";
 import { getConfigFilePath } from "./config.ts";
@@ -118,7 +117,12 @@ async function main(): Promise<void> {
         }
       }
 
-      await runInteractive(process.cwd());
+      const cwd = process.cwd();
+      const { runTui } = await import("./tui/run-tui.tsx");
+      const result = await runTui({ cwd });
+      if (result.args) {
+        await runRalphai(result.args);
+      }
       return;
     }
     // Non-interactive: show help text

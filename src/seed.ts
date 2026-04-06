@@ -17,6 +17,8 @@ export function loadSamplePlan(filename: string): string {
   const candidates = [
     new URL(`./sample-plans/${filename}`, import.meta.url),
     new URL(`../src/sample-plans/${filename}`, import.meta.url),
+    // When bundled into dist/_chunks/, go up two levels to reach repo root.
+    new URL(`../../src/sample-plans/${filename}`, import.meta.url),
   ];
 
   for (const url of candidates) {

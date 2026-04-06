@@ -6,7 +6,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 
 | File             | Role                                                                                                                 |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `src/cli.ts`     | Process entry point. Parses top-level args and calls `runRalphai`.                                                   |
+| `src/cli.ts`     | Process entry point. Parses top-level args, launches the Ink TUI (no args + TTY), or calls `runRalphai`.             |
 | `src/ralphai.ts` | Main dispatcher. Routes subcommands, runs the interactive wizard, scaffolds `init`/`update`, and orchestrates `run`. |
 
 ## Core loop
@@ -27,6 +27,35 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/doctor.ts`        | `ralphai doctor` -- health checks and diagnostics.                                   |
 | `src/status.ts`        | `ralphai status` -- pipeline state rendering with optional auto-refresh.             |
 | `src/seed.ts`          | `ralphai seed` -- sample plan management.                                            |
+
+## TUI subsystem (`src/tui/`)
+
+The Ink-based interactive TUI launched by `ralphai` (no subcommand) in a TTY. Built on React/Ink with a screen-router pattern: `App` manages which screen is visible, dispatches actions, and handles transitions.
+
+| File / Directory             | Role                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/tui/run-tui.tsx`        | TUI entry point. Mounts the Ink app, installs terminal safety handlers, returns CLI args on exit.                                    |
+| `src/tui/app.tsx`            | Screen router. Wires data hooks, dispatches actions to screens, handles exit-to-runner handoff.                                      |
+| `src/tui/types.ts`           | Core types: `ActionType`, `Screen`, `DispatchResult`, `RunConfig`, and confirm/options wiring helpers.                               |
+| `src/tui/menu-items.ts`      | Pure data layer. Builds menu items from pipeline state with groups (START, MANAGE, TOOLS) and hotkeys.                               |
+| `src/tui/terminal-safety.ts` | Crash recovery. Installs handlers for SIGINT, SIGTERM, uncaughtException, unhandledRejection to restore terminal state.              |
+| `src/tui/color-support.ts`   | Bridges `NO_COLOR` env var to chalk's level system before Ink mounts.                                                                |
+| `src/tui/screens/`           | Full-screen views: `menu`, `confirm`, `options`, `backlog-picker`, `issue-picker`, `stop`, `reset`, `status`, `doctor`, `clean`.     |
+| `src/tui/components/`        | Reusable UI components: `selectable-list`, `checkbox-list`, `detail-pane`, `header`, `split-layout`, `text-input`.                   |
+| `src/tui/hooks/`             | Data hooks: `use-pipeline-state` (async pipeline gathering), `use-github-issues` (issue count peek), `use-terminal-size` (SIGWINCH). |
+
+## Interactive data layer (`src/interactive/`)
+
+Pure data helpers and the `@clack/prompts`-based config wizard, shared between the TUI and CLI flows. The old interactive menu loop has been removed; what remains is data and wizard logic.
+
+| File                                     | Role                                                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `src/interactive/run-actions.ts`         | Menu item builders for run actions (label, hint, disabled state). Consumed by `src/tui/menu-items.ts`.          |
+| `src/interactive/pipeline-actions.ts`    | Menu item builders for pipeline actions, plus plan filters (`stalledPlans`, `runningPlans`, `resettablePlans`). |
+| `src/interactive/github-issues.ts`       | GitHub issue fetching, display list construction, and data types for the issue picker.                          |
+| `src/interactive/wizard-options.ts`      | Wizard option descriptors and `selectionsToFlags()` helper.                                                     |
+| `src/interactive/run-wizard.ts`          | `@clack/prompts`-based config wizard for `ralphai run --wizard`. Used by `ralphai.ts`.                          |
+| `src/interactive/maintenance-actions.ts` | `ExitIntercepted` sentinel class for test infrastructure.                                                       |
 
 ## Worktree subsystem (`src/worktree/`)
 
@@ -79,13 +108,19 @@ cli.ts
        -> worktree/index.ts -> parsing, selection, management
        -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts, sentinel.ts
        -> config.ts, issues.ts, receipt.ts, ...           (supporting modules)
+  -> tui/run-tui.tsx  (Ink TUI, launched when no subcommand + TTY)
+       -> tui/app.tsx -> screens/, components/, hooks/
+       -> tui/menu-items.ts -> interactive/run-actions.ts, pipeline-actions.ts
+       -> tui/terminal-safety.ts, color-support.ts
 ```
 
-Modules import from leaf utilities and supporting modules. `ralphai.ts` is the root dispatcher; `types.ts`, `git-helpers.ts`, and `utils.ts` are leaves with no intra-project imports.
+Modules import from leaf utilities and supporting modules. `ralphai.ts` is the root dispatcher; `types.ts`, `git-helpers.ts`, and `utils.ts` are leaves with no intra-project imports. The `src/tui/` subsystem depends on `src/interactive/` for pure data helpers (menu item builders, plan filters) but not for any interactive prompts.
 
 ## Where to add new code
 
 - **New CLI subcommand:** Add a case to the dispatcher switch in `ralphai.ts`, implement the command in a new module, and re-export the entry function.
+- **New TUI screen:** Add a screen component in `src/tui/screens/`, add the screen type to `Screen` in `src/tui/types.ts`, and wire it into the screen router in `src/tui/app.tsx`.
+- **New TUI menu item:** Add the item to `buildMenuItems()` in `src/tui/menu-items.ts` with a hotkey, add the action type to `ActionType` in `src/tui/types.ts`, and add routing in `resolveAction()`.
 - **New worktree behavior:** Add to the appropriate `src/worktree/` sub-module, or create a new one and re-export through `index.ts`.
 - **New feedback or iteration logic:** Modify `src/runner.ts`.
 - **New plan selection or dependency logic:** Modify `src/plan-detection.ts`.

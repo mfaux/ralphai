@@ -37,7 +37,6 @@ async function runIsolated(
 // or third-party / internal modules (@clack/prompts, ./issues.ts, etc.).
 // These must run in separate processes to prevent mock leaks.
 const ISOLATED = [
-  "src/interactive/maintenance-actions.test.ts",
   "src/interactive/run-wizard.test.ts",
   "src/runner-github-drain.test.ts",
 ];

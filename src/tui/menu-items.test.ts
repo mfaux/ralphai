@@ -1,8 +1,13 @@
 /**
- * Tests for the interactive menu module.
+ * Tests for the TUI menu items module.
  *
- * Tests buildMenuItems and buildHeaderLine with various PipelineState
- * inputs. These are pure unit tests — no filesystem, no subprocess.
+ * Ports tests from `src/interactive/menu.test.ts` with adaptations for:
+ * - Renamed groups: run → START, pipeline → MANAGE, maintenance → TOOLS
+ * - Dropped `recent-activity` item
+ * - Consolidated `view-config` + `edit-config` → `settings`
+ * - Added hotkey assignments
+ *
+ * These are pure unit tests — no filesystem, no subprocess.
  */
 
 import { describe, it, expect } from "bun:test";
@@ -11,9 +16,10 @@ import type { PipelineState } from "../pipeline-state.ts";
 import {
   buildHeaderLine,
   buildMenuItems,
+  isPipelineEmpty,
   type MenuItem,
   type MenuContext,
-} from "./menu.ts";
+} from "./menu-items.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,6 +127,39 @@ describe("buildHeaderLine", () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildHeaderLine — stalled warning
+// ---------------------------------------------------------------------------
+
+describe("buildHeaderLine — stalled warning", () => {
+  it("appends singular stalled warning when 1 plan is stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1, "stalled"),
+      backlog: makeBacklog(2),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).toBe(
+      "Pipeline: 2 backlog \u00b7 1 running \u00b7 0 completed \u00b7 \u26a0 1 plan stalled",
+    );
+  });
+
+  it("appends plural stalled warning when multiple plans are stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(2, "stalled"),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).toContain("\u26a0 2 plans stalled");
+  });
+
+  it("does not include stalled warning when no plans are stalled", () => {
+    const state = makeState({
+      inProgress: makeInProgress(1),
+    });
+    const header = stripAnsi(buildHeaderLine(state));
+    expect(header).not.toContain("\u26a0");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildMenuItems — structure and ordering
 // ---------------------------------------------------------------------------
 
@@ -138,15 +177,23 @@ describe("buildMenuItems", () => {
     expect(values).toContain("stop-running");
     expect(values).toContain("reset-plan");
     expect(values).toContain("view-status");
-    expect(values).toContain("recent-activity");
     expect(values).toContain("doctor");
     expect(values).toContain("clean");
-    expect(values).toContain("view-config");
-    expect(values).toContain("edit-config");
+    expect(values).toContain("settings");
     expect(values).toContain("quit");
   });
 
-  it("orders items by group: run, pipeline, maintenance", () => {
+  it("does not include dropped items", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const values = items.map((i) => i.value);
+
+    expect(values).not.toContain("recent-activity");
+    expect(values).not.toContain("view-config");
+    expect(values).not.toContain("edit-config");
+  });
+
+  it("orders items by group: START, MANAGE, TOOLS", () => {
     const state = makeState({ backlog: makeBacklog(1) });
     const items = buildMenuItems(state, NO_GITHUB);
 
@@ -155,7 +202,7 @@ describe("buildMenuItems", () => {
     const statusIdx = items.findIndex((i) => i.value === "view-status");
     const quitIdx = items.findIndex((i) => i.value === "quit");
 
-    // Run group before pipeline before maintenance
+    // START group before MANAGE before TOOLS
     expect(runNextIdx).toBeLessThan(statusIdx);
     expect(pickIdx).toBeLessThan(statusIdx);
     expect(statusIdx).toBeLessThan(quitIdx);
@@ -187,8 +234,19 @@ describe("buildMenuItems", () => {
       expect(item.value.length).toBeGreaterThan(0);
       expect(item.label).toBeTypeOf("string");
       expect(item.label.length).toBeGreaterThan(0);
-      expect(["run", "pipeline", "maintenance"]).toContain(item.group);
+      expect(["START", "MANAGE", "TOOLS"]).toContain(item.group);
     }
+  });
+
+  it("uses START, MANAGE, TOOLS group names", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const items = buildMenuItems(state, NO_GITHUB);
+    const groups = new Set(items.map((i) => i.group));
+
+    expect(groups).toContain("START");
+    expect(groups).toContain("MANAGE");
+    expect(groups).toContain("TOOLS");
+    expect(groups.size).toBe(3);
   });
 });
 
@@ -336,11 +394,11 @@ describe("buildMenuItems — Pick from GitHub", () => {
     expect(values).toContain("pick-from-github");
   });
 
-  it("is in the run group", () => {
+  it("is in the START group", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const pick = items.find((i) => i.value === "pick-from-github")!;
-    expect(pick.group).toBe("run");
+    expect(pick.group).toBe("START");
   });
 
   it("is disabled with (not configured) when GitHub is not configured", () => {
@@ -393,39 +451,6 @@ describe("buildMenuItems — Pick from GitHub", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildHeaderLine — stalled warning
-// ---------------------------------------------------------------------------
-
-describe("buildHeaderLine — stalled warning", () => {
-  it("appends singular stalled warning when 1 plan is stalled", () => {
-    const state = makeState({
-      inProgress: makeInProgress(1, "stalled"),
-      backlog: makeBacklog(2),
-    });
-    const header = stripAnsi(buildHeaderLine(state));
-    expect(header).toBe(
-      "Pipeline: 2 backlog \u00b7 1 running \u00b7 0 completed \u00b7 \u26a0 1 plan stalled",
-    );
-  });
-
-  it("appends plural stalled warning when multiple plans are stalled", () => {
-    const state = makeState({
-      inProgress: makeInProgress(2, "stalled"),
-    });
-    const header = stripAnsi(buildHeaderLine(state));
-    expect(header).toContain("\u26a0 2 plans stalled");
-  });
-
-  it("does not include stalled warning when no plans are stalled", () => {
-    const state = makeState({
-      inProgress: makeInProgress(1),
-    });
-    const header = stripAnsi(buildHeaderLine(state));
-    expect(header).not.toContain("\u26a0");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // buildMenuItems — stalled promotion
 // ---------------------------------------------------------------------------
 
@@ -437,17 +462,17 @@ describe("buildMenuItems — stalled promotion", () => {
     });
     const items = buildMenuItems(state, NO_GITHUB);
 
-    // resume-stalled should be the first item (promoted to run group)
+    // resume-stalled should be the first item (promoted to START group)
     expect(items[0]!.value).toBe("resume-stalled");
-    expect(items[0]!.group).toBe("run");
+    expect(items[0]!.group).toBe("START");
   });
 
-  it("resume-stalled is in pipeline group when no stalled plans", () => {
+  it("resume-stalled is in MANAGE group when no stalled plans", () => {
     const state = makeState({ backlog: makeBacklog(1) });
     const items = buildMenuItems(state, NO_GITHUB);
     const resume = items.find((i) => i.value === "resume-stalled")!;
 
-    expect(resume.group).toBe("pipeline");
+    expect(resume.group).toBe("MANAGE");
     expect(resume.disabled).toBe(true);
   });
 
@@ -463,7 +488,7 @@ describe("buildMenuItems — stalled promotion", () => {
     expect(resumeIdx).toBeLessThan(runNextIdx);
   });
 
-  it("resume-stalled appears after run group when not stalled", () => {
+  it("resume-stalled appears after START group when not stalled", () => {
     const state = makeState({ backlog: makeBacklog(1) });
     const items = buildMenuItems(state, NO_GITHUB);
     const resumeIdx = items.findIndex((i) => i.value === "resume-stalled");
@@ -474,70 +499,24 @@ describe("buildMenuItems — stalled promotion", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildMenuItems — recent activity item
-// ---------------------------------------------------------------------------
-
-describe("buildMenuItems — Recent activity", () => {
-  it("is disabled with (none) when no completed plans", () => {
-    const state = makeState();
-    const items = buildMenuItems(state, NO_GITHUB);
-    const recent = items.find((i) => i.value === "recent-activity")!;
-
-    expect(recent.label).toBe("Recent activity");
-    expect(recent.hint).toBe("(none)");
-    expect(recent.disabled).toBe(true);
-  });
-
-  it("shows count when completed plans exist", () => {
-    const state = makeState({
-      completedSlugs: ["done-a", "done-b", "done-c"],
-    });
-    const items = buildMenuItems(state, NO_GITHUB);
-    const recent = items.find((i) => i.value === "recent-activity")!;
-
-    expect(recent.label).toBe("Recent activity (3 completed)");
-    expect(recent.disabled).toBe(false);
-  });
-
-  it("is in the pipeline group", () => {
-    const state = makeState({ completedSlugs: ["done"] });
-    const items = buildMenuItems(state, NO_GITHUB);
-    const recent = items.find((i) => i.value === "recent-activity")!;
-
-    expect(recent.group).toBe("pipeline");
-  });
-
-  it("appears after view-status but before quit", () => {
-    const state = makeState({ completedSlugs: ["done"] });
-    const items = buildMenuItems(state, NO_GITHUB);
-    const statusIdx = items.findIndex((i) => i.value === "view-status");
-    const recentIdx = items.findIndex((i) => i.value === "recent-activity");
-    const quitIdx = items.findIndex((i) => i.value === "quit");
-
-    expect(recentIdx).toBeGreaterThan(statusIdx);
-    expect(recentIdx).toBeLessThan(quitIdx);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // buildMenuItems — pipeline management items
 // ---------------------------------------------------------------------------
 
 describe("buildMenuItems — pipeline management items", () => {
-  it("includes stop-running in pipeline group", () => {
+  it("includes stop-running in MANAGE group", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const stop = items.find((i) => i.value === "stop-running")!;
 
-    expect(stop.group).toBe("pipeline");
+    expect(stop.group).toBe("MANAGE");
   });
 
-  it("includes reset-plan in pipeline group", () => {
+  it("includes reset-plan in MANAGE group", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const reset = items.find((i) => i.value === "reset-plan")!;
 
-    expect(reset.group).toBe("pipeline");
+    expect(reset.group).toBe("MANAGE");
   });
 
   it("stop-running shows count when plans are running", () => {
@@ -582,22 +561,22 @@ describe("buildMenuItems — pipeline management items", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildMenuItems — maintenance items
+// buildMenuItems — TOOLS items (formerly maintenance)
 // ---------------------------------------------------------------------------
 
-describe("buildMenuItems — maintenance items", () => {
-  it("all four maintenance items are in the maintenance group and never disabled", () => {
+describe("buildMenuItems — TOOLS items", () => {
+  it("doctor, clean, settings, and quit are in the TOOLS group and never disabled", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
 
-    for (const value of ["doctor", "clean", "view-config", "edit-config"]) {
+    for (const value of ["doctor", "clean", "settings", "quit"]) {
       const item = items.find((i) => i.value === value)!;
-      expect(item.group).toBe("maintenance");
+      expect(item.group).toBe("TOOLS");
       expect(item.disabled).toBeFalsy();
     }
   });
 
-  it("maintenance items appear after pipeline items, quit is last", () => {
+  it("TOOLS items appear after MANAGE items, quit is last", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const statusIdx = items.findIndex((i) => i.value === "view-status");
@@ -605,6 +584,15 @@ describe("buildMenuItems — maintenance items", () => {
 
     expect(doctorIdx).toBeGreaterThan(statusIdx);
     expect(items[items.length - 1]!.value).toBe("quit");
+  });
+
+  it("settings item has hint 'view or edit config'", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const settings = items.find((i) => i.value === "settings")!;
+
+    expect(settings.label).toBe("Settings");
+    expect(settings.hint).toBe("view or edit config");
   });
 });
 
@@ -620,11 +608,11 @@ describe("buildMenuItems — Run with options...", () => {
     expect(values).toContain("run-with-options");
   });
 
-  it("is in the run group", () => {
+  it("is in the START group", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const item = items.find((i) => i.value === "run-with-options")!;
-    expect(item.group).toBe("run");
+    expect(item.group).toBe("START");
   });
 
   it("is always enabled", () => {
@@ -641,7 +629,7 @@ describe("buildMenuItems — Run with options...", () => {
     expect(item.hint).toBe("configure before running");
   });
 
-  it("appears after pick-from-github in the run group", () => {
+  it("appears after pick-from-github in the START group", () => {
     const state = makeState({ backlog: makeBacklog(1) });
     const items = buildMenuItems(state, NO_GITHUB);
     const githubIdx = items.findIndex((i) => i.value === "pick-from-github");
@@ -650,12 +638,247 @@ describe("buildMenuItems — Run with options...", () => {
     expect(optionsIdx).toBeGreaterThan(githubIdx);
   });
 
-  it("appears before pipeline group items", () => {
+  it("appears before MANAGE group items", () => {
     const state = makeState();
     const items = buildMenuItems(state, NO_GITHUB);
     const optionsIdx = items.findIndex((i) => i.value === "run-with-options");
     const statusIdx = items.findIndex((i) => i.value === "view-status");
 
     expect(optionsIdx).toBeLessThan(statusIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — hotkey assignments
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — hotkey assignments", () => {
+  it("assigns expected hotkeys to each item", () => {
+    const state = makeState({
+      backlog: makeBacklog(1),
+      inProgress: makeInProgress(1, "stalled"),
+    });
+    const items = buildMenuItems(state, WITH_GITHUB);
+
+    const hotkeys: Record<string, string | undefined> = {};
+    for (const item of items) {
+      hotkeys[item.value] = item.hotkey;
+    }
+
+    expect(hotkeys["resume-stalled"]).toBe("r");
+    expect(hotkeys["run-next"]).toBe("n");
+    expect(hotkeys["pick-from-backlog"]).toBe("b");
+    expect(hotkeys["pick-from-github"]).toBe("g");
+    expect(hotkeys["run-with-options"]).toBe("o");
+    expect(hotkeys["stop-running"]).toBe("s");
+    expect(hotkeys["reset-plan"]).toBe("e");
+    expect(hotkeys["view-status"]).toBe("p");
+    expect(hotkeys["doctor"]).toBe("d");
+    expect(hotkeys["clean"]).toBe("c");
+    expect(hotkeys["quit"]).toBe("q");
+  });
+
+  it("all hotkeys are unique single characters", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const hotkeys = items.map((i) => i.hotkey).filter(Boolean) as string[];
+
+    // All single characters
+    for (const key of hotkeys) {
+      expect(key.length).toBe(1);
+    }
+
+    // All unique
+    const unique = new Set(hotkeys);
+    expect(unique.size).toBe(hotkeys.length);
+  });
+
+  it("settings item has no hotkey", () => {
+    const state = makeState();
+    const items = buildMenuItems(state, NO_GITHUB);
+    const settings = items.find((i) => i.value === "settings")!;
+
+    expect(settings.hotkey).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — GitHub loading indicator
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — GitHub loading indicator", () => {
+  it("pick-from-github shows 'loading...' hint and is disabled while loading", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub");
+    expect(pick.hint).toBe("loading\u2026");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("run-next shows 'loading...' hint when GitHub is loading and no local plans", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // run-next should show a hint that includes loading
+    expect(runNext.hint).toBe("loading\u2026");
+  });
+
+  it("run-next hint remains plan name when local plans exist, even if GitHub is loading", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // When a local plan is available, loading doesn't affect the label
+    expect(runNext.label).toBe("Run next plan (plan-1.md)");
+    expect(runNext.disabled).toBeFalsy();
+  });
+
+  it("loading indicators don't appear when hasGitHubIssues is false", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: false,
+      githubIssueLoading: true, // ignored when not configured
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(not configured)");
+    expect(pick.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMenuItems — GitHub error state
+// ---------------------------------------------------------------------------
+
+describe("buildMenuItems — GitHub error state", () => {
+  it("pick-from-github shows error hint and is disabled on error", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueError: "gh CLI not available",
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(gh CLI not available)");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("run-next shows GitHub error hint when no local plans", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueError: "gh CLI not available",
+    };
+    const items = buildMenuItems(state, ctx);
+    const runNext = items.find((i) => i.value === "run-next")!;
+
+    // run-next still gets generic "will pull from GitHub" from runNextMenuItem,
+    // but our override replaces undefined hints with the error
+    expect(runNext.hint).toBe("(GitHub: gh CLI not available)");
+  });
+
+  it("error indicators don't appear when hasGitHubIssues is false", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: false,
+      githubIssueError: "some error", // ignored
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("(not configured)");
+  });
+
+  it("loading state takes precedence over error state for pick-from-github", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueLoading: true,
+      githubIssueError: "stale error",
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.hint).toBe("loading\u2026");
+    expect(pick.disabled).toBe(true);
+  });
+
+  it("successful count overrides loading/error for pick-from-github", () => {
+    const state = makeState();
+    const ctx: MenuContext = {
+      hasGitHubIssues: true,
+      githubIssueCount: 5,
+    };
+    const items = buildMenuItems(state, ctx);
+    const pick = items.find((i) => i.value === "pick-from-github")!;
+
+    expect(pick.label).toBe("Pick from GitHub (5 issues)");
+    expect(pick.disabled).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isPipelineEmpty
+// ---------------------------------------------------------------------------
+
+describe("isPipelineEmpty", () => {
+  it("returns true when all pipeline sections are empty", () => {
+    const state = makeState();
+    expect(isPipelineEmpty(state)).toBe(true);
+  });
+
+  it("returns false when backlog has plans", () => {
+    const state = makeState({ backlog: makeBacklog(1) });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when in-progress has plans", () => {
+    const state = makeState({ inProgress: makeInProgress(1) });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when completed has slugs", () => {
+    const state = makeState({ completedSlugs: ["done-a"] });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns false when all sections have data", () => {
+    const state = makeState({
+      backlog: makeBacklog(2),
+      inProgress: makeInProgress(1),
+      completedSlugs: ["done-a"],
+    });
+    expect(isPipelineEmpty(state)).toBe(false);
+  });
+
+  it("returns true when worktrees/problems exist but plans are empty", () => {
+    // Worktrees and problems don't count as pipeline content
+    const state = makeState({
+      worktrees: [
+        {
+          entry: { path: "/tmp/wt", branch: "main" },
+          hasActivePlan: false,
+        },
+      ],
+      problems: [{ message: "some warning" }],
+    });
+    expect(isPipelineEmpty(state)).toBe(true);
   });
 });

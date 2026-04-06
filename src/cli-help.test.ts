@@ -260,4 +260,39 @@ describe("CLI help and flags", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).not.toContain("backlog-dir");
   });
+
+  // -------------------------------------------------------------------------
+  // Non-TTY fallback (subprocess tests — exercises the real main() TTY gate)
+  // -------------------------------------------------------------------------
+
+  it("(no args, non-TTY) falls back to help text instead of launching TUI", () => {
+    // runCli uses stdio: ["pipe", "pipe", "pipe"] → non-TTY context.
+    // This exercises the real main() function in cli.ts, which gates the
+    // TUI behind process.stdout.isTTY && process.stdin.isTTY.
+    const result = runCli([], ctx.dir);
+    expect(result.exitCode).toBe(0);
+    // Should show help text
+    expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("Core");
+    expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("init");
+    expect(result.stdout).toContain("status");
+  });
+
+  it("(no args, non-TTY) shows version header before help text", () => {
+    const result = runCli([], ctx.dir);
+    expect(result.exitCode).toBe(0);
+    // Version header: "ralphai vX.Y.Z"
+    expect(result.stdout).toMatch(/ralphai\s+v\d+\.\d+\.\d+/);
+  });
+
+  it("(no args, non-TTY) does not emit TUI/Ink artifacts", () => {
+    const result = runCli([], ctx.dir);
+    expect(result.exitCode).toBe(0);
+    // No Ink-specific cursor control sequences (alternate screen, hide cursor)
+    expect(result.stdout).not.toContain("\x1b[?1049h"); // alternate screen
+    expect(result.stdout).not.toContain("\x1b[?25l"); // hide cursor
+    // Should not contain React/Ink component output markers
+    expect(result.stdout).not.toContain("❯"); // TUI cursor indicator
+  });
 });

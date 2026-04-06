@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "obuild",
-    "dev": "node --experimental-strip-types src/cli.ts",
+    "dev": "bun src/cli.ts",
     "test": "bun scripts/test.ts",
     "test:fast": "bun scripts/test.ts --fast",
     "type-check": "tsc --noEmit",

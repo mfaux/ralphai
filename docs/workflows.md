@@ -4,15 +4,15 @@ Common patterns for working with Ralphai. Each recipe shows the command and what
 
 Back to the [README](../README.md) for setup and quickstart. See the [CLI Reference](cli-reference.md) for all flags.
 
-## Browse plans with the dashboard
+## Browse plans with the interactive menu
 
 ```bash
 ralphai
 ```
 
-Running `ralphai` with no arguments in a terminal opens the interactive dashboard. The left pane lists plans grouped by state (**In progress**, **Backlog**, **Completed**). Select a plan to see its details in the right pane, with tabs for summary, plan content, progress log, and live agent output. Press **Tab** to toggle focus between panes, **Enter** to open or focus the detail pane, **c** to copy the selected repo path, and **s/p/g/o** to switch detail tabs. Use **r** to run the selected backlog plan.
+Running `ralphai` with no arguments in a terminal opens the interactive menu. The menu is organized into groups — **START**, **MANAGE**, and **TOOLS** — with hotkeys for quick action. Use arrow keys to navigate, **Enter** to select, and **Esc** to go back from sub-screens. On wide terminals (≥120 columns), a contextual detail pane shows information about the highlighted item. Press **q** to quit.
 
-This is the primary workflow for humans. Use it to browse the backlog, inspect in-progress work, and launch runs without switching commands.
+This is the primary workflow for humans. Use it to browse the backlog, inspect pipeline state, and launch runs without switching commands.
 
 ## Drain the backlog
 
@@ -36,7 +36,7 @@ ralphai run 42           # issue #42: detected as PRD via label, processes sub-i
 
 Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed and stuck items.
 
-The TUI also supports PRDs: select "Pick from GitHub" and PRD issues appear with their sub-issue tree.
+The interactive menu also supports PRDs: select "Pick from GitHub" (or press **g**) and PRD issues appear with their sub-issue tree.
 
 ## Run a single GitHub issue
 
@@ -90,7 +90,7 @@ The runner handles SIGTERM gracefully: it finishes the current iteration, preser
 ralphai run
 ```
 
-Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the TUI (`ralphai`) to see current progress and launch a new run from there.
+Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the interactive menu (`ralphai`) to see current progress and launch a new run from there.
 
 If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
 
@@ -146,16 +146,16 @@ Use `ralphai run` when you want headless execution, such as automation, scripts,
 
 ```
 ralphai
-→ "Run with options..." → select a target → configure run options → launch
+→ press "o" or select "Run with options..." → configure run options → launch
 ```
 
-Select "Run with options..." from the interactive menu to combine target selection with an interactive config wizard. The flow:
+Select "Run with options..." from the interactive menu (or press **o**) to open the config wizard. The flow:
 
-1. **Target sub-prompt** — choose auto-detect (next plan), pick from backlog, or pick from GitHub. Unavailable targets are greyed out with hints (e.g. "(empty)" for an empty backlog).
-2. **Config wizard** — a multiselect of run options (agent command, feedback commands, max-stuck threshold, etc.) with current values shown. Select which options to override and provide new values.
-3. **Launch** — Ralphai merges your wizard overrides with the selected target and starts the run.
+1. **Config wizard** — a multiselect of run options (agent command, feedback commands, max-stuck threshold, etc.) with current values shown. Select which options to override and provide new values.
+2. **Confirm** — review the run target, agent command, and feedback commands before launching.
+3. **Launch** — Ralphai merges your wizard overrides and starts the run.
 
-Cancel at any step to return to the main menu.
+Press Esc at any step to return to the main menu.
 
 **From the CLI:**
 
