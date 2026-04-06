@@ -166,7 +166,7 @@ By default, `ralphai run` drains the backlog — processing plans sequentially u
 
 1. **Each completed plan** -> pushes the branch and creates a draft PR
 2. **Stuck plans** -> skipped, logged, and reported in the exit summary
-3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues
+3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`) are skipped during auto-drain — they require human attention.
 4. **Nothing left** -> exits with a summary: "Completed N, skipped M (stuck)"
 
 Use `--once` to process a single work unit and exit instead of draining.
@@ -218,11 +218,11 @@ When Ralphai begins processing a PRD's sub-issues — either via an explicit `ra
 
 ### PRD Done Label
 
-When all of a PRD's sub-issues have completed successfully (all have the `done` label, none have `stuck` or `in-progress` labels), Ralphai swaps the `in-progress` label for the `done` label on the PRD parent. This transition happens in three code paths: the explicit PRD runner after its sub-issue loop, the auto-drain path when no more eligible sub-issues remain, and the early exit path when all sub-issues are already complete on entry.
+When all of a PRD's sub-issues have completed successfully (all have the `done` label, none have `stuck` or `in-progress` labels), Ralphai swaps the `in-progress` label for the `done` label on the PRD parent. The PRD is also not marked done while any sub-issues are labeled HITL or are blocked by HITL dependencies. This transition happens in three code paths: the explicit PRD runner after its sub-issue loop, the auto-drain path when no more eligible sub-issues remain, and the early exit path when all sub-issues are already complete on entry.
 
 ### Sequencing
 
-Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-issues can declare dependencies on each other via GitHub's native blocking relationships — Ralphai writes these as `depends-on` frontmatter and respects them during plan selection.
+Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-issues can declare dependencies on each other via GitHub's native blocking relationships — Ralphai writes these as `depends-on` frontmatter and respects them during plan selection. Sub-issues labeled with the HITL label are filtered out before sequencing begins — they require human review. Sub-issues whose `depends-on` entries reference a HITL sub-issue are also skipped as blocked.
 
 ### Aggregate PR
 
@@ -231,11 +231,21 @@ Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped),
 - A `Closes #N` block for the PRD and each completed sub-issue
 - A checklist of completed sub-issues
 - A checklist of stuck sub-issues (if any)
+- A checklist of HITL sub-issues awaiting human review (if any)
+- A checklist of sub-issues blocked by HITL dependencies (if any)
 - A categorized commit log covering all changes on the branch
 
 ### Stuck sub-issues
 
 When a sub-issue hits the stuck threshold (default 3 consecutive no-commit iterations), Ralphai skips it and moves to the next sub-issue. The stuck sub-issue is listed in the aggregate PR body so you can address it manually.
+
+### HITL sub-issues
+
+When a sub-issue is labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`), Ralphai skips it before processing begins. These sub-issues require human review — they are not attempted by the automated runner.
+
+Sub-issues that depend on a HITL sub-issue (via `depends-on` frontmatter) are also skipped as blocked. Both HITL and blocked-by-HITL sub-issues are reported in the exit summary and aggregate PR body. The PRD is not marked done while HITL or blocked sub-issues remain.
+
+To resume after human review: remove the HITL label from the sub-issue, then re-run the PRD with `ralphai run <prd-number>`. Already-completed sub-issues are skipped on re-run.
 
 ## Iteration Timeout
 

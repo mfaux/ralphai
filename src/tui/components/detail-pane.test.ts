@@ -83,6 +83,7 @@ function makeConfig(
     prdLabel: rv("ralphai-prd"),
     issueRepo: rv(""),
     issueCommentProgress: rv("true"),
+    issueHitlLabel: rv("ralphai-subissue-hitl"),
     iterationTimeout: rv(0),
     autoCommit: rv("false"),
     workspaces: rv(null),

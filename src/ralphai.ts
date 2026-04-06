@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { execQuiet as execQuietFn } from "./exec.ts";
 import {
   existsSync,
   mkdirSync,
@@ -62,6 +63,7 @@ import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
 
 import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { extractDependsOn } from "./frontmatter.ts";
 import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
@@ -74,6 +76,7 @@ import {
   fetchIssueWithLabels,
   discoverParentIssue,
   issueBranchName,
+  issueDepSlug,
   commitTypeFromTitle,
   pullGithubIssueByNumber,
   pullGithubIssues,
@@ -1978,15 +1981,51 @@ async function runPrdIssueTarget(
   );
   console.log(`Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")}`);
 
+  // --- HITL sub-issue filtering ---
+  // Before processing, check each sub-issue's labels for the HITL label.
+  // HITL sub-issues require human review and are skipped by the automated runner.
+  const hitlLabel = worktreeConfig.issueHitlLabel.value;
+  const hitlSubIssues: number[] = [];
+  const eligibleSubIssues: number[] = [];
+  for (const num of subIssues) {
+    const labelsRaw = execQuietFn(
+      `gh issue view ${num} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (labels.includes(hitlLabel)) {
+      hitlSubIssues.push(num);
+    } else {
+      eligibleSubIssues.push(num);
+    }
+  }
+
+  if (hitlSubIssues.length > 0) {
+    console.log(
+      `HITL (waiting on human): ${hitlSubIssues.map((n) => `#${n}`).join(", ")} — skipping (labeled "${hitlLabel}")`,
+    );
+  }
+
+  if (eligibleSubIssues.length === 0) {
+    console.log(
+      `PRD #${prd.number} — all sub-issues are either completed, stuck, or awaiting human review. Nothing to do.`,
+    );
+    return;
+  }
+
+  // Build the set of HITL issue numbers for dependency checking
+  const hitlIssueNumbers = new Set(hitlSubIssues);
+
   const stuckSubIssues: number[] = [];
   const completedSubIssues: number[] = [];
+  const blockedSubIssues: { number: number; blockedBy: number[] }[] = [];
   let completedCount = 0;
 
-  for (const subIssueNumber of subIssues) {
+  for (const subIssueNumber of eligibleSubIssues) {
     console.log();
     console.log("----------------------------------------");
     console.log(
-      `PRD #${prd.number} — working on sub-issue #${subIssueNumber} (${completedCount + 1}/${subIssues.length})`,
+      `PRD #${prd.number} — working on sub-issue #${subIssueNumber} (${completedCount + 1}/${eligibleSubIssues.length})`,
     );
     console.log("----------------------------------------");
 
@@ -2014,6 +2053,33 @@ async function runPrdIssueTarget(
         `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
       );
       continue;
+    }
+
+    // --- Check depends-on frontmatter for HITL dependencies ---
+    // If the pulled plan depends on a HITL sub-issue, skip it as blocked.
+    if (pullResult.planPath && hitlIssueNumbers.size > 0) {
+      const deps = extractDependsOn(pullResult.planPath);
+      const hitlBlockers: number[] = [];
+      for (const dep of deps) {
+        // Dependency slugs are like "gh-42" — extract the issue number
+        const m = dep.match(/^gh-(\d+)$/);
+        if (m) {
+          const depNum = parseInt(m[1]!, 10);
+          if (hitlIssueNumbers.has(depNum)) {
+            hitlBlockers.push(depNum);
+          }
+        }
+      }
+      if (hitlBlockers.length > 0) {
+        console.log(
+          `Sub-issue #${subIssueNumber} depends on HITL sub-issue(s) ${hitlBlockers.map((n) => `#${n}`).join(", ")} — skipping.`,
+        );
+        blockedSubIssues.push({
+          number: subIssueNumber,
+          blockedBy: hitlBlockers,
+        });
+        continue;
+      }
     }
 
     console.log(pullResult.message);
@@ -2085,13 +2151,27 @@ async function runPrdIssueTarget(
       `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
     );
   }
+  if (hitlSubIssues.length > 0) {
+    console.log(
+      `HITL (waiting on human): ${hitlSubIssues.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
+  if (blockedSubIssues.length > 0) {
+    for (const b of blockedSubIssues) {
+      console.log(
+        `Blocked by HITL: #${b.number} (depends on ${b.blockedBy.map((n) => `#${n}`).join(", ")})`,
+      );
+    }
+  }
 
   // --- PRD done transition ---
-  // When all sub-issues completed successfully (none stuck), mark the
-  // PRD parent as done.
+  // When all sub-issues completed successfully (none stuck, none HITL, none
+  // blocked by HITL), mark the PRD parent as done.
   if (
-    completedCount === subIssues.length &&
+    completedCount === eligibleSubIssues.length &&
     stuckSubIssues.length === 0 &&
+    hitlSubIssues.length === 0 &&
+    blockedSubIssues.length === 0 &&
     subIssues.length > 0
   ) {
     console.log(
@@ -2241,6 +2321,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedSubissueLabel = DEFAULTS.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
+  let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
   try {
     const cfgResult = resolveConfig({
@@ -2257,6 +2338,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
+    resolvedIssueHitlLabel = cfgResult.config.issueHitlLabel.value;
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
@@ -2570,6 +2652,7 @@ async function runRalphaiInManagedWorktree(
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
+              issueHitlLabel: resolvedIssueHitlLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
