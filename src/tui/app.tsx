@@ -20,6 +20,7 @@ import { useApp } from "ink";
 import type { MenuContext } from "./menu-items.ts";
 import type { Screen, DispatchResult, RunConfig } from "./types.ts";
 import { isActionType, resolveAction, toConfirmNav } from "./types.ts";
+import type { ResolvedConfig } from "../config.ts";
 import { usePipelineState } from "./hooks/use-pipeline-state.ts";
 import type { UsePipelineStateOptions } from "./hooks/use-pipeline-state.ts";
 import { useGithubIssues } from "./hooks/use-github-issues.ts";
@@ -72,6 +73,12 @@ export interface AppProps {
    * Defaults to empty strings when not provided.
    */
   runConfig?: RunConfig;
+  /**
+   * Resolved configuration for the run-with-options wizard.
+   * When provided, the options screen shows configurable options.
+   * When absent, the options screen shows a placeholder.
+   */
+  resolvedConfig?: ResolvedConfig;
   /**
    * Called when the TUI wants to hand off to the agent runner.
    * The caller should exit Ink and run the given CLI args.
@@ -127,6 +134,7 @@ export function App({
   hasGitHubIssues = false,
   issueListOptions,
   runConfig = { agentCommand: "", feedbackCommands: "" },
+  resolvedConfig,
   onExitToRunner,
   stopPlan: injectedStopPlan,
   resetPlan: injectedResetPlan,
@@ -313,6 +321,7 @@ export function App({
           data={screen.data}
           onResult={dispatch}
           backScreen={screen.backScreen}
+          resolvedConfig={resolvedConfig}
           isActive={true}
         />
       );

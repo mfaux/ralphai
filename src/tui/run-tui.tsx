@@ -17,6 +17,7 @@ import { render } from "ink";
 import { App } from "./app.tsx";
 import type { AppProps } from "./app.tsx";
 import { resolveConfig, DEFAULTS } from "../config.ts";
+import type { ResolvedConfig } from "../config.ts";
 import type { RunConfig } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
   let issueRepo = "";
   let agentCommand = DEFAULTS.agentCommand;
   let feedbackCommands = DEFAULTS.feedbackCommands;
+  let resolvedConfig: ResolvedConfig | undefined;
 
   try {
     const { config } = resolveConfig({
@@ -60,6 +62,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
       envVars: process.env,
       cliArgs: [],
     });
+    resolvedConfig = config;
     hasGitHubIssues = config.issueSource.value === "github";
     standaloneLabel = config.standaloneLabel.value;
     issuePrdLabel = config.prdLabel.value;
@@ -96,6 +99,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     hasGitHubIssues,
     issueListOptions,
     runConfig,
+    resolvedConfig,
   };
 }
 
