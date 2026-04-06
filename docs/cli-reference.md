@@ -126,7 +126,7 @@ What it does:
 
 ### Wizard Mode
 
-`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 7 config options (agent command, setup command, feedback commands, base branch, max stuck, iteration timeout, auto-commit). Each option shows its current value and source (default, config file, env var, or CLI flag).
+`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 8 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, auto-commit). Each option shows its current value and source (default, config file, env var, or CLI flag).
 
 Wizard overrides are injected as synthetic CLI flags. Explicit flags passed alongside `--wizard` take precedence (last-wins):
 
@@ -367,21 +367,21 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### Config Keys
 
-| Key                    | Default                | Env Var                          | Description                                                          |
-| ---------------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
-| `agentCommand`         | _(none)_               | `RALPHAI_AGENT_COMMAND`          | CLI command to invoke the coding agent                               |
-| `feedbackCommands`     | _(auto-detected)_      | `RALPHAI_FEEDBACK_COMMANDS`      | Comma-separated build/test/lint commands                             |
-| `prFeedbackCommands`   | `""`                   | `RALPHAI_PR_FEEDBACK_COMMANDS`   | Comma-separated PR feedback commands (run after PR creation)         |
-| `baseBranch`           | `"main"`               | `RALPHAI_BASE_BRANCH`            | Base branch for worktree creation                                    |
-| `autoCommit`           | `false`                | `RALPHAI_AUTO_COMMIT`            | Enable auto-commit recovery snapshots                                |
-| `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                        |
-| `iterationTimeout`     | `0`                    | `RALPHAI_ITERATION_TIMEOUT`      | Per-agent-invocation timeout in seconds (0 = no timeout)             |
-| `issueSource`          | `"none"`               | `RALPHAI_ISSUE_SOURCE`           | Issue source (`"github"` or `"none"`); `init` defaults to `"github"` |
-| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Family label for standalone issues                                   |
-| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Family label for PRD sub-issues                                      |
-| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Family label for PRD parent issues                                   |
-| `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                |
-| `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                              |
+| Key                    | Default                | Env Var                          | Description                                                                                        |
+| ---------------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `agentCommand`         | _(none)_               | `RALPHAI_AGENT_COMMAND`          | CLI command to invoke the coding agent                                                             |
+| `feedbackCommands`     | _(auto-detected)_      | `RALPHAI_FEEDBACK_COMMANDS`      | Comma-separated build/test/lint commands                                                           |
+| `prFeedbackCommands`   | `""`                   | `RALPHAI_PR_FEEDBACK_COMMANDS`   | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations) |
+| `baseBranch`           | `"main"`               | `RALPHAI_BASE_BRANCH`            | Base branch for worktree creation                                                                  |
+| `autoCommit`           | `false`                | `RALPHAI_AUTO_COMMIT`            | Enable auto-commit recovery snapshots                                                              |
+| `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                                                      |
+| `iterationTimeout`     | `0`                    | `RALPHAI_ITERATION_TIMEOUT`      | Per-agent-invocation timeout in seconds (0 = no timeout)                                           |
+| `issueSource`          | `"none"`               | `RALPHAI_ISSUE_SOURCE`           | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                               |
+| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Family label for standalone issues                                                                 |
+| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Family label for PRD sub-issues                                                                    |
+| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Family label for PRD parent issues                                                                 |
+| `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                                              |
+| `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                                                            |
 
 ### Workspaces
 
@@ -390,9 +390,11 @@ The `workspaces` key in `config.json` provides per-package feedback command over
 ```json
 {
   "feedbackCommands": ["pnpm build", "pnpm test"],
+  "prFeedbackCommands": ["pnpm test:e2e"],
   "workspaces": {
     "packages/web": {
-      "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"]
+      "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"],
+      "prFeedbackCommands": ["pnpm --filter web test:e2e"]
     },
     "packages/api": {
       "feedbackCommands": ["pnpm --filter api build"]
@@ -401,7 +403,7 @@ The `workspaces` key in `config.json` provides per-package feedback command over
 }
 ```
 
-When a plan declares `scope: packages/web`, Ralphai first checks for a matching `workspaces` entry. If none exists, it derives scoped commands automatically.
+When a plan declares `scope: packages/web`, Ralphai first checks for a matching `workspaces` entry. If none exists, it derives scoped commands automatically. Workspace entries that override `feedbackCommands` but omit `prFeedbackCommands` inherit the root-level `prFeedbackCommands` unchanged.
 
 - **Node.js** -> uses the package manager's workspace filter
 - **C# / .NET** -> appends the scope path to dotnet commands

@@ -192,3 +192,32 @@ export RALPHAI_PRD_LABEL=ai-prd
 ```
 
 See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.
+
+## Move slow tests to PR-only feedback
+
+If your E2E or integration tests are too slow to run every iteration, move them to `prFeedbackCommands`. They will only run at the completion gate — after the agent signals all tasks are done — instead of every loop iteration.
+
+**Before** — E2E tests run every iteration, slowing the feedback loop:
+
+```json
+{
+  "feedbackCommands": ["pnpm build", "pnpm test", "pnpm test:e2e"]
+}
+```
+
+**After** — E2E tests run only at the completion gate:
+
+```json
+{
+  "feedbackCommands": ["pnpm build", "pnpm test"],
+  "prFeedbackCommands": ["pnpm test:e2e"]
+}
+```
+
+Or via CLI flags:
+
+```bash
+ralphai run --feedback-commands='pnpm build,pnpm test' --pr-feedback-commands='pnpm test:e2e'
+```
+
+If a PR-tier command fails at the gate, Ralphai re-invokes the agent with the failure details so it can fix the issue before the PR is created. See [How Ralphai Works](how-ralphai-works.md#completion-gate) for details on the two-tier model.
