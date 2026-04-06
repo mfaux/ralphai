@@ -5,7 +5,7 @@
  * command, branch name, and feedback commands. The user can:
  * - Press Enter to confirm and launch the agent run
  * - Press Esc to go back to the previous screen
- * - Press `o` to open the run-with-options wizard (placeholder)
+ * - Press `o` to open the run-with-options wizard (pre-populated)
  *
  * Data is passed in as props — the caller is responsible for computing
  * branch names, resolving config values, and gathering PRD context.
@@ -129,7 +129,9 @@ export function confirmKeyHandler(
  *
  * - `confirm` → exit TUI, hand off CLI args to the runner
  * - `back` → navigate to `backScreen` (previous screen)
- * - `options` → placeholder stay (will navigate to options wizard later)
+ * - `options` → navigate to the run-with-options wizard, pre-populated
+ *   with the current confirm data. The wizard's back screen is set to
+ *   the confirm screen so Esc returns here.
  *
  * Pure function — exported for testing.
  */
@@ -144,9 +146,18 @@ export function resolveConfirmIntent(
     case "back":
       return { type: "navigate", screen: backScreen };
     case "options":
-      // Placeholder: will navigate to the run-with-options wizard
-      // once it is built. For now, this is a no-op.
-      return { type: "stay" };
+      return {
+        type: "navigate",
+        screen: {
+          type: "options",
+          data: data as ConfirmData,
+          backScreen: {
+            type: "confirm",
+            data: data as ConfirmData,
+            backScreen,
+          },
+        },
+      };
   }
 }
 

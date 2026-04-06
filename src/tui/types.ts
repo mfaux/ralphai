@@ -74,7 +74,8 @@ export type Screen =
   | { type: "menu" }
   | { type: "issue-picker" }
   | { type: "backlog-picker" }
-  | { type: "confirm"; data: ConfirmData; backScreen?: Screen };
+  | { type: "confirm"; data: ConfirmData; backScreen?: Screen }
+  | { type: "options"; data: ConfirmData; backScreen?: Screen };
 
 // ---------------------------------------------------------------------------
 // Dispatch result

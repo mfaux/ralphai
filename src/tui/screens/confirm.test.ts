@@ -291,10 +291,31 @@ describe("resolveConfirmIntent", () => {
   });
 
   describe("options intent", () => {
-    it("returns stay (placeholder for future options wizard)", () => {
+    it("navigates to options screen with confirm data pre-populated", () => {
       const data = makeData();
-      const result = resolveConfirmIntent("options", data, { type: "menu" });
-      expect(result).toEqual({ type: "stay" });
+      const backScreen: Screen = { type: "menu" };
+      const result = resolveConfirmIntent("options", data, backScreen);
+      expect(result.type).toBe("navigate");
+      if (result.type === "navigate") {
+        expect(result.screen.type).toBe("options");
+        if (result.screen.type === "options") {
+          expect(result.screen.data).toBe(data);
+        }
+      }
+    });
+
+    it("sets backScreen of options to the confirm screen itself", () => {
+      const data = makeData();
+      const backScreen: Screen = { type: "issue-picker" };
+      const result = resolveConfirmIntent("options", data, backScreen);
+      if (result.type === "navigate" && result.screen.type === "options") {
+        const optionsBack = result.screen.backScreen;
+        expect(optionsBack?.type).toBe("confirm");
+        if (optionsBack?.type === "confirm") {
+          expect(optionsBack.data).toBe(data);
+          expect(optionsBack.backScreen).toBe(backScreen);
+        }
+      }
     });
   });
 
@@ -326,14 +347,18 @@ describe("resolveConfirmIntent", () => {
       });
     });
 
-    it("o key → options intent → stay", () => {
+    it("o key → options intent → navigate to options screen", () => {
       const key = makeKey();
       const intent = confirmKeyHandler("o", key);
       expect(intent).toBe("options");
 
       const data = makeData();
-      const result = resolveConfirmIntent(intent!, data, { type: "menu" });
-      expect(result).toEqual({ type: "stay" });
+      const backScreen: Screen = { type: "menu" };
+      const result = resolveConfirmIntent(intent!, data, backScreen);
+      expect(result.type).toBe("navigate");
+      if (result.type === "navigate") {
+        expect(result.screen.type).toBe("options");
+      }
     });
   });
 });

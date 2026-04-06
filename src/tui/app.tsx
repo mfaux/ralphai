@@ -29,6 +29,7 @@ import { MenuScreen } from "./screens/menu.tsx";
 import { IssuePickerScreen } from "./screens/issue-picker.tsx";
 import { BacklogPickerScreen } from "./screens/backlog-picker.tsx";
 import { ConfirmScreen } from "./screens/confirm.tsx";
+import { OptionsScreen } from "./screens/options.tsx";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -227,6 +228,16 @@ export function App({
     case "confirm":
       return (
         <ConfirmScreen
+          data={screen.data}
+          onResult={dispatch}
+          backScreen={screen.backScreen}
+          isActive={true}
+        />
+      );
+
+    case "options":
+      return (
+        <OptionsScreen
           data={screen.data}
           onResult={dispatch}
           backScreen={screen.backScreen}

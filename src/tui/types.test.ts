@@ -216,3 +216,54 @@ describe("Screen confirm variant", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Screen union: options variant
+// ---------------------------------------------------------------------------
+
+describe("Screen options variant", () => {
+  const sampleData: ConfirmData = {
+    title: "test-plan.md",
+    agentCommand: "claude",
+    branch: "feat/test",
+    feedbackCommands: "bun test",
+    runArgs: ["run"],
+  };
+
+  it("can be used in a navigate DispatchResult", () => {
+    const result: DispatchResult = {
+      type: "navigate",
+      screen: { type: "options", data: sampleData },
+    };
+    expect(result.type).toBe("navigate");
+    if (result.type === "navigate") {
+      expect(result.screen.type).toBe("options");
+    }
+  });
+
+  it("carries ConfirmData in the screen object", () => {
+    const screen: Screen = { type: "options", data: sampleData };
+    if (screen.type === "options") {
+      expect(screen.data.title).toBe("test-plan.md");
+      expect(screen.data.runArgs).toEqual(["run"]);
+    }
+  });
+
+  it("supports optional backScreen for navigation back to confirm", () => {
+    const screen: Screen = {
+      type: "options",
+      data: sampleData,
+      backScreen: { type: "confirm", data: sampleData },
+    };
+    if (screen.type === "options") {
+      expect(screen.backScreen?.type).toBe("confirm");
+    }
+  });
+
+  it("backScreen defaults to undefined", () => {
+    const screen: Screen = { type: "options", data: sampleData };
+    if (screen.type === "options") {
+      expect(screen.backScreen).toBeUndefined();
+    }
+  });
+});
