@@ -43,37 +43,69 @@ Works with: `status`, `stop`, `reset`, `clean`, `uninstall`, `doctor`, `config`.
 
 Blocked for: `run`, `init`.
 
-## Interactive Dashboard
+## Interactive Menu (TUI)
 
-Running `ralphai` with no subcommand in a TTY launches the interactive dashboard. Browse plans here, inspect progress, and launch runs without leaving the TUI.
+Running `ralphai` with no subcommand in a TTY launches the interactive menu. Browse plans, manage the pipeline, and launch runs without leaving the TUI.
 
-Navigation:
+The menu is organized into three groups:
 
-- `1`, `2`, `3` focus the repo bar, pipeline, or detail pane
-- `Tab` and `Shift+Tab` cycle between panes
-- `Up` and `Down` move within the focused pane
-- `Enter` opens detail, focuses the detail pane, or selects the current dropdown item
-- `Esc` closes overlays or returns to the previous view
-- `q` quits the dashboard from repo or pipeline focus
+- **START** — Run next plan, pick from backlog, pick from GitHub, run with options
+- **MANAGE** — Resume stalled, stop running, reset plan, view pipeline status
+- **TOOLS** — Doctor, clean worktrees, settings, quit
 
-Detail tabs:
+### Navigation
 
-- `s` summary
-- `p` plan
-- `g` progress
-- `o` output
-- `c` copies the selected repo path
+| Key           | Action                                           |
+| ------------- | ------------------------------------------------ |
+| `Up` / `Down` | Move cursor between menu items                   |
+| `Enter`       | Select the highlighted item                      |
+| `Esc`         | Go back from a sub-screen to the previous screen |
+| `Ctrl+C`      | Exit the TUI (terminal state is always restored) |
 
-Actions:
+### Hotkeys
 
-- `a` opens the action menu for the selected plan
-- `r` runs the selected backlog plan
-- `R` resets an in-progress plan to backlog
-- `P` purges a completed plan archive
-- `/` opens the filter bar
-- `?` opens keyboard help
+Each menu item has a single-key hotkey that fires the action immediately:
 
-The dashboard auto-refreshes every 3 seconds. In non-TTY environments, `ralphai` shows help text instead.
+| Key | Action              | Key | Action               |
+| --- | ------------------- | --- | -------------------- |
+| `n` | Run next plan       | `s` | Stop running plan    |
+| `b` | Pick from backlog   | `e` | Reset plan           |
+| `g` | Pick from GitHub    | `p` | View pipeline status |
+| `o` | Run with options    | `d` | Doctor               |
+| `r` | Resume stalled plan | `c` | Clean worktrees      |
+| `q` | Quit                |     |                      |
+
+### Detail pane
+
+On wide terminals (≥120 columns), a contextual detail pane appears alongside the menu. It shows information relevant to the currently highlighted item — pipeline summary for run actions, plan counts for backlog/GitHub items, config values with sources for settings. On narrower terminals, only the menu is shown.
+
+### Sub-screens
+
+Some menu actions open sub-screens instead of exiting the TUI:
+
+- **Pick from backlog** — list of backlog plans to select from
+- **Pick from GitHub** — list of open GitHub issues (standalone + PRD)
+- **Run with options** — config wizard to override run options before launch
+- **Confirm** — review run details (target, agent, feedback commands) before launching
+- **Stop / Reset / Status / Doctor / Clean** — inline sub-screens for pipeline management
+
+Press `Esc` to return from any sub-screen to the main menu.
+
+### Empty state
+
+When the pipeline is completely empty (no backlog, in-progress, or completed plans), the menu shows hints guiding you to add plans to `./backlog/` or run `ralphai init`.
+
+### Color and accessibility
+
+The TUI honors the `NO_COLOR` env var and `--no-color` flag — all ANSI color codes are disabled when set. Color conventions: bold for group headers, dim for disabled items and hints, `❯` cursor indicator for the current selection.
+
+### Terminal safety
+
+The TUI installs cleanup handlers for SIGINT, SIGTERM, uncaught exceptions, and unhandled rejections. The terminal is always restored to its original state (raw mode disabled, cursor visible) before exit, even on crashes.
+
+### Non-TTY fallback
+
+In non-TTY environments (piped output, CI), `ralphai` prints the version header and help text instead of launching the TUI.
 
 ## Init
 
