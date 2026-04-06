@@ -1,9 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, rmSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { useTempDir, useTempGitDir } from "./test-utils.ts";
+import { useTempDir, useTempGitDir, runCliInProcess } from "./test-utils.ts";
 import {
   getRalphaiHome,
   getRepoId,
@@ -183,5 +183,55 @@ describe("getRepoPipelineDirs", () => {
     expect(dirs.backlogDir).toContain(join("pipeline", "backlog"));
     expect(dirs.wipDir).toContain(join("pipeline", "in-progress"));
     expect(dirs.archiveDir).toContain(join("pipeline", "out"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: no leaks to the real ~/.ralphai/repos/ directory
+// ---------------------------------------------------------------------------
+
+describe("no global state leak to real ~/.ralphai", () => {
+  const ctx = useTempGitDir();
+
+  /** Snapshot entry names in the real repos directory. */
+  function snapshotRealRepos(): Set<string> {
+    const realReposDir = join(homedir(), ".ralphai", "repos");
+    if (!existsSync(realReposDir)) return new Set();
+    return new Set(readdirSync(realReposDir));
+  }
+
+  it("ensureRepoStateDir with RALPHAI_HOME does not write to ~/.ralphai", () => {
+    const before = snapshotRealRepos();
+
+    const home = join(ctx.dir, "ralphai-home-leak-test");
+    ensureRepoStateDir(ctx.dir, { RALPHAI_HOME: home });
+
+    const after = snapshotRealRepos();
+    const leaked = [...after].filter((e) => !before.has(e));
+    expect(leaked).toEqual([]);
+  });
+
+  it("getRepoPipelineDirs with RALPHAI_HOME does not write to ~/.ralphai", () => {
+    const before = snapshotRealRepos();
+
+    const home = join(ctx.dir, "ralphai-home-leak-test");
+    getRepoPipelineDirs(ctx.dir, { RALPHAI_HOME: home });
+
+    const after = snapshotRealRepos();
+    const leaked = [...after].filter((e) => !before.has(e));
+    expect(leaked).toEqual([]);
+  });
+
+  it("runCliInProcess init --yes with RALPHAI_HOME does not leak to ~/.ralphai", async () => {
+    const before = snapshotRealRepos();
+
+    const home = join(ctx.dir, "ralphai-home-leak-test");
+    await runCliInProcess(["init", "--yes"], ctx.dir, {
+      RALPHAI_HOME: home,
+    });
+
+    const after = snapshotRealRepos();
+    const leaked = [...after].filter((e) => !before.has(e));
+    expect(leaked).toEqual([]);
   });
 });

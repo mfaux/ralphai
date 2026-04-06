@@ -49,22 +49,20 @@ describe("repos command", () => {
       JSON.stringify({ repoPath: "/tmp/nonexistent-dir-xyz" }),
     );
 
-    // Verify it shows up as stale
-    const beforeOutput = stripLogo(
+    // Stale repos are auto-cleaned on every command invocation, so the entry
+    // is already gone by the time `repos` renders its listing.  Verify that
+    // the auto-cleanup worked — the directory should no longer exist.
+    const listOutput = stripLogo(
       await runCliOutputInProcess(["repos"], ctx.dir, env()),
     );
-    expect(beforeOutput).toContain("_path-deadbeef1234");
-    expect(beforeOutput).toContain("[stale]");
+    expect(listOutput).not.toContain("_path-deadbeef1234");
+    expect(existsSync(staleDir)).toBe(false);
 
-    // Run --clean
+    // Explicit --clean on an already-clean state reports nothing to remove.
     const cleanOutput = stripLogo(
       await runCliOutputInProcess(["repos", "--clean"], ctx.dir, env()),
     );
-    expect(cleanOutput).toContain("Removed");
-    expect(cleanOutput).toContain("_path-deadbeef1234");
-
-    // Verify it's gone
-    expect(existsSync(staleDir)).toBe(false);
+    expect(cleanOutput).toContain("No stale repos to remove");
   });
 
   it("--clean preserves stale repos that have plans", async () => {
