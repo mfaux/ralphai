@@ -64,6 +64,11 @@ import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
 
 import { extractIssueFrontmatter } from "./frontmatter.ts";
 import { extractDependsOn } from "./frontmatter.ts";
+import {
+  findHitlBlockers,
+  formatPrdHitlSummary,
+  type BlockedSubIssue,
+} from "./prd-hitl.ts";
 import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
@@ -2018,7 +2023,7 @@ async function runPrdIssueTarget(
 
   const stuckSubIssues: number[] = [];
   const completedSubIssues: number[] = [];
-  const blockedSubIssues: { number: number; blockedBy: number[] }[] = [];
+  const blockedSubIssues: BlockedSubIssue[] = [];
   let completedCount = 0;
 
   for (const subIssueNumber of eligibleSubIssues) {
@@ -2059,17 +2064,7 @@ async function runPrdIssueTarget(
     // If the pulled plan depends on a HITL sub-issue, skip it as blocked.
     if (pullResult.planPath && hitlIssueNumbers.size > 0) {
       const deps = extractDependsOn(pullResult.planPath);
-      const hitlBlockers: number[] = [];
-      for (const dep of deps) {
-        // Dependency slugs are like "gh-42" — extract the issue number
-        const m = dep.match(/^gh-(\d+)$/);
-        if (m) {
-          const depNum = parseInt(m[1]!, 10);
-          if (hitlIssueNumbers.has(depNum)) {
-            hitlBlockers.push(depNum);
-          }
-        }
-      }
+      const hitlBlockers = findHitlBlockers(deps, hitlIssueNumbers);
       if (hitlBlockers.length > 0) {
         console.log(
           `Sub-issue #${subIssueNumber} depends on HITL sub-issue(s) ${hitlBlockers.map((n) => `#${n}`).join(", ")} — skipping.`,
@@ -2142,26 +2137,16 @@ async function runPrdIssueTarget(
 
   // --- Summary ---
   console.log();
-  console.log("========================================");
-  console.log(`  PRD #${prd.number} — summary`);
-  console.log("========================================");
-  console.log(`Completed: ${completedCount}/${subIssues.length} sub-issue(s)`);
-  if (stuckSubIssues.length > 0) {
-    console.log(
-      `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
-    );
-  }
-  if (hitlSubIssues.length > 0) {
-    console.log(
-      `HITL (waiting on human): ${hitlSubIssues.map((n) => `#${n}`).join(", ")}`,
-    );
-  }
-  if (blockedSubIssues.length > 0) {
-    for (const b of blockedSubIssues) {
-      console.log(
-        `Blocked by HITL: #${b.number} (depends on ${b.blockedBy.map((n) => `#${n}`).join(", ")})`,
-      );
-    }
+  const summaryLines = formatPrdHitlSummary({
+    prdNumber: prd.number,
+    totalSubIssues: subIssues.length,
+    completedCount,
+    stuckSubIssues,
+    hitlSubIssues,
+    blockedSubIssues,
+  });
+  for (const line of summaryLines) {
+    console.log(line);
   }
 
   // --- PRD done transition ---
