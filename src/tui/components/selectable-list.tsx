@@ -155,14 +155,16 @@ export function SelectableList({
 
   const [cursorIndex, setCursorIndex] = useState(initialIndex);
 
-  // Notify parent of initial cursor position on mount
+  // Notify parent whenever the cursor moves to a different item.
+  // This single effect replaces all the scattered onCursorChange calls,
+  // ensuring the parent's setState is never invoked during another
+  // component's render or state-updater (which triggers the React warning
+  // "Cannot update a component while rendering a different component").
   useEffect(() => {
-    if (onCursorChange && initialIndex >= 0 && items[initialIndex]) {
-      onCursorChange(items[initialIndex]!.value);
+    if (onCursorChange && cursorIndex >= 0 && items[cursorIndex]) {
+      onCursorChange(items[cursorIndex]!.value);
     }
-    // Only fire on mount — initialIndex and items identity won't change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cursorIndex, items, onCursorChange]);
 
   // If items change and cursor is on a now-disabled item, snap to nearest enabled
   useEffect(() => {
@@ -174,25 +176,16 @@ export function SelectableList({
       const next = findNextEnabled(items, Math.max(0, cursorIndex), 1);
       if (next !== -1) {
         setCursorIndex(next);
-        if (onCursorChange && items[next]) {
-          onCursorChange(items[next]!.value);
-        }
       }
     }
-  }, [items, cursorIndex, onCursorChange]);
+  }, [items, cursorIndex]);
 
   const handleInput = useCallback(
     (input: string, key: Key) => {
       if (key.downArrow) {
         setCursorIndex((prev) => {
           const next = findNextEnabled(items, prev + 1, 1);
-          if (next !== -1 && next !== prev) {
-            if (onCursorChange && items[next]) {
-              onCursorChange(items[next]!.value);
-            }
-            return next;
-          }
-          return prev;
+          return next !== -1 && next !== prev ? next : prev;
         });
         return;
       }
@@ -200,13 +193,7 @@ export function SelectableList({
       if (key.upArrow) {
         setCursorIndex((prev) => {
           const next = findNextEnabled(items, prev - 1, -1);
-          if (next !== -1 && next !== prev) {
-            if (onCursorChange && items[next]) {
-              onCursorChange(items[next]!.value);
-            }
-            return next;
-          }
-          return prev;
+          return next !== -1 && next !== prev ? next : prev;
         });
         return;
       }
@@ -224,7 +211,7 @@ export function SelectableList({
         return;
       }
     },
-    [items, cursorIndex, onSelect, onBack, onCursorChange],
+    [items, cursorIndex, onSelect, onBack],
   );
 
   useInput(handleInput, { isActive });

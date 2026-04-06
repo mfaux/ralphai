@@ -22,7 +22,6 @@ import type { PipelineState } from "../../pipeline-state.ts";
 import type { MenuItem, MenuGroup, MenuContext } from "../menu-items.ts";
 import { buildMenuItems, isPipelineEmpty } from "../menu-items.ts";
 import type { ResolvedConfig } from "../../config.ts";
-import { PipelineHeader } from "../components/header.tsx";
 import { SplitLayout } from "../components/split-layout.tsx";
 import type { SplitLayoutProps } from "../components/split-layout.tsx";
 import { DetailPane } from "../components/detail-pane.tsx";
@@ -72,6 +71,12 @@ const GROUP_LABELS: Record<MenuGroup, string> = {
  * are always disabled so the cursor skips over them.
  */
 const GROUP_HEADER_PREFIX = "__group__";
+
+/**
+ * Extra indentation applied to regular menu items so they appear
+ * visually nested under their group headers.
+ */
+export const ITEM_INDENT = "  ";
 
 // ---------------------------------------------------------------------------
 // Empty state hint
@@ -168,13 +173,16 @@ function MenuListItem({
     );
   }
 
-  // Regular menu item
+  // Regular menu item — indented under its group header
   const cursor = isCursor ? "❯ " : "  ";
   const labelColor = isDisabled ? "gray" : isCursor ? "cyan" : undefined;
 
   return (
     <Box>
-      <Text color={isCursor ? "cyan" : undefined}>{cursor}</Text>
+      <Text color={isCursor ? "cyan" : undefined}>
+        {ITEM_INDENT}
+        {cursor}
+      </Text>
       <Text color={labelColor} dimColor={isDisabled}>
         {item.label}
       </Text>
@@ -268,12 +276,11 @@ export function MenuScreen({
     [onAction],
   );
 
-  // Left pane: the menu content (header + optional hint + selectable list)
+  // Left pane: the menu content (optional hint + selectable list)
   const menuContent = (
     <Box flexDirection="column">
-      <PipelineHeader state={state} />
       {pipelineEmpty ? (
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column">
           {EMPTY_STATE_HINTS.map((hint, i) => (
             <Text key={i} dimColor>
               {hint}
@@ -281,7 +288,7 @@ export function MenuScreen({
           ))}
         </Box>
       ) : null}
-      <Box marginTop={1}>
+      <Box marginTop={pipelineEmpty ? 1 : 0}>
         <SelectableList
           items={listItems}
           onSelect={handleSelect}

@@ -26,6 +26,12 @@
 /** Show the terminal cursor (DECTCEM). */
 const SHOW_CURSOR = "\x1b[?25h";
 
+/** Enter alternate screen buffer (smcup). */
+export const ENTER_ALT_SCREEN = "\x1b[?1049h";
+
+/** Exit alternate screen buffer (rmcup). */
+export const EXIT_ALT_SCREEN = "\x1b[?1049l";
+
 // ---------------------------------------------------------------------------
 // restoreTerminal
 // ---------------------------------------------------------------------------
@@ -34,6 +40,7 @@ const SHOW_CURSOR = "\x1b[?25h";
  * Restore the terminal to a safe state.
  *
  * - Disables raw mode on stdin (if it's a TTY and raw mode is active).
+ * - Exits the alternate screen buffer (if active).
  * - Writes the "show cursor" escape sequence to stdout.
  *
  * This function is intentionally synchronous and idempotent — it's safe
@@ -51,7 +58,7 @@ export function restoreTerminal(): void {
 
   try {
     if (process.stdout.isTTY) {
-      process.stdout.write(SHOW_CURSOR);
+      process.stdout.write(EXIT_ALT_SCREEN + SHOW_CURSOR);
     }
   } catch {
     // stdout may already be destroyed — ignore

@@ -47,6 +47,7 @@ import {
 } from "../interactive/pipeline-actions.ts";
 import { runRalphaiStop } from "../stop.ts";
 import { resetPlanBySlug } from "../ralphai.ts";
+import { ScreenFrame } from "./components/screen-frame.tsx";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -281,114 +282,122 @@ export function App({
   // Screen router
   // -----------------------------------------------------------------------
 
-  switch (screen.type) {
-    case "menu":
-      return (
-        <MenuScreen
-          state={pipeline.state}
-          loading={pipeline.loading}
-          menuContext={menuContext}
-          resolvedConfig={resolvedConfig}
-          onAction={handleMenuAction}
-          isActive={true}
-        />
-      );
+  const screenContent = (() => {
+    switch (screen.type) {
+      case "menu":
+        return (
+          <MenuScreen
+            state={pipeline.state}
+            loading={pipeline.loading}
+            menuContext={menuContext}
+            resolvedConfig={resolvedConfig}
+            onAction={handleMenuAction}
+            isActive={true}
+          />
+        );
 
-    case "issue-picker":
-      return (
-        <IssuePickerScreen
-          listOptions={
-            resolvedIssueListOptions ?? {
-              cwd: "",
-              standaloneLabel: "",
-              issueRepo: "",
+      case "issue-picker":
+        return (
+          <IssuePickerScreen
+            listOptions={
+              resolvedIssueListOptions ?? {
+                cwd: "",
+                standaloneLabel: "",
+                issueRepo: "",
+              }
             }
-          }
-          onResult={dispatchViaConfirm({ type: "issue-picker" })}
-          isActive={true}
-        />
-      );
+            onResult={dispatchViaConfirm({ type: "issue-picker" })}
+            isActive={true}
+          />
+        );
 
-    case "backlog-picker":
-      return (
-        <BacklogPickerScreen
-          backlog={pipeline.state?.backlog ?? []}
-          completedSlugs={pipeline.state?.completedSlugs ?? []}
-          onResult={dispatchViaConfirm({ type: "backlog-picker" })}
-          isActive={true}
-        />
-      );
+      case "backlog-picker":
+        return (
+          <BacklogPickerScreen
+            backlog={pipeline.state?.backlog ?? []}
+            completedSlugs={pipeline.state?.completedSlugs ?? []}
+            onResult={dispatchViaConfirm({ type: "backlog-picker" })}
+            isActive={true}
+          />
+        );
 
-    case "confirm":
-      return (
-        <ConfirmScreen
-          data={screen.data}
-          onResult={dispatch}
-          backScreen={screen.backScreen}
-          isActive={true}
-        />
-      );
+      case "confirm":
+        return (
+          <ConfirmScreen
+            data={screen.data}
+            onResult={dispatch}
+            backScreen={screen.backScreen}
+            isActive={true}
+          />
+        );
 
-    case "options":
-      return (
-        <OptionsScreen
-          data={screen.data}
-          onResult={dispatch}
-          backScreen={screen.backScreen}
-          resolvedConfig={resolvedConfig}
-          isActive={true}
-        />
-      );
+      case "options":
+        return (
+          <OptionsScreen
+            data={screen.data}
+            onResult={dispatch}
+            backScreen={screen.backScreen}
+            resolvedConfig={resolvedConfig}
+            isActive={true}
+          />
+        );
 
-    case "stop":
-      return (
-        <StopScreen
-          runningPlans={pipeline.state ? runningPlans(pipeline.state) : []}
-          cwd={pipelineOpts.cwd}
-          onResult={dispatch}
-          stopPlan={stopPlan}
-          isActive={true}
-        />
-      );
+      case "stop":
+        return (
+          <StopScreen
+            runningPlans={pipeline.state ? runningPlans(pipeline.state) : []}
+            cwd={pipelineOpts.cwd}
+            onResult={dispatch}
+            stopPlan={stopPlan}
+            isActive={true}
+          />
+        );
 
-    case "reset":
-      return (
-        <ResetScreen
-          resettablePlans={
-            pipeline.state ? resettablePlans(pipeline.state) : []
-          }
-          cwd={pipelineOpts.cwd}
-          onResult={dispatch}
-          resetPlan={resetPlanFn}
-          isActive={true}
-        />
-      );
+      case "reset":
+        return (
+          <ResetScreen
+            resettablePlans={
+              pipeline.state ? resettablePlans(pipeline.state) : []
+            }
+            cwd={pipelineOpts.cwd}
+            onResult={dispatch}
+            resetPlan={resetPlanFn}
+            isActive={true}
+          />
+        );
 
-    case "status":
-      return (
-        <StatusScreen
-          state={pipeline.state}
-          onResult={dispatch}
-          isActive={true}
-        />
-      );
+      case "status":
+        return (
+          <StatusScreen
+            state={pipeline.state}
+            onResult={dispatch}
+            isActive={true}
+          />
+        );
 
-    case "doctor":
-      return (
-        <DoctorScreen
-          cwd={pipelineOpts.cwd}
-          onResult={dispatch}
-          isActive={true}
-        />
-      );
+      case "doctor":
+        return (
+          <DoctorScreen
+            cwd={pipelineOpts.cwd}
+            onResult={dispatch}
+            isActive={true}
+          />
+        );
 
-    case "clean":
-      return (
-        <CleanScreen
-          cwd={pipelineOpts.cwd}
-          onResult={dispatch}
-          isActive={true}
-        />
-      );
-  }
+      case "clean":
+        return (
+          <CleanScreen
+            cwd={pipelineOpts.cwd}
+            onResult={dispatch}
+            isActive={true}
+          />
+        );
+    }
+  })();
+
+  return (
+    <ScreenFrame screenType={screen.type} pipelineState={pipeline.state}>
+      {screenContent}
+    </ScreenFrame>
+  );
 }

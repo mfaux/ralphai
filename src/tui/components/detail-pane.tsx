@@ -558,13 +558,18 @@ export function DetailPane({
     resolvedConfig,
   );
 
-  // No content for unknown items
+  // No content for unknown items — show a placeholder so the pane
+  // isn't completely empty (which breaks the split layout visually).
   if (!detail.title && detail.lines.length === 0) {
-    return null;
+    return (
+      <Box flexDirection="column">
+        <Text dimColor>Navigate to see details</Text>
+      </Box>
+    );
   }
 
   return (
-    <Box flexDirection="column" paddingLeft={1}>
+    <Box flexDirection="column">
       {detail.title ? (
         <Text bold underline>
           {detail.title}

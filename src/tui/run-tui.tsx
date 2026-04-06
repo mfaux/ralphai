@@ -23,6 +23,7 @@ import {
   installTerminalSafetyHandlers,
   removeTerminalSafetyHandlers,
   restoreTerminal,
+  ENTER_ALT_SCREEN,
 } from "./terminal-safety.ts";
 import { applyNoColorOverride } from "./color-support.ts";
 
@@ -161,6 +162,12 @@ export async function runTui(
       // instance may not be mounted yet or already unmounted
     }
   });
+
+  // Enter the alternate screen buffer so the TUI gets a clean canvas
+  // and the user's scrollback is preserved when the TUI exits.
+  if (process.stdout.isTTY) {
+    process.stdout.write(ENTER_ALT_SCREEN);
+  }
 
   // Mount the Ink app
   inkInstance = render(React.createElement(App, props));

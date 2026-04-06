@@ -2,19 +2,22 @@
  * Responsive split-layout component for the TUI.
  *
  * Renders a left pane (menu) alongside a right pane (detail) when the
- * terminal is wide enough (≥120 columns), separated by a vertical line.
- * On narrower terminals, only the left pane is shown.
+ * terminal is wide enough (≥120 columns). On narrower terminals, only
+ * the left pane is shown.
+ *
+ * Uses flex-grow proportions (~40/60) so the layout naturally fits
+ * within whatever width the parent provides (e.g. inside the
+ * ScreenFrame border), avoiding width overflow.
  *
  * The layout dynamically switches when the terminal is resized across
  * the threshold, driven by the `useTerminalSize` hook which subscribes
  * to SIGWINCH events.
  *
- * Pure layout helpers (`shouldSplit`, `computePaneWidths`) are exported
- * for unit testing without React rendering.
+ * Pure layout helper (`shouldSplit`) is exported for unit testing
+ * without React rendering.
  */
 
-import { useMemo } from "react";
-import { Box, Text } from "ink";
+import { Box } from "ink";
 
 import { useTerminalSize } from "../hooks/use-terminal-size.ts";
 import type { UseTerminalSizeOptions } from "../hooks/use-terminal-size.ts";
@@ -30,17 +33,22 @@ import type { UseTerminalSizeOptions } from "../hooks/use-terminal-size.ts";
 export const SPLIT_THRESHOLD = 120;
 
 /**
- * Width of the vertical separator between left and right panes.
- * Accounts for the "│" character plus surrounding padding.
+ * Flex-grow value for the left (menu) pane.
+ * With LEFT_FLEX=2 and RIGHT_FLEX=3, the split is ~40/60.
  */
-export const SEPARATOR_WIDTH = 3;
+export const LEFT_FLEX = 2;
 
 /**
- * Fraction of available width allocated to the left pane (menu) when
- * the split layout is active. The remaining fraction goes to the right
- * pane (detail).
+ * Flex-grow value for the right (detail) pane.
  */
-export const LEFT_PANE_RATIO = 0.4;
+export const RIGHT_FLEX = 3;
+
+/**
+ * Background colour for the right (detail) pane.
+ * A subtle dark grey that provides visual separation without
+ * being distracting.
+ */
+export const RIGHT_PANE_BG = "#1e1e1e";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for testing)
@@ -55,37 +63,6 @@ export const LEFT_PANE_RATIO = 0.4;
  */
 export function shouldSplit(terminalWidth: number): boolean {
   return terminalWidth >= SPLIT_THRESHOLD;
-}
-
-/**
- * Pane width allocation for the split layout.
- */
-export interface PaneWidths {
-  /** Width of the left pane in columns. */
-  left: number;
-  /** Width of the right pane in columns. */
-  right: number;
-}
-
-/**
- * Compute the width allocation for left and right panes.
- *
- * The left pane gets `LEFT_PANE_RATIO` of the total width (after
- * subtracting the separator). The right pane gets the remainder.
- *
- * Both values are clamped to a minimum of 1 column.
- *
- * Returns `null` when the terminal is too narrow for a split layout,
- * indicating that only the left pane should be rendered at full width.
- */
-export function computePaneWidths(terminalWidth: number): PaneWidths | null {
-  if (!shouldSplit(terminalWidth)) return null;
-
-  const available = terminalWidth - SEPARATOR_WIDTH;
-  const left = Math.max(1, Math.floor(available * LEFT_PANE_RATIO));
-  const right = Math.max(1, available - left);
-
-  return { left, right };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,22 +88,6 @@ export interface SplitLayoutProps {
 }
 
 // ---------------------------------------------------------------------------
-// Separator component
-// ---------------------------------------------------------------------------
-
-/**
- * Vertical line separator between the two panes.
- * Renders a dim "│" character that stretches the full height.
- */
-function Separator() {
-  return (
-    <Box width={SEPARATOR_WIDTH} justifyContent="center" alignItems="stretch">
-      <Text dimColor>│</Text>
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // SplitLayout component
 // ---------------------------------------------------------------------------
 
@@ -134,9 +95,13 @@ function Separator() {
  * Responsive split-layout container.
  *
  * - At ≥120 columns: renders `left` and `right` children side-by-side
- *   separated by a vertical line.
+ *   using flex-grow proportions (~40/60 split). The right pane is
+ *   separated by padding — no background colour needed.
  * - At <120 columns: renders only `left` at full width.
  * - Dynamically switches on terminal resize (SIGWINCH).
+ *
+ * Flex-based sizing means the layout naturally fits within whatever
+ * width the parent provides (e.g. inside the ScreenFrame border).
  */
 export function SplitLayout({
   left,
@@ -145,24 +110,32 @@ export function SplitLayout({
 }: SplitLayoutProps) {
   const { width: terminalWidth } = useTerminalSize(terminalSizeOptions);
 
-  const paneWidths = useMemo(
-    () => computePaneWidths(terminalWidth),
-    [terminalWidth],
-  );
-
   // Narrow terminal: single-pane mode
-  if (!paneWidths) {
-    return <Box flexDirection="column">{left}</Box>;
-  }
-
-  // Wide terminal: split layout
-  return (
-    <Box flexDirection="row" width={terminalWidth}>
-      <Box width={paneWidths.left} flexDirection="column" flexShrink={0}>
+  if (!shouldSplit(terminalWidth)) {
+    return (
+      <Box flexDirection="column" paddingX={2} paddingY={1}>
         {left}
       </Box>
-      <Separator />
-      <Box width={paneWidths.right} flexDirection="column" flexShrink={0}>
+    );
+  }
+
+  // Wide terminal: flex-proportional split layout.
+  // The outer row uses flexGrow so it stretches to fill the
+  // ScreenFrame's remaining height, giving the right pane's
+  // background colour a solid, full-height panel appearance.
+  return (
+    <Box flexDirection="row" flexGrow={1}>
+      <Box flexGrow={LEFT_FLEX} flexBasis={0} flexDirection="column" paddingX={2} paddingY={1}>
+        {left}
+      </Box>
+      <Box
+        flexGrow={RIGHT_FLEX}
+        flexBasis={0}
+        flexDirection="column"
+        paddingX={2}
+        paddingY={1}
+        backgroundColor={RIGHT_PANE_BG}
+      >
         {right}
       </Box>
     </Box>

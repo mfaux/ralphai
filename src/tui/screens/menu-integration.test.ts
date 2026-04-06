@@ -24,7 +24,6 @@ import { detailForItem } from "../components/detail-pane.tsx";
 import type { DetailContent } from "../components/detail-pane.tsx";
 import {
   shouldSplit,
-  computePaneWidths,
   SPLIT_THRESHOLD,
 } from "../components/split-layout.tsx";
 
@@ -195,17 +194,12 @@ describe("menu → detail pane contract", () => {
 // ---------------------------------------------------------------------------
 
 describe("split layout threshold integration", () => {
-  it("at >=120 columns, split layout is active with valid pane widths", () => {
+  it("at >=120 columns, split layout is active", () => {
     expect(shouldSplit(SPLIT_THRESHOLD)).toBe(true);
-    const widths = computePaneWidths(SPLIT_THRESHOLD);
-    expect(widths).not.toBeNull();
-    expect(widths!.left).toBeGreaterThan(0);
-    expect(widths!.right).toBeGreaterThan(0);
   });
 
   it("at <120 columns, split layout is inactive (detail pane hidden)", () => {
     expect(shouldSplit(119)).toBe(false);
-    expect(computePaneWidths(119)).toBeNull();
   });
 
   it("crossing the threshold switches between split and single-pane modes", () => {
