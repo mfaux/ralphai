@@ -184,6 +184,27 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("Do not log one-off typos or dead ends");
   });
 
+  // --- Richer learnings guidance ---
+
+  it("learnings prompt asks for file paths, APIs/signatures, architecture constraints, and error resolutions", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("File paths modified or discovered");
+    expect(prompt).toContain("Exported APIs and their signatures");
+    expect(prompt).toContain("Architecture constraints or patterns observed");
+    expect(prompt).toContain(
+      "Error messages encountered and how they were resolved",
+    );
+  });
+
+  it("learnings guidance remains freeform prose (no structured schema)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("freeform prose");
+    // Should not introduce structured YAML/JSON fields
+    expect(prompt).not.toContain("file_paths:");
+    expect(prompt).not.toContain("apis:");
+    expect(prompt).not.toContain('"file_paths"');
+  });
+
   it("commit step is always step 6 regardless of learnings", () => {
     const withoutLearnings = assemblePrompt(baseOptions({ learnings: [] }));
     expect(withoutLearnings).toContain("6. Stage and commit ALL changes");
@@ -272,12 +293,50 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("2. Find the highest-priority incomplete task");
   });
 
-  it("instructs agent to complete only one task per iteration", () => {
+  // --- Continue-if-small wording ---
+
+  it("includes continue-if-small guidance in tasks format step 2", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("includes continue-if-small guidance in default format step 2", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("does not include continue-if-small in checkboxes format step 2", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "checkboxes" }));
+    expect(prompt).not.toContain(
+      "If the following task is trivially small, continue to it",
+    );
+  });
+
+  it("continue-if-small wording does not change COMPLETE signal behavior", () => {
+    const prompt = assemblePrompt(baseOptions({ planFormat: "tasks" }));
+    expect(prompt).toContain("<promise>COMPLETE</promise>");
+    expect(prompt).toContain(
+      "but ONLY after committing. Never output COMPLETE with uncommitted changes",
+    );
+    // The unless-trivially-small caveat is in the one-task-per-iteration paragraph
+    expect(prompt).toContain(
+      "Do not continue to the next task unless it is trivially small",
+    );
+  });
+
+  it("instructs agent to complete only one task per iteration (with trivially-small exception)", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Complete ONLY the task identified in step 2");
     expect(prompt).toContain("you will be re-invoked with updated progress");
     expect(prompt).toContain(
       "do not attempt to complete the entire plan in one pass",
+    );
+    expect(prompt).toContain(
+      "Do not continue to the next task unless it is trivially small",
     );
   });
 

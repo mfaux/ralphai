@@ -129,7 +129,7 @@ A plan file uses Markdown headings to define tasks and optional subtasks:
 
 **Subtasks** (`#### N.M:`) are optional breakdowns within a task. They help the agent stay focused on smaller steps. The agent completes all subtasks of a task before moving on.
 
-**One iteration, one task.** Each runner iteration starts a fresh agent session that works on exactly one task, including its subtasks.
+**One iteration, one task.** Each runner iteration starts a fresh agent session that works on exactly one task, including its subtasks. If the next task in the plan is trivially small, the agent may continue to it within the same iteration — this avoids burning a full context-reset cycle on minor follow-ups. The agent still signals COMPLETE normally when the next task is substantial.
 
 ## Worktree Execution Model
 
@@ -409,6 +409,8 @@ scope: ui
 ## Learnings System
 
 Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review. Learnings are also injected into subsequent iterations as anti-repeat memory.
+
+The prompt asks agents to report specific categories of information in their learnings — file paths modified or discovered, exported APIs and their signatures, architecture constraints or patterns observed, and error messages encountered with how they were resolved. The format remains free-form prose; the categories are guidance, not schema enforcement. Vague or empty learnings still work — the guidance is best-effort.
 
 ## Progress Extraction
 

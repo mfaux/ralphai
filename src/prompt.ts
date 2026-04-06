@@ -144,7 +144,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   // --- Format-aware step 2 and progress block ---
   const step2 = isCheckboxes
     ? "Pick the next group of unchecked items from the plan that form a coherent commit. You may satisfy multiple related items in one iteration (e.g., related error cases that share implementation)."
-    : "Find the highest-priority incomplete task (see prioritization rules in the plan).";
+    : "Find the highest-priority incomplete task (see prioritization rules in the plan). Complete it fully. If the following task is trivially small, continue to it within this iteration.";
 
   const completionRef = isCheckboxes
     ? "all items checked"
@@ -200,14 +200,19 @@ Ralphai extracts this block and appends it to the progress file automatically. D
    - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
    Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.
 6. ${commitInstruction}
-Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
+Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task unless it is trivially small — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
 If ${completionRef}, output ${promiseOpen}COMPLETE${promiseClose} — ${completeInstruction}
 IMPORTANT: Ralphai runs an independent completion gate after you output COMPLETE. It verifies that (1) the progress file shows ${completionRef}, and (2) all feedback commands pass when run externally. If the gate rejects, you will be re-invoked to fix the issues. Only claim COMPLETE when you are confident all work is done and all feedback commands pass.
 When you output COMPLETE, also include a ${prSummaryOpen}...${prSummaryClose} block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 ${prSummaryOpen}
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
 ${prSummaryClose}
-REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. Use:
+REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. When reporting learnings, include specifics that help future iterations hit the ground running:
+- File paths modified or discovered (e.g. "the validation logic lives in src/validators/input.ts")
+- Exported APIs and their signatures (e.g. "parseConfig(path: string): Config is the main entry point")
+- Architecture constraints or patterns observed (e.g. "all DB access goes through the repository layer, never direct queries")
+- Error messages encountered and how they were resolved (e.g. "TS2345 type mismatch fixed by narrowing the union with a type guard")
+Use:
 ${learningsOpen}
 Your freeform prose lesson here.
 ${learningsClose}
