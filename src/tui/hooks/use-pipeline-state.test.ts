@@ -17,6 +17,7 @@ import type { PipelineState } from "../../pipeline-state.ts";
 import {
   loadReducer,
   INITIAL_LOAD_STATE,
+  TUI_SUBPROCESS_TIMEOUT_MS,
   type LoadState,
   type LoadAction,
 } from "./use-pipeline-state.ts";
@@ -260,5 +261,30 @@ describe("loadReducer", () => {
       expect(s.state).toBe(good); // stale data kept
       expect(s.error).toBe("disk full");
     });
+
+    it("transitions to error on subprocess timeout", () => {
+      // Simulates the timeout-induced ETIMEDOUT error that would be
+      // caught by the hook's try/catch around the gatherState call.
+      let s = loadReducer(INITIAL_LOAD_STATE, { type: "start" });
+      expect(s.phase).toBe("loading");
+
+      s = loadReducer(s, {
+        type: "failure",
+        error: "Command timed out after 10000ms: ETIMEDOUT",
+      });
+      expect(s.phase).toBe("idle");
+      expect(s.state).toBeNull();
+      expect(s.error).toBe("Command timed out after 10000ms: ETIMEDOUT");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TUI_SUBPROCESS_TIMEOUT_MS
+// ---------------------------------------------------------------------------
+
+describe("TUI_SUBPROCESS_TIMEOUT_MS", () => {
+  it("is a positive number around 10 seconds", () => {
+    expect(TUI_SUBPROCESS_TIMEOUT_MS).toBe(10_000);
   });
 });

@@ -293,6 +293,7 @@ export function App({
           <MenuScreen
             state={pipeline.state}
             loading={pipeline.loading}
+            pipelineError={pipeline.error}
             menuContext={menuContext}
             resolvedConfig={resolvedConfig}
             onAction={handleMenuAction}
@@ -400,7 +401,11 @@ export function App({
   })();
 
   return (
-    <ScreenFrame screenType={screen.type} pipelineState={pipeline.state}>
+    <ScreenFrame
+      screenType={screen.type}
+      pipelineState={pipeline.state}
+      pipelineError={pipeline.error}
+    >
       {screenContent}
     </ScreenFrame>
   );

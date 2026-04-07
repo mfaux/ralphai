@@ -780,3 +780,71 @@ describe("loading indicators", () => {
     expect(detail.loading).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pipeline error state in detail pane (Cycle 4)
+// ---------------------------------------------------------------------------
+
+describe("pipeline error state in detail pane", () => {
+  const itemsWithPipelineLoading = [
+    "pick-from-backlog",
+    "stop-running",
+    "reset-plan",
+    "view-status",
+    "clean",
+    "run-next",
+    "resume-stalled",
+  ];
+
+  for (const item of itemsWithPipelineLoading) {
+    it(`shows error for "${item}" when state is null and error is set`, () => {
+      const detail = detailForItem(
+        item,
+        null,
+        false, // not loading
+        undefined,
+        undefined,
+        "Subprocess timed out",
+      );
+      expect(detail.loading).toBeFalsy();
+      // The error text should appear in the lines
+      const errorLine = detail.lines.find((l) =>
+        l.text.includes("Subprocess timed out"),
+      );
+      expect(errorLine).toBeDefined();
+      expect(errorLine!.color).toBe("yellow");
+    });
+  }
+
+  it("shows error for run-next when no local plans and pipeline errored", () => {
+    const detail = detailForItem(
+      "run-next",
+      null,
+      false,
+      undefined,
+      undefined,
+      "git worktree list timed out",
+    );
+    expect(detail.loading).toBeFalsy();
+    expect(
+      detail.lines.some((l) => l.text.includes("git worktree list timed out")),
+    ).toBe(true);
+  });
+
+  it("does not show error for items when state is available", () => {
+    const state = makeState();
+    const detail = detailForItem(
+      "pick-from-backlog",
+      state,
+      false,
+      undefined,
+      undefined,
+      "stale error",
+    );
+    // With valid state, no error line should be present
+    expect(detail.loading).toBeFalsy();
+    expect(detail.lines.some((l) => l.text.includes("stale error"))).toBe(
+      false,
+    );
+  });
+});

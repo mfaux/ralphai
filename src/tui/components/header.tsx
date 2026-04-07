@@ -22,6 +22,8 @@ import { stalledPlans } from "../../interactive/pipeline-actions.ts";
 export interface PipelineHeaderProps {
   /** Current pipeline state, or null if still loading. */
   state: PipelineState | null;
+  /** Human-readable error string from the pipeline hook. */
+  error?: string;
 }
 
 /**
@@ -87,6 +89,28 @@ export function buildStalledWarning(state: PipelineState): string | undefined {
   return `⚠ ${count} plan${count === 1 ? "" : "s"} stalled`;
 }
 
+/**
+ * Determine the fallback header text for states that don't use
+ * `buildHeaderParts` (loading, error, empty).
+ *
+ * Returns:
+ * - `"loading…"` when state is null and no error
+ * - the error string when state is null and error is set
+ * - `"empty"` when state has all zero counts
+ * - `undefined` when state has data (caller should use `buildHeaderParts`)
+ */
+export function buildHeaderText(
+  state: PipelineState | null,
+  error?: string,
+): string | undefined {
+  if (state === null) {
+    return error ?? "loading…";
+  }
+  const parts = buildHeaderParts(state);
+  if (!parts) return "empty";
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // PipelineHeader component
 // ---------------------------------------------------------------------------
@@ -99,11 +123,21 @@ export function buildStalledWarning(state: PipelineState): string | undefined {
  * - Otherwise: shows "Pipeline: N backlog · N running · N completed"
  *   with optional stalled warning
  */
-export function PipelineHeader({ state }: PipelineHeaderProps) {
+export function PipelineHeader({ state, error }: PipelineHeaderProps) {
   const parts = useMemo(
     () => (state ? buildHeaderParts(state) : undefined),
     [state],
   );
+
+  // Error state — show error instead of "loading…"
+  if (state === null && error) {
+    return (
+      <Box>
+        <Text>Pipeline: </Text>
+        <Text color="yellow">{error}</Text>
+      </Box>
+    );
+  }
 
   // Loading state
   if (state === null) {

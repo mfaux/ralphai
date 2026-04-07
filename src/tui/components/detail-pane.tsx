@@ -31,6 +31,8 @@ export interface DetailPaneProps {
   state: PipelineState | null;
   /** Whether pipeline state is still loading. */
   stateLoading?: boolean;
+  /** Human-readable error string from the pipeline hook. */
+  stateError?: string;
   /** Extra context from the GitHub issue peek. */
   menuContext?: MenuContext;
   /** Resolved config for the settings detail view. */
@@ -119,22 +121,23 @@ export function detailForItem(
   stateLoading: boolean,
   menuContext?: MenuContext,
   resolvedConfig?: ResolvedConfig,
+  stateError?: string,
 ): DetailContent {
   switch (highlightedValue) {
     case "pick-from-github":
       return githubDetail(menuContext);
 
     case "pick-from-backlog":
-      return backlogDetail(state, stateLoading);
+      return backlogDetail(state, stateLoading, stateError);
 
     case "stop-running":
-      return stopRunningDetail(state, stateLoading);
+      return stopRunningDetail(state, stateLoading, stateError);
 
     case "reset-plan":
-      return resetPlanDetail(state, stateLoading);
+      return resetPlanDetail(state, stateLoading, stateError);
 
     case "view-status":
-      return viewStatusDetail(state, stateLoading);
+      return viewStatusDetail(state, stateLoading, stateError);
 
     case "doctor":
       return {
@@ -143,16 +146,16 @@ export function detailForItem(
       };
 
     case "clean":
-      return cleanWorktreesDetail(state, stateLoading);
+      return cleanWorktreesDetail(state, stateLoading, stateError);
 
     case "settings":
       return settingsDetail(resolvedConfig);
 
     case "run-next":
-      return runNextDetail(state, stateLoading, menuContext);
+      return runNextDetail(state, stateLoading, menuContext, stateError);
 
     case "resume-stalled":
-      return resumeStalledDetail(state, stateLoading);
+      return resumeStalledDetail(state, stateLoading, stateError);
 
     case "run-with-options":
       return {
@@ -179,6 +182,31 @@ export function detailForItem(
 // ---------------------------------------------------------------------------
 // Per-item detail builders
 // ---------------------------------------------------------------------------
+
+/**
+ * Build a loading-or-error detail content for items that depend on
+ * pipeline state. Returns `undefined` when state is available.
+ */
+function loadingOrError(
+  title: string,
+  state: PipelineState | null,
+  stateLoading: boolean,
+  stateError?: string,
+): DetailContent | undefined {
+  if (stateLoading) {
+    return { title, lines: [], loading: true };
+  }
+  if (!state && stateError) {
+    return {
+      title,
+      lines: [{ text: stateError, color: "yellow" }],
+    };
+  }
+  if (!state) {
+    return { title, lines: [], loading: true };
+  }
+  return undefined;
+}
 
 function githubDetail(menuContext?: MenuContext): DetailContent {
   if (menuContext?.githubIssueLoading) {
@@ -232,12 +260,14 @@ function githubDetail(menuContext?: MenuContext): DetailContent {
 function backlogDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Backlog", lines: [], loading: true };
-  }
+  const pending = loadingOrError("Backlog", state, stateLoading, stateError);
+  if (pending) return pending;
+  // After the guard, state is guaranteed non-null.
+  const s = state!;
 
-  if (state.backlog.length === 0) {
+  if (s.backlog.length === 0) {
     return {
       title: "Backlog",
       lines: [{ text: "No plans in backlog", dim: true }],
@@ -245,11 +275,11 @@ function backlogDetail(
   }
 
   const lines: DetailLine[] = [];
-  for (const plan of state.backlog) {
+  for (const plan of s.backlog) {
     const name = plan.filename.replace(/\.md$/, "");
     if (plan.dependsOn.length > 0) {
       const depStatuses = plan.dependsOn.map((dep) =>
-        formatDependency(dep, state.completedSlugs),
+        formatDependency(dep, s.completedSlugs),
       );
       lines.push({ text: `${name}` });
       for (const depStatus of depStatuses) {
@@ -267,7 +297,7 @@ function backlogDetail(
   }
 
   return {
-    title: `Backlog (${state.backlog.length})`,
+    title: `Backlog (${s.backlog.length})`,
     lines,
   };
 }
@@ -275,12 +305,18 @@ function backlogDetail(
 function stopRunningDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Running Plans", lines: [], loading: true };
-  }
+  const pending = loadingOrError(
+    "Running Plans",
+    state,
+    stateLoading,
+    stateError,
+  );
+  if (pending) return pending;
+  const s = state!;
 
-  const running = state.inProgress.filter((p) => p.liveness.tag === "running");
+  const running = s.inProgress.filter((p) => p.liveness.tag === "running");
 
   if (running.length === 0) {
     return {
@@ -316,12 +352,18 @@ function stopRunningDetail(
 function resetPlanDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "In-Progress Plans", lines: [], loading: true };
-  }
+  const pending = loadingOrError(
+    "In-Progress Plans",
+    state,
+    stateLoading,
+    stateError,
+  );
+  if (pending) return pending;
+  const s = state!;
 
-  if (state.inProgress.length === 0) {
+  if (s.inProgress.length === 0) {
     return {
       title: "In-Progress Plans",
       lines: [{ text: "No in-progress plans", dim: true }],
@@ -329,7 +371,7 @@ function resetPlanDetail(
   }
 
   const lines: DetailLine[] = [];
-  for (const plan of state.inProgress) {
+  for (const plan of s.inProgress) {
     const status = formatLiveness(plan);
     lines.push({ text: plan.slug, bold: true });
     lines.push({ text: `  Status: ${status}`, dim: true });
@@ -342,7 +384,7 @@ function resetPlanDetail(
   }
 
   return {
-    title: `In Progress (${state.inProgress.length})`,
+    title: `In Progress (${s.inProgress.length})`,
     lines,
   };
 }
@@ -350,26 +392,32 @@ function resetPlanDetail(
 function viewStatusDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Pipeline Status", lines: [], loading: true };
-  }
+  const pending = loadingOrError(
+    "Pipeline Status",
+    state,
+    stateLoading,
+    stateError,
+  );
+  if (pending) return pending;
+  const s = state!;
 
   const lines: DetailLine[] = [
-    { text: `Backlog: ${state.backlog.length}` },
-    { text: `In progress: ${state.inProgress.length}` },
-    { text: `Completed: ${state.completedSlugs.length}` },
-    { text: `Worktrees: ${state.worktrees.length}` },
+    { text: `Backlog: ${s.backlog.length}` },
+    { text: `In progress: ${s.inProgress.length}` },
+    { text: `Completed: ${s.completedSlugs.length}` },
+    { text: `Worktrees: ${s.worktrees.length}` },
   ];
 
-  if (state.problems.length > 0) {
+  if (s.problems.length > 0) {
     lines.push({
-      text: `Problems: ${state.problems.length}`,
+      text: `Problems: ${s.problems.length}`,
       color: "yellow",
     });
   }
 
-  const stalled = state.inProgress.filter((p) => p.liveness.tag === "stalled");
+  const stalled = s.inProgress.filter((p) => p.liveness.tag === "stalled");
   if (stalled.length > 0) {
     lines.push({
       text: `Stalled: ${stalled.length}`,
@@ -386,13 +434,14 @@ function viewStatusDetail(
 function cleanWorktreesDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Worktrees", lines: [], loading: true };
-  }
+  const pending = loadingOrError("Worktrees", state, stateLoading, stateError);
+  if (pending) return pending;
+  const s = state!;
 
-  const total = state.worktrees.length;
-  const orphaned = state.worktrees.filter((w) => !w.hasActivePlan).length;
+  const total = s.worktrees.length;
+  const orphaned = s.worktrees.filter((w) => !w.hasActivePlan).length;
 
   const lines: DetailLine[] = [
     { text: `${total} worktree${total === 1 ? "" : "s"} total` },
@@ -461,12 +510,13 @@ function runNextDetail(
   state: PipelineState | null,
   stateLoading: boolean,
   menuContext?: MenuContext,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Run Next", lines: [], loading: true };
-  }
+  const pending = loadingOrError("Run Next", state, stateLoading, stateError);
+  if (pending) return pending;
+  const s = state!;
 
-  if (state.backlog.length === 0 && state.inProgress.length === 0) {
+  if (s.backlog.length === 0 && s.inProgress.length === 0) {
     // No local plans at all — check if GitHub can supply one
     if (menuContext?.hasGitHubIssues) {
       if (menuContext.githubIssueLoading) {
@@ -506,10 +556,10 @@ function runNextDetail(
   }
 
   // Find the dependency-aware next plan (mirrors the runner algorithm)
-  const nextPlanName = findNextPlanName(state);
+  const nextPlanName = findNextPlanName(s);
 
   if (nextPlanName) {
-    const plan = state.backlog.find((p) => p.filename === nextPlanName)!;
+    const plan = s.backlog.find((p) => p.filename === nextPlanName)!;
     const name = plan.filename.replace(/\.md$/, "");
     const lines: DetailLine[] = [{ text: name, bold: true }];
 
@@ -520,14 +570,14 @@ function runNextDetail(
     if (plan.dependsOn.length > 0) {
       for (const dep of plan.dependsOn) {
         lines.push({
-          text: `  ${formatDependency(dep, state.completedSlugs)}`,
-          color: state.completedSlugs.some(
-            (s) => s === dep || s.startsWith(`${dep}-`),
+          text: `  ${formatDependency(dep, s.completedSlugs)}`,
+          color: s.completedSlugs.some(
+            (cs) => cs === dep || cs.startsWith(`${dep}-`),
           )
             ? "green"
             : undefined,
-          dim: !state.completedSlugs.some(
-            (s) => s === dep || s.startsWith(`${dep}-`),
+          dim: !s.completedSlugs.some(
+            (cs) => cs === dep || cs.startsWith(`${dep}-`),
           ),
         });
       }
@@ -538,11 +588,11 @@ function runNextDetail(
   }
 
   // Backlog exists but nothing is ready (all blocked by dependencies)
-  if (state.backlog.length > 0) {
+  if (s.backlog.length > 0) {
     const lines: DetailLine[] = [];
-    for (const plan of state.backlog) {
+    for (const plan of s.backlog) {
       const name = plan.filename.replace(/\.md$/, "");
-      const unmet = unmetDependencies(plan, state.completedSlugs);
+      const unmet = unmetDependencies(plan, s.completedSlugs);
       lines.push({ text: name });
       lines.push({
         text: `  Blocked by: ${unmet.join(", ")}`,
@@ -573,12 +623,18 @@ function runNextDetail(
 function resumeStalledDetail(
   state: PipelineState | null,
   stateLoading: boolean,
+  stateError?: string,
 ): DetailContent {
-  if (stateLoading || !state) {
-    return { title: "Resume Stalled", lines: [], loading: true };
-  }
+  const pending = loadingOrError(
+    "Resume Stalled",
+    state,
+    stateLoading,
+    stateError,
+  );
+  if (pending) return pending;
+  const s = state!;
 
-  const stalled = state.inProgress.filter((p) => p.liveness.tag === "stalled");
+  const stalled = s.inProgress.filter((p) => p.liveness.tag === "stalled");
 
   if (stalled.length === 0) {
     return {
@@ -620,6 +676,7 @@ export function DetailPane({
   highlightedValue,
   state,
   stateLoading = false,
+  stateError,
   menuContext,
   resolvedConfig,
 }: DetailPaneProps) {
@@ -629,6 +686,7 @@ export function DetailPane({
     stateLoading,
     menuContext,
     resolvedConfig,
+    stateError,
   );
 
   // No content for unknown items — show a placeholder so the pane

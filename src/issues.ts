@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { execQuiet, checkGhAvailable } from "./exec.ts";
+import type { ExecOptions } from "./exec.ts";
 // Re-export so consumers that imported checkGhAvailable from issues.ts still work
 export { checkGhAvailable } from "./exec.ts";
 import { DEFAULTS } from "./config.ts";
@@ -61,6 +62,13 @@ export interface PeekIssueOptions {
   issueRepo: string;
   /** Label that marks an issue as a PRD (e.g. "ralphai-prd"). */
   issuePrdLabel?: string;
+  /**
+   * Subprocess timeout in milliseconds. When set, `gh` and `git`
+   * subprocess calls are killed after this many milliseconds.
+   * Useful for TUI contexts where a hung CLI must not block the
+   * event loop. Omit for no timeout (default).
+   */
+  timeout?: number;
 }
 
 /** Result of a peekGithubIssues() call. */
@@ -96,12 +104,13 @@ export interface PeekIssueResult {
 export function detectIssueRepo(
   cwd: string,
   configRepo?: string,
+  options?: ExecOptions,
 ): string | null {
   if (configRepo && configRepo.length > 0) {
     return configRepo;
   }
 
-  const url = execQuiet("git remote get-url origin", cwd);
+  const url = execQuiet("git remote get-url origin", cwd, options);
   if (!url) return null;
 
   // Handle SSH: git@<host>:owner/repo.git  (supports host aliases like github-work)
@@ -268,12 +277,14 @@ export function buildIssuePlanContent(
  */
 export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
   const { cwd, issueSource, standaloneLabel: issueLabel, issueRepo } = options;
+  const timeoutOpt =
+    options.timeout != null ? { timeout: options.timeout } : {};
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
   }
 
-  if (!checkGhAvailable()) {
+  if (!checkGhAvailable(timeoutOpt)) {
     return {
       found: false,
       count: 0,
@@ -282,7 +293,7 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
     };
   }
 
-  const repo = detectIssueRepo(cwd, issueRepo);
+  const repo = detectIssueRepo(cwd, issueRepo, timeoutOpt);
   if (!repo) {
     return {
       found: false,
@@ -296,6 +307,7 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
     `gh issue list --repo "${repo}" --label "${issueLabel}" --state open ` +
       `--limit 100 --json number,title`,
     cwd,
+    timeoutOpt,
   );
 
   if (!raw) {
@@ -350,12 +362,14 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
 export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
   const { cwd, issueSource, issueRepo } = options;
   const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
+  const timeoutOpt =
+    options.timeout != null ? { timeout: options.timeout } : {};
 
   if (issueSource !== "github") {
     return { found: false, count: 0, message: "Issue source is not 'github'" };
   }
 
-  if (!checkGhAvailable()) {
+  if (!checkGhAvailable(timeoutOpt)) {
     return {
       found: false,
       count: 0,
@@ -363,7 +377,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
     };
   }
 
-  const repo = detectIssueRepo(cwd, issueRepo);
+  const repo = detectIssueRepo(cwd, issueRepo, timeoutOpt);
   if (!repo) {
     return {
       found: false,
@@ -376,6 +390,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
     `gh issue list --repo "${repo}" --label "${prdLabel}" --state open ` +
       `--limit 10 --json number,title`,
     cwd,
+    timeoutOpt,
   );
 
   if (!raw) {
