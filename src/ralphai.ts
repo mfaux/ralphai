@@ -47,6 +47,7 @@ import {
   getConfigFilePath,
   writeConfigFile,
   DEFAULTS,
+  detectDockerAvailable,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
@@ -270,6 +271,22 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  // 5. Docker sandboxing
+  const dockerAvailable = detectDockerAvailable();
+  const sandboxConfirm = await clack.confirm({
+    message: dockerAvailable
+      ? "Enable Docker sandboxing? (recommended — Docker detected)"
+      : "Enable Docker sandboxing? (Docker not detected)",
+    initialValue: dockerAvailable,
+  });
+
+  if (clack.isCancel(sandboxConfirm)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
+  const sandbox: "none" | "docker" = sandboxConfirm ? "docker" : "none";
+
   let autoCommit = false;
 
   // 6. GitHub Issues integration (enabled by default)
@@ -334,6 +351,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     prFeedbackCommands: prFeedbackCommands || "",
     autoCommit,
+    sandbox,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
     createSamplePlan,
@@ -483,7 +501,7 @@ function ensureGitHubLabels(
 // ---------------------------------------------------------------------------
 
 function scaffold(answers: WizardAnswers, cwd: string): void {
-  // Generate config (JSON format) — all 14 keys with explicit defaults
+  // Generate config (JSON format) — all 15 keys with explicit defaults
   const feedbackCommands = answers.feedbackCommands
     ? answers.feedbackCommands
         .split(",")
@@ -519,6 +537,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     prdLabel: DEFAULTS.prdLabel,
     issueRepo: "",
     issueCommentProgress: true,
+    sandbox: answers.sandbox ?? "none",
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -1364,6 +1383,10 @@ async function runRalphaiInit(
       : "";
     const detectedSetupStr = detectSetupCommand(cwd);
 
+    // Auto-detect Docker for sandbox
+    const dockerDetected = detectDockerAvailable();
+    const sandboxValue: "none" | "docker" = dockerDetected ? "docker" : "none";
+
     answers = {
       agentCommand,
       setupCommand: detectedSetupStr,
@@ -1371,6 +1394,7 @@ async function runRalphaiInit(
       feedbackCommands: detectedFeedbackStr,
       prFeedbackCommands: detectedPrFeedbackStr,
       autoCommit: false,
+      sandbox: sandboxValue,
       issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
       createSamplePlan: true,
@@ -1397,6 +1421,9 @@ async function runRalphaiInit(
     );
     console.log(
       `  ${DIM}Issues:${RESET}    ${TEXT}GitHub Issues (enabled)${RESET}`,
+    );
+    console.log(
+      `  ${DIM}Sandbox:${RESET}   ${TEXT}${sandboxValue}${dockerDetected ? " (Docker detected)" : " (Docker not detected)"}${RESET}`,
     );
 
     // Workspace detection for --yes mode

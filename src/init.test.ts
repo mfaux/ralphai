@@ -82,8 +82,8 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 14 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(14);
+    // Verify exactly 15 keys are present (includes repoPath)
+    expect(Object.keys(parsed)).toHaveLength(15);
 
     // Core settings from wizard
     expect(typeof parsed.agentCommand).toBe("string");
@@ -103,6 +103,9 @@ describe("init command", () => {
     expect(parsed.prdLabel).toBe("ralphai-prd");
     expect(parsed.issueRepo).toBe("");
     expect(parsed.issueCommentProgress).toBe(true);
+
+    // Sandbox (auto-detected: "docker" if Docker available, "none" otherwise)
+    expect(["none", "docker"]).toContain(parsed.sandbox);
   });
 
   it("init --yes --agent-command uses the provided agent command", async () => {
@@ -116,7 +119,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(14);
+    expect(Object.keys(parsed)).toHaveLength(15);
     expect(parsed.autoCommit).toBe(false);
   });
 
@@ -156,6 +159,8 @@ describe("init command", () => {
     expect(output).toContain("(none)");
     // Project should also show (none) since no package.json
     expect(output).toMatch(/Project:.*\(none\)/);
+    // Sandbox shows auto-detected value
+    expect(output).toMatch(/Sandbox:.*(?:docker|none)/);
   });
 
   it("init --yes detection summary shows custom agent command", async () => {
@@ -324,6 +329,22 @@ describe("init command", () => {
     const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("already configured");
+  });
+
+  it("init --yes writes sandbox to config (auto-detected)", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
+
+    const config = readFileSync(configPath(), "utf-8");
+    const parsed = JSON.parse(config);
+    // Sandbox should be "docker" or "none" depending on Docker availability
+    expect(parsed.sandbox).toBeDefined();
+    expect(["none", "docker"]).toContain(parsed.sandbox);
+  });
+
+  it("init --yes detection summary shows sandbox value", async () => {
+    const result = await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
+    const output = stripLogo(result.stdout || result.stderr);
+    expect(output).toMatch(/Sandbox:.*(?:docker|none)/);
   });
 
   it("init error message suggests init --force", async () => {

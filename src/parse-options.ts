@@ -60,6 +60,7 @@ export interface WizardAnswers {
   prFeedbackCommands: string;
   autoCommit?: boolean;
   issueSource: "none" | "github";
+  sandbox?: "none" | "docker";
   updateAgentsMd?: boolean;
   createSamplePlan?: boolean;
   workspaces?: Record<string, { feedbackCommands: string[] }>;
