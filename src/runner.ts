@@ -37,7 +37,10 @@ import {
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
-import { FEEDBACK_WRAPPER_FILENAME } from "./feedback-wrapper.ts";
+import {
+  FEEDBACK_WRAPPER_FILENAME,
+  parseFeedbackCommands,
+} from "./feedback-wrapper.ts";
 import { writeFeedbackWrapper } from "./worktree/index.ts";
 import { appendProgressBlock } from "./progress.ts";
 import {
@@ -850,7 +853,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     // Written here (not in prepareWorktree) so it lives in pipeline state
     // instead of the user's worktree, avoiding untracked-file noise.
     // Regenerated every run so config changes are picked up.
-    writeFeedbackWrapper(wipDir, feedbackCommands);
+    writeFeedbackWrapper(wipDir, parseFeedbackCommands(feedbackCommands));
 
     // --- Start IPC server for real-time output streaming ---
     let ipcServer: IpcServer | null = null;
