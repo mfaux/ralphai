@@ -56,6 +56,7 @@ const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
   ["issueCommentProgress", "ISSUE_COMMENT_PROGRESS"],
   ["iterationTimeout", "ITERATION_TIMEOUT"],
   ["autoCommit", "AUTO_COMMIT"],
+  ["review", "REVIEW"],
 ];
 
 const args = process.argv.slice(2);

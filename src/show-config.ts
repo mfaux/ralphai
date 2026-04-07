@@ -61,6 +61,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   dockerImage: "RALPHAI_DOCKER_IMAGE",
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
   dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
+  review: "RALPHAI_REVIEW",
 };
 
 // ---------------------------------------------------------------------------
@@ -236,6 +237,10 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
       `  dockerEnvVars      = ${dockerEnvVarsVal}  (${dockerEnvVarsSrc})`,
     );
   }
+
+  // review: CLI label is "--review" or "--no-review"
+  const reviewSrc = sourceLabel("review", config.review.source, input);
+  lines.push(`  review             = ${config.review.value}  (${reviewSrc})`);
 
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(

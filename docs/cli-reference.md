@@ -158,6 +158,8 @@ What it does:
 --docker-image=<image>            Override Docker image (default: auto-resolve from agent name)
 --docker-mounts=<csv>             Extra bind mounts for Docker sandbox (comma-separated)
 --docker-env-vars=<csv>           Extra env vars to forward into Docker sandbox (comma-separated)
+--review                          Enable review pass after completion (default)
+--no-review                       Disable review pass after completion
 --show-config                     Print resolved settings and exit
 ```
 
@@ -422,6 +424,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_PR_FEEDBACK_COMMANDS`        | `prFeedbackCommands`      |
 | `RALPHAI_BASE_BRANCH`                 | `baseBranch`              |
 | `RALPHAI_AUTO_COMMIT`                 | `autoCommit`              |
+| `RALPHAI_REVIEW`                      | `review`                  |
 | `RALPHAI_MAX_STUCK`                   | `maxStuck`                |
 | `RALPHAI_ITERATION_TIMEOUT`           | `iterationTimeout`        |
 | `RALPHAI_NO_UPDATE_CHECK`             | _(none)_                  |
@@ -451,6 +454,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
 | `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
 | `autoCommit`              | `false`                   | `RALPHAI_AUTO_COMMIT`               | Enable auto-commit recovery snapshots                                                                                                                                                                                                                                                                                     |
+| `review`                  | `true`                    | `RALPHAI_REVIEW`                    | Enable review pass after completion                                                                                                                                                                                                                                                                                       |
 | `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                                                                                                                                                                                                                                             |
 | `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                                                                                                                                                                                                                                                  |
 | `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                                                                                                                                                                                                                                                      |
