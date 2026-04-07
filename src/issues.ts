@@ -151,21 +151,37 @@ const CC_TITLE_PATTERN =
   /^(feat|fix|refactor|test|docs|chore|ci|build|perf|style|revert)(?:\([^)]*\))?!?:\s+(.+)$/i;
 
 /**
+ * Strip a leading "PRD:" or "PRD " prefix (case-insensitive) from a title.
+ *
+ * PRD titles like `"PRD: Add dark mode"` should not leak the "PRD" label
+ * into branch names or PR titles.  Stripping it early lets the rest of the
+ * pipeline treat them like any other title.
+ */
+function stripPrdPrefix(title: string): string {
+  return title.replace(/^prd[:\s]+/i, "").trim();
+}
+
+/**
  * Extract the conventional-commit type and remaining description from a title.
  *
  * If the title starts with a recognised prefix (e.g. `"fix: broken login"`),
  * returns `{ type: "fix", description: "broken login" }`.
  * Otherwise defaults to `{ type: "feat", description: <original title> }`.
+ *
+ * A leading `"PRD:"` label is stripped before matching so that PRD titles
+ * like `"PRD: Add dark mode"` produce `feat/add-dark-mode` instead of
+ * `feat/prd-add-dark-mode`.
  */
 export function commitTypeFromTitle(title: string): {
   type: string;
   description: string;
 } {
-  const m = title.match(CC_TITLE_PATTERN);
+  const cleaned = stripPrdPrefix(title);
+  const m = cleaned.match(CC_TITLE_PATTERN);
   if (m) {
     return { type: m[1]!.toLowerCase(), description: m[2]!.trim() };
   }
-  return { type: "feat", description: title };
+  return { type: "feat", description: cleaned };
 }
 
 // ---------------------------------------------------------------------------

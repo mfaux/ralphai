@@ -201,7 +201,7 @@ Drains the entire backlog on one worktree per plan and opens/updates a draft PR 
 ralphai run --plan=dark-mode.md
 ```
 
-Targets a specific backlog plan instead of letting Ralphai pick. Creates an isolated worktree with a `ralphai/dark-mode` branch.
+Targets a specific backlog plan instead of letting Ralphai pick. Creates an isolated worktree with a `feat/dark-mode` branch (type derived from the plan title).
 
 ## Manage multiple repos
 

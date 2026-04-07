@@ -61,6 +61,7 @@ import {
   pullGithubIssues,
   pullPrdSubIssue,
   checkAllPrdSubIssuesDone,
+  issueBranchName,
 } from "./issues.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
@@ -97,6 +98,8 @@ import { type ResolvedConfig } from "./config.ts";
 export interface RunnerResult {
   /** Slugs of plans that got stuck during this run. */
   stuckSlugs: string[];
+  /** Agent-generated PR summary from the last completed plan (if any). */
+  lastPrSummary?: string;
 }
 
 /** Options passed from the CLI layer to the runner. */
@@ -487,7 +490,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     console.log(`[dry-run] Scope: ${planScope}`);
   }
 
-  const branch = `ralphai/${planSlug}`;
+  const branch = issueBranchName(planDesc);
   const progressFile = join(dirs.wipDir, planSlug, "progress.md");
   const worktreeDir = join(cwd, "..", ".ralphai-worktrees", planSlug);
 
@@ -500,15 +503,6 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     );
   } else {
     console.log(`[dry-run] Would create worktree: ${worktreeDir}`);
-  }
-
-  if (execOk('git show-ref --verify --quiet "refs/heads/ralphai"', cwd)) {
-    console.log(
-      `[dry-run] WARNING: Branch 'ralphai' exists and would block creation of '${branch}'.`,
-    );
-    console.log(
-      "[dry-run] Fix: git branch -m ralphai ralphai-legacy  OR  git branch -D ralphai",
-    );
   }
 
   const collision = branchHasOpenWork(branch, cwd);
@@ -803,7 +797,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "unknown";
       if (currentBranch === baseBranch) {
         console.error(
-          `ERROR: Resuming requires being on a ralphai/* branch, not '${baseBranch}'.`,
+          `ERROR: Resuming requires being on a feature branch, not '${baseBranch}'.`,
         );
         console.error(
           "Checkout the branch you want to resume, then run again.",
@@ -822,7 +816,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         );
         console.error("Create a worktree on a feature branch instead:");
         console.error(
-          `  git worktree add ../<dir> -b ralphai/${planSlug} ${baseBranch}`,
+          `  git worktree add ../<dir> -b ${issueBranchName(planDesc)} ${baseBranch}`,
         );
         rollbackPlan(planFile, dirs.backlogDir);
         process.exit(1);
@@ -1360,5 +1354,5 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);
 
-  return { stuckSlugs };
+  return { stuckSlugs, lastPrSummary };
 }

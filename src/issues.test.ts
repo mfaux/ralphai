@@ -351,6 +351,34 @@ describe("commitTypeFromTitle", () => {
       description: "update: something",
     });
   });
+
+  it("strips leading PRD: prefix (uppercase)", () => {
+    expect(commitTypeFromTitle("PRD: Add dark mode")).toEqual({
+      type: "feat",
+      description: "Add dark mode",
+    });
+  });
+
+  it("strips leading PRD: prefix before matching CC type", () => {
+    expect(commitTypeFromTitle("PRD: fix: broken login")).toEqual({
+      type: "fix",
+      description: "broken login",
+    });
+  });
+
+  it("strips leading prd: prefix (lowercase)", () => {
+    expect(commitTypeFromTitle("prd: Refactor auth")).toEqual({
+      type: "feat",
+      description: "Refactor auth",
+    });
+  });
+
+  it("strips leading PRD prefix without colon (just space)", () => {
+    expect(commitTypeFromTitle("PRD Add dark mode")).toEqual({
+      type: "feat",
+      description: "Add dark mode",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -399,6 +427,14 @@ describe("issueBranchName", () => {
 
   it("handles empty title", () => {
     expect(issueBranchName("")).toBe("feat/");
+  });
+
+  it("strips PRD: prefix from title", () => {
+    expect(issueBranchName("PRD: Add dark mode")).toBe("feat/add-dark-mode");
+  });
+
+  it("strips PRD: prefix and extracts CC type", () => {
+    expect(issueBranchName("PRD: fix: broken login")).toBe("fix/broken-login");
   });
 });
 

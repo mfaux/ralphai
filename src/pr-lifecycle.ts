@@ -201,10 +201,11 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
+  const prTitle = formatPrTitle(planDescription);
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(planDescription)}" --body-file - --draft`,
+      `--title "${esc(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );
@@ -400,6 +401,8 @@ export interface PrdPrBodyOptions {
   cwd: string;
   issueRepo?: string;
   prRepo?: string;
+  /** Agent-generated summaries keyed by sub-issue number. */
+  summaries?: Map<number, string>;
 }
 
 /** Build a PR body for an aggregate PRD pull request. */
@@ -415,12 +418,22 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
     cwd,
     issueRepo,
     prRepo,
+    summaries,
   } = options;
 
   const parts: string[] = [];
 
   // Title / description
   parts.push(`PRD #${prd.number}: ${prd.title}\n`);
+
+  // High-level summary from agent-generated PR summaries
+  if (summaries && summaries.size > 0) {
+    parts.push("## Summary\n");
+    for (const [issueNum, summary] of summaries) {
+      parts.push(`- **#${issueNum}:** ${summary}`);
+    }
+    parts.push("");
+  }
 
   // Closes references — PRD + completed sub-issues only
   // Exclude stuck, HITL, and blocked sub-issues from auto-close
@@ -491,6 +504,8 @@ export interface CreatePrdPrOptions {
   blockedSubIssues?: BlockedSubIssue[];
   cwd: string;
   issueRepo?: string;
+  /** Agent-generated summaries keyed by sub-issue number. */
+  summaries?: Map<number, string>;
 }
 
 /** Push branch and create (or update) a draft PR for a PRD aggregate run. */
@@ -505,6 +520,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     blockedSubIssues,
     cwd,
     issueRepo,
+    summaries,
   } = options;
 
   const push = pushBranch(branch, cwd, true);
@@ -529,6 +545,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     cwd,
     issueRepo,
     prRepo,
+    summaries,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(prd.title);

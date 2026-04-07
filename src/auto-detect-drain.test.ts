@@ -3,7 +3,7 @@
  * branch and worktree when processed via `ralphai run` (no target).
  *
  * Covers:
- *   - Each plan gets a unique ralphai/<slug> branch
+ *   - Each plan gets a unique <type>/<slug> branch (conventional commit style)
  *   - --once processes exactly one plan
  *   - Worktrees are cleaned up between plans
  *   - Plans with prd: frontmatter route through the PRD flow, not standalone
@@ -147,8 +147,8 @@ describe.skipIf(process.platform === "win32")(
         encoding: "utf-8",
       });
 
-      expect(branches).toContain("ralphai/aaa-first");
-      expect(branches).toContain("ralphai/bbb-second");
+      expect(branches).toContain("feat/plan-first-plan");
+      expect(branches).toContain("feat/plan-second-plan");
     });
 
     test("--once processes exactly one plan when two are available", () => {
@@ -166,8 +166,8 @@ describe.skipIf(process.platform === "win32")(
         encoding: "utf-8",
       });
 
-      expect(branches).toContain("ralphai/aaa-first");
-      expect(branches).not.toContain("ralphai/bbb-second");
+      expect(branches).toContain("feat/plan-first-plan");
+      expect(branches).not.toContain("feat/plan-second-plan");
       expect(existsSync(join(backlogDir, "bbb-second.md"))).toBe(true);
     });
 
@@ -186,7 +186,7 @@ describe.skipIf(process.platform === "win32")(
       expect(existsSync(join(worktreeBase, "aaa-first"))).toBe(false);
     });
 
-    test("plan with prd: frontmatter does not get a standalone ralphai/ branch", () => {
+    test("plan with prd: frontmatter does not get a standalone branch", () => {
       initWithAgent(dir, testEnv());
       process.env.RALPHAI_HOME = ralphaiHome;
 
@@ -195,7 +195,7 @@ describe.skipIf(process.platform === "win32")(
 
       // Run auto-detect. Since there's no GitHub remote, PRD discovery
       // will fail, but the drain loop should NOT process this as a
-      // standalone plan on a ralphai/ branch.
+      // standalone plan on a feature branch.
       const result = runCli(["run"], dir, testEnv(), 60000);
 
       const branches = execSync("git branch --list", {
@@ -204,15 +204,15 @@ describe.skipIf(process.platform === "win32")(
       });
 
       // The plan has prd: frontmatter, so it must NOT be processed as
-      // standalone (which would create a ralphai/gh-99-prd-sub-task branch).
-      expect(branches).not.toContain("ralphai/gh-99-prd-sub-task");
+      // standalone (which would create a feat/plan-gh-99-prd-sub-task branch).
+      expect(branches).not.toContain("feat/plan-gh-99-prd-sub-task");
 
       // The combined output should indicate PRD routing was attempted
       const combined = result.stdout + result.stderr;
       expect(combined).toMatch(/PRD|prd/i);
     });
 
-    test("plan without prd: frontmatter still gets standalone ralphai/ branch", () => {
+    test("plan without prd: frontmatter still gets standalone branch", () => {
       initWithAgent(dir, testEnv());
       process.env.RALPHAI_HOME = ralphaiHome;
       addPlans(dir, testEnv(), [
@@ -227,7 +227,7 @@ describe.skipIf(process.platform === "win32")(
       });
 
       // Plan without prd: should still be processed as standalone
-      expect(branches).toContain("ralphai/standalone-task");
+      expect(branches).toContain("feat/plan-standalone-task");
     });
   },
 );

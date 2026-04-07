@@ -173,7 +173,7 @@ Under the hood, `ralphai run` is the headless execution command. It always runs 
 For a normal run, Ralphai:
 
 1. Picks the next plan from `backlog/` or resumes one from `in-progress/`
-2. Creates or reuses a worktree on branch `ralphai/<slug>` (or `feat/<prd-slug>` for PRD-driven runs)
+2. Creates or reuses a worktree on a conventional-commit-style branch (`<type>/<slug>`, e.g. `feat/add-dark-mode`)
 3. Runs the agent inside that worktree
 4. Commits the results there
 5. Pushes the branch
@@ -237,7 +237,7 @@ When `ralphai run` (auto-detect, no target) encounters a plan with `prd: N` fron
 
 | Aspect         | Standalone plan / issue          | PRD                                         |
 | -------------- | -------------------------------- | ------------------------------------------- |
-| Branch         | `ralphai/<slug>` per plan        | `feat/<prd-slug>` for the whole PRD         |
+| Branch         | `<type>/<slug>` per plan         | `<type>/<prd-slug>` for the whole PRD       |
 | PR             | One draft PR per plan            | One aggregate draft PR for all sub-issues   |
 | Stuck handling | Plan is skipped, drain continues | Sub-issue is skipped, PRD continues to next |
 
@@ -257,6 +257,7 @@ Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-
 
 Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped), Ralphai opens a single draft PR with:
 
+- A high-level **Summary** section with agent-generated descriptions of each completed sub-issue
 - A `Closes #N` block for the PRD and each completed sub-issue
 - A checklist of completed sub-issues
 - A checklist of stuck sub-issues (if any)
@@ -321,7 +322,7 @@ Receipt files are plain text, one `key=value` per line:
 ```
 started_at=2026-03-08T14:22:00Z
 worktree_path=/home/user/.ralphai-worktrees/dark-mode
-branch=ralphai/dark-mode
+branch=feat/dark-mode
 slug=dark-mode
 plan_file=dark-mode.md
 tasks_completed=2
@@ -333,7 +334,7 @@ tasks_completed=2
 | ----------------- | ----------------------------------------- | --------------------------------------------------------------- |
 | `started_at`      | `2026-03-08T14:22:00Z`                    | ISO 8601 UTC timestamp of when the run started                  |
 | `worktree_path`   | `/home/user/.ralphai-worktrees/dark-mode` | Absolute path to the managed worktree                           |
-| `branch`          | `ralphai/dark-mode`                       | Git branch the run is on                                        |
+| `branch`          | `feat/dark-mode`                          | Git branch the run is on                                        |
 | `slug`            | `dark-mode`                               | Plan slug, filename minus `.md`                                 |
 | `plan_file`       | `dark-mode.md`                            | Source plan filename                                            |
 | `tasks_completed` | `2`                                       | Number of plan tasks marked complete, parsed from `progress.md` |

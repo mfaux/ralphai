@@ -131,7 +131,7 @@ Use it for headless execution, automation, or when you want to kick off work dir
 What it does:
 
 1. Picks a plan from `backlog/` or resumes one from `in-progress/`
-2. Creates or reuses a worktree on `ralphai/<slug>` (or `feat/<prd-slug>` for PRD-driven runs)
+2. Creates or reuses a worktree on a `<type>/<slug>` branch (e.g. `feat/add-dark-mode`)
 3. Runs the agent inside that worktree
 4. Commits and pushes the branch
 5. Opens or updates a draft PR when `gh` is available
