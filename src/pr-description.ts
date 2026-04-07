@@ -165,6 +165,54 @@ export function buildClosesBlock(options: {
 }
 
 // ---------------------------------------------------------------------------
+// High-level summary generation
+// ---------------------------------------------------------------------------
+
+/** Build a reviewer-facing PR summary from categorized commits. */
+export function buildHighLevelSummaryFromCommits(
+  commits: CategorizedCommits,
+): string | null {
+  const parts: string[] = [];
+
+  if (commits.features.length > 0) {
+    parts.push(
+      commits.features.length === 1
+        ? "Adds the main feature work in this branch."
+        : `Adds ${commits.features.length} feature updates in this branch.`,
+    );
+  }
+
+  if (commits.fixes.length > 0) {
+    parts.push(
+      commits.fixes.length === 1
+        ? "Includes a bug fix to improve correctness and stability."
+        : `Includes ${commits.fixes.length} bug fixes to improve correctness and stability.`,
+    );
+  }
+
+  const maintenanceCount =
+    commits.refactors.length +
+    commits.tests.length +
+    commits.docs.length +
+    commits.chores.length +
+    commits.other.length;
+  if (maintenanceCount > 0) {
+    const focusedOnly = parts.length === 0;
+    if (focusedOnly) {
+      parts.push(
+        "Focuses on maintenance work across refactoring, tests, documentation, and supporting cleanup.",
+      );
+    } else {
+      parts.push(
+        "Also includes supporting maintenance work across refactoring, tests, documentation, or tooling.",
+      );
+    }
+  }
+
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+// ---------------------------------------------------------------------------
 // Body builders
 // ---------------------------------------------------------------------------
 

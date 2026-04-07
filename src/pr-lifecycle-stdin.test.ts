@@ -180,6 +180,7 @@ describe("PR body shell-safety", () => {
       completedPlans: ["plan-a"],
       backlogDir,
       cwd: repoDir,
+      summary: DANGEROUS_BODY,
     });
 
     expect(result.ok).toBe(true);
@@ -194,6 +195,7 @@ describe("PR body shell-safety", () => {
     expect(cmd).toContain("--body-file -");
     expect(cmd).not.toContain('--body "');
     expect(typeof opts.input).toBe("string");
+    expect(opts.input).toContain(DANGEROUS_BODY);
   });
 
   it("updateContinuousPr pipes body via stdin on edit", () => {
@@ -303,6 +305,7 @@ describe("PR body shell-safety", () => {
     expect(cmd).toContain("--body-file -");
     expect(cmd).not.toContain('--body "');
     expect(typeof opts.input).toBe("string");
+    expect(opts.input).toContain("Adds the main feature work in this branch.");
   });
 
   it("createPrdPr pipes body via stdin on edit (existing PR)", () => {

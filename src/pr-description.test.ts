@@ -4,6 +4,7 @@ import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 import {
+  buildHighLevelSummaryFromCommits,
   categorizeCommits,
   formatCommitsByCategory,
   buildCommitLog,
@@ -157,6 +158,46 @@ describe("formatCommitsByCategory", () => {
     const commits = categorizeCommits("");
     const formatted = formatCommitsByCategory(commits);
     expect(formatted).toBe("_No commits._");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHighLevelSummaryFromCommits
+// ---------------------------------------------------------------------------
+
+describe("buildHighLevelSummaryFromCommits", () => {
+  it("summarizes feature and fix work for reviewers", () => {
+    const summary = buildHighLevelSummaryFromCommits(
+      categorizeCommits(
+        ["abc1234 feat: add dashboard", "def5678 fix: handle empty state"].join(
+          "\n",
+        ),
+      ),
+    );
+
+    expect(summary).toBe(
+      "Adds the main feature work in this branch. Includes a bug fix to improve correctness and stability.",
+    );
+  });
+
+  it("summarizes maintenance-only branches", () => {
+    const summary = buildHighLevelSummaryFromCommits(
+      categorizeCommits(
+        [
+          "abc1234 refactor: simplify runner wiring",
+          "def5678 test: add regression coverage",
+          "aaa1111 docs: update CLI reference",
+        ].join("\n"),
+      ),
+    );
+
+    expect(summary).toBe(
+      "Focuses on maintenance work across refactoring, tests, documentation, and supporting cleanup.",
+    );
+  });
+
+  it("returns null when there are no commits to summarize", () => {
+    expect(buildHighLevelSummaryFromCommits(categorizeCommits(""))).toBeNull();
   });
 });
 

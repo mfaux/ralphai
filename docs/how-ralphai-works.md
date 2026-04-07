@@ -228,6 +228,7 @@ Ralphai fetches sub-issues from the GitHub API and processes them in order. Sub-
 
 Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped), Ralphai opens a single draft PR with:
 
+- A high-level summary of the branch's completed work
 - A `Closes #N` block for the PRD and each completed sub-issue
 - A checklist of completed sub-issues
 - A checklist of stuck sub-issues (if any)

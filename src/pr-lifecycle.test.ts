@@ -400,6 +400,61 @@ describe("buildPrdPrBody", () => {
     expect(body).toContain("add dashboard widget");
   });
 
+  it("leads with a generated high-level summary when commits exist", () => {
+    initRepo(ctx.dir);
+    execSync("git checkout -b feat/test-prd-summary", {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(ctx.dir, "feature.txt"), "feature\n");
+    execSync('git add -A && git commit -m "feat: add dashboard widget"', {
+      cwd: ctx.dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(ctx.dir, "fix.txt"), "fix\n");
+    execSync(
+      'git add -A && git commit -m "fix: handle empty dashboard state"',
+      {
+        cwd: ctx.dir,
+        stdio: "ignore",
+      },
+    );
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/test-prd-summary",
+      cwd: ctx.dir,
+    });
+
+    expect(
+      body.startsWith(
+        "Adds the main feature work in this branch. Includes a bug fix to improve correctness and stability.",
+      ),
+    ).toBe(true);
+    const closesIdx = body.indexOf("Closes #42");
+    const completedIdx = body.indexOf("## Completed Sub-Issues");
+    expect(closesIdx).toBeGreaterThan(-1);
+    expect(completedIdx).toBeGreaterThan(closesIdx);
+  });
+
+  it("falls back to the PRD title when no summary is provided", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body.startsWith("PRD #42: Add user dashboard")).toBe(true);
+  });
+
   it("renders Waiting on Human section when hitlSubIssues is non-empty", () => {
     initRepo(ctx.dir);
 

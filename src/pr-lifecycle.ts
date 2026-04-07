@@ -22,6 +22,7 @@ import {
   buildContinuousPrBodyStructured,
   buildClosesBlock,
   buildCommitLog,
+  buildHighLevelSummaryFromCommits,
   categorizeCommits,
   formatCommitsByCategory,
 } from "./pr-description.ts";
@@ -285,7 +286,13 @@ export function createContinuousPr(
     baseBranch,
     branch,
     cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
+    {
+      prdNumber: prd?.number,
+      issueRepo,
+      prRepo,
+      summary: options.summary,
+      learnings: options.learnings,
+    },
   );
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
@@ -397,6 +404,7 @@ export interface PrdPrBodyOptions {
   cwd: string;
   issueRepo?: string;
   prRepo?: string;
+  summary?: string;
 }
 
 /** Build a PR body for an aggregate PRD pull request. */
@@ -412,12 +420,20 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
     cwd,
     issueRepo,
     prRepo,
+    summary,
   } = options;
 
+  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
+  const categorized = categorizeCommits(commitLog);
+  const formattedCommits = formatCommitsByCategory(categorized);
   const parts: string[] = [];
 
   // Title / description
-  parts.push(`PRD #${prd.number}: ${prd.title}\n`);
+  parts.push(
+    (summary ??
+      buildHighLevelSummaryFromCommits(categorized) ??
+      `PRD #${prd.number}: ${prd.title}`) + "\n",
+  );
 
   // Closes references — PRD + completed sub-issues only
   // Exclude stuck, HITL, and blocked sub-issues from auto-close
@@ -470,9 +486,6 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
   }
 
   // Changes
-  const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
-  const categorized = categorizeCommits(commitLog);
-  const formattedCommits = formatCommitsByCategory(categorized);
   parts.push("\n## Changes\n", formattedCommits);
 
   return parts.join("\n");
@@ -488,6 +501,7 @@ export interface CreatePrdPrOptions {
   blockedSubIssues?: BlockedSubIssue[];
   cwd: string;
   issueRepo?: string;
+  summary?: string;
 }
 
 /** Push branch and create (or update) a draft PR for a PRD aggregate run. */
@@ -502,6 +516,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     blockedSubIssues,
     cwd,
     issueRepo,
+    summary,
   } = options;
 
   const push = pushBranch(branch, cwd, true);
@@ -526,6 +541,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     cwd,
     issueRepo,
     prRepo,
+    summary,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(prd.title);
