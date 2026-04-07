@@ -106,8 +106,37 @@ If any check fails, the gate **rejects** and Ralphai re-invokes the agent with a
        └────┬─────┘       │ rejection details    │
             │ yes         └──────────────────────┘
             ▼
+    ┌──────────────────┐
+    │   Review pass    │
+    │ (if enabled and  │
+    │  not yet run)    │
+    └────────┬─────────┘
+             ▼
+       ┌──────────┐       ┌──────────────────────┐
+       │ Changes? │──yes─▶│ Re-run gate; reject  │
+       └────┬─────┘       │ → re-invoke agent    │
+            │ no          └──────────────────────┘
+            ▼
     Create/update PR
 ```
+
+### Review Pass
+
+After the completion gate passes, Ralphai optionally runs a **review pass** — a one-shot agent invocation that performs behavior-preserving simplifications on the changed files. The review pass is enabled by default and can be disabled with `--no-review` or `review: false` in `config.json`.
+
+The review pass:
+
+1. **Detects changed files** — runs `git diff --name-only <baseBranch>...HEAD` and filters out deleted files
+2. **Assembles a focused prompt** — lists the changed files (capped at 25) and instructs the agent to perform behavior-preserving simplifications: dead code removal, redundant logic elimination, unused imports cleanup, and control flow simplification
+3. **Invokes the agent** — runs a single agent session with the review prompt; the agent runs feedback commands to verify its changes and commits with a `refactor:` prefix if it makes any changes
+4. **Re-runs the gate if changes were made** — if the agent committed simplifications, the completion gate runs again to verify nothing was broken; gate failures follow the normal rejection flow
+
+Key properties:
+
+- **One pass maximum** — the review pass runs at most once per plan, regardless of outcome. If the gate is rejected after review changes, the agent is re-invoked to fix the issue, but the review pass is not repeated.
+- **Best-effort** — if the review pass fails (agent error or timeout), Ralphai logs a warning and proceeds to PR creation. The review pass never blocks PR creation.
+- **No sentinel tags** — the review prompt is a utility prompt with no completion, learnings, or progress sentinels. The agent simply reviews, optionally commits, and exits.
+- **Short-circuits on empty diffs** — if no files have changed between the base branch and HEAD, the review pass is skipped entirely.
 
 ## Plan Structure
 
