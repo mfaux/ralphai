@@ -39,6 +39,7 @@ async function runIsolated(
 const ISOLATED = [
   "src/interactive/run-wizard.test.ts",
   "src/runner-github-drain.test.ts",
+  "src/hitl.test.ts",
 ];
 
 // Inherently slow tests (E2E runner loops, real process spawning, real sockets).

@@ -304,7 +304,7 @@ describe("pullPrdSubIssue — sub-issues via REST API", () => {
     const result = pullPrdSubIssue(defaultOptions(dir));
     expect(result.pulled).toBe(false);
     expect(result.message).toContain(
-      "all open sub-issues already in-progress or done",
+      "all open sub-issues already in-progress, done, or awaiting human review",
     );
   });
 
@@ -651,5 +651,209 @@ describe("pullPrdSubIssue — custom issuePrdLabel", () => {
     const content = readFileSync(result.planPath!, "utf-8");
     expect(content).toContain("prd: 100");
     expect(content).toContain("issue: 201");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HITL label filtering
+// ---------------------------------------------------------------------------
+
+describe("pullPrdSubIssue — HITL label filtering", () => {
+  it("skips sub-issues with the default HITL label", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "Needs human review", state: "open" },
+      { number: 202, title: "Available", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has the default HITL label — should be skipped
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "ralphai-subissue-hitl",
+      // #202 has no skip labels — should be pulled
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Available",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Available body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
+  });
+
+  it("skips sub-issues with a custom HITL label via issueHitlLabel option", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "Custom HITL", state: "open" },
+      { number: 202, title: "Available", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has a custom HITL label — should be skipped
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "my-custom-hitl",
+      // #202 has no skip labels
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Available",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Available body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const opts = {
+      ...defaultOptions(dir),
+      issueHitlLabel: "my-custom-hitl",
+    };
+    const result = pullPrdSubIssue(opts);
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
+  });
+
+  it("returns pulled:false when all sub-issues have the HITL label", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "HITL 1", state: "open" },
+      { number: 202, title: "HITL 2", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "ralphai-subissue-hitl",
+      'gh issue view 202 --repo "owner/repo" --json labels': () =>
+        "ralphai-subissue-hitl",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(false);
+    expect(result.message).toContain("awaiting human review");
+  });
+
+  it("skips sub-issues with both HITL and in-progress labels", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "HITL + in-progress", state: "open" },
+      { number: 202, title: "Available", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has both labels — should be skipped (in-progress matches first)
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "in-progress,ralphai-subissue-hitl",
+      // #202 has no skip labels
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Available",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Available body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
+  });
+
+  it("processes non-HITL sub-issues normally when HITL sub-issues exist", () => {
+    const prdIssues = [{ number: 100, title: "Feature PRD" }];
+    const subIssues = [
+      { number: 201, title: "HITL issue", state: "open" },
+      { number: 202, title: "Normal issue", state: "open" },
+      { number: 203, title: "Also normal", state: "open" },
+    ];
+
+    mockGhCommands({
+      "gh issue list": () => JSON.stringify(prdIssues),
+      "gh api repos/owner/repo/issues/100/sub_issues": () =>
+        JSON.stringify(subIssues),
+      // #201 has HITL label — skipped
+      'gh issue view 201 --repo "owner/repo" --json labels': () =>
+        "ralphai-subissue-hitl",
+      // #202 is available — should be pulled (first eligible)
+      'gh issue view 202 --repo "owner/repo" --json labels': () => "",
+      'gh issue view 202 --repo "owner/repo" --json title --jq': () =>
+        "Normal issue",
+      'gh issue view 202 --repo "owner/repo" --json body --jq': () =>
+        "Normal body",
+      'gh issue view 202 --repo "owner/repo" --json url --jq': () =>
+        "https://github.com/owner/repo/issues/202",
+      "gh api repos/owner/repo/issues/202/parent": () =>
+        JSON.stringify({
+          number: 100,
+          labels: [{ name: "ralphai-prd" }],
+        }),
+      "gh api graphql": () =>
+        JSON.stringify({
+          data: {
+            repository: { issue: { blockedBy: { nodes: [] } } },
+          },
+        }),
+      "gh issue edit": () => "",
+    });
+
+    const dir = makeTempDir();
+    const result = pullPrdSubIssue(defaultOptions(dir));
+    expect(result.pulled).toBe(true);
+    expect(result.message).toContain("#202");
+    // Should pull #202 (first non-HITL), not #201 (HITL) or #203 (later)
+    expect(result.message).not.toContain("#201");
   });
 });

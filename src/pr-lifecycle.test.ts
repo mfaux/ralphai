@@ -399,4 +399,111 @@ describe("buildPrdPrBody", () => {
     expect(body).toContain("Changes");
     expect(body).toContain("add dashboard widget");
   });
+
+  it("renders Waiting on Human section when hitlSubIssues is non-empty", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      hitlSubIssues: [20, 21],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("## Waiting on Human");
+    expect(body).toContain("- [ ] #20");
+    expect(body).toContain("- [ ] #21");
+  });
+
+  it("omits Waiting on Human section when hitlSubIssues is empty", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      hitlSubIssues: [],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body).not.toContain("Waiting on Human");
+  });
+
+  it("omits Waiting on Human section when hitlSubIssues is undefined", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body).not.toContain("Waiting on Human");
+  });
+
+  it("excludes HITL sub-issues from Closes references", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      hitlSubIssues: [20, 21],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("Closes #42");
+    expect(body).toContain("Closes #10");
+    expect(body).not.toContain("Closes #20");
+    expect(body).not.toContain("Closes #21");
+  });
+
+  it("shows blocked sub-issues in stuck section with HITL dependency note", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [11],
+      hitlSubIssues: [20],
+      blockedSubIssues: [{ number: 12, blockedBy: [20] }],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    expect(body).toContain("## Stuck Sub-Issues");
+    expect(body).toContain("- [ ] #11");
+    expect(body).toContain("- [ ] #12 — blocked by HITL #20");
+  });
+
+  it("does not duplicate blocked sub-issues already in stuck list", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [12],
+      hitlSubIssues: [20],
+      blockedSubIssues: [{ number: 12, blockedBy: [20] }],
+      baseBranch: "main",
+      headBranch: "main",
+      cwd: ctx.dir,
+    });
+
+    // #12 should appear only once
+    const matches = body.match(/- \[ \] #12/g);
+    expect(matches).toHaveLength(1);
+    expect(body).toContain("- [ ] #12 — blocked by HITL #20");
+  });
 });

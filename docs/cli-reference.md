@@ -10,6 +10,7 @@ ralphai <command> [options]
 | -------------- | ---------------------------------------------------------------------- |
 | `init`         | Set up Ralphai in your project (configure agent and feedback commands) |
 | `run`          | Create or reuse a worktree and run the next plan                       |
+| `hitl`         | Open interactive agent session for a HITL sub-issue                    |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
 | `reset`        | Move in-progress plans back to backlog and clean up                    |
@@ -178,7 +179,7 @@ By default, `ralphai run` drains the backlog — processing plans sequentially, 
 - Each plan gets its own worktree branch and draft PR
 - Stuck plans are skipped and reported in the exit summary
 - When the backlog is empty, Ralphai checks for PRD issues, then regular issues
-- Exit summary reports "Completed N, skipped M (stuck)" with stuck slugs
+- Exit summary reports "Completed N, skipped M (stuck)" with stuck slugs; HITL and blocked-by-HITL sub-issues are also reported
 
 ### Issue Tracking
 
@@ -199,7 +200,8 @@ PRD behavior:
 - Sub-issues are processed in GitHub API order; dependencies via blocking relationships are respected
 - Per-sub-issue PRs are suppressed; one aggregate draft PR is opened at the end
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
-- The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck checklists
+- HITL sub-issues (labeled with `issueHitlLabel`, default `ralphai-subissue-hitl`) and sub-issues blocked by HITL dependencies are skipped; the PRD continues to the next eligible sub-issue
+- The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck/HITL checklists
 
 The `ralphai run <number>` form uses label-driven dispatch: it reads the issue's labels to classify it as standalone (`ralphai-standalone`), sub-issue (`ralphai-subissue`), or PRD (`ralphai-prd`). Sub-issues automatically discover their parent PRD and process through the PRD flow. Issues with no recognized label produce an error with guidance. The old unified `ralphai` label is not recognized.
 
@@ -210,6 +212,39 @@ Label issues with the configured standalone intake label (`ralphai-standalone` b
 #### Sub-Issues
 
 Label issues with `ralphai-subissue` and ensure they have a parent PRD relationship on GitHub. Ralphai discovers the parent PRD and processes the sub-issue through the PRD flow on the parent's shared branch. Validation catches misconfigurations: orphaned sub-issues or parents missing the PRD label are skipped with a warning.
+
+## Hitl
+
+```
+ralphai hitl <issue-number> [--dry-run]
+```
+
+Open an interactive agent session for a HITL (human-in-the-loop) sub-issue. This is the primary interface for humans to collaborate with the agent on complex tasks that can't be fully automated.
+
+```
+<issue-number>        GitHub issue number of the HITL sub-issue
+--dry-run, -n         Preview what would happen without spawning the agent
+```
+
+**Requires:** `agentInteractiveCommand` must be configured (in `config.json` or via `RALPHAI_AGENT_INTERACTIVE_COMMAND` env var).
+
+Orchestration flow:
+
+1. Discovers the parent PRD via the sub-issue's parent relationship
+2. Creates or reuses the PRD's worktree (same branch as `ralphai run`)
+3. Assembles a prompt from the sub-issue body
+4. Spawns the agent interactively with full terminal pass-through (`stdio: "inherit"`)
+
+Label management on exit:
+
+- **Clean exit (code 0):** Removes the `ralphai-subissue-hitl` label and adds `done`
+- **Abnormal exit (non-zero, Ctrl+C):** Leaves all labels unchanged
+
+Validation errors with descriptive messages when:
+
+- The issue has no parent
+- The parent lacks the PRD label
+- `agentInteractiveCommand` is not configured
 
 ## Clean
 
@@ -396,24 +431,28 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_PRD_DONE_LABEL`        | `issuePrdDoneLabel`       |
 | `RALPHAI_ISSUE_REPO`                  | `issueRepo`               |
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`      | `issueCommentProgress`    |
+| `RALPHAI_ISSUE_HITL_LABEL`            | `issueHitlLabel`          |
+| `RALPHAI_AGENT_INTERACTIVE_COMMAND`   | `agentInteractiveCommand` |
 
 ### Config Keys
 
-| Key                    | Default                | Env Var                          | Description                                                                                        |
-| ---------------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `agentCommand`         | _(none)_               | `RALPHAI_AGENT_COMMAND`          | CLI command to invoke the coding agent                                                             |
-| `feedbackCommands`     | _(auto-detected)_      | `RALPHAI_FEEDBACK_COMMANDS`      | Comma-separated build/test/lint commands                                                           |
-| `prFeedbackCommands`   | `""`                   | `RALPHAI_PR_FEEDBACK_COMMANDS`   | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations) |
-| `baseBranch`           | `"main"`               | `RALPHAI_BASE_BRANCH`            | Base branch for worktree creation                                                                  |
-| `autoCommit`           | `false`                | `RALPHAI_AUTO_COMMIT`            | Enable auto-commit recovery snapshots                                                              |
-| `maxStuck`             | `3`                    | `RALPHAI_MAX_STUCK`              | Consecutive no-commit iterations before abort                                                      |
-| `iterationTimeout`     | `0`                    | `RALPHAI_ITERATION_TIMEOUT`      | Per-agent-invocation timeout in seconds (0 = no timeout)                                           |
-| `issueSource`          | `"none"`               | `RALPHAI_ISSUE_SOURCE`           | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                               |
-| `standaloneLabel`      | `"ralphai-standalone"` | `RALPHAI_STANDALONE_LABEL`       | Family label for standalone issues                                                                 |
-| `subissueLabel`        | `"ralphai-subissue"`   | `RALPHAI_SUBISSUE_LABEL`         | Family label for PRD sub-issues                                                                    |
-| `prdLabel`             | `"ralphai-prd"`        | `RALPHAI_PRD_LABEL`              | Family label for PRD parent issues                                                                 |
-| `issueRepo`            | _(auto-detected)_      | `RALPHAI_ISSUE_REPO`             | GitHub `owner/repo` for issue queries                                                              |
-| `issueCommentProgress` | `false`                | `RALPHAI_ISSUE_COMMENT_PROGRESS` | Post progress comments on GitHub issues                                                            |
+| Key                       | Default                   | Env Var                             | Description                                                                                        |
+| ------------------------- | ------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `agentCommand`            | _(none)_                  | `RALPHAI_AGENT_COMMAND`             | CLI command to invoke the coding agent                                                             |
+| `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                           |
+| `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations) |
+| `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                  |
+| `autoCommit`              | `false`                   | `RALPHAI_AUTO_COMMIT`               | Enable auto-commit recovery snapshots                                                              |
+| `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                      |
+| `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                           |
+| `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                               |
+| `standaloneLabel`         | `"ralphai-standalone"`    | `RALPHAI_STANDALONE_LABEL`          | Family label for standalone issues                                                                 |
+| `subissueLabel`           | `"ralphai-subissue"`      | `RALPHAI_SUBISSUE_LABEL`            | Family label for PRD sub-issues                                                                    |
+| `prdLabel`                | `"ralphai-prd"`           | `RALPHAI_PRD_LABEL`                 | Family label for PRD parent issues                                                                 |
+| `issueRepo`               | _(auto-detected)_         | `RALPHAI_ISSUE_REPO`                | GitHub `owner/repo` for issue queries                                                              |
+| `issueCommentProgress`    | `false`                   | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                            |
+| `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                            |
+| `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                 |
 
 ### Plan Frontmatter Fields
 

@@ -27,6 +27,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/doctor.ts`        | `ralphai doctor` -- health checks and diagnostics.                                   |
 | `src/status.ts`        | `ralphai status` -- pipeline state rendering with optional auto-refresh.             |
 | `src/seed.ts`          | `ralphai seed` -- sample plan management.                                            |
+| `src/hitl.ts`          | `ralphai hitl` -- interactive agent session for HITL sub-issues.                     |
 
 ## TUI subsystem (`src/tui/`)
 
@@ -70,33 +71,33 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 
 ## Supporting modules
 
-| File                       | Role                                                                      |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                      |
-| `src/show-config.ts`       | `--show-config` output formatting.                                        |
-| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery.  |
-| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.    |
-| `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).            |
-| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).            |
-| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                |
-| `src/pr-lifecycle.ts`      | PR creation after plan completion.                                        |
-| `src/pr-description.ts`    | PR body generation (summary, learnings).                                  |
-| `src/receipt.ts`           | Completion receipt parsing and source checking.                           |
-| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                |
-| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.          |
-| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                 |
-| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).        |
-| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                          |
-| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.               |
-| `src/learnings.ts`         | Learnings extraction and persistence across iterations.                   |
-| `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction). |
-| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.          |
-| `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script for agent-side feedback.  |
-| `src/process-utils.ts`     | Child process helpers.                                                    |
-| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                 |
-| `src/ipc-server.ts`        | IPC server for agent communication.                                       |
-| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                             |
-| `src/self-update.ts`       | `ralphai update` self-update logic.                                       |
+| File                       | Role                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                     |
+| `src/show-config.ts`       | `--show-config` output formatting.                                                       |
+| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery, HITL filtering. |
+| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.                   |
+| `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).                           |
+| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).                           |
+| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                               |
+| `src/pr-lifecycle.ts`      | PR creation after plan completion.                                                       |
+| `src/pr-description.ts`    | PR body generation (summary, learnings).                                                 |
+| `src/receipt.ts`           | Completion receipt parsing and source checking.                                          |
+| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                               |
+| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                         |
+| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                                |
+| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                       |
+| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                         |
+| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                              |
+| `src/learnings.ts`         | Learnings extraction and persistence across iterations.                                  |
+| `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction).                |
+| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                         |
+| `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script for agent-side feedback.                 |
+| `src/process-utils.ts`     | Child process helpers.                                                                   |
+| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                |
+| `src/ipc-server.ts`        | IPC server for agent communication.                                                      |
+| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                            |
+| `src/self-update.ts`       | `ralphai update` self-update logic.                                                      |
 
 ## Dependency direction
 
@@ -104,7 +105,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 cli.ts
   -> ralphai.ts  (dispatcher, wizard, scaffold, run orchestration)
        -> parse-options.ts, git-helpers.ts, seed.ts       (leaf utilities)
-       -> doctor.ts, status.ts                            (subcommand handlers)
+       -> doctor.ts, status.ts, hitl.ts                   (subcommand handlers)
        -> worktree/index.ts -> parsing, selection, management
        -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts, sentinel.ts
        -> config.ts, issues.ts, receipt.ts, ...           (supporting modules)

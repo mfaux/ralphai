@@ -121,6 +121,17 @@ When a sub-issue hits the stuck threshold during a PRD run, Ralphai skips it and
 2. Inspect `progress.md` in `in-progress/<slug>/` for the stuck sub-issue to see what the agent attempted.
 3. Edit the sub-issue's plan file or add hints, then re-run the PRD: `ralphai run <prd-number>`. Already-completed sub-issues are skipped on re-run.
 
+## "Sub-issue skipped as HITL during PRD run"
+
+When a sub-issue has the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`), Ralphai skips it automatically during PRD processing. Sub-issues that depend on a HITL sub-issue are also skipped as blocked.
+
+**Steps:**
+
+1. Check the exit summary or aggregate PR body for the list of HITL and blocked-by-HITL sub-issues.
+2. Complete the human review for the HITL sub-issue.
+3. Remove the HITL label from the sub-issue when done.
+4. Re-run the PRD: `ralphai run <prd-number>`. Already-completed sub-issues are skipped on re-run.
+
 ## "PRD not detected from GitHub issue"
 
 When `ralphai run <number>` treats your PRD as a standalone issue, the issue is missing the required label or has no sub-issues.

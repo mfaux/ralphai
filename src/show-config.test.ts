@@ -105,6 +105,9 @@ describe("formatShowConfig", () => {
   it("shows all default values with default sources", () => {
     const output = formatShowConfig(defaultInput());
     expect(output).toContain("  agentCommand       = <none>  (default (none))");
+    expect(output).toContain(
+      "  agentInteractiveCommand = <none>  (default (none))",
+    );
     expect(output).toContain("  setupCommand       = <none>  (default (none))");
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
@@ -147,6 +150,7 @@ describe("formatShowConfig", () => {
     expect(output).not.toContain("  prdLabel");
     expect(output).not.toContain("  issueRepo");
     expect(output).not.toContain("  issueCommentProgress");
+    expect(output).not.toContain("  issueHitlLabel");
   });
 
   it("shows issue detail fields when issueSource is github", () => {
@@ -167,6 +171,9 @@ describe("formatShowConfig", () => {
       "  issueRepo          = <auto-detect>  (default (auto-detect))",
     );
     expect(output).toContain("  issueCommentProgress = true  (default)");
+    expect(output).toContain(
+      "  issueHitlLabel     = ralphai-subissue-hitl  (default)",
+    );
   });
 
   // --- Source label tests ---

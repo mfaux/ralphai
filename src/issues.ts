@@ -35,6 +35,8 @@ export interface PullIssueOptions {
   issueCommentProgress: boolean;
   /** Family label that marks an issue as a PRD (e.g. "ralphai-prd"). */
   issuePrdLabel?: string;
+  /** Label that marks a sub-issue as requiring human-in-the-loop review (e.g. "ralphai-subissue-hitl"). */
+  issueHitlLabel?: string;
 }
 
 /** Result of a pullGithubIssues() call. */
@@ -864,7 +866,8 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // Find the first open sub-issue that hasn't already been picked up
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
-  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];
+  const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issueHitlLabel;
+  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL, hitlLabel];
   let subIssueNumber: number | undefined;
   for (const candidate of openSubIssues) {
     const labelsRaw = execQuiet(
@@ -882,7 +885,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   if (subIssueNumber === undefined) {
     return {
       pulled: false,
-      message: `PRD #${prd.number} — all open sub-issues already in-progress or done`,
+      message: `PRD #${prd.number} — all open sub-issues already in-progress, done, or awaiting human review`,
     };
   }
 

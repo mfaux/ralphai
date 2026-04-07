@@ -233,6 +233,7 @@ function makeResolvedConfig(
     prdLabel: "ralphai-prd",
     issueRepo: "",
     issueCommentProgress: "true",
+    issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
     autoCommit: "false",
     workspaces: null,

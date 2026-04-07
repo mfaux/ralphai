@@ -20,7 +20,7 @@ This is the primary workflow for humans. Use it to browse the backlog, inspect p
 ralphai run
 ```
 
-Processes all dependency-ready plans sequentially, one branch and PR per plan. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. Use `--once` to process a single plan and exit.
+Processes all dependency-ready plans sequentially, one branch and PR per plan. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. HITL-labeled sub-issues are skipped during auto-drain. Use `--once` to process a single plan and exit.
 
 ## Work from a PRD (recommended for features)
 
@@ -34,7 +34,7 @@ For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 ralphai run 42           # issue #42: detected as PRD via label, processes sub-issues
 ```
 
-Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed and stuck items.
+Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items.
 
 The interactive menu also supports PRDs: select "Pick from GitHub" (or press **g**) and PRD issues appear with their sub-issue tree.
 
@@ -51,6 +51,29 @@ Or let the drain loop auto-pull when the local backlog is empty — Ralphai chec
 `ralphai run <number>` uses label-driven dispatch: it reads the issue's labels to classify it as standalone, sub-issue, or PRD. Targeting a sub-issue (labeled `ralphai-subissue`) automatically discovers its parent PRD and processes through the PRD flow.
 
 Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
+
+## Working on HITL sub-issues
+
+Some sub-issues require human collaboration — design decisions, manual testing, security review. Label these with `ralphai-subissue-hitl` (configurable via `issueHitlLabel`) and use the `hitl` command:
+
+```bash
+ralphai hitl 55           # open interactive session for sub-issue #55
+```
+
+Ralphai discovers the parent PRD, creates or reuses the PRD worktree, assembles a prompt from the sub-issue body, and spawns your agent interactively with full terminal pass-through. You get the agent's TUI and can collaborate directly.
+
+On clean exit (code 0), the HITL label is removed and `done` is added. On abnormal exit (Ctrl+C, non-zero code), labels are left unchanged so you can resume later.
+
+**Prerequisites:**
+
+- `agentInteractiveCommand` must be configured (e.g. `opencode`, `claude`)
+- The sub-issue must have a parent PRD (with the `ralphai-prd` label)
+
+**Dry-run:**
+
+```bash
+ralphai hitl 55 --dry-run    # preview without spawning agent or touching labels
+```
 
 ## Parallel runs
 

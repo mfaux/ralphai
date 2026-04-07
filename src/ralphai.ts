@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { execQuiet as execQuietFn } from "./exec.ts";
 import {
   existsSync,
   mkdirSync,
@@ -60,8 +61,15 @@ import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
+import { runHitl } from "./hitl.ts";
 
 import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { extractDependsOn } from "./frontmatter.ts";
+import {
+  findHitlBlockers,
+  formatPrdHitlSummary,
+  type BlockedSubIssue,
+} from "./prd-hitl.ts";
 import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
@@ -74,6 +82,7 @@ import {
   fetchIssueWithLabels,
   discoverParentIssue,
   issueBranchName,
+  issueDepSlug,
   commitTypeFromTitle,
   pullGithubIssueByNumber,
   pullGithubIssues,
@@ -910,6 +919,45 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// hitl — interactive agent session for HITL sub-issues
+// ---------------------------------------------------------------------------
+
+function showHitlHelp(): void {
+  console.log(`${TEXT}Usage:${RESET} ralphai hitl <issue-number> [options]`);
+  console.log();
+  console.log(
+    "Open an interactive agent session for a HITL (human-in-the-loop) sub-issue.",
+  );
+  console.log(
+    "Discovers the parent PRD, resolves the worktree, assembles the prompt,",
+  );
+  console.log(
+    "and spawns the agent interactively so you get the full TUI experience.",
+  );
+  console.log();
+  console.log(`${TEXT}Arguments:${RESET}`);
+  console.log(
+    `  ${TEXT}<issue-number>${RESET}   ${DIM}GitHub issue number of the HITL sub-issue${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Options:${RESET}`);
+  console.log(
+    `  ${TEXT}--dry-run, -n${RESET}    ${DIM}Preview what would happen without spawning the agent${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}Requires:${RESET}`);
+  console.log(
+    `  ${TEXT}agentInteractiveCommand${RESET}  ${DIM}Set in config or RALPHAI_AGENT_INTERACTIVE_COMMAND env var${RESET}`,
+  );
+  console.log();
+  console.log(`${TEXT}On exit:${RESET}`);
+  console.log(
+    `  ${DIM}Clean exit (code 0): removes HITL label, adds done label${RESET}`,
+  );
+  console.log(`  ${DIM}Abnormal exit: labels unchanged${RESET}`);
+}
+
+// ---------------------------------------------------------------------------
 
 function showRalphaiHelp(): void {
   console.log(`${TEXT}Usage:${RESET} ralphai <command> [options]`);
@@ -917,6 +965,9 @@ function showRalphaiHelp(): void {
   console.log(`${TEXT}Core${RESET}`);
   console.log(
     `  ${TEXT}run${RESET}         ${DIM}Run a plan in an isolated worktree (use --wizard/-w to configure interactively)${RESET}`,
+  );
+  console.log(
+    `  ${TEXT}hitl${RESET}        ${DIM}Open interactive agent session for a HITL sub-issue${RESET}`,
   );
   console.log(
     `  ${TEXT}status${RESET}      ${DIM}Show pipeline status (auto-refreshes in terminal)${RESET}`,
@@ -1045,7 +1096,11 @@ export async function runRalphai(args: string[]): Promise<void> {
   }
 
   // --- Early git-repo guard for commands that require a working tree ---
-  const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>(["run", "init"]);
+  const GIT_REQUIRED_COMMANDS = new Set<RalphaiSubcommand>([
+    "run",
+    "init",
+    "hitl",
+  ]);
   if (
     options.subcommand &&
     GIT_REQUIRED_COMMANDS.has(options.subcommand) &&
@@ -1167,6 +1222,25 @@ export async function runRalphai(args: string[]): Promise<void> {
       break;
     case "seed":
       runSeed(cwd);
+      break;
+    case "hitl":
+      if (helpRequested) {
+        showHitlHelp();
+        return;
+      }
+      if (!options.hitlIssueNumber) {
+        console.error(`${TEXT}Usage:${RESET} ralphai hitl <issue-number>`);
+        console.error(
+          `\n${DIM}Provide the GitHub issue number of the HITL sub-issue.${RESET}`,
+        );
+        process.exit(1);
+      }
+      await runHitl({
+        issueNumber: options.hitlIssueNumber,
+        cwd,
+        dryRun: isDryRunGlobal,
+        runArgs: options.runArgs,
+      });
       break;
     default:
       showRalphaiHelp();
@@ -1978,15 +2052,51 @@ async function runPrdIssueTarget(
   );
   console.log(`Sub-issues: ${subIssues.map((n) => `#${n}`).join(", ")}`);
 
+  // --- HITL sub-issue filtering ---
+  // Before processing, check each sub-issue's labels for the HITL label.
+  // HITL sub-issues require human review and are skipped by the automated runner.
+  const hitlLabel = worktreeConfig.issueHitlLabel.value;
+  const hitlSubIssues: number[] = [];
+  const eligibleSubIssues: number[] = [];
+  for (const num of subIssues) {
+    const labelsRaw = execQuietFn(
+      `gh issue view ${num} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (labels.includes(hitlLabel)) {
+      hitlSubIssues.push(num);
+    } else {
+      eligibleSubIssues.push(num);
+    }
+  }
+
+  if (hitlSubIssues.length > 0) {
+    console.log(
+      `HITL (waiting on human): ${hitlSubIssues.map((n) => `#${n}`).join(", ")} — skipping (labeled "${hitlLabel}")`,
+    );
+  }
+
+  if (eligibleSubIssues.length === 0) {
+    console.log(
+      `PRD #${prd.number} — all sub-issues are either completed, stuck, or awaiting human review. Nothing to do.`,
+    );
+    return;
+  }
+
+  // Build the set of HITL issue numbers for dependency checking
+  const hitlIssueNumbers = new Set(hitlSubIssues);
+
   const stuckSubIssues: number[] = [];
   const completedSubIssues: number[] = [];
+  const blockedSubIssues: BlockedSubIssue[] = [];
   let completedCount = 0;
 
-  for (const subIssueNumber of subIssues) {
+  for (const subIssueNumber of eligibleSubIssues) {
     console.log();
     console.log("----------------------------------------");
     console.log(
-      `PRD #${prd.number} — working on sub-issue #${subIssueNumber} (${completedCount + 1}/${subIssues.length})`,
+      `PRD #${prd.number} — working on sub-issue #${subIssueNumber} (${completedCount + 1}/${eligibleSubIssues.length})`,
     );
     console.log("----------------------------------------");
 
@@ -2014,6 +2124,23 @@ async function runPrdIssueTarget(
         `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
       );
       continue;
+    }
+
+    // --- Check depends-on frontmatter for HITL dependencies ---
+    // If the pulled plan depends on a HITL sub-issue, skip it as blocked.
+    if (pullResult.planPath && hitlIssueNumbers.size > 0) {
+      const deps = extractDependsOn(pullResult.planPath);
+      const hitlBlockers = findHitlBlockers(deps, hitlIssueNumbers);
+      if (hitlBlockers.length > 0) {
+        console.log(
+          `Sub-issue #${subIssueNumber} depends on HITL sub-issue(s) ${hitlBlockers.map((n) => `#${n}`).join(", ")} — skipping.`,
+        );
+        blockedSubIssues.push({
+          number: subIssueNumber,
+          blockedBy: hitlBlockers,
+        });
+        continue;
+      }
     }
 
     console.log(pullResult.message);
@@ -2076,22 +2203,26 @@ async function runPrdIssueTarget(
 
   // --- Summary ---
   console.log();
-  console.log("========================================");
-  console.log(`  PRD #${prd.number} — summary`);
-  console.log("========================================");
-  console.log(`Completed: ${completedCount}/${subIssues.length} sub-issue(s)`);
-  if (stuckSubIssues.length > 0) {
-    console.log(
-      `Stuck/skipped: ${stuckSubIssues.map((n) => `#${n}`).join(", ")}`,
-    );
+  const summaryLines = formatPrdHitlSummary({
+    prdNumber: prd.number,
+    totalSubIssues: subIssues.length,
+    completedCount,
+    stuckSubIssues,
+    hitlSubIssues,
+    blockedSubIssues,
+  });
+  for (const line of summaryLines) {
+    console.log(line);
   }
 
   // --- PRD done transition ---
-  // When all sub-issues completed successfully (none stuck), mark the
-  // PRD parent as done.
+  // When all sub-issues completed successfully (none stuck, none HITL, none
+  // blocked by HITL), mark the PRD parent as done.
   if (
-    completedCount === subIssues.length &&
+    completedCount === eligibleSubIssues.length &&
     stuckSubIssues.length === 0 &&
+    hitlSubIssues.length === 0 &&
+    blockedSubIssues.length === 0 &&
     subIssues.length > 0
   ) {
     console.log(
@@ -2111,6 +2242,8 @@ async function runPrdIssueTarget(
       prd,
       completedSubIssues,
       stuckSubIssues,
+      hitlSubIssues,
+      blockedSubIssues,
       cwd: resolvedWorktreeDir,
       issueRepo,
     });
@@ -2241,6 +2374,7 @@ async function runRalphaiInManagedWorktree(
   let resolvedSubissueLabel = DEFAULTS.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
+  let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
   try {
     const cfgResult = resolveConfig({
@@ -2257,6 +2391,7 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfgResult.config.issueRepo.value;
     resolvedIssueCommentProgress =
       cfgResult.config.issueCommentProgress.value === "true";
+    resolvedIssueHitlLabel = cfgResult.config.issueHitlLabel.value;
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
@@ -2570,6 +2705,7 @@ async function runRalphaiInManagedWorktree(
               issueRepo: resolvedIssueRepo,
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
+              issueHitlLabel: resolvedIssueHitlLabel,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);

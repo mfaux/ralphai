@@ -606,6 +606,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     if (!detectResult.detected) {
       // No plan found — try GitHub issues if backlog is empty
       if (detectResult.reason === "empty-backlog") {
+        const issueHitlLabel = config.issueHitlLabel.value;
         const pullOpts = {
           backlogDir: dirs.backlogDir,
           cwd,
@@ -615,6 +616,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           issueRepo,
           issueCommentProgress,
           issuePrdLabel,
+          issueHitlLabel,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues
