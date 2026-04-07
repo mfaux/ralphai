@@ -72,13 +72,13 @@ This shows a pipeline summary header and an interactive menu. From here you can 
 
 ### 3. Run headlessly
 
-Ralphai always creates or reuses a managed worktree on **`ralphai/<plan-slug>`** (or **`feat/<prd-slug>`** for PRD runs), so there is no need to create a feature branch yourself.
+Ralphai always creates or reuses a managed worktree on a **`<type>/<slug>`** branch (e.g. `feat/add-dark-mode`, `fix/broken-login`), so there is no need to create a feature branch yourself.
 
 ```bash
 ralphai run
 ```
 
-Each run creates or reuses an isolated worktree, works on a `ralphai/<plan-slug>` branch, runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
+Each run creates or reuses an isolated worktree, works on a `<type>/<slug>` branch (conventional commit style), runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
 
 ```bash
 ralphai run              # drain the backlog: one branch/PR per plan

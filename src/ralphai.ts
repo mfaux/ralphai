@@ -21,6 +21,7 @@ import {
   resolvePlanPath,
   planExistsForSlug,
   countCompletedTasks,
+  getPlanDescription,
 } from "./plan-detection.ts";
 import {
   parseReceipt,
@@ -2137,6 +2138,7 @@ async function runPrdIssueTarget(
   const stuckSubIssues: number[] = [];
   const completedSubIssues: number[] = [];
   const blockedSubIssues: BlockedSubIssue[] = [];
+  const subIssueSummaries = new Map<number, string>();
   let completedCount = 0;
 
   for (const subIssueNumber of eligibleSubIssues) {
@@ -2235,6 +2237,9 @@ async function runPrdIssueTarget(
       } else {
         completedCount++;
         completedSubIssues.push(subIssueNumber);
+        if (result.lastPrSummary) {
+          subIssueSummaries.set(subIssueNumber, result.lastPrSummary);
+        }
       }
     } catch (error) {
       // Runner may exit on stuck detection or other errors
@@ -2293,6 +2298,7 @@ async function runPrdIssueTarget(
       blockedSubIssues,
       cwd: resolvedWorktreeDir,
       issueRepo,
+      summaries: subIssueSummaries,
     });
     console.log(prResult.message);
   } else {
@@ -2877,7 +2883,10 @@ async function runRalphaiInManagedWorktree(
       }
     }
 
-    const branch = `ralphai/${plan.slug}`;
+    const planDesc = planFullPath
+      ? getPlanDescription(planFullPath)
+      : plan.planFile;
+    const branch = issueBranchName(planDesc);
     const resolvedWorktreeDir = prepareWorktree(
       cwd,
       plan.slug,

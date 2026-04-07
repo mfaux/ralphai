@@ -506,4 +506,60 @@ describe("buildPrdPrBody", () => {
     expect(matches).toHaveLength(1);
     expect(body).toContain("- [ ] #12 — blocked by HITL #20");
   });
+
+  it("includes Summary section when summaries are provided", () => {
+    initRepo(ctx.dir);
+
+    const summaries = new Map<number, string>();
+    summaries.set(
+      10,
+      "Added JWT-based authentication with login/logout endpoints.",
+    );
+    summaries.set(11, "Implemented rate limiting on auth routes.");
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10, 11],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+      summaries,
+    });
+
+    expect(body).toContain("## Summary");
+    expect(body).toContain("**#10:** Added JWT-based authentication");
+    expect(body).toContain("**#11:** Implemented rate limiting");
+  });
+
+  it("omits Summary section when no summaries are provided", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).not.toContain("## Summary");
+  });
+
+  it("omits Summary section when summaries map is empty", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+      summaries: new Map(),
+    });
+
+    expect(body).not.toContain("## Summary");
+  });
 });
