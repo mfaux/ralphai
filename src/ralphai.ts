@@ -123,7 +123,6 @@ import {
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,
-  writeFeedbackWrapper,
   listRalphaiWorktrees,
   selectPlanForWorktree,
 } from "./worktree/index.ts";
@@ -1944,7 +1943,6 @@ async function runIssueTarget(
     branch,
     baseBranch,
     setupCommand,
-    feedbackCommands,
     setupSandboxConfig,
   ); // Pull the issue into a plan file in the worktree's pipeline
   const worktreeConfig = resolveWorktreeConfig(
@@ -2082,7 +2080,6 @@ async function runPrdIssueTarget(
     branch,
     baseBranch,
     setupCommand,
-    feedbackCommands,
     setupSandboxConfig,
   );
 
@@ -2698,8 +2695,9 @@ async function runRalphaiInManagedWorktree(
         );
       }
 
-      // Write feedback wrapper script (mirrors prepareWorktree behavior)
-      writeFeedbackWrapper(resolvedWorktreeDir, feedbackCommandsList);
+      // NOTE: The feedback wrapper script is written by the runner to the
+      // WIP slug directory (pipeline state), not the worktree. No wrapper
+      // write needed here.
 
       console.log("Running ralphai in worktree...");
       const shouldResume = activeWorktree !== undefined;
@@ -2886,7 +2884,6 @@ async function runRalphaiInManagedWorktree(
       branch,
       baseBranch,
       setupCommand,
-      feedbackCommandsList,
       setupSandboxConfig,
     );
 

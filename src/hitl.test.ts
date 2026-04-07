@@ -65,7 +65,6 @@ const mockPrepareWorktree =
       branch: string,
       baseBranch: string,
       setupCommand: string,
-      feedbackCommands?: string[],
     ) => string
   >();
 
@@ -76,6 +75,7 @@ mock.module("./worktree/management.ts", () => ({
 
 mock.module("./worktree/index.ts", () => ({
   prepareWorktree: mockPrepareWorktree,
+  writeFeedbackWrapper: () => {},
 }));
 
 // Mock git-helpers

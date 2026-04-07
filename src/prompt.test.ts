@@ -94,10 +94,15 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(
       baseOptions({
         feedbackCommands: "bun run build,bun test",
-        wrapperPath: "./_ralphai_feedback.sh",
+        wrapperPath:
+          "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh",
       }),
     );
-    expect(prompt).toContain("`" + "./_ralphai_feedback.sh" + "`");
+    expect(prompt).toContain(
+      "`" +
+        "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh" +
+        "`",
+    );
     expect(prompt).toContain("Run the feedback wrapper:");
   });
 
@@ -105,7 +110,8 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(
       baseOptions({
         feedbackCommands: "bun run build,bun test",
-        wrapperPath: "./_ralphai_feedback.sh",
+        wrapperPath:
+          "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh",
       }),
     );
     expect(prompt).toContain("one-line summary");
@@ -116,7 +122,8 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(
       baseOptions({
         feedbackCommands: "bun run build,bun test",
-        wrapperPath: "./_ralphai_feedback.sh",
+        wrapperPath:
+          "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh",
       }),
     );
     expect(prompt).not.toContain(
