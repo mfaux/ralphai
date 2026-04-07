@@ -105,6 +105,44 @@ ralphai run --sandbox=none       # force local execution
 
 **Status indicators:** Plans running in Docker show a `docker` tag in the status display (`ralphai status`) and the interactive menu. Local execution shows no extra tag.
 
+**Custom Docker image:** Override the auto-resolved image with your own:
+
+```bash
+ralphai run --docker-image=my-registry/my-agent:latest
+```
+
+Or in `config.json`:
+
+```json
+{
+  "sandbox": "docker",
+  "dockerImage": "my-registry/my-agent:latest"
+}
+```
+
+When `dockerImage` is empty (the default), Ralphai auto-resolves the image from the agent name — e.g., `claude -p` uses `ghcr.io/ralphai/sandbox:claude`.
+
+**Custom mounts and env vars:** Forward additional files or environment variables into the container:
+
+```bash
+ralphai run --docker-mounts='/host/certs:/certs:ro,/host/data:/data' \
+            --docker-env-vars='MY_API_KEY,DATABASE_URL'
+```
+
+Or in `config.json`:
+
+```json
+{
+  "sandbox": "docker",
+  "dockerMounts": "/host/certs:/certs:ro,/host/data:/data",
+  "dockerEnvVars": "MY_API_KEY,DATABASE_URL"
+}
+```
+
+Mounts use standard Docker bind-mount syntax (`host:container[:options]`). Env vars use `-e VAR` format — Docker reads the value from the host environment, so values are not exposed in process listings. Vars that are unset or empty on the host are silently skipped.
+
+For details on the Docker execution flow and credential forwarding, see [How Ralphai Works](how-ralphai-works.md#docker-execution-flow).
+
 ## Test a plan without changing anything
 
 ```bash
