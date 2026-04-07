@@ -58,6 +58,9 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   agentInteractiveCommand: "RALPHAI_AGENT_INTERACTIVE_COMMAND",
   autoCommit: "RALPHAI_AUTO_COMMIT",
   sandbox: "RALPHAI_SANDBOX",
+  dockerImage: "RALPHAI_DOCKER_IMAGE",
+  dockerMounts: "RALPHAI_DOCKER_MOUNTS",
+  dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
 };
 
 // ---------------------------------------------------------------------------
@@ -191,6 +194,45 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
 
   const sandboxSrc = sourceLabel("sandbox", config.sandbox.source, input);
   lines.push(`  sandbox            = ${config.sandbox.value}  (${sandboxSrc})`);
+
+  // Docker config keys (shown when sandbox is "docker" or explicitly set)
+  if (
+    config.sandbox.value === "docker" ||
+    config.dockerImage.source !== "default" ||
+    config.dockerMounts.source !== "default" ||
+    config.dockerEnvVars.source !== "default"
+  ) {
+    const dockerImageVal = config.dockerImage.value || "<auto-resolve>";
+    const dockerImageSrc = sourceLabel(
+      "dockerImage",
+      config.dockerImage.source,
+      input,
+      "auto-resolve",
+    );
+    lines.push(`  dockerImage        = ${dockerImageVal}  (${dockerImageSrc})`);
+
+    const dockerMountsVal = config.dockerMounts.value || "<none>";
+    const dockerMountsSrc = sourceLabel(
+      "dockerMounts",
+      config.dockerMounts.source,
+      input,
+      "none",
+    );
+    lines.push(
+      `  dockerMounts       = ${dockerMountsVal}  (${dockerMountsSrc})`,
+    );
+
+    const dockerEnvVarsVal = config.dockerEnvVars.value || "<none>";
+    const dockerEnvVarsSrc = sourceLabel(
+      "dockerEnvVars",
+      config.dockerEnvVars.source,
+      input,
+      "none",
+    );
+    lines.push(
+      `  dockerEnvVars      = ${dockerEnvVarsVal}  (${dockerEnvVarsSrc})`,
+    );
+  }
 
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(

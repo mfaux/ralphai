@@ -33,6 +33,9 @@ export interface RalphaiConfig {
   iterationTimeout: number;
   autoCommit: string; // "true" | "false"
   sandbox: "none" | "docker";
+  dockerImage: string;
+  dockerMounts: string;
+  dockerEnvVars: string;
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -78,6 +81,9 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   iterationTimeout: 0,
   autoCommit: "false",
   sandbox: "none",
+  dockerImage: "",
+  dockerMounts: "",
+  dockerEnvVars: "",
   workspaces: null,
 };
 
@@ -189,6 +195,9 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "iterationTimeout",
   "autoCommit",
   "sandbox",
+  "dockerImage",
+  "dockerMounts",
+  "dockerEnvVars",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -392,6 +401,46 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.sandbox = v as RalphaiConfig["sandbox"];
   }
 
+  // dockerImage (string, can be empty)
+  if ("dockerImage" in obj) {
+    const v = obj.dockerImage;
+    if (typeof v !== "string")
+      err(`'dockerImage' must be a string, got ${typeof v}`);
+    values.dockerImage = v;
+  }
+
+  // dockerMounts (CSV string or array of strings)
+  if ("dockerMounts" in obj) {
+    const v = obj.dockerMounts;
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err("'dockerMounts' array contains an empty entry");
+      values.dockerMounts = v.join(",");
+    } else if (typeof v === "string") {
+      values.dockerMounts = v;
+    } else {
+      err(
+        `'dockerMounts' must be an array of strings or a comma-separated string, got ${typeof v}`,
+      );
+    }
+  }
+
+  // dockerEnvVars (CSV string or array of strings)
+  if ("dockerEnvVars" in obj) {
+    const v = obj.dockerEnvVars;
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err("'dockerEnvVars' array contains an empty entry");
+      values.dockerEnvVars = v.join(",");
+    } else if (typeof v === "string") {
+      values.dockerEnvVars = v;
+    } else {
+      err(
+        `'dockerEnvVars' must be an array of strings or a comma-separated string, got ${typeof v}`,
+      );
+    }
+  }
+
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -490,6 +539,9 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
   ["RALPHAI_SANDBOX", "sandbox"],
+  ["RALPHAI_DOCKER_IMAGE", "dockerImage"],
+  ["RALPHAI_DOCKER_MOUNTS", "dockerMounts"],
+  ["RALPHAI_DOCKER_ENV_VARS", "dockerEnvVars"],
 ];
 
 /**
@@ -602,6 +654,24 @@ export function applyEnvOverrides(
     overrides.sandbox = sandbox as RalphaiConfig["sandbox"];
   }
 
+  // dockerImage (string)
+  const dockerImage = get("RALPHAI_DOCKER_IMAGE");
+  if (dockerImage !== undefined) overrides.dockerImage = dockerImage;
+
+  // dockerMounts (CSV string)
+  const dockerMounts = get("RALPHAI_DOCKER_MOUNTS");
+  if (dockerMounts !== undefined) {
+    validateCommaList(dockerMounts, "RALPHAI_DOCKER_MOUNTS");
+    overrides.dockerMounts = dockerMounts;
+  }
+
+  // dockerEnvVars (CSV string)
+  const dockerEnvVars = get("RALPHAI_DOCKER_ENV_VARS");
+  if (dockerEnvVars !== undefined) {
+    validateCommaList(dockerEnvVars, "RALPHAI_DOCKER_ENV_VARS");
+    overrides.dockerEnvVars = dockerEnvVars;
+  }
+
   return overrides;
 }
 
@@ -697,6 +767,20 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validateEnum(v, "--sandbox", ["none", "docker"]);
       overrides.sandbox = v as RalphaiConfig["sandbox"];
       rawFlags.sandbox = arg;
+    } else if (arg.startsWith("--docker-image=")) {
+      const v = arg.slice("--docker-image=".length);
+      overrides.dockerImage = v;
+      rawFlags.dockerImage = arg;
+    } else if (arg.startsWith("--docker-mounts=")) {
+      const v = arg.slice("--docker-mounts=".length);
+      if (v !== "") validateCommaList(v, "--docker-mounts");
+      overrides.dockerMounts = v;
+      rawFlags.dockerMounts = arg;
+    } else if (arg.startsWith("--docker-env-vars=")) {
+      const v = arg.slice("--docker-env-vars=".length);
+      if (v !== "") validateCommaList(v, "--docker-env-vars");
+      overrides.dockerEnvVars = v;
+      rawFlags.dockerEnvVars = arg;
     }
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.

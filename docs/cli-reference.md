@@ -155,6 +155,9 @@ What it does:
 --auto-commit                     Enable auto-commit recovery snapshots
 --no-auto-commit                  Disable auto-commit recovery snapshots (default)
 --sandbox=<mode>                  Execution sandbox mode: 'none' or 'docker' (default: none)
+--docker-image=<image>            Override Docker image (default: auto-resolve from agent name)
+--docker-mounts=<csv>             Extra bind mounts for Docker sandbox (comma-separated)
+--docker-env-vars=<csv>           Extra env vars to forward into Docker sandbox (comma-separated)
 --show-config                     Print resolved settings and exit
 ```
 
@@ -435,27 +438,33 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_HITL_LABEL`            | `issueHitlLabel`          |
 | `RALPHAI_AGENT_INTERACTIVE_COMMAND`   | `agentInteractiveCommand` |
 | `RALPHAI_SANDBOX`                     | `sandbox`                 |
+| `RALPHAI_DOCKER_IMAGE`                | `dockerImage`             |
+| `RALPHAI_DOCKER_MOUNTS`               | `dockerMounts`            |
+| `RALPHAI_DOCKER_ENV_VARS`             | `dockerEnvVars`           |
 
 ### Config Keys
 
-| Key                       | Default                   | Env Var                             | Description                                                                                        |
-| ------------------------- | ------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `agentCommand`            | _(none)_                  | `RALPHAI_AGENT_COMMAND`             | CLI command to invoke the coding agent                                                             |
-| `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                           |
-| `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations) |
-| `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                  |
-| `autoCommit`              | `false`                   | `RALPHAI_AUTO_COMMIT`               | Enable auto-commit recovery snapshots                                                              |
-| `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                      |
-| `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                           |
-| `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                               |
-| `standaloneLabel`         | `"ralphai-standalone"`    | `RALPHAI_STANDALONE_LABEL`          | Family label for standalone issues                                                                 |
-| `subissueLabel`           | `"ralphai-subissue"`      | `RALPHAI_SUBISSUE_LABEL`            | Family label for PRD sub-issues                                                                    |
-| `prdLabel`                | `"ralphai-prd"`           | `RALPHAI_PRD_LABEL`                 | Family label for PRD parent issues                                                                 |
-| `issueRepo`               | _(auto-detected)_         | `RALPHAI_ISSUE_REPO`                | GitHub `owner/repo` for issue queries                                                              |
-| `issueCommentProgress`    | `false`                   | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                            |
-| `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                            |
-| `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                 |
-| `sandbox`                 | `"none"`                  | `RALPHAI_SANDBOX`                   | Execution sandbox mode (`"none"` for local, `"docker"` for containerized)                          |
+| Key                       | Default                   | Env Var                             | Description                                                                                          |
+| ------------------------- | ------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `agentCommand`            | _(none)_                  | `RALPHAI_AGENT_COMMAND`             | CLI command to invoke the coding agent                                                               |
+| `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                             |
+| `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)   |
+| `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                    |
+| `autoCommit`              | `false`                   | `RALPHAI_AUTO_COMMIT`               | Enable auto-commit recovery snapshots                                                                |
+| `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                        |
+| `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                             |
+| `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                                 |
+| `standaloneLabel`         | `"ralphai-standalone"`    | `RALPHAI_STANDALONE_LABEL`          | Family label for standalone issues                                                                   |
+| `subissueLabel`           | `"ralphai-subissue"`      | `RALPHAI_SUBISSUE_LABEL`            | Family label for PRD sub-issues                                                                      |
+| `prdLabel`                | `"ralphai-prd"`           | `RALPHAI_PRD_LABEL`                 | Family label for PRD parent issues                                                                   |
+| `issueRepo`               | _(auto-detected)_         | `RALPHAI_ISSUE_REPO`                | GitHub `owner/repo` for issue queries                                                                |
+| `issueCommentProgress`    | `false`                   | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                              |
+| `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                              |
+| `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                   |
+| `sandbox`                 | `"none"`                  | `RALPHAI_SANDBOX`                   | Execution sandbox mode (`"none"` for local, `"docker"` for containerized)                            |
+| `dockerImage`             | `""`                      | `RALPHAI_DOCKER_IMAGE`              | Override Docker image (default: auto-resolve from agent name, e.g. `ghcr.io/ralphai/sandbox:claude`) |
+| `dockerMounts`            | `""`                      | `RALPHAI_DOCKER_MOUNTS`             | Extra bind mounts for Docker sandbox (comma-separated, e.g. `/host:/container:ro`)                   |
+| `dockerEnvVars`           | `""`                      | `RALPHAI_DOCKER_ENV_VARS`           | Extra env vars to forward into Docker sandbox (comma-separated)                                      |
 
 ### Plan Frontmatter Fields
 

@@ -186,6 +186,8 @@ export interface RunConfig {
   feedbackCommands: string;
   /** Sandbox mode with source label (e.g. "none (default)"). */
   sandbox?: string;
+  /** Warning when Docker sandbox is selected but Docker is unavailable. */
+  dockerWarning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +263,7 @@ export function buildConfirmDataFromArgs(
     branch: branchFromRunArgs(args),
     feedbackCommands: config.feedbackCommands,
     sandbox: config.sandbox,
+    dockerWarning: config.dockerWarning,
     runArgs: args,
   };
 }

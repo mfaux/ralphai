@@ -19,6 +19,7 @@ import type { AppProps } from "./app.tsx";
 import { resolveConfig, DEFAULTS } from "../config.ts";
 import type { ResolvedConfig } from "../config.ts";
 import type { RunConfig } from "./types.ts";
+import { checkDockerAvailability } from "../executor/docker.ts";
 import {
   installTerminalSafetyHandlers,
   removeTerminalSafetyHandlers,
@@ -115,10 +116,20 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     ? { cwd, standaloneLabel, issueRepo, issuePrdLabel }
     : undefined;
 
+  // Check Docker availability when sandbox is "docker"
+  let dockerWarning: string | undefined;
+  if (resolvedConfig?.sandbox.value === "docker") {
+    const dockerCheck = checkDockerAvailability();
+    if (!dockerCheck.available) {
+      dockerWarning = dockerCheck.error;
+    }
+  }
+
   const runConfig: RunConfig = {
     agentCommand,
     feedbackCommands,
     sandbox: sandboxDisplay,
+    dockerWarning,
   };
 
   return {

@@ -159,3 +159,35 @@ When your test suite is large, the agent may spend most of its iteration budget 
 If you don't set `feedback-scope`, Ralphai tries to infer it from the `## Relevant Files` section in the plan. For plans that touch widely scattered files, consider splitting into smaller plans with narrower scope.
 
 You can also move slow tests (E2E, integration) to `prFeedbackCommands` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).
+
+## Docker Sandboxing Issues
+
+### "Docker is not installed"
+
+When `sandbox` is set to `"docker"`, Ralphai checks for Docker availability at startup. If the `docker` binary is not found:
+
+```
+ERROR: Docker is not installed. Install Docker from https://docs.docker.com/get-docker/
+or use sandbox='none' to run without containerization.
+```
+
+**Fix:** Install Docker or set `sandbox` to `"none"` (the default).
+
+### "Docker daemon is not running"
+
+If the Docker binary is installed but the daemon is not running:
+
+```
+ERROR: Docker daemon is not running. Start Docker with 'sudo systemctl start docker'
+or 'open -a Docker' (macOS), then retry.
+```
+
+**Fix:** Start the Docker daemon, then retry.
+
+### Windows + Docker
+
+Docker sandboxing is not supported on Windows. Use WSL or set `sandbox` to `"none"`.
+
+```
+ERROR: Docker sandboxing is not supported on Windows. Use sandbox='none' or run Ralphai in WSL.
+```

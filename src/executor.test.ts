@@ -5,6 +5,7 @@ import { describe, it, expect } from "bun:test";
 
 import { LocalExecutor } from "./executor/local.ts";
 import { createExecutor, type AgentExecutor } from "./executor/index.ts";
+import { DockerExecutor } from "./executor/docker.ts";
 
 // ---------------------------------------------------------------------------
 // LocalExecutor
@@ -106,10 +107,9 @@ describe("createExecutor", () => {
     expect(executor).toBeInstanceOf(LocalExecutor);
   });
 
-  it("throws for sandbox='docker' (not yet implemented)", () => {
-    expect(() => createExecutor("docker")).toThrow(
-      "Docker executor is not yet implemented",
-    );
+  it("returns a DockerExecutor for sandbox='docker'", () => {
+    const executor = createExecutor("docker");
+    expect(executor).toBeInstanceOf(DockerExecutor);
   });
 
   it("throws for unknown sandbox mode", () => {
