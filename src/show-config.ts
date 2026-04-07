@@ -102,6 +102,9 @@ function sourceLabel(
   if (source === "config") {
     return `config (${input.configFilePath})`;
   }
+  if (source === "auto-detected") {
+    return "auto-detected";
+  }
   // default
   return defaultLabel ? `default (${defaultLabel})` : "default";
 }

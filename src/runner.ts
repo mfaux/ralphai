@@ -585,11 +585,24 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
   // --- Fail-early Docker availability check ---
+  // When sandbox was explicitly set to "docker" (config/env/CLI), fail hard
+  // if Docker is unavailable — the user asked for Docker, so the error is
+  // actionable. When sandbox was auto-detected, silently fall back to "none"
+  // instead — Docker may have become unavailable between config resolution
+  // and runner start, and the user never explicitly requested Docker.
   if (config.sandbox.value === "docker") {
     const dockerCheck = checkDockerAvailability();
     if (!dockerCheck.available) {
-      console.error(`ERROR: ${dockerCheck.error}`);
-      process.exit(1);
+      if (config.sandbox.source === "auto-detected") {
+        // Silent fallback: override sandbox to "none" for this run
+        (config as { sandbox: { value: string; source: string } }).sandbox = {
+          value: "none",
+          source: "auto-detected",
+        };
+      } else {
+        console.error(`ERROR: ${dockerCheck.error}`);
+        process.exit(1);
+      }
     }
   }
 

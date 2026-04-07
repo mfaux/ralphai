@@ -56,6 +56,7 @@ export const WIZARD_KEYS = [
 /** Map ConfigSource to human-readable hint text. */
 const SOURCE_HINTS: Record<ConfigSource, string> = {
   default: "default",
+  "auto-detected": "auto-detected",
   config: "config file",
   env: "env var",
   cli: "CLI flag",

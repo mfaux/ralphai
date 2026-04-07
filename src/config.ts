@@ -6,6 +6,7 @@
  * with source tracking for --show-config.
  */
 
+import { execSync } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { resolveRepoStateDir } from "./global-state.ts";
@@ -46,7 +47,12 @@ export interface WorkspaceOverrides {
 }
 
 /** Where a resolved value came from. */
-export type ConfigSource = "default" | "config" | "env" | "cli";
+export type ConfigSource =
+  | "default"
+  | "auto-detected"
+  | "config"
+  | "env"
+  | "cli";
 
 /** A resolved value paired with its source. */
 export interface ResolvedValue<T> {
@@ -790,6 +796,62 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Docker auto-detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Probe whether Docker is available by running `docker info`.
+ *
+ * Used at config resolution time to auto-detect the sandbox default:
+ * if Docker is available → default to "docker"; otherwise → "none".
+ *
+ * The check uses a short timeout (3 s) to avoid stalling config resolution
+ * when Docker is installed but the daemon is unresponsive.
+ *
+ * Results are cached per-process — Docker availability rarely changes
+ * mid-run, and caching avoids repeated `execSync` calls from test suites
+ * that invoke `resolveConfig` many times.
+ *
+ * @param execCheck - Optional override for testability (returns true if the
+ *   command exits 0). The default uses `execSync` with a 3-second timeout.
+ *   Passing an override bypasses the cache.
+ * @param platform - Override `process.platform` for testing.
+ * @returns `true` when `docker info` exits 0; `false` otherwise.
+ */
+let _dockerAvailableCache: boolean | undefined;
+
+export function detectDockerAvailable(
+  execCheck?: (cmd: string) => boolean,
+  platform?: string,
+): boolean {
+  const plat = platform ?? process.platform;
+  if (plat === "win32") return false;
+
+  // Custom exec check — bypass cache (test usage)
+  if (execCheck) return execCheck("docker info");
+
+  // Return cached result when available
+  if (_dockerAvailableCache !== undefined) return _dockerAvailableCache;
+
+  try {
+    execSync("docker info", {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 3000,
+    });
+    _dockerAvailableCache = true;
+  } catch {
+    _dockerAvailableCache = false;
+  }
+
+  return _dockerAvailableCache;
+}
+
+/** Reset the Docker availability cache (for testing). */
+export function _resetDockerAvailableCache(): void {
+  _dockerAvailableCache = undefined;
+}
+
+// ---------------------------------------------------------------------------
 // resolveConfig — compose defaults -> file -> env -> CLI with source tracking
 // ---------------------------------------------------------------------------
 
@@ -797,6 +859,11 @@ export interface ResolveConfigInput {
   cwd: string;
   envVars: Record<string, string | undefined>;
   cliArgs: readonly string[];
+  /**
+   * Override Docker detection for testing. When provided, this function
+   * is called instead of the real `detectDockerAvailable()`.
+   */
+  detectDocker?: () => boolean;
 }
 
 export interface ResolveConfigResult {
@@ -812,11 +879,12 @@ export interface ResolveConfigResult {
  *   2. Config file values
  *   3. Environment variable overrides
  *   4. CLI argument overrides
+ *   5. Auto-detection fallbacks (sandbox: probe Docker when no explicit value)
  *
  * Each field tracks its source for --show-config display.
  */
 export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
-  const { cwd, envVars, cliArgs } = input;
+  const { cwd, envVars, cliArgs, detectDocker } = input;
   const configFilePath = getConfigFilePath(cwd, envVars);
   const warnings: string[] = [];
 
@@ -872,6 +940,20 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
         source: "cli" as ConfigSource,
       };
     }
+  }
+
+  // Layer 5: Auto-detection fallbacks
+  // When sandbox has no explicit value (still at default "none"), probe
+  // Docker availability. If Docker is running → "docker"; otherwise "none".
+  // Both outcomes use source "auto-detected" so --show-config can display it.
+  if (resolved.sandbox.source === "default") {
+    const dockerAvailable = detectDocker
+      ? detectDocker()
+      : detectDockerAvailable();
+    resolved.sandbox = {
+      value: dockerAvailable ? "docker" : "none",
+      source: "auto-detected",
+    };
   }
 
   return { config: resolved, configFilePath, warnings };
