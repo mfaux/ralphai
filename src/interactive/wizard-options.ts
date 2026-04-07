@@ -50,11 +50,13 @@ export const WIZARD_KEYS = [
   "maxStuck",
   "iterationTimeout",
   "autoCommit",
+  "sandbox",
 ] as const;
 
 /** Map ConfigSource to human-readable hint text. */
 const SOURCE_HINTS: Record<ConfigSource, string> = {
   default: "default",
+  "auto-detected": "auto-detected",
   config: "config file",
   env: "env var",
   cli: "CLI flag",
@@ -70,6 +72,7 @@ const FLAG_NAMES: Record<WizardConfigKey, string> = {
   maxStuck: "max-stuck",
   iterationTimeout: "iteration-timeout",
   autoCommit: "auto-commit",
+  sandbox: "sandbox",
 };
 
 /** Human-readable labels for each wizard key. */
@@ -82,6 +85,7 @@ const LABELS: Record<WizardConfigKey, string> = {
   maxStuck: "Max stuck iterations",
   iterationTimeout: "Iteration timeout (seconds)",
   autoCommit: "Auto-commit",
+  sandbox: "Sandbox mode",
 };
 
 // ---------------------------------------------------------------------------
@@ -117,6 +121,8 @@ function buildPrompt(key: WizardConfigKey): PromptType {
       return { kind: "text", validate: validateNonNegInt };
     case "autoCommit":
       return { kind: "select", choices: ["true", "false"] };
+    case "sandbox":
+      return { kind: "select", choices: ["none", "docker"] };
     default:
       return { kind: "text" };
   }

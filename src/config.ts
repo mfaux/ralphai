@@ -6,6 +6,7 @@
  * with source tracking for --show-config.
  */
 
+import { execSync } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { resolveRepoStateDir } from "./global-state.ts";
@@ -32,6 +33,10 @@ export interface RalphaiConfig {
   agentInteractiveCommand: string;
   iterationTimeout: number;
   autoCommit: string; // "true" | "false"
+  sandbox: "none" | "docker";
+  dockerImage: string;
+  dockerMounts: string;
+  dockerEnvVars: string;
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -42,7 +47,12 @@ export interface WorkspaceOverrides {
 }
 
 /** Where a resolved value came from. */
-export type ConfigSource = "default" | "config" | "env" | "cli";
+export type ConfigSource =
+  | "default"
+  | "auto-detected"
+  | "config"
+  | "env"
+  | "cli";
 
 /** A resolved value paired with its source. */
 export interface ResolvedValue<T> {
@@ -76,6 +86,10 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   agentInteractiveCommand: "",
   iterationTimeout: 0,
   autoCommit: "false",
+  sandbox: "none",
+  dockerImage: "",
+  dockerMounts: "",
+  dockerEnvVars: "",
   workspaces: null,
 };
 
@@ -186,6 +200,10 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "agentInteractiveCommand",
   "iterationTimeout",
   "autoCommit",
+  "sandbox",
+  "dockerImage",
+  "dockerMounts",
+  "dockerEnvVars",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -381,6 +399,54 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.autoCommit = String(v);
   }
 
+  // sandbox (enum: "none" | "docker")
+  if ("sandbox" in obj) {
+    const v = String(obj.sandbox || "");
+    if (!["none", "docker"].includes(v))
+      err(`'sandbox' must be 'none' or 'docker', got '${v}'`);
+    values.sandbox = v as RalphaiConfig["sandbox"];
+  }
+
+  // dockerImage (string, can be empty)
+  if ("dockerImage" in obj) {
+    const v = obj.dockerImage;
+    if (typeof v !== "string")
+      err(`'dockerImage' must be a string, got ${typeof v}`);
+    values.dockerImage = v;
+  }
+
+  // dockerMounts (CSV string or array of strings)
+  if ("dockerMounts" in obj) {
+    const v = obj.dockerMounts;
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err("'dockerMounts' array contains an empty entry");
+      values.dockerMounts = v.join(",");
+    } else if (typeof v === "string") {
+      values.dockerMounts = v;
+    } else {
+      err(
+        `'dockerMounts' must be an array of strings or a comma-separated string, got ${typeof v}`,
+      );
+    }
+  }
+
+  // dockerEnvVars (CSV string or array of strings)
+  if ("dockerEnvVars" in obj) {
+    const v = obj.dockerEnvVars;
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err("'dockerEnvVars' array contains an empty entry");
+      values.dockerEnvVars = v.join(",");
+    } else if (typeof v === "string") {
+      values.dockerEnvVars = v;
+    } else {
+      err(
+        `'dockerEnvVars' must be an array of strings or a comma-separated string, got ${typeof v}`,
+      );
+    }
+  }
+
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -478,6 +544,10 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_HITL_LABEL", "issueHitlLabel"],
   ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
+  ["RALPHAI_SANDBOX", "sandbox"],
+  ["RALPHAI_DOCKER_IMAGE", "dockerImage"],
+  ["RALPHAI_DOCKER_MOUNTS", "dockerMounts"],
+  ["RALPHAI_DOCKER_ENV_VARS", "dockerEnvVars"],
 ];
 
 /**
@@ -583,6 +653,31 @@ export function applyEnvOverrides(
     overrides.autoCommit = autoCommit;
   }
 
+  // sandbox (enum: "none" | "docker")
+  const sandbox = get("RALPHAI_SANDBOX");
+  if (sandbox !== undefined) {
+    validateEnum(sandbox, "RALPHAI_SANDBOX", ["none", "docker"]);
+    overrides.sandbox = sandbox as RalphaiConfig["sandbox"];
+  }
+
+  // dockerImage (string)
+  const dockerImage = get("RALPHAI_DOCKER_IMAGE");
+  if (dockerImage !== undefined) overrides.dockerImage = dockerImage;
+
+  // dockerMounts (CSV string)
+  const dockerMounts = get("RALPHAI_DOCKER_MOUNTS");
+  if (dockerMounts !== undefined) {
+    validateCommaList(dockerMounts, "RALPHAI_DOCKER_MOUNTS");
+    overrides.dockerMounts = dockerMounts;
+  }
+
+  // dockerEnvVars (CSV string)
+  const dockerEnvVars = get("RALPHAI_DOCKER_ENV_VARS");
+  if (dockerEnvVars !== undefined) {
+    validateCommaList(dockerEnvVars, "RALPHAI_DOCKER_ENV_VARS");
+    overrides.dockerEnvVars = dockerEnvVars;
+  }
+
   return overrides;
 }
 
@@ -673,12 +768,87 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       const v = arg.slice("--agent-interactive-command=".length);
       overrides.agentInteractiveCommand = v;
       rawFlags.agentInteractiveCommand = arg;
+    } else if (arg.startsWith("--sandbox=")) {
+      const v = arg.slice("--sandbox=".length);
+      validateEnum(v, "--sandbox", ["none", "docker"]);
+      overrides.sandbox = v as RalphaiConfig["sandbox"];
+      rawFlags.sandbox = arg;
+    } else if (arg.startsWith("--docker-image=")) {
+      const v = arg.slice("--docker-image=".length);
+      overrides.dockerImage = v;
+      rawFlags.dockerImage = arg;
+    } else if (arg.startsWith("--docker-mounts=")) {
+      const v = arg.slice("--docker-mounts=".length);
+      if (v !== "") validateCommaList(v, "--docker-mounts");
+      overrides.dockerMounts = v;
+      rawFlags.dockerMounts = arg;
+    } else if (arg.startsWith("--docker-env-vars=")) {
+      const v = arg.slice("--docker-env-vars=".length);
+      if (v !== "") validateCommaList(v, "--docker-env-vars");
+      overrides.dockerEnvVars = v;
+      rawFlags.dockerEnvVars = arg;
     }
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.
   }
 
   return { overrides, rawFlags };
+}
+
+// ---------------------------------------------------------------------------
+// Docker auto-detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Probe whether Docker is available by running `docker info`.
+ *
+ * Used at config resolution time to auto-detect the sandbox default:
+ * if Docker is available → default to "docker"; otherwise → "none".
+ *
+ * The check uses a short timeout (3 s) to avoid stalling config resolution
+ * when Docker is installed but the daemon is unresponsive.
+ *
+ * Results are cached per-process — Docker availability rarely changes
+ * mid-run, and caching avoids repeated `execSync` calls from test suites
+ * that invoke `resolveConfig` many times.
+ *
+ * @param execCheck - Optional override for testability (returns true if the
+ *   command exits 0). The default uses `execSync` with a 3-second timeout.
+ *   Passing an override bypasses the cache.
+ * @param platform - Override `process.platform` for testing.
+ * @returns `true` when `docker info` exits 0; `false` otherwise.
+ */
+let _dockerAvailableCache: boolean | undefined;
+
+export function detectDockerAvailable(
+  execCheck?: (cmd: string) => boolean,
+  platform?: string,
+): boolean {
+  const plat = platform ?? process.platform;
+  if (plat === "win32") return false;
+
+  // Custom exec check — bypass cache (test usage)
+  if (execCheck) return execCheck("docker info");
+
+  // Return cached result when available
+  if (_dockerAvailableCache !== undefined) return _dockerAvailableCache;
+
+  try {
+    execSync("docker info", {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 3000,
+    });
+    _dockerAvailableCache = true;
+  } catch {
+    _dockerAvailableCache = false;
+  }
+
+  return _dockerAvailableCache;
+}
+
+/** Reset the Docker availability cache (for testing). */
+export function _resetDockerAvailableCache(): void {
+  _dockerAvailableCache = undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -689,6 +859,11 @@ export interface ResolveConfigInput {
   cwd: string;
   envVars: Record<string, string | undefined>;
   cliArgs: readonly string[];
+  /**
+   * Override Docker detection for testing. When provided, this function
+   * is called instead of the real `detectDockerAvailable()`.
+   */
+  detectDocker?: () => boolean;
 }
 
 export interface ResolveConfigResult {
@@ -704,11 +879,12 @@ export interface ResolveConfigResult {
  *   2. Config file values
  *   3. Environment variable overrides
  *   4. CLI argument overrides
+ *   5. Auto-detection fallbacks (sandbox: probe Docker when no explicit value)
  *
  * Each field tracks its source for --show-config display.
  */
 export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
-  const { cwd, envVars, cliArgs } = input;
+  const { cwd, envVars, cliArgs, detectDocker } = input;
   const configFilePath = getConfigFilePath(cwd, envVars);
   const warnings: string[] = [];
 
@@ -764,6 +940,20 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
         source: "cli" as ConfigSource,
       };
     }
+  }
+
+  // Layer 5: Auto-detection fallbacks
+  // When sandbox has no explicit value (still at default "none"), probe
+  // Docker availability. If Docker is running → "docker"; otherwise "none".
+  // Both outcomes use source "auto-detected" so --show-config can display it.
+  if (resolved.sandbox.source === "default") {
+    const dockerAvailable = detectDocker
+      ? detectDocker()
+      : detectDockerAvailable();
+    resolved.sandbox = {
+      value: dockerAvailable ? "docker" : "none",
+      source: "auto-detected",
+    };
   }
 
   return { config: resolved, configFilePath, warnings };

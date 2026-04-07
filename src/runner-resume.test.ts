@@ -63,6 +63,7 @@ function makeResolvedConfig(
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
     autoCommit: "false",
+    sandbox: "none",
     workspaces: null,
     ...overrides,
   };

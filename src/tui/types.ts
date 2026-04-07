@@ -184,6 +184,10 @@ export interface RunConfig {
   agentCommand: string;
   /** Feedback commands (e.g. "bun run build && bun test"). */
   feedbackCommands: string;
+  /** Sandbox mode with source label (e.g. "none (default)"). */
+  sandbox?: string;
+  /** Warning when Docker sandbox is selected but Docker is unavailable. */
+  dockerWarning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +262,8 @@ export function buildConfirmDataFromArgs(
     agentCommand: config.agentCommand,
     branch: branchFromRunArgs(args),
     feedbackCommands: config.feedbackCommands,
+    sandbox: config.sandbox,
+    dockerWarning: config.dockerWarning,
     runArgs: args,
   };
 }

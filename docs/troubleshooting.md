@@ -159,3 +159,62 @@ When your test suite is large, the agent may spend most of its iteration budget 
 If you don't set `feedback-scope`, Ralphai tries to infer it from the `## Relevant Files` section in the plan. For plans that touch widely scattered files, consider splitting into smaller plans with narrower scope.
 
 You can also move slow tests (E2E, integration) to `prFeedbackCommands` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).
+
+## Docker Sandboxing Issues
+
+### "Docker is not installed"
+
+When `sandbox` is set to `"docker"`, Ralphai checks for Docker availability at startup. If the `docker` binary is not found:
+
+```
+ERROR: Docker is not installed. Install Docker from https://docs.docker.com/get-docker/
+or use sandbox='none' to run without containerization.
+```
+
+**Fix:** Install Docker or set `sandbox` to `"none"` (the default).
+
+### "Docker daemon is not running"
+
+If the Docker binary is installed but the daemon is not running:
+
+```
+ERROR: Docker daemon is not running. Start Docker with 'sudo systemctl start docker'
+or 'open -a Docker' (macOS), then retry.
+```
+
+**Fix:** Start the Docker daemon, then retry.
+
+### Windows + Docker
+
+Docker sandboxing is not supported on Windows. Use WSL or set `sandbox` to `"none"`.
+
+```
+ERROR: Docker sandboxing is not supported on Windows. Use sandbox='none' or run Ralphai in WSL.
+```
+
+### Image pull failures
+
+If Docker cannot pull the pre-built image (network issues, private registry, rate limiting), the container fails to start and the agent invocation fails.
+
+**Steps:**
+
+1. Pull the image manually to diagnose: `docker pull ghcr.io/ralphai/sandbox:claude`
+2. Check network connectivity and Docker Hub / GHCR rate limits.
+3. If using a private registry, ensure `docker login` is configured.
+4. As a workaround, build the image locally from the Ralphai Dockerfile and set `dockerImage` to the local tag:
+   ```bash
+   ralphai run --docker-image=my-local-sandbox:latest
+   ```
+
+### Permission errors on bind mounts
+
+When the container cannot read or write the worktree bind mount, you may see permission denied errors from the agent or setup command.
+
+**Common causes:**
+
+- **SELinux / AppArmor** — On distributions with mandatory access control (e.g., Fedora, RHEL), Docker bind mounts may require the `:z` or `:Z` suffix. Add the worktree mount with the correct label via `dockerMounts`:
+  ```bash
+  ralphai run --docker-mounts='/path/to/worktree:/path/to/worktree:z'
+  ```
+- **Rootless Docker** — UID/GID mapping may prevent the container user from accessing host files. Ensure the container user has read/write access to the worktree directory.
+- **Read-only credential mounts** — Credential files (e.g., `.gitconfig`, API key files) are intentionally mounted read-only (`:ro`). If the agent attempts to write to these paths, it will fail. This is by design — credential files should not be modified by the agent.

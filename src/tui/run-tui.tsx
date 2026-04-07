@@ -19,6 +19,7 @@ import type { AppProps } from "./app.tsx";
 import { resolveConfig, DEFAULTS } from "../config.ts";
 import type { ResolvedConfig } from "../config.ts";
 import type { RunConfig } from "./types.ts";
+import { checkDockerAvailability } from "../executor/docker.ts";
 import {
   installTerminalSafetyHandlers,
   removeTerminalSafetyHandlers,
@@ -65,6 +66,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
   let issueRepo = "";
   let agentCommand = DEFAULTS.agentCommand;
   let feedbackCommands = DEFAULTS.feedbackCommands;
+  let sandboxDisplay = `${DEFAULTS.sandbox} (default)`;
   let resolvedConfig: ResolvedConfig | undefined;
 
   try {
@@ -80,6 +82,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     issueRepo = config.issueRepo.value;
     agentCommand = config.agentCommand.value;
     feedbackCommands = config.feedbackCommands.value;
+    sandboxDisplay = `${config.sandbox.value} (${config.sandbox.source})`;
   } catch {
     // Config resolution failure — proceed with defaults
   }
@@ -113,7 +116,21 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     ? { cwd, standaloneLabel, issueRepo, issuePrdLabel }
     : undefined;
 
-  const runConfig: RunConfig = { agentCommand, feedbackCommands };
+  // Check Docker availability when sandbox is "docker"
+  let dockerWarning: string | undefined;
+  if (resolvedConfig?.sandbox.value === "docker") {
+    const dockerCheck = checkDockerAvailability();
+    if (!dockerCheck.available) {
+      dockerWarning = dockerCheck.error;
+    }
+  }
+
+  const runConfig: RunConfig = {
+    agentCommand,
+    feedbackCommands,
+    sandbox: sandboxDisplay,
+    dockerWarning,
+  };
 
   return {
     pipelineOpts,

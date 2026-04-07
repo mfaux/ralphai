@@ -23,7 +23,7 @@ describe("status runner liveness", () => {
   function createInProgressPlan(
     ipDir: string,
     slug: string,
-    opts?: { pid?: string; outcome?: string },
+    opts?: { pid?: string; outcome?: string; sandbox?: string },
   ): void {
     const planDir = join(ipDir, slug);
     mkdirSync(planDir, { recursive: true });
@@ -38,6 +38,9 @@ describe("status runner liveness", () => {
     ];
     if (opts?.outcome) {
       receiptLines.push(`outcome=${opts.outcome}`);
+    }
+    if (opts?.sandbox) {
+      receiptLines.push(`sandbox=${opts.sandbox}`);
     }
     writeFileSync(join(planDir, "receipt.txt"), receiptLines.join("\n"));
 
@@ -111,5 +114,39 @@ describe("status runner liveness", () => {
     expect(result.exitCode).toBe(0);
     expect(output).toContain("[stuck]");
     expect(output).not.toContain("[running PID");
+  });
+
+  it("shows [docker] tag when receipt has sandbox=docker", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+
+    createInProgressPlan(ipDir, "prd-docker-plan", {
+      pid: String(process.pid),
+      sandbox: "docker",
+    });
+
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("[docker]");
+    expect(output).toContain(`[running PID ${process.pid}]`);
+  });
+
+  it("does not show [docker] tag when receipt has sandbox=none", async () => {
+    await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
+    const { wipDir: ipDir } = getRepoPipelineDirs(ctx.dir, testEnv());
+
+    createInProgressPlan(ipDir, "prd-local-plan", {
+      pid: String(process.pid),
+      sandbox: "none",
+    });
+
+    const result = await runCliInProcess(["status"], ctx.dir, testEnv());
+    const output = result.stdout + result.stderr;
+
+    expect(result.exitCode).toBe(0);
+    expect(output).not.toContain("[docker]");
+    expect(output).toContain(`[running PID ${process.pid}]`);
   });
 });

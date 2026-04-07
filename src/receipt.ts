@@ -25,6 +25,7 @@ export interface Receipt {
   tasks_completed: number;
   outcome?: string;
   pr_url?: string;
+  sandbox?: string;
 }
 
 /** Fields required when initializing a new receipt. */
@@ -33,6 +34,7 @@ export interface InitReceiptFields {
   branch: string;
   slug: string;
   plan_file: string;
+  sandbox?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +79,7 @@ export function parseReceipt(filePath: string): Receipt | null {
     tasks_completed: Number.isNaN(parsedTasks) ? 0 : parsedTasks,
     outcome: fields.outcome,
     pr_url: fields.pr_url,
+    sandbox: fields.sandbox,
   };
 }
 
@@ -99,6 +102,9 @@ export function initReceipt(path: string, fields: InitReceiptFields): void {
   lines.push(`slug=${fields.slug}`);
   lines.push(`plan_file=${fields.plan_file}`);
   lines.push(`tasks_completed=0`);
+  if (fields.sandbox) {
+    lines.push(`sandbox=${fields.sandbox}`);
+  }
   writeFileSync(path, lines.join("\n") + "\n");
 }
 

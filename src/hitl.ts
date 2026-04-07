@@ -35,7 +35,7 @@ import {
 } from "./issues.ts";
 import { execQuiet } from "./exec.ts";
 import { DONE_LABEL } from "./labels.ts";
-import { prepareWorktree } from "./worktree/index.ts";
+import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
 import { isGitWorktree, ensureRepoHasCommit } from "./worktree/management.ts";
 import { detectBaseBranch } from "./git-helpers.ts";
 import { shellSplit } from "./runner.ts";
@@ -202,6 +202,30 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     ? config.feedbackCommands.value.split(",").map((s: string) => s.trim())
     : [];
 
+  // Build sandbox config for routing setup commands through Docker
+  const setupSandboxConfig: SetupSandboxConfig = {
+    sandbox: config.sandbox.value as "none" | "docker",
+    agentCommand: config.agentCommand.value,
+    dockerConfig:
+      config.sandbox.value === "docker"
+        ? {
+            dockerImage: config.dockerImage.value || undefined,
+            dockerEnvVars: config.dockerEnvVars.value
+              ? config.dockerEnvVars.value
+                  .split(",")
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
+              : undefined,
+            dockerMounts: config.dockerMounts.value
+              ? config.dockerMounts.value
+                  .split(",")
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
+              : undefined,
+          }
+        : undefined,
+  };
+
   const resolvedWorktreeDir = prepareWorktree(
     cwd,
     prdSlug,
@@ -209,6 +233,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     baseBranch,
     setupCommand,
     feedbackCommands,
+    setupSandboxConfig,
   );
 
   // --- Write temporary plan file for prompt ---

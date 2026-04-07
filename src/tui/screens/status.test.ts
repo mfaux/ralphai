@@ -183,6 +183,39 @@ describe("buildInProgressLine", () => {
     const line = buildInProgressLine(makeInProgressPlan());
     expect(line.hint).toBe("in progress");
   });
+
+  it("appends docker tag when sandbox is docker", () => {
+    const line = buildInProgressLine(
+      makeInProgressPlan({
+        liveness: { tag: "running", pid: 42 },
+        sandbox: "docker",
+      }),
+    );
+    expect(line.hint).toContain("running PID 42");
+    expect(line.hint).toContain("docker");
+    expect(line.hint).toBe("running PID 42 · docker");
+  });
+
+  it("does not append docker tag when sandbox is none", () => {
+    const line = buildInProgressLine(
+      makeInProgressPlan({
+        liveness: { tag: "running", pid: 42 },
+        sandbox: "none",
+      }),
+    );
+    expect(line.hint).toBe("running PID 42");
+    expect(line.hint).not.toContain("docker");
+  });
+
+  it("does not append docker tag when sandbox is undefined", () => {
+    const line = buildInProgressLine(
+      makeInProgressPlan({
+        liveness: { tag: "running", pid: 42 },
+      }),
+    );
+    expect(line.hint).toBe("running PID 42");
+    expect(line.hint).not.toContain("docker");
+  });
 });
 
 // ---------------------------------------------------------------------------

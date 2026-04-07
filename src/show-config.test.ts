@@ -4,7 +4,7 @@ import {
   detectAgentType,
   type FormatShowConfigInput,
 } from "./show-config.ts";
-import type { ResolvedConfig, RalphaiConfig } from "./config.ts";
+import type { ResolvedConfig, RalphaiConfig, ConfigSource } from "./config.ts";
 import { DEFAULTS } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -13,7 +13,7 @@ import { DEFAULTS } from "./config.ts";
 
 type FieldOverride<K extends keyof RalphaiConfig> = {
   value: RalphaiConfig[K];
-  source: "default" | "config" | "env" | "cli";
+  source: ConfigSource;
 };
 
 function makeResolved(
@@ -300,5 +300,25 @@ describe("formatShowConfig", () => {
     };
     const output = formatShowConfig(input);
     expect(output).toContain("  packages/api: prFeedbackCommands=npm test");
+  });
+
+  // --- Auto-detected source label ---
+
+  it("shows auto-detected source for sandbox when Docker detected", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      sandbox: { value: "docker", source: "auto-detected" },
+    });
+    const output = formatShowConfig(input);
+    expect(output).toContain("  sandbox            = docker  (auto-detected)");
+  });
+
+  it("shows auto-detected source for sandbox when Docker not detected", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      sandbox: { value: "none", source: "auto-detected" },
+    });
+    const output = formatShowConfig(input);
+    expect(output).toContain("  sandbox            = none  (auto-detected)");
   });
 });

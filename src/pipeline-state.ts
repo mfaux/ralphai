@@ -52,6 +52,7 @@ export interface InProgressPlan {
   tasksCompleted: number;
   hasWorktree: boolean;
   liveness: LivenessStatus;
+  sandbox?: string;
 }
 
 /** Minimal worktree entry shape expected by gatherPipelineState. */
@@ -182,6 +183,7 @@ export function gatherPipelineState(
       tasksCompleted: receipt?.tasks_completed ?? 0,
       hasWorktree: !!receipt?.worktree_path,
       liveness: determineLiveness(inProgressDir, slug, receipt),
+      sandbox: receipt?.sandbox,
     };
   });
 

@@ -44,6 +44,10 @@ export interface ConfirmData {
   branch: string;
   /** Feedback commands (semicolon or newline separated). */
   feedbackCommands: string;
+  /** Sandbox mode with source label (e.g. "none (default)"). */
+  sandbox?: string;
+  /** Warning when Docker sandbox is selected but Docker is unavailable. */
+  dockerWarning?: string;
   /** PRD context, if the plan is a sub-issue of a PRD. */
   prdContext?: PrdContext;
   /** The CLI args that will be passed to the runner on confirm. */
@@ -95,6 +99,14 @@ export function buildConfirmLines(data: ConfirmData): ConfirmLine[] {
 
   if (data.feedbackCommands) {
     lines.push({ label: "Feedback", value: data.feedbackCommands });
+  }
+
+  if (data.sandbox) {
+    lines.push({ label: "Sandbox", value: data.sandbox });
+  }
+
+  if (data.dockerWarning) {
+    lines.push({ label: "WARNING", value: data.dockerWarning });
   }
 
   return lines;
@@ -198,8 +210,15 @@ export function ConfirmScreen({
 
       {lines.map((line) => (
         <Box key={line.label}>
-          <Text dimColor>{line.label.padEnd(maxLabel)} </Text>
-          <Text>{line.value}</Text>
+          <Text
+            dimColor={line.label !== "WARNING"}
+            color={line.label === "WARNING" ? "yellow" : undefined}
+          >
+            {line.label.padEnd(maxLabel)}{" "}
+          </Text>
+          <Text color={line.label === "WARNING" ? "yellow" : undefined}>
+            {line.value}
+          </Text>
         </Box>
       ))}
 

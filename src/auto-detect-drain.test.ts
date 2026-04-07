@@ -58,6 +58,7 @@ function initWithAgent(dir: string, env: Record<string, string>): void {
   const config = JSON.parse(readFileSync(configPath, "utf-8"));
   config.agentCommand = completeAgent;
   config.autoCommit = true;
+  config.sandbox = "none"; // Force local execution — the bash agent isn't Docker-compatible
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 
   // Remove the scaffolded hello-world sample plan so it doesn't interfere

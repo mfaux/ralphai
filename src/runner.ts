@@ -22,6 +22,12 @@ import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
 import { execQuiet, execOk } from "./exec.ts";
+import { createExecutor, type AgentExecutor } from "./executor/index.ts";
+import {
+  checkDockerAvailability,
+  buildDockerArgs,
+  formatDockerCommand,
+} from "./executor/docker.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import {
   getSocketPath,
@@ -514,6 +520,32 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     "[dry-run] Would push commits and open a draft PR on completion.",
   );
 
+  // Docker dry-run: print the full docker run command
+  if (config.sandbox.value === "docker") {
+    const agentCmd = config.agentCommand.value;
+    const dockerEnvVars = config.dockerEnvVars.value
+      ? config.dockerEnvVars.value
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+      : [];
+    const dockerMountsVal = config.dockerMounts.value
+      ? config.dockerMounts.value
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+      : [];
+    const dockerArgs = buildDockerArgs({
+      agentCommand: agentCmd,
+      prompt: "<PROMPT>",
+      cwd: worktreeDir,
+      dockerImage: config.dockerImage.value || undefined,
+      dockerEnvVars,
+      dockerMounts: dockerMountsVal,
+    });
+    console.log(`[dry-run] Docker command: ${formatDockerCommand(dockerArgs)}`);
+  }
+
   console.log(
     "[dry-run] No files moved, no worktrees created, no agent run executed.",
   );
@@ -551,6 +583,52 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issuePrdLabel = config.prdLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
+
+  // --- Fail-early Docker availability check ---
+  // When sandbox was explicitly set to "docker" (config/env/CLI), fail hard
+  // if Docker is unavailable — the user asked for Docker, so the error is
+  // actionable. When sandbox was auto-detected, silently fall back to "none"
+  // instead — Docker may have become unavailable between config resolution
+  // and runner start, and the user never explicitly requested Docker.
+  if (config.sandbox.value === "docker") {
+    const dockerCheck = checkDockerAvailability();
+    if (!dockerCheck.available) {
+      if (config.sandbox.source === "auto-detected") {
+        // Silent fallback: override sandbox to "none" for this run
+        (config as { sandbox: { value: string; source: string } }).sandbox = {
+          value: "none",
+          source: "auto-detected",
+        };
+      } else {
+        console.error(`ERROR: ${dockerCheck.error}`);
+        process.exit(1);
+      }
+    }
+  }
+
+  // Create the executor based on sandbox config
+  const dockerConfig =
+    config.sandbox.value === "docker"
+      ? {
+          dockerImage: config.dockerImage.value || undefined,
+          dockerEnvVars: config.dockerEnvVars.value
+            ? config.dockerEnvVars.value
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : undefined,
+          dockerMounts: config.dockerMounts.value
+            ? config.dockerMounts.value
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : undefined,
+        }
+      : undefined;
+  const executor: AgentExecutor = createExecutor(
+    config.sandbox.value,
+    dockerConfig,
+  );
 
   // Pipeline directories (resolved from global state)
   const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
@@ -752,6 +830,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
+        sandbox: config.sandbox.value,
       });
     } else {
       console.error("ERROR: Ralphai runs plans only inside managed worktrees.");
@@ -851,15 +930,17 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       } catch {
         // Best-effort; non-fatal if we can't write the header
       }
-      const { output, exitCode, timedOut } = await spawnAgent(
+      const { output, exitCode, timedOut } = await executor.spawn({
         agentCommand,
         prompt,
         iterationTimeout,
         cwd,
         outputLogPath,
-        ipcServer ? (msg) => ipcServer!.broadcast(msg) : undefined,
+        ipcBroadcast: ipcServer
+          ? (msg) => ipcServer!.broadcast(msg)
+          : undefined,
         nonce,
-      );
+      });
 
       if (timedOut) {
         console.log();

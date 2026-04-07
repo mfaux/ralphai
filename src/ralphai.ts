@@ -47,6 +47,7 @@ import {
   getConfigFilePath,
   writeConfigFile,
   DEFAULTS,
+  detectDockerAvailable,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
@@ -130,6 +131,7 @@ import type {
   WorktreeEntry,
   SelectedWorktreePlan,
   GitHubFallbackOptions,
+  SetupSandboxConfig,
 } from "./worktree/index.ts";
 import { parseFeedbackCommands } from "./feedback-wrapper.ts";
 import { runConfigWizard } from "./interactive/run-wizard.ts";
@@ -270,6 +272,22 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     return null;
   }
 
+  // 5. Docker sandboxing
+  const dockerAvailable = detectDockerAvailable();
+  const sandboxConfirm = await clack.confirm({
+    message: dockerAvailable
+      ? "Enable Docker sandboxing? (recommended — Docker detected)"
+      : "Enable Docker sandboxing? (Docker not detected)",
+    initialValue: dockerAvailable,
+  });
+
+  if (clack.isCancel(sandboxConfirm)) {
+    clack.cancel("Setup cancelled.");
+    return null;
+  }
+
+  const sandbox: "none" | "docker" = sandboxConfirm ? "docker" : "none";
+
   let autoCommit = false;
 
   // 6. GitHub Issues integration (enabled by default)
@@ -334,6 +352,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     prFeedbackCommands: prFeedbackCommands || "",
     autoCommit,
+    sandbox,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
     createSamplePlan,
@@ -483,7 +502,7 @@ function ensureGitHubLabels(
 // ---------------------------------------------------------------------------
 
 function scaffold(answers: WizardAnswers, cwd: string): void {
-  // Generate config (JSON format) — all 14 keys with explicit defaults
+  // Generate config (JSON format) — all 15 keys with explicit defaults
   const feedbackCommands = answers.feedbackCommands
     ? answers.feedbackCommands
         .split(",")
@@ -519,6 +538,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     prdLabel: DEFAULTS.prdLabel,
     issueRepo: "",
     issueCommentProgress: true,
+    sandbox: answers.sandbox ?? "none",
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -1364,6 +1384,10 @@ async function runRalphaiInit(
       : "";
     const detectedSetupStr = detectSetupCommand(cwd);
 
+    // Auto-detect Docker for sandbox
+    const dockerDetected = detectDockerAvailable();
+    const sandboxValue: "none" | "docker" = dockerDetected ? "docker" : "none";
+
     answers = {
       agentCommand,
       setupCommand: detectedSetupStr,
@@ -1371,6 +1395,7 @@ async function runRalphaiInit(
       feedbackCommands: detectedFeedbackStr,
       prFeedbackCommands: detectedPrFeedbackStr,
       autoCommit: false,
+      sandbox: sandboxValue,
       issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
       createSamplePlan: true,
@@ -1397,6 +1422,9 @@ async function runRalphaiInit(
     );
     console.log(
       `  ${DIM}Issues:${RESET}    ${TEXT}GitHub Issues (enabled)${RESET}`,
+    );
+    console.log(
+      `  ${DIM}Sandbox:${RESET}   ${TEXT}${sandboxValue}${dockerDetected ? " (Docker detected)" : " (Docker not detected)"}${RESET}`,
     );
 
     // Workspace detection for --yes mode
@@ -1551,6 +1579,10 @@ const CONFIG_FLAG_PATTERNS = [
   /^--auto-commit$/,
   /^--no-auto-commit$/,
   /^--prompt-mode=/,
+  /^--sandbox=/,
+  /^--docker-image=/,
+  /^--docker-mounts=/,
+  /^--docker-env-vars=/,
 ];
 
 function isRecognizedRunFlag(arg: string): boolean {
@@ -1597,13 +1629,17 @@ function showRunHelp(): void {
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
     "  --auto-commit                    Enable auto-commit of agent changes (per-iteration and resume recovery)",
     "  --no-auto-commit                 Disable auto-commit recovery snapshots (default: off)",
+    "  --sandbox=<mode>                 Execution sandbox mode: 'none' (local) or 'docker' (default: none)",
+    "  --docker-image=<image>           Override Docker image (default: auto-resolve from agent name)",
+    "  --docker-mounts=<csv>            Extra bind mounts for Docker sandbox (comma-separated)",
+    "  --docker-env-vars=<csv>          Extra env vars to forward into Docker sandbox (comma-separated)",
     "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
-    "                  baseBranch, maxStuck,",
+    "                  baseBranch, maxStuck, sandbox, dockerImage, dockerMounts, dockerEnvVars,",
     "                  autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
     "                  issueRepo, issueCommentProgress",
@@ -1612,7 +1648,9 @@ function showRunHelp(): void {
     "                   RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_PR_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
-    "                   RALPHAI_AUTO_COMMIT,",
+    "                   RALPHAI_AUTO_COMMIT, RALPHAI_SANDBOX,",
+    "                   RALPHAI_DOCKER_IMAGE, RALPHAI_DOCKER_MOUNTS,",
+    "                   RALPHAI_DOCKER_ENV_VARS,",
     "                   RALPHAI_ITERATION_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
@@ -1675,6 +1713,7 @@ async function runIssueTarget(
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
+    setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
   const {
@@ -1686,6 +1725,7 @@ async function runIssueTarget(
     standaloneLabel,
     subissueLabel,
     prdLabel,
+    setupSandboxConfig,
   } = flags;
 
   // Pass through --help and --show-config unchanged
@@ -1821,6 +1861,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      setupSandboxConfig,
     });
   }
 
@@ -1869,6 +1910,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      setupSandboxConfig,
     });
   }
 
@@ -1899,6 +1941,7 @@ async function runIssueTarget(
     baseBranch,
     setupCommand,
     feedbackCommands,
+    setupSandboxConfig,
   ); // Pull the issue into a plan file in the worktree's pipeline
   const worktreeConfig = resolveWorktreeConfig(
     resolvedWorktreeDir,
@@ -1975,9 +2018,11 @@ async function runPrdIssueTarget(
     hasShowConfig: boolean;
     setupCommand: string;
     feedbackCommands: string[];
+    setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
-  const { isDryRun, setupCommand, feedbackCommands } = flags;
+  const { isDryRun, setupCommand, feedbackCommands, setupSandboxConfig } =
+    flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
   const branch = issueBranchName(prd.title);
@@ -2034,6 +2079,7 @@ async function runPrdIssueTarget(
     baseBranch,
     setupCommand,
     feedbackCommands,
+    setupSandboxConfig,
   );
 
   const worktreeConfig = resolveWorktreeConfig(
@@ -2401,6 +2447,32 @@ async function runRalphaiInManagedWorktree(
     ? parseFeedbackCommands(resolvedConfig.feedbackCommands.value)
     : [];
 
+  // Build sandbox config for routing setup commands through Docker
+  const setupSandboxConfig: SetupSandboxConfig | undefined = resolvedConfig
+    ? {
+        sandbox: resolvedConfig.sandbox.value as "none" | "docker",
+        agentCommand: resolvedConfig.agentCommand.value,
+        dockerConfig:
+          resolvedConfig.sandbox.value === "docker"
+            ? {
+                dockerImage: resolvedConfig.dockerImage.value || undefined,
+                dockerEnvVars: resolvedConfig.dockerEnvVars.value
+                  ? resolvedConfig.dockerEnvVars.value
+                      .split(",")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean)
+                  : undefined,
+                dockerMounts: resolvedConfig.dockerMounts.value
+                  ? resolvedConfig.dockerMounts.value
+                      .split(",")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean)
+                  : undefined,
+              }
+            : undefined,
+      }
+    : undefined;
+
   // --- Interactive wizard: `--wizard` / `-w` ---
   if (hasWizard && !hasHelp) {
     if (!process.stdout.isTTY) {
@@ -2443,6 +2515,7 @@ async function runRalphaiInManagedWorktree(
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
+      setupSandboxConfig,
     });
   }
 
@@ -2614,7 +2687,11 @@ async function runRalphaiInManagedWorktree(
 
       // Run setup command in freshly-created worktrees (not reused ones)
       if (!activeWorktree) {
-        executeSetupCommand(setupCommand, resolvedWorktreeDir);
+        executeSetupCommand(
+          setupCommand,
+          resolvedWorktreeDir,
+          setupSandboxConfig,
+        );
       }
 
       // Write feedback wrapper script (mirrors prepareWorktree behavior)
@@ -2785,6 +2862,7 @@ async function runRalphaiInManagedWorktree(
             hasShowConfig: false,
             setupCommand,
             feedbackCommands: feedbackCommandsList,
+            setupSandboxConfig,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done
           break;
@@ -2805,6 +2883,7 @@ async function runRalphaiInManagedWorktree(
       baseBranch,
       setupCommand,
       feedbackCommandsList,
+      setupSandboxConfig,
     );
 
     console.log("Running ralphai in worktree...");

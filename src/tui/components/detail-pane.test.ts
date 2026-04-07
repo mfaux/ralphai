@@ -86,6 +86,7 @@ function makeConfig(
     issueHitlLabel: rv("ralphai-subissue-hitl"),
     iterationTimeout: rv(0),
     autoCommit: rv("false"),
+    sandbox: rv("none"),
     workspaces: rv(null),
     ...overrides,
   } as ResolvedConfig;
@@ -147,6 +148,29 @@ describe("formatLiveness", () => {
       liveness: { tag: "outcome", outcome: "stuck" },
     });
     expect(formatLiveness(plan)).toBe("stuck");
+  });
+
+  it("appends docker tag when sandbox is docker", () => {
+    const plan = makeInProgressPlan({
+      liveness: { tag: "running", pid: 1234 },
+      sandbox: "docker",
+    });
+    expect(formatLiveness(plan)).toBe("running (PID 1234) · docker");
+  });
+
+  it("does not append docker tag when sandbox is none", () => {
+    const plan = makeInProgressPlan({
+      liveness: { tag: "running", pid: 1234 },
+      sandbox: "none",
+    });
+    expect(formatLiveness(plan)).toBe("running (PID 1234)");
+  });
+
+  it("does not append docker tag when sandbox is undefined", () => {
+    const plan = makeInProgressPlan({
+      liveness: { tag: "stalled" },
+    });
+    expect(formatLiveness(plan)).toBe("stalled");
   });
 });
 
@@ -357,6 +381,39 @@ describe("detailForItem — stop-running", () => {
     expect(detail.title).toBe("Running (1)");
     expect(detail.lines[0]!.text).toBe("running-plan");
   });
+
+  it("shows docker sandbox tag for Docker runs", () => {
+    const state = makeState({
+      inProgress: [
+        makeInProgressPlan({
+          slug: "docker-plan",
+          liveness: { tag: "running", pid: 5678 },
+          sandbox: "docker",
+        }),
+      ],
+    });
+    const detail = detailForItem("stop-running", state, false);
+    const sandboxLine = detail.lines.find((l) =>
+      l.text.includes("Sandbox: docker"),
+    );
+    expect(sandboxLine).toBeDefined();
+    expect(sandboxLine!.dim).toBe(true);
+  });
+
+  it("does not show sandbox tag for non-Docker runs", () => {
+    const state = makeState({
+      inProgress: [
+        makeInProgressPlan({
+          slug: "local-plan",
+          liveness: { tag: "running", pid: 5678 },
+          sandbox: "none",
+        }),
+      ],
+    });
+    const detail = detailForItem("stop-running", state, false);
+    const sandboxLine = detail.lines.find((l) => l.text.includes("Sandbox"));
+    expect(sandboxLine).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -391,6 +448,22 @@ describe("detailForItem — reset-plan", () => {
     expect(detail.lines[0]!.text).toBe("my-plan");
     expect(detail.lines[1]!.text).toContain("stalled");
     expect(detail.lines[2]!.text).toContain("5/8 tasks");
+  });
+
+  it("shows docker tag in status for Docker plans", () => {
+    const state = makeState({
+      inProgress: [
+        makeInProgressPlan({
+          slug: "docker-plan",
+          liveness: { tag: "running", pid: 999 },
+          sandbox: "docker",
+        }),
+      ],
+    });
+    const detail = detailForItem("reset-plan", state, false);
+    const statusLine = detail.lines.find((l) => l.text.includes("Status:"));
+    expect(statusLine).toBeDefined();
+    expect(statusLine!.text).toContain("docker");
   });
 });
 
