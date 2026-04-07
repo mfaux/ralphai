@@ -29,6 +29,7 @@ import { applyNoColorOverride } from "./color-support.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { listRalphaiWorktrees } from "../worktree/parsing.ts";
 import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
+import { TUI_SUBPROCESS_TIMEOUT_MS } from "./hooks/use-pipeline-state.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +87,11 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
   const pipelineOpts = {
     cwd,
     gatherState: gatherPipelineState,
-    listWorktrees: listRalphaiWorktrees,
+    // Wrap listRalphaiWorktrees with a timeout so a hung `git worktree list`
+    // does not block the TUI indefinitely.
+    listWorktrees: (dir: string) =>
+      listRalphaiWorktrees(dir, { timeout: TUI_SUBPROCESS_TIMEOUT_MS }),
+    timeout: TUI_SUBPROCESS_TIMEOUT_MS,
   };
 
   const githubOpts = hasGitHubIssues
@@ -97,6 +102,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
           standaloneLabel,
           issueRepo,
           issuePrdLabel,
+          timeout: TUI_SUBPROCESS_TIMEOUT_MS,
         },
         peekGithub: peekGithubIssues,
         peekPrd: peekPrdIssues,

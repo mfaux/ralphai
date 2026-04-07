@@ -32,13 +32,30 @@ export function setExecImpl(impl: ExecSyncFn): () => void {
   };
 }
 
+/** Options for exec utilities that support timeout. */
+export interface ExecOptions {
+  /**
+   * Subprocess timeout in milliseconds. When set, the child process
+   * is killed with SIGTERM after this many milliseconds. The call
+   * then throws (caught internally), so the caller sees `null` / `false`.
+   *
+   * Omit or set to `undefined` for no timeout (backward-compatible default).
+   */
+  timeout?: number;
+}
+
 /** Run a command and return trimmed stdout, or null on any error. */
-export function execQuiet(cmd: string, cwd: string): string | null {
+export function execQuiet(
+  cmd: string,
+  cwd: string,
+  options?: ExecOptions,
+): string | null {
   try {
     return _execSync(cmd, {
       cwd,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      ...(options?.timeout != null ? { timeout: options.timeout } : {}),
     }).trim();
   } catch {
     return null;
@@ -81,15 +98,27 @@ export function execOk(cmd: string, cwd: string): boolean {
 /**
  * Check whether the `gh` CLI is installed and authenticated.
  * Returns true if both `gh --version` and `gh auth status` pass.
+ *
+ * When called with a `timeout`, each subprocess is killed if it
+ * exceeds the deadline — useful for TUI contexts where the CLI
+ * must not hang indefinitely.
  */
-export function checkGhAvailable(): boolean {
+export function checkGhAvailable(options?: ExecOptions): boolean {
+  const timeoutOpt =
+    options?.timeout != null ? { timeout: options.timeout } : {};
   try {
-    _execSync("gh --version", { stdio: ["pipe", "pipe", "pipe"] });
+    _execSync("gh --version", {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...timeoutOpt,
+    });
   } catch {
     return false;
   }
   try {
-    _execSync("gh auth status", { stdio: ["pipe", "pipe", "pipe"] });
+    _execSync("gh auth status", {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...timeoutOpt,
+    });
   } catch {
     return false;
   }

@@ -109,6 +109,8 @@ export interface ScreenFrameProps {
   screenType: Screen["type"];
   /** Current pipeline state, used to determine border color. */
   pipelineState: PipelineState | null;
+  /** Human-readable error string from the pipeline hook. */
+  pipelineError?: string;
   /**
    * Override the border color for screens that report their own health
    * status (e.g. doctor passing = green, failing = red). When omitted,
@@ -140,6 +142,7 @@ export interface ScreenFrameProps {
 export function ScreenFrame({
   screenType,
   pipelineState,
+  pipelineError,
   colorOverride,
   terminalSizeOptions,
   children,
@@ -172,7 +175,7 @@ export function ScreenFrame({
 
       {/* Pipeline status bar at the bottom */}
       <Box marginTop={1}>
-        <PipelineHeader state={pipelineState} />
+        <PipelineHeader state={pipelineState} error={pipelineError} />
       </Box>
     </Box>
   );

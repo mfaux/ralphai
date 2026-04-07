@@ -12,7 +12,11 @@
 
 import { describe, it, expect } from "bun:test";
 import type { PipelineState } from "../../pipeline-state.ts";
-import { buildHeaderParts, buildStalledWarning } from "./header.tsx";
+import {
+  buildHeaderParts,
+  buildStalledWarning,
+  buildHeaderText,
+} from "./header.tsx";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -232,5 +236,38 @@ describe("buildStalledWarning", () => {
       ],
     });
     expect(buildStalledWarning(state)).toBe("\u26a0 1 plan stalled");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHeaderText (error-aware status text)
+// ---------------------------------------------------------------------------
+
+describe("buildHeaderText", () => {
+  it("returns 'loading…' when state is null and no error", () => {
+    expect(buildHeaderText(null)).toBe("loading…");
+  });
+
+  it("returns the error message when state is null and error is set", () => {
+    expect(buildHeaderText(null, "Subprocess timed out")).toBe(
+      "Subprocess timed out",
+    );
+  });
+
+  it("returns 'empty' when state has all zero counts", () => {
+    const state = makeState();
+    expect(buildHeaderText(state)).toBe("empty");
+  });
+
+  it("returns undefined when state has counts (delegate to buildHeaderParts)", () => {
+    const state = makeState({ backlog: makeBacklog(2) });
+    expect(buildHeaderText(state)).toBeUndefined();
+  });
+
+  it("ignores error when state is not null", () => {
+    // When data was loaded but an error occurred during a refresh,
+    // the header should show the data, not the error.
+    const state = makeState({ backlog: makeBacklog(1) });
+    expect(buildHeaderText(state, "stale error")).toBeUndefined();
   });
 });

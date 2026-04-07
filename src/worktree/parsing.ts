@@ -66,11 +66,24 @@ export function isRalphaiManagedBranch(branch: string): boolean {
   );
 }
 
-export function listRalphaiWorktrees(cwd: string): WorktreeEntry[] {
+export interface ListWorktreesOptions {
+  /**
+   * Subprocess timeout in milliseconds. When set, `git worktree list`
+   * is killed after this many milliseconds. Useful for TUI contexts
+   * where a hung git process must not block the event loop.
+   */
+  timeout?: number;
+}
+
+export function listRalphaiWorktrees(
+  cwd: string,
+  options?: ListWorktreesOptions,
+): WorktreeEntry[] {
   const output = execSync("git worktree list --porcelain", {
     cwd,
     encoding: "utf-8",
     stdio: ["pipe", "pipe", "pipe"],
+    ...(options?.timeout != null ? { timeout: options.timeout } : {}),
   });
 
   return parseWorktreeList(output).filter((wt) =>

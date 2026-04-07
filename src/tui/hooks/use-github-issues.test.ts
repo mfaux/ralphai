@@ -217,5 +217,20 @@ describe("fetchReducer", () => {
       expect(s.count).toBe(8); // stale count kept
       expect(s.error).toBe("gh CLI not authenticated");
     });
+
+    it("transitions to error on subprocess timeout", () => {
+      // Simulates a timeout-induced error from peekGithubIssues
+      // that would be caught by the hook's try/catch.
+      let s = fetchReducer(INITIAL_FETCH_STATE, { type: "start" });
+      expect(s.phase).toBe("loading");
+
+      s = fetchReducer(s, {
+        type: "failure",
+        error: "Command timed out: ETIMEDOUT",
+      });
+      expect(s.phase).toBe("idle");
+      expect(s.count).toBeUndefined();
+      expect(s.error).toBe("Command timed out: ETIMEDOUT");
+    });
   });
 });

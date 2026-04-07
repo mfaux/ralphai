@@ -40,6 +40,8 @@ export interface MenuScreenProps {
   state: PipelineState | null;
   /** `true` while pipeline state is being gathered. */
   loading?: boolean;
+  /** Human-readable error string from the pipeline hook. */
+  pipelineError?: string;
   /** Extra context for menu item construction. */
   menuContext?: MenuContext;
   /** Resolved config for the settings detail pane content. */
@@ -198,6 +200,7 @@ function MenuListItem({
 export function MenuScreen({
   state,
   loading = false,
+  pipelineError,
   menuContext,
   resolvedConfig,
   onAction,
@@ -306,6 +309,7 @@ export function MenuScreen({
       highlightedValue={highlightedValue}
       state={state}
       stateLoading={loading}
+      stateError={pipelineError}
       menuContext={menuContext}
       resolvedConfig={resolvedConfig}
     />

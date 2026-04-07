@@ -18,6 +18,22 @@ import type { PipelineState } from "../../pipeline-state.ts";
 import type { WorktreeEntry } from "../../worktree/index.ts";
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Default subprocess timeout for TUI data-gathering calls (ms).
+ *
+ * Prevents the TUI from hanging indefinitely when `git` or `gh`
+ * subprocess calls block (e.g. network down, git index lock,
+ * expired token prompting for input).
+ *
+ * The value is generous enough for slow CI / NFS mounts while
+ * still providing a bounded user experience.
+ */
+export const TUI_SUBPROCESS_TIMEOUT_MS = 10_000;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -48,6 +64,12 @@ export interface UsePipelineStateOptions {
    * `listRalphaiWorktrees` — override in tests.
    */
   listWorktrees?: (cwd: string) => WorktreeEntry[];
+  /**
+   * Subprocess timeout in milliseconds for data-gathering calls.
+   * Defaults to `TUI_SUBPROCESS_TIMEOUT_MS` (10 000 ms).
+   * Set to `undefined` or `0` to disable.
+   */
+  timeout?: number;
 }
 
 // ---------------------------------------------------------------------------
