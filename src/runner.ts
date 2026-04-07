@@ -872,6 +872,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     // Review pass: runs at most once per plan after the gate passes.
     let reviewDone = false;
+    let reviewPassMadeChanges = false;
 
     // Detect plan format once per plan; the result flows into the
     // iteration log header and future downstream consumers.
@@ -1166,6 +1167,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               reviewDone = true;
 
               if (reviewResult.madeChanges) {
+                console.log("Review pass: simplifications committed.");
+                reviewPassMadeChanges = true;
                 // Re-run the completion gate after review changes
                 const reGateResult = runCompletionGate({
                   progressFile,
@@ -1260,6 +1263,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             prd: issueFm.prd,
             summary: prSummary,
             learnings: accumulatedLearnings,
+            reviewPassMadeChanges,
           });
           console.log(prResult.message);
 

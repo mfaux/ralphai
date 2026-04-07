@@ -10,7 +10,7 @@
  * - Pure functions: `assembleReviewPrompt` (prompt assembly, file capping)
  * - Side-effecting: `getChangedFiles` (git operations), `runReviewPass` (orchestration)
  */
-import { existsSync } from "fs";
+import { existsSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { execQuiet } from "./exec.ts";
@@ -188,7 +188,16 @@ export async function runReviewPass(
   // 3. Record HEAD before agent invocation
   const headBefore = execQuiet("git rev-parse HEAD", cwd);
 
-  // 4. Invoke the agent
+  // 4. Write review pass header to agent output log
+  if (outputLogPath) {
+    try {
+      writeFileSync(outputLogPath, "\n--- Review Pass ---\n", { flag: "a" });
+    } catch {
+      // Best-effort; non-fatal if we can't write the header
+    }
+  }
+
+  // 5. Invoke the agent
   const { output } = await spawnAgent(
     agentCommand,
     prompt,
@@ -198,7 +207,7 @@ export async function runReviewPass(
     ipcBroadcast,
   );
 
-  // 5. Compare HEAD after agent invocation
+  // 6. Compare HEAD after agent invocation
   const headAfter = execQuiet("git rev-parse HEAD", cwd);
   const madeChanges = headBefore !== headAfter;
 

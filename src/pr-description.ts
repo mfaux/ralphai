@@ -212,6 +212,7 @@ export function buildPrBody(
     prRepo?: string;
     summary?: string;
     learnings?: string[];
+    reviewPassMadeChanges?: boolean;
   },
 ): string {
   const commitLog = buildCommitLog(baseBranch, headBranch, cwd);
@@ -245,6 +246,13 @@ export function buildPrBody(
   const learningsSection = formatLearningsForPr(options?.learnings ?? []);
   if (learningsSection) {
     parts.push("\n\n" + learningsSection);
+  }
+
+  // Append review pass note when the review pass made changes
+  if (options?.reviewPassMadeChanges) {
+    parts.push(
+      "\n\n---\n\n*A review pass was run to simplify the implementation.*",
+    );
   }
 
   return parts.join("\n");

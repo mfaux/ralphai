@@ -9,7 +9,13 @@
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { execSync } from "child_process";
-import { existsSync, mkdtempSync, unlinkSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -379,5 +385,48 @@ describe("runReviewPass", () => {
     });
     // echo receives the prompt as an argument, so output should contain prompt text
     expect(result.output).toContain("behavior-preserving");
+  });
+
+  test("writes '--- Review Pass ---' header to agent-output.log", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "new-file.ts"), "export const x = 1;\n");
+    execSync('git add -A && git commit -m "add file"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    const logPath = join(dir, "agent-output.log");
+
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+      outputLogPath: logPath,
+    });
+
+    expect(existsSync(logPath)).toBe(true);
+    const logContent = readFileSync(logPath, "utf-8");
+    expect(logContent).toContain("--- Review Pass ---");
+  });
+
+  test("does not write header when outputLogPath is not provided", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "new-file.ts"), "export const x = 1;\n");
+    execSync('git add -A && git commit -m "add file"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    // No outputLogPath — should not throw
+    const result = await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+    });
+    expect(result.madeChanges).toBe(false);
   });
 });
