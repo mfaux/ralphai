@@ -55,9 +55,9 @@ function findOption(
 // ---------------------------------------------------------------------------
 
 describe("buildWizardOptions", () => {
-  it("returns exactly 8 options in the expected order", () => {
+  it("returns exactly 9 options in the expected order", () => {
     const options = buildWizardOptions(makeConfig());
-    expect(options).toHaveLength(8);
+    expect(options).toHaveLength(9);
     expect(options.map((o) => o.key)).toEqual([...WIZARD_KEYS]);
   });
 

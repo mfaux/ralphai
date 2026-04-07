@@ -57,6 +57,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueHitlLabel: "RALPHAI_ISSUE_HITL_LABEL",
   agentInteractiveCommand: "RALPHAI_AGENT_INTERACTIVE_COMMAND",
   autoCommit: "RALPHAI_AUTO_COMMIT",
+  sandbox: "RALPHAI_SANDBOX",
 };
 
 // ---------------------------------------------------------------------------
@@ -187,6 +188,9 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   lines.push(
     `  autoCommit         = ${config.autoCommit.value}  (${autoCommitSrc})`,
   );
+
+  const sandboxSrc = sourceLabel("sandbox", config.sandbox.source, input);
+  lines.push(`  sandbox            = ${config.sandbox.value}  (${sandboxSrc})`);
 
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(

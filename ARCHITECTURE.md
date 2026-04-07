@@ -18,6 +18,16 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | `src/prompt.ts`         | Builds the prompt passed to the agent each iteration.                                                                                       |
 | `src/progress.ts`       | Tracks iteration progress and task completion.                                                                                              |
 
+## Executor subsystem (`src/executor/`)
+
+The executor abstraction decouples agent process spawning from the runner loop. The runner calls `executor.spawn()` via a factory, enabling different execution strategies.
+
+| File                    | Role                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/executor/types.ts` | `AgentExecutor` interface and `ExecutorSpawnOptions`/`ExecutorSpawnResult` types.                     |
+| `src/executor/local.ts` | `LocalExecutor` — runs the agent as a local child process (extracted from the original `spawnAgent`). |
+| `src/executor/index.ts` | `createExecutor(sandbox)` factory and barrel re-exports.                                              |
+
 ## Feature modules
 
 | File                   | Role                                                                                 |

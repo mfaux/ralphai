@@ -154,12 +154,13 @@ What it does:
 --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
 --auto-commit                     Enable auto-commit recovery snapshots
 --no-auto-commit                  Disable auto-commit recovery snapshots (default)
+--sandbox=<mode>                  Execution sandbox mode: 'none' or 'docker' (default: none)
 --show-config                     Print resolved settings and exit
 ```
 
 ### Wizard Mode
 
-`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 8 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, auto-commit). Each option shows its current value and source (default, config file, env var, or CLI flag).
+`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 9 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, auto-commit, sandbox). Each option shows its current value and source (default, config file, env var, or CLI flag).
 
 Wizard overrides are injected as synthetic CLI flags. Explicit flags passed alongside `--wizard` take precedence (last-wins):
 
@@ -433,6 +434,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_ISSUE_COMMENT_PROGRESS`      | `issueCommentProgress`    |
 | `RALPHAI_ISSUE_HITL_LABEL`            | `issueHitlLabel`          |
 | `RALPHAI_AGENT_INTERACTIVE_COMMAND`   | `agentInteractiveCommand` |
+| `RALPHAI_SANDBOX`                     | `sandbox`                 |
 
 ### Config Keys
 
@@ -453,6 +455,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `issueCommentProgress`    | `false`                   | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                            |
 | `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                            |
 | `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                 |
+| `sandbox`                 | `"none"`                  | `RALPHAI_SANDBOX`                   | Execution sandbox mode (`"none"` for local, `"docker"` for containerized)                          |
 
 ### Plan Frontmatter Fields
 

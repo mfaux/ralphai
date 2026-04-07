@@ -237,14 +237,14 @@ describe("runConfigWizard", () => {
     expect(maxStuckOpt!.hint).toContain("env var");
   });
 
-  it("shows all 8 options in multiselect", async () => {
+  it("shows all 9 options in multiselect", async () => {
     mockMultiselect.mockResolvedValue([]);
     await runConfigWizard(makeConfig());
 
     const call = mockMultiselect.mock.calls[0]![0] as {
       options: { value: string }[];
     };
-    expect(call.options).toHaveLength(8);
+    expect(call.options).toHaveLength(9);
     const keys = call.options.map((o) => o.value);
     expect(keys).toContain("agentCommand");
     expect(keys).toContain("setupCommand");
@@ -254,6 +254,7 @@ describe("runConfigWizard", () => {
     expect(keys).toContain("maxStuck");
     expect(keys).toContain("iterationTimeout");
     expect(keys).toContain("autoCommit");
+    expect(keys).toContain("sandbox");
   });
 
   it("text prompt receives current value as initialValue", async () => {

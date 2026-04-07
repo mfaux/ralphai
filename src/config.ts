@@ -32,6 +32,7 @@ export interface RalphaiConfig {
   agentInteractiveCommand: string;
   iterationTimeout: number;
   autoCommit: string; // "true" | "false"
+  sandbox: "none" | "docker";
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -76,6 +77,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   agentInteractiveCommand: "",
   iterationTimeout: 0,
   autoCommit: "false",
+  sandbox: "none",
   workspaces: null,
 };
 
@@ -186,6 +188,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "agentInteractiveCommand",
   "iterationTimeout",
   "autoCommit",
+  "sandbox",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -381,6 +384,14 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.autoCommit = String(v);
   }
 
+  // sandbox (enum: "none" | "docker")
+  if ("sandbox" in obj) {
+    const v = String(obj.sandbox || "");
+    if (!["none", "docker"].includes(v))
+      err(`'sandbox' must be 'none' or 'docker', got '${v}'`);
+    values.sandbox = v as RalphaiConfig["sandbox"];
+  }
+
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -478,6 +489,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_HITL_LABEL", "issueHitlLabel"],
   ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
   ["RALPHAI_AUTO_COMMIT", "autoCommit"],
+  ["RALPHAI_SANDBOX", "sandbox"],
 ];
 
 /**
@@ -583,6 +595,13 @@ export function applyEnvOverrides(
     overrides.autoCommit = autoCommit;
   }
 
+  // sandbox (enum: "none" | "docker")
+  const sandbox = get("RALPHAI_SANDBOX");
+  if (sandbox !== undefined) {
+    validateEnum(sandbox, "RALPHAI_SANDBOX", ["none", "docker"]);
+    overrides.sandbox = sandbox as RalphaiConfig["sandbox"];
+  }
+
   return overrides;
 }
 
@@ -673,6 +692,11 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       const v = arg.slice("--agent-interactive-command=".length);
       overrides.agentInteractiveCommand = v;
       rawFlags.agentInteractiveCommand = arg;
+    } else if (arg.startsWith("--sandbox=")) {
+      const v = arg.slice("--sandbox=".length);
+      validateEnum(v, "--sandbox", ["none", "docker"]);
+      overrides.sandbox = v as RalphaiConfig["sandbox"];
+      rawFlags.sandbox = arg;
     }
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.

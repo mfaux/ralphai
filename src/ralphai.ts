@@ -1551,6 +1551,7 @@ const CONFIG_FLAG_PATTERNS = [
   /^--auto-commit$/,
   /^--no-auto-commit$/,
   /^--prompt-mode=/,
+  /^--sandbox=/,
 ];
 
 function isRecognizedRunFlag(arg: string): boolean {
@@ -1597,13 +1598,14 @@ function showRunHelp(): void {
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
     "  --auto-commit                    Enable auto-commit of agent changes (per-iteration and resume recovery)",
     "  --no-auto-commit                 Disable auto-commit recovery snapshots (default: off)",
+    "  --sandbox=<mode>                 Execution sandbox mode: 'none' (local) or 'docker' (default: none)",
     "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
     "",
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
-    "                  baseBranch, maxStuck,",
+    "                  baseBranch, maxStuck, sandbox,",
     "                  autoCommit, iterationTimeout, promptMode,",
     "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
     "                  issueRepo, issueCommentProgress",
@@ -1612,7 +1614,7 @@ function showRunHelp(): void {
     "                   RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_PR_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
-    "                   RALPHAI_AUTO_COMMIT,",
+    "                   RALPHAI_AUTO_COMMIT, RALPHAI_SANDBOX,",
     "                   RALPHAI_ITERATION_TIMEOUT,",
     "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",

@@ -44,6 +44,8 @@ export interface ConfirmData {
   branch: string;
   /** Feedback commands (semicolon or newline separated). */
   feedbackCommands: string;
+  /** Sandbox mode with source label (e.g. "none (default)"). */
+  sandbox?: string;
   /** PRD context, if the plan is a sub-issue of a PRD. */
   prdContext?: PrdContext;
   /** The CLI args that will be passed to the runner on confirm. */
@@ -95,6 +97,10 @@ export function buildConfirmLines(data: ConfirmData): ConfirmLine[] {
 
   if (data.feedbackCommands) {
     lines.push({ label: "Feedback", value: data.feedbackCommands });
+  }
+
+  if (data.sandbox) {
+    lines.push({ label: "Sandbox", value: data.sandbox });
   }
 
   return lines;

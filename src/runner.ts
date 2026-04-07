@@ -22,6 +22,7 @@ import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
 import { execQuiet, execOk } from "./exec.ts";
+import { createExecutor, type AgentExecutor } from "./executor/index.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import {
   getSocketPath,
@@ -552,6 +553,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
 
+  // Create the executor based on sandbox config
+  const executor: AgentExecutor = createExecutor(config.sandbox.value);
+
   // Pipeline directories (resolved from global state)
   const dirs: PipelineDirs = getRepoPipelineDirs(cwd);
 
@@ -851,15 +855,17 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       } catch {
         // Best-effort; non-fatal if we can't write the header
       }
-      const { output, exitCode, timedOut } = await spawnAgent(
+      const { output, exitCode, timedOut } = await executor.spawn({
         agentCommand,
         prompt,
         iterationTimeout,
         cwd,
         outputLogPath,
-        ipcServer ? (msg) => ipcServer!.broadcast(msg) : undefined,
+        ipcBroadcast: ipcServer
+          ? (msg) => ipcServer!.broadcast(msg)
+          : undefined,
         nonce,
-      );
+      });
 
       if (timedOut) {
         console.log();

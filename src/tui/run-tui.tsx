@@ -65,6 +65,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
   let issueRepo = "";
   let agentCommand = DEFAULTS.agentCommand;
   let feedbackCommands = DEFAULTS.feedbackCommands;
+  let sandboxDisplay = `${DEFAULTS.sandbox} (default)`;
   let resolvedConfig: ResolvedConfig | undefined;
 
   try {
@@ -80,6 +81,7 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     issueRepo = config.issueRepo.value;
     agentCommand = config.agentCommand.value;
     feedbackCommands = config.feedbackCommands.value;
+    sandboxDisplay = `${config.sandbox.value} (${config.sandbox.source})`;
   } catch {
     // Config resolution failure — proceed with defaults
   }
@@ -113,7 +115,11 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
     ? { cwd, standaloneLabel, issueRepo, issuePrdLabel }
     : undefined;
 
-  const runConfig: RunConfig = { agentCommand, feedbackCommands };
+  const runConfig: RunConfig = {
+    agentCommand,
+    feedbackCommands,
+    sandbox: sandboxDisplay,
+  };
 
   return {
     pipelineOpts,
