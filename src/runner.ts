@@ -60,6 +60,7 @@ import {
 } from "./issues.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
+import { runReviewPass, getChangedFiles } from "./review-pass.ts";
 import {
   detectPlan,
   detectPlanFormat,
@@ -583,6 +584,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issuePrdLabel = config.prdLabel.value;
   const issueRepo = config.issueRepo.value;
   const issueCommentProgress = config.issueCommentProgress.value === "true";
+  const review = config.review.value === "true";
 
   // --- Fail-early Docker availability check ---
   // When sandbox was explicitly set to "docker" (config/env/CLI), fail hard
@@ -868,6 +870,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const maxGateRejections = 2;
     let lastGateRejection: string | undefined;
 
+    // Review pass: runs at most once per plan after the gate passes.
+    let reviewDone = false;
+
     // Detect plan format once per plan; the result flows into the
     // iteration log header and future downstream consumers.
     const planContent = readFileSync(planFile, "utf-8");
@@ -1129,6 +1134,89 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
         // Clear gate state on acceptance
         lastGateRejection = undefined;
+
+        // --- Review pass: behavior-preserving simplification ---
+        // Runs at most once per plan, after the gate passes. If the review
+        // makes changes, re-run the gate; on failure follow normal rejection.
+        if (review && !reviewDone) {
+          const changedFiles = getChangedFiles(baseBranch, cwd);
+          if (changedFiles.length === 0) {
+            console.log("Review pass: no changed files — skipping.");
+          } else {
+            console.log(
+              `Running review pass on ${changedFiles.length} changed files...`,
+            );
+            const wrapperFile = join(cwd, FEEDBACK_WRAPPER_FILENAME);
+            const feedbackStep = existsSync(wrapperFile)
+              ? `./${FEEDBACK_WRAPPER_FILENAME}`
+              : feedbackCommands;
+            const outputLogPath = join(wipDir, "agent-output.log");
+            try {
+              const reviewResult = await runReviewPass({
+                baseBranch,
+                agentCommand,
+                feedbackStep,
+                iterationTimeout,
+                cwd,
+                outputLogPath,
+                ipcBroadcast: ipcServer
+                  ? (msg) => ipcServer!.broadcast(msg)
+                  : undefined,
+              });
+              reviewDone = true;
+
+              if (reviewResult.madeChanges) {
+                // Re-run the completion gate after review changes
+                const reGateResult = runCompletionGate({
+                  progressFile,
+                  planFormat,
+                  totalTasks,
+                  feedbackCommands,
+                  prFeedbackCommands,
+                  cwd,
+                });
+
+                if (
+                  !reGateResult.passed &&
+                  gateRejectionCount < maxGateRejections
+                ) {
+                  gateRejectionCount++;
+                  lastGateRejection = formatGateRejection(reGateResult, nonce);
+                  console.log();
+                  console.log(
+                    `Completion gate rejected after review pass (${gateRejectionCount}/${maxGateRejections}): ${reGateResult.reason}`,
+                  );
+                  for (const detail of reGateResult.details) {
+                    console.log(`  - ${detail}`);
+                  }
+                  console.log("Re-invoking agent to address the issues above.");
+                  continue;
+                }
+
+                if (!reGateResult.passed) {
+                  // Max rejections reached — accept anyway but warn
+                  console.log();
+                  console.log(
+                    `WARNING: Completion gate still failing after review pass and ${maxGateRejections} rejections — accepting anyway.`,
+                  );
+                  for (const detail of reGateResult.details) {
+                    console.log(`  - ${detail}`);
+                  }
+                }
+              } else {
+                console.log("Review pass: no simplifications needed.");
+              }
+            } catch (err) {
+              // Best-effort: agent failure or timeout during review should
+              // not block PR creation.
+              reviewDone = true;
+              console.log(
+                `WARNING: Review pass failed: ${err instanceof Error ? err.message : err}`,
+              );
+              console.log("Proceeding to PR creation.");
+            }
+          }
+        }
 
         console.log();
         console.log(

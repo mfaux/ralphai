@@ -76,6 +76,7 @@ function makeResolvedConfig(
     iterationTimeout: 0,
     autoCommit: "false",
     sandbox: "none",
+    review: "false",
     workspaces: null,
     ...overrides,
   };
