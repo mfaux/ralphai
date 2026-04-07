@@ -323,6 +323,72 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
   return args;
 }
 
+// ---------------------------------------------------------------------------
+// Setup command construction
+// ---------------------------------------------------------------------------
+
+/** Options for building the docker run command for a setup command. */
+export interface SetupDockerCommandOptions {
+  /** The agent command string — used only for image resolution and credential selection. */
+  agentCommand: string;
+  /** The setup command to run (e.g. "bun install"). */
+  setupCommand: string;
+  /** Working directory (worktree path) to bind-mount. */
+  cwd: string;
+  /** Override image name (empty = auto-resolve). */
+  dockerImage?: string;
+  /** Extra env vars to forward (from dockerEnvVars config). */
+  dockerEnvVars?: string[];
+  /** Extra bind mounts (from dockerMounts config). */
+  dockerMounts?: string[];
+}
+
+/**
+ * Build the `docker run` command arguments for a setup command.
+ *
+ * Reuses the same image, env vars, and credential mounts as agent execution
+ * so that platform-specific binaries (e.g., native npm modules) match the
+ * container's OS/arch. The setup command is passed to `sh -c` as the
+ * container entrypoint.
+ */
+export function buildSetupDockerArgs(
+  opts: SetupDockerCommandOptions,
+): string[] {
+  const {
+    agentCommand,
+    setupCommand,
+    cwd,
+    dockerImage,
+    dockerEnvVars = [],
+    dockerMounts = [],
+  } = opts;
+
+  const agentType = detectAgentType(agentCommand);
+  const image = resolveDockerImage(agentCommand, dockerImage);
+
+  const args: string[] = ["run", "--rm"];
+
+  // Worktree bind mount (read-write so setup can install dependencies)
+  args.push("-v", `${cwd}:${cwd}`);
+  args.push("-w", cwd);
+
+  // Env var forwarding (same as agent execution)
+  const envFlags = buildEnvFlags(agentType, dockerEnvVars);
+  args.push(...envFlags);
+
+  // Credential file mounts (same as agent execution)
+  const mountFlags = buildMountFlags(agentType, dockerMounts);
+  args.push(...mountFlags);
+
+  // Image
+  args.push(image);
+
+  // Setup command via sh -c
+  args.push("sh", "-c", setupCommand);
+
+  return args;
+}
+
 /**
  * Format a docker run command for display (dry-run output).
  *

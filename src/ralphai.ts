@@ -131,6 +131,7 @@ import type {
   WorktreeEntry,
   SelectedWorktreePlan,
   GitHubFallbackOptions,
+  SetupSandboxConfig,
 } from "./worktree/index.ts";
 import { parseFeedbackCommands } from "./feedback-wrapper.ts";
 import { runConfigWizard } from "./interactive/run-wizard.ts";
@@ -1712,6 +1713,7 @@ async function runIssueTarget(
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
+    setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
   const {
@@ -1723,6 +1725,7 @@ async function runIssueTarget(
     standaloneLabel,
     subissueLabel,
     prdLabel,
+    setupSandboxConfig,
   } = flags;
 
   // Pass through --help and --show-config unchanged
@@ -1858,6 +1861,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      setupSandboxConfig,
     });
   }
 
@@ -1906,6 +1910,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      setupSandboxConfig,
     });
   }
 
@@ -1936,6 +1941,7 @@ async function runIssueTarget(
     baseBranch,
     setupCommand,
     feedbackCommands,
+    setupSandboxConfig,
   ); // Pull the issue into a plan file in the worktree's pipeline
   const worktreeConfig = resolveWorktreeConfig(
     resolvedWorktreeDir,
@@ -2012,9 +2018,11 @@ async function runPrdIssueTarget(
     hasShowConfig: boolean;
     setupCommand: string;
     feedbackCommands: string[];
+    setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
-  const { isDryRun, setupCommand, feedbackCommands } = flags;
+  const { isDryRun, setupCommand, feedbackCommands, setupSandboxConfig } =
+    flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
   const branch = issueBranchName(prd.title);
@@ -2071,6 +2079,7 @@ async function runPrdIssueTarget(
     baseBranch,
     setupCommand,
     feedbackCommands,
+    setupSandboxConfig,
   );
 
   const worktreeConfig = resolveWorktreeConfig(
@@ -2438,6 +2447,32 @@ async function runRalphaiInManagedWorktree(
     ? parseFeedbackCommands(resolvedConfig.feedbackCommands.value)
     : [];
 
+  // Build sandbox config for routing setup commands through Docker
+  const setupSandboxConfig: SetupSandboxConfig | undefined = resolvedConfig
+    ? {
+        sandbox: resolvedConfig.sandbox.value as "none" | "docker",
+        agentCommand: resolvedConfig.agentCommand.value,
+        dockerConfig:
+          resolvedConfig.sandbox.value === "docker"
+            ? {
+                dockerImage: resolvedConfig.dockerImage.value || undefined,
+                dockerEnvVars: resolvedConfig.dockerEnvVars.value
+                  ? resolvedConfig.dockerEnvVars.value
+                      .split(",")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean)
+                  : undefined,
+                dockerMounts: resolvedConfig.dockerMounts.value
+                  ? resolvedConfig.dockerMounts.value
+                      .split(",")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean)
+                  : undefined,
+              }
+            : undefined,
+      }
+    : undefined;
+
   // --- Interactive wizard: `--wizard` / `-w` ---
   if (hasWizard && !hasHelp) {
     if (!process.stdout.isTTY) {
@@ -2480,6 +2515,7 @@ async function runRalphaiInManagedWorktree(
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
+      setupSandboxConfig,
     });
   }
 
@@ -2651,7 +2687,11 @@ async function runRalphaiInManagedWorktree(
 
       // Run setup command in freshly-created worktrees (not reused ones)
       if (!activeWorktree) {
-        executeSetupCommand(setupCommand, resolvedWorktreeDir);
+        executeSetupCommand(
+          setupCommand,
+          resolvedWorktreeDir,
+          setupSandboxConfig,
+        );
       }
 
       // Write feedback wrapper script (mirrors prepareWorktree behavior)
@@ -2822,6 +2862,7 @@ async function runRalphaiInManagedWorktree(
             hasShowConfig: false,
             setupCommand,
             feedbackCommands: feedbackCommandsList,
+            setupSandboxConfig,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done
           break;
@@ -2842,6 +2883,7 @@ async function runRalphaiInManagedWorktree(
       baseBranch,
       setupCommand,
       feedbackCommandsList,
+      setupSandboxConfig,
     );
 
     console.log("Running ralphai in worktree...");

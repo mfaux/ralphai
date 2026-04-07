@@ -88,5 +88,12 @@ Set to `""` (empty string) to disable.
 ### Behavior
 
 - Runs **only on fresh worktree creation**, not when reusing an existing one.
+- When `sandbox` is `"docker"`, the setup command runs **inside the Docker
+  container** (not on the host). This ensures platform-specific binaries
+  (e.g., native npm modules) are compiled for the container's OS and
+  architecture. The container uses the same image, env vars, and credential
+  mounts as agent execution.
+- When `sandbox` is `"none"` (default), the setup command runs on the host
+  via `execSync`.
 - On failure, Ralphai exits with code 1 and prints the failing command.
 - In `--dry-run` mode, the setup command is not executed.

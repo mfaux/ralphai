@@ -16,6 +16,7 @@ export {
   DockerExecutor,
   checkDockerAvailability,
   buildDockerArgs,
+  buildSetupDockerArgs,
   formatDockerCommand,
   resolveDockerImage,
   buildEnvFlags,
@@ -23,6 +24,7 @@ export {
   type DockerCheckResult,
   type DockerExecutorConfig,
   type DockerCommandOptions,
+  type SetupDockerCommandOptions,
 } from "./docker.ts";
 
 import type { AgentExecutor } from "./types.ts";

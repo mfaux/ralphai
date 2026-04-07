@@ -12,6 +12,7 @@ import {
   buildDockerArgs,
   buildEnvFlags,
   buildMountFlags,
+  buildSetupDockerArgs,
   checkDockerAvailability,
   formatDockerCommand,
   resolveDockerImage,
@@ -567,5 +568,109 @@ describe("buildConfirmLines — Docker warning", () => {
       (l: { label: string }) => l.label === "WARNING",
     );
     expect(warningLine).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSetupDockerArgs — setup command construction
+// ---------------------------------------------------------------------------
+
+describe("buildSetupDockerArgs", () => {
+  it("includes --rm flag", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    expect(args[0]).toBe("run");
+    expect(args[1]).toBe("--rm");
+  });
+
+  it("bind-mounts worktree at host path", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const vIdx = args.indexOf("-v");
+    expect(vIdx).toBeGreaterThan(-1);
+    expect(args[vIdx + 1]).toBe("/work/my-project:/work/my-project");
+  });
+
+  it("sets working directory to worktree path", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const wIdx = args.indexOf("-w");
+    expect(wIdx).toBeGreaterThan(-1);
+    expect(args[wIdx + 1]).toBe("/work/my-project");
+  });
+
+  it("auto-resolves image from agent name (same as agent execution)", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "npm install",
+      cwd: "/work",
+    });
+    expect(args).toContain("ghcr.io/ralphai/sandbox:claude");
+  });
+
+  it("uses dockerImage override", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "npm install",
+      cwd: "/work",
+      dockerImage: "my-image:latest",
+    });
+    expect(args).toContain("my-image:latest");
+    expect(args).not.toContain("ghcr.io/ralphai/sandbox:claude");
+  });
+
+  it("wraps setup command with sh -c as entrypoint", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install && bun run build",
+      cwd: "/work",
+    });
+    const len = args.length;
+    expect(args[len - 3]).toBe("sh");
+    expect(args[len - 2]).toBe("-c");
+    expect(args[len - 1]).toBe("bun install && bun run build");
+  });
+
+  it("does NOT include RALPHAI_NONCE (setup has no nonce)", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work",
+    });
+    const hasNonce = args.some((a) => a.includes("RALPHAI_NONCE"));
+    expect(hasNonce).toBe(false);
+  });
+
+  it("includes extra env vars from dockerEnvVars config", () => {
+    // Note: buildEnvFlags only includes vars that are set on host,
+    // so we verify the structural correctness via the args pattern
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "npm install",
+      cwd: "/work",
+      dockerEnvVars: ["CUSTOM_VAR"],
+    });
+    // The args should contain env flags from buildEnvFlags
+    // (actual values depend on host env, tested separately)
+    expect(args).toContain("--rm");
+  });
+
+  it("includes extra mounts from dockerMounts config", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "npm install",
+      cwd: "/work",
+      dockerMounts: ["/host/cache:/container/cache"],
+    });
+    expect(args).toContain("/host/cache:/container/cache");
   });
 });

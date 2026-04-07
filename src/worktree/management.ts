@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { existsSync, mkdirSync, rmSync, renameSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { TEXT, RESET } from "../utils.ts";
@@ -10,8 +10,25 @@ import {
   generateFeedbackWrapper,
   FEEDBACK_WRAPPER_FILENAME,
 } from "../feedback-wrapper.ts";
+import { buildSetupDockerArgs } from "../executor/docker.ts";
+import type { DockerExecutorConfig } from "../executor/docker.ts";
 import type { RalphaiOptions } from "../parse-options.ts";
 import { listRalphaiWorktrees } from "./parsing.ts";
+
+/**
+ * Configuration for routing the setup command through Docker.
+ * When provided, the setup command runs inside a container instead of
+ * on the host. Requires `agentCommand` to resolve the image and
+ * credential allowlist.
+ */
+export interface SetupSandboxConfig {
+  /** The sandbox mode ("none" or "docker"). */
+  sandbox: "none" | "docker";
+  /** The agent command string — used for image resolution and credential selection. */
+  agentCommand: string;
+  /** Docker-specific config (image, mounts, env vars). */
+  dockerConfig?: DockerExecutorConfig;
+}
 
 export function isGitWorktree(dir: string): boolean {
   try {
@@ -62,13 +79,53 @@ export function resolveWorktreeInfo(dir: string): {
 /**
  * Run a setup command inside a freshly-created worktree directory.
  * Called only when a new worktree is created (not reused).
+ *
+ * When `sandboxConfig.sandbox` is `"docker"`, the command runs inside a
+ * Docker container with the worktree bind-mounted, using the same image,
+ * env vars, and credential mounts as agent execution. This ensures
+ * platform-specific binaries (e.g., native npm modules) match the
+ * container's OS/arch.
+ *
+ * When `sandboxConfig` is omitted or `sandbox` is `"none"`, the command
+ * runs on the host via `execSync` (unchanged behavior).
+ *
  * On failure the process exits with code 1.
  */
 export function executeSetupCommand(
   setupCommand: string,
   worktreeDir: string,
+  sandboxConfig?: SetupSandboxConfig,
 ): void {
   if (!setupCommand) return;
+
+  if (sandboxConfig?.sandbox === "docker") {
+    console.log(`Running setup command in Docker: ${setupCommand}`);
+    const dockerArgs = buildSetupDockerArgs({
+      agentCommand: sandboxConfig.agentCommand,
+      setupCommand,
+      cwd: worktreeDir,
+      dockerImage: sandboxConfig.dockerConfig?.dockerImage,
+      dockerEnvVars: sandboxConfig.dockerConfig?.dockerEnvVars,
+      dockerMounts: sandboxConfig.dockerConfig?.dockerMounts,
+    });
+    const result = spawnSync("docker", dockerArgs, {
+      stdio: "inherit",
+    });
+    if (result.status !== 0) {
+      console.error(
+        `${TEXT}Error:${RESET} Setup command failed in Docker container: ${setupCommand}`,
+      );
+      if (result.error) {
+        console.error(`  ${result.error.message}`);
+      }
+      console.error(
+        `\nFix the issue and re-run, or set ${TEXT}setupCommand${RESET} to "" in config to disable.`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
   console.log(`Running setup command: ${setupCommand}`);
   try {
     execSync(setupCommand, {
@@ -112,6 +169,9 @@ export function ensureRepoHasCommit(cwd: string): void {
  * wrapper script is written to the worktree root after the setup command.
  * The wrapper is regenerated on every call — including reused worktrees —
  * so config changes are picked up without worktree recreation.
+ *
+ * When `sandboxConfig` is provided with `sandbox: "docker"`, the setup
+ * command runs inside a Docker container instead of on the host.
  */
 export function prepareWorktree(
   cwd: string,
@@ -120,6 +180,7 @@ export function prepareWorktree(
   baseBranch: string,
   setupCommand: string,
   feedbackCommands?: string[],
+  sandboxConfig?: SetupSandboxConfig,
 ): string {
   const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
   const desiredWorktreeDir = join(worktreeBase, slug);
@@ -179,7 +240,7 @@ export function prepareWorktree(
 
   // Run setup command in freshly-created worktrees (not reused ones)
   if (!activeWorktree) {
-    executeSetupCommand(setupCommand, resolvedWorktreeDir);
+    executeSetupCommand(setupCommand, resolvedWorktreeDir, sandboxConfig);
   }
 
   // Write feedback wrapper script (skipped on Windows — the prompt slice
