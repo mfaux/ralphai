@@ -296,6 +296,26 @@ describe("parseConfigFile", () => {
     expect(result.values.issueCommentProgress).toBe("false");
   });
 
+  it("parses review boolean field", () => {
+    const file = join(ctx.dir, "review-true.json");
+    writeFileSync(file, JSON.stringify({ review: true }));
+    const result = parseConfigFile(file)!;
+    expect(result.values.review).toBe("true");
+
+    const file2 = join(ctx.dir, "review-false.json");
+    writeFileSync(file2, JSON.stringify({ review: false }));
+    const result2 = parseConfigFile(file2)!;
+    expect(result2.values.review).toBe("false");
+  });
+
+  it("rejects non-boolean review value", () => {
+    const file = join(ctx.dir, "review-bad.json");
+    writeFileSync(file, JSON.stringify({ review: "yes" }));
+    expect(() => parseConfigFile(file)).toThrow(
+      "'review' must be 'true' or 'false'",
+    );
+  });
+
   it("parses workspaces", () => {
     const file = join(ctx.dir, "ws.json");
     writeFileSync(
@@ -381,6 +401,17 @@ describe("applyEnvOverrides", () => {
       "must be 'true' or 'false'",
     );
   });
+
+  it("extracts review from RALPHAI_REVIEW", () => {
+    const result = applyEnvOverrides({ RALPHAI_REVIEW: "false" });
+    expect(result.review).toBe("false");
+  });
+
+  it("validates review env var as boolean", () => {
+    expect(() => applyEnvOverrides({ RALPHAI_REVIEW: "yes" })).toThrow(
+      "must be 'true' or 'false'",
+    );
+  });
 });
 
 // ---- CLI arg parsing ----
@@ -441,6 +472,18 @@ describe("parseCLIArgs", () => {
     expect(result.rawFlags.autoCommit).toBe("--no-auto-commit");
   });
 
+  it("parses --review", () => {
+    const result = parseCLIArgs(["--review"]);
+    expect(result.overrides.review).toBe("true");
+    expect(result.rawFlags.review).toBe("--review");
+  });
+
+  it("parses --no-review", () => {
+    const result = parseCLIArgs(["--no-review"]);
+    expect(result.overrides.review).toBe("false");
+    expect(result.rawFlags.review).toBe("--no-review");
+  });
+
   it("ignores non-config flags", () => {
     const result = parseCLIArgs([
       "--dry-run",
@@ -491,6 +534,8 @@ describe("resolveConfig", () => {
     expect(config.maxStuck.source).toBe("default");
     expect(config.setupCommand.value).toBe("");
     expect(config.setupCommand.source).toBe("default");
+    expect(config.review.value).toBe("true");
+    expect(config.review.source).toBe("default");
   });
 
   it("config file overrides defaults", () => {
@@ -620,6 +665,40 @@ describe("resolveConfig", () => {
     expect(() =>
       resolveConfig({ cwd, envVars: env(), cliArgs: ["--max-stuck=abc"] }),
     ).toThrow("must be a positive integer");
+  });
+
+  it("review: full precedence chain (default < config < env < CLI)", () => {
+    const cwd = join(ctx.dir, "repo-review-prec");
+    mkdirSync(cwd, { recursive: true });
+
+    // Default: "true"
+    const r0 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
+    expect(r0.config.review.value).toBe("true");
+    expect(r0.config.review.source).toBe("default");
+
+    // Config file overrides default
+    writeGlobalConfig(cwd, { review: false });
+    const r1 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
+    expect(r1.config.review.value).toBe("false");
+    expect(r1.config.review.source).toBe("config");
+
+    // Env var overrides config
+    const r2 = resolveConfig({
+      cwd,
+      envVars: env({ RALPHAI_REVIEW: "true" }),
+      cliArgs: [],
+    });
+    expect(r2.config.review.value).toBe("true");
+    expect(r2.config.review.source).toBe("env");
+
+    // CLI flag overrides env
+    const r3 = resolveConfig({
+      cwd,
+      envVars: env({ RALPHAI_REVIEW: "true" }),
+      cliArgs: ["--no-review"],
+    });
+    expect(r3.config.review.value).toBe("false");
+    expect(r3.config.review.source).toBe("cli");
   });
 
   it("returns the resolved config file path", () => {

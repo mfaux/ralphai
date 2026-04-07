@@ -37,6 +37,7 @@ export interface RalphaiConfig {
   dockerImage: string;
   dockerMounts: string;
   dockerEnvVars: string;
+  review: string; // "true" | "false"
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -90,6 +91,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   dockerImage: "",
   dockerMounts: "",
   dockerEnvVars: "",
+  review: "true",
   workspaces: null,
 };
 
@@ -204,6 +206,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "dockerImage",
   "dockerMounts",
   "dockerEnvVars",
+  "review",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -447,6 +450,14 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     }
   }
 
+  // review (boolean)
+  if ("review" in obj) {
+    const v = obj.review;
+    if (typeof v !== "boolean")
+      err(`'review' must be 'true' or 'false', got '${v}'`);
+    values.review = String(v);
+  }
+
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -548,6 +559,7 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_DOCKER_IMAGE", "dockerImage"],
   ["RALPHAI_DOCKER_MOUNTS", "dockerMounts"],
   ["RALPHAI_DOCKER_ENV_VARS", "dockerEnvVars"],
+  ["RALPHAI_REVIEW", "review"],
 ];
 
 /**
@@ -678,6 +690,13 @@ export function applyEnvOverrides(
     overrides.dockerEnvVars = dockerEnvVars;
   }
 
+  // review (boolean)
+  const review = get("RALPHAI_REVIEW");
+  if (review !== undefined) {
+    validateBoolean(review, "RALPHAI_REVIEW");
+    overrides.review = review;
+  }
+
   return overrides;
 }
 
@@ -755,6 +774,12 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-auto-commit") {
       overrides.autoCommit = "false";
       rawFlags.autoCommit = "--no-auto-commit";
+    } else if (arg === "--review") {
+      overrides.review = "true";
+      rawFlags.review = "--review";
+    } else if (arg === "--no-review") {
+      overrides.review = "false";
+      rawFlags.review = "--no-review";
     } else if (arg.startsWith("--issue-hitl-label=")) {
       const v = arg.slice("--issue-hitl-label=".length);
       if (v === "") {

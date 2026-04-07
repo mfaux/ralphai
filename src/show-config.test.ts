@@ -113,6 +113,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  autoCommit         = false  (default)");
+    expect(output).toContain("  review             = true  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
@@ -200,6 +201,30 @@ describe("formatShowConfig", () => {
     const output = formatShowConfig(input);
     expect(output).toContain(
       "  autoCommit         = false  (cli (--no-auto-commit))",
+    );
+  });
+
+  it("shows cli source for review --no-review", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      review: { value: "false", source: "cli" },
+    });
+    input.rawFlags = { review: "--no-review" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  review             = false  (cli (--no-review))",
+    );
+  });
+
+  it("shows env source for review", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      review: { value: "false", source: "env" },
+    });
+    input.envVars = { RALPHAI_REVIEW: "false" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  review             = false  (env (RALPHAI_REVIEW=false))",
     );
   });
 

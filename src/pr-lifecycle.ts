@@ -69,6 +69,8 @@ export interface CreatePrOptions {
   summary?: string;
   /** Accumulated learnings from agent runs to include in PR body. */
   learnings?: string[];
+  /** Whether the review pass made simplification changes. */
+  reviewPassMadeChanges?: boolean;
 }
 
 export interface ContinuousPrOptions {
@@ -196,6 +198,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     prRepo,
     summary: options.summary,
     learnings: options.learnings,
+    reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
   const esc = (s: string) => s.replace(/"/g, '\\"');
 

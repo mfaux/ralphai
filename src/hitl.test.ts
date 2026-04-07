@@ -145,6 +145,7 @@ function makeResolvedConfig(overrides: Partial<Record<string, unknown>> = {}) {
     iterationTimeout: 0,
     autoCommit: "false",
     sandbox: "none",
+    review: "false",
     workspaces: null,
     ...overrides,
   };
