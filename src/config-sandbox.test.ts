@@ -241,12 +241,12 @@ describe("resolveConfig — sandbox 4-layer resolution", () => {
 
 describe("detectDockerAvailable", () => {
   it("returns true when docker info succeeds", () => {
-    const result = detectDockerAvailable(() => true);
+    const result = detectDockerAvailable(() => true, "linux");
     expect(result).toBe(true);
   });
 
   it("returns false when docker info fails", () => {
-    const result = detectDockerAvailable(() => false);
+    const result = detectDockerAvailable(() => false, "linux");
     expect(result).toBe(false);
   });
 
@@ -260,7 +260,7 @@ describe("detectDockerAvailable", () => {
     detectDockerAvailable((cmd) => {
       capturedCmd = cmd;
       return true;
-    });
+    }, "linux");
     expect(capturedCmd).toBe("docker info");
   });
 });
