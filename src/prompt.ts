@@ -47,10 +47,11 @@ export interface AssemblePromptOptions {
    */
   nonce?: string;
   /**
-   * Path to the generated feedback wrapper script (e.g.
-   * `./_ralphai_feedback.sh`). When set, step 4 tells the agent to run
-   * the wrapper instead of listing raw commands. When absent (Windows,
-   * or wrapper not generated), step 4 falls back to raw commands.
+   * Absolute path to the generated feedback wrapper script in the WIP
+   * slug directory (e.g. `~/.ralphai/repos/.../in-progress/slug/_ralphai_feedback.sh`).
+   * When set, step 4 tells the agent to run the wrapper instead of
+   * listing raw commands. When absent (Windows, or wrapper not
+   * generated), step 4 falls back to raw commands.
    */
   wrapperPath?: string;
 }

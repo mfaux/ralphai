@@ -167,11 +167,12 @@ export function ensureRepoHasCommit(cwd: string): void {
  *
  * When `feedbackCommands` is provided (and not on Windows), a feedback
  * wrapper script is written to the worktree root after the setup command.
- * The wrapper is regenerated on every call — including reused worktrees —
- * so config changes are picked up without worktree recreation.
- *
  * When `sandboxConfig` is provided with `sandbox: "docker"`, the setup
  * command runs inside a Docker container instead of on the host.
+ *
+ * NOTE: The feedback wrapper script is NOT written here. The runner
+ * writes it to the WIP slug directory (pipeline state) so it stays
+ * out of the user's worktree.
  */
 export function prepareWorktree(
   cwd: string,
@@ -179,7 +180,6 @@ export function prepareWorktree(
   branch: string,
   baseBranch: string,
   setupCommand: string,
-  feedbackCommands?: string[],
   sandboxConfig?: SetupSandboxConfig,
 ): string {
   const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
@@ -243,28 +243,25 @@ export function prepareWorktree(
     executeSetupCommand(setupCommand, resolvedWorktreeDir, sandboxConfig);
   }
 
-  // Write feedback wrapper script (skipped on Windows — the prompt slice
-  // handles the fallback). Regenerated on every call so config changes
-  // are picked up on reused worktrees.
-  writeFeedbackWrapper(resolvedWorktreeDir, feedbackCommands);
-
   return resolvedWorktreeDir;
 }
 
 /**
- * Write the feedback wrapper script to the worktree root.
+ * Write the feedback wrapper script to the given directory.
+ * Typically called with the WIP slug directory so the script stays
+ * out of the user's worktree (no untracked-file noise in git status).
  * Skipped on Windows (process.platform === "win32") and when no
  * feedback commands are configured.
  */
 export function writeFeedbackWrapper(
-  worktreeDir: string,
+  targetDir: string,
   feedbackCommands?: string[],
 ): void {
   if (process.platform === "win32") return;
   if (!feedbackCommands || feedbackCommands.length === 0) return;
 
   const script = generateFeedbackWrapper(feedbackCommands);
-  const wrapperPath = join(worktreeDir, FEEDBACK_WRAPPER_FILENAME);
+  const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
   writeFileSync(wrapperPath, script, { mode: 0o755 });
 }
 

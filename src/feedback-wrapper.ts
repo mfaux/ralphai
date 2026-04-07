@@ -6,13 +6,14 @@
  * - On non-zero exit: prints full stdout/stderr so the agent can diagnose.
  * - On timeout: kills the child process and prints partial output.
  *
- * The generated script is written to the worktree root as
- * `_ralphai_feedback.sh` during `prepareWorktree()`. It is regenerated
- * on every call (new and reused worktrees alike) so config changes are
- * picked up without worktree recreation.
+ * The generated script is written to the WIP slug directory (pipeline
+ * state, e.g. `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/`)
+ * by the runner before the iteration loop starts. This keeps the
+ * wrapper out of the user's worktree so it doesn't appear as an
+ * untracked file in `git status`.
  *
- * This module exports a pure function — no I/O. The caller (worktree
- * management) handles writing the file.
+ * This module exports a pure function — no I/O. The caller
+ * (`writeFeedbackWrapper` in worktree/management.ts) handles writing.
  */
 
 /** Filename of the generated wrapper script. */

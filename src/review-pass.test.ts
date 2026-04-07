@@ -173,7 +173,8 @@ describe("getChangedFiles", () => {
 // ---------------------------------------------------------------------------
 
 describe("assembleReviewPrompt", () => {
-  const feedbackStep = "./_ralphai_feedback.sh";
+  const feedbackStep =
+    "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh";
 
   test("includes all file paths when count is 0 (empty prompt body)", () => {
     const result = assembleReviewPrompt({ files: [], feedbackStep });
@@ -261,9 +262,12 @@ describe("assembleReviewPrompt", () => {
   test("includes the feedback step (wrapper path)", () => {
     const result = assembleReviewPrompt({
       files: ["src/index.ts"],
-      feedbackStep: "./_ralphai_feedback.sh",
+      feedbackStep:
+        "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh",
     });
-    expect(result).toContain("./_ralphai_feedback.sh");
+    expect(result).toContain(
+      "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh",
+    );
   });
 
   test("includes the feedback step (raw commands)", () => {

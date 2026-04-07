@@ -37,7 +37,11 @@ import {
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
-import { FEEDBACK_WRAPPER_FILENAME } from "./feedback-wrapper.ts";
+import {
+  FEEDBACK_WRAPPER_FILENAME,
+  parseFeedbackCommands,
+} from "./feedback-wrapper.ts";
+import { writeFeedbackWrapper } from "./worktree/index.ts";
 import { appendProgressBlock } from "./progress.ts";
 import {
   generateNonce,
@@ -845,6 +849,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     writeFileSync(pidFile, String(process.pid), "utf8");
     activePidFile = pidFile;
 
+    // --- Write feedback wrapper script to the WIP slug directory ---
+    // Written here (not in prepareWorktree) so it lives in pipeline state
+    // instead of the user's worktree, avoiding untracked-file noise.
+    // Regenerated every run so config changes are picked up.
+    writeFeedbackWrapper(wipDir, parseFeedbackCommands(feedbackCommands));
+
     // --- Start IPC server for real-time output streaming ---
     let ipcServer: IpcServer | null = null;
     const socketPath = getSocketPath(dirs.wipDir, planSlug);
@@ -908,12 +918,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       }
 
       // --- Assemble prompt ---
-      // Check for the feedback wrapper script in the worktree. When it
-      // exists the prompt references the wrapper instead of raw commands.
-      const wrapperFile = join(cwd, FEEDBACK_WRAPPER_FILENAME);
-      const wrapperPath = existsSync(wrapperFile)
-        ? `./${FEEDBACK_WRAPPER_FILENAME}`
-        : undefined;
+      // Check for the feedback wrapper script in the WIP slug directory
+      // (pipeline state). When it exists the prompt references the
+      // absolute path so the agent can invoke it from the worktree.
+      const wrapperFile = join(wipDir, FEEDBACK_WRAPPER_FILENAME);
+      const wrapperPath = existsSync(wrapperFile) ? wrapperFile : undefined;
 
       const prompt = assemblePrompt({
         planFile,
@@ -1147,9 +1156,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             console.log(
               `Running review pass on ${changedFiles.length} changed files...`,
             );
-            const wrapperFile = join(cwd, FEEDBACK_WRAPPER_FILENAME);
+            const wrapperFile = join(wipDir, FEEDBACK_WRAPPER_FILENAME);
             const feedbackStep = existsSync(wrapperFile)
-              ? `./${FEEDBACK_WRAPPER_FILENAME}`
+              ? wrapperFile
               : feedbackCommands;
             const outputLogPath = join(wipDir, "agent-output.log");
             try {

@@ -20,7 +20,7 @@ Iteration 10 gets the same quality of context as iteration 1.
 
 Each iteration, the agent runs your project's real build, test, and lint commands. The retry loop is agent-internal: Ralphai provides the feedback commands in the prompt, and the agent runs them, fixes errors, and iterates within a single session.
 
-When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the worktree, the prompt tells the agent to run the wrapper instead of listing raw commands. The wrapper provides concise output on success and full diagnostics on failure (see [Feedback Wrapper Script](#feedback-wrapper-script) below). When the wrapper is absent (e.g. on Windows), the prompt falls back to listing raw commands directly.
+When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the pipeline state directory, the prompt tells the agent to run the wrapper instead of listing raw commands. The wrapper provides concise output on success and full diagnostics on failure (see [Feedback Wrapper Script](#feedback-wrapper-script) below). When the wrapper is absent (e.g. on Windows), the prompt falls back to listing raw commands directly.
 
 ```
     ┌─────────────────────────────────────┐
@@ -69,15 +69,15 @@ Feedback commands are auto-detected during `ralphai init` or configured via `fee
 
 ### Feedback Wrapper Script
 
-When a worktree is created or reused, Ralphai generates a shell script called `_ralphai_feedback.sh` in the worktree root. This script wraps each configured loop-tier feedback command to optimize agent output:
+When a worktree is created or reused, Ralphai generates a shell script called `_ralphai_feedback.sh` in the WIP slug directory (pipeline state, e.g. `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/`). This keeps the wrapper out of the user's worktree so it doesn't appear as an untracked file in `git status`. The script wraps each configured loop-tier feedback command to optimize agent output:
 
 - **On success (exit 0):** prints a one-line summary with the command name and wall-clock duration, keeping the agent's context window lean.
 - **On failure (non-zero exit):** prints the full stdout/stderr so the agent can diagnose and fix the issue.
 - **On timeout:** kills the child process and prints partial output with a timeout message.
 
-The wrapper is regenerated on every `prepareWorktree()` call — including reused worktrees — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt falls back to listing raw commands).
+The wrapper is regenerated on every run — including resumed runs — so config changes take effect without recreating the worktree. On Windows, wrapper generation is skipped entirely (the prompt falls back to listing raw commands).
 
-When the wrapper exists in the worktree, the runner passes its path to the prompt module via `wrapperPath`. The agent prompt then tells the agent to run `./_ralphai_feedback.sh` and explains its summary-on-pass / full-output-on-failure behavior. When the wrapper is absent, the prompt lists raw commands as before — this keeps backward compatibility with Windows and any environment where the wrapper is not generated.
+When the wrapper exists, the runner passes its absolute path to the prompt module via `wrapperPath`. The agent prompt then tells the agent to run the wrapper by its full path and explains its summary-on-pass / full-output-on-failure behavior. When the wrapper is absent, the prompt lists raw commands as before — this keeps backward compatibility with Windows and any environment where the wrapper is not generated.
 
 The completion gate does **not** use the wrapper — it runs feedback commands directly and collects structured results. The wrapper is purely an agent-side UX optimization.
 

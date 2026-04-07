@@ -232,7 +232,6 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     branch,
     baseBranch,
     setupCommand,
-    feedbackCommands,
     setupSandboxConfig,
   );
 
