@@ -144,6 +144,11 @@ export function printStatusOnce(cwd: string): void {
         break;
     }
 
+    // Docker sandbox tag
+    if (plan.sandbox === "docker") {
+      parts.push("[docker]");
+    }
+
     const suffix =
       parts.length > 0 ? `${DIM}${parts.join("    ")}${RESET}` : "";
     console.log(

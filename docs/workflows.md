@@ -83,6 +83,28 @@ ralphai run                         # run in separate terminals
 
 Each invocation creates an isolated [worktree](worktrees.md) with its own branch and draft PR. Run multiple instances in separate terminals to work on plans in parallel. Use `ralphai worktree list` to see active runs and `ralphai worktree clean` to remove completed ones.
 
+## Docker sandboxing
+
+Ralphai can run agents inside Docker containers for filesystem and network isolation. When Docker is available, it is used by default.
+
+**Auto-detection:** When no explicit `sandbox` value is set, Ralphai probes Docker availability at startup. If Docker is running, `sandbox` defaults to `"docker"`; otherwise it falls back to `"none"`. Use `--show-config` to see the resolved value and source:
+
+```bash
+ralphai config --show-config
+# sandbox = docker (source: auto-detected)
+```
+
+**Init wizard:** Running `ralphai init` prompts for Docker sandboxing. When Docker is detected, the option is pre-selected and labeled "(recommended — Docker detected)". The wizard writes `sandbox: "docker"` or `sandbox: "none"` to `config.json`.
+
+**Explicit override:** Set `sandbox` explicitly in config, via env var, or CLI flag to override auto-detection:
+
+```bash
+ralphai run --sandbox=docker     # force Docker
+ralphai run --sandbox=none       # force local execution
+```
+
+**Status indicators:** Plans running in Docker show a `docker` tag in the status display (`ralphai status`) and the interactive menu. Local execution shows no extra tag.
+
 ## Test a plan without changing anything
 
 ```bash

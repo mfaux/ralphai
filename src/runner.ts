@@ -830,6 +830,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
+        sandbox: config.sandbox.value,
       });
     } else {
       console.error("ERROR: Ralphai runs plans only inside managed worktrees.");

@@ -125,6 +125,7 @@ describe("parseReceipt", () => {
     expect(receipt!.plan_file).toBeUndefined();
     expect(receipt!.outcome).toBeUndefined();
     expect(receipt!.pr_url).toBeUndefined();
+    expect(receipt!.sandbox).toBeUndefined();
   });
 
   it("parses pr_url when present", () => {
@@ -143,6 +144,42 @@ describe("parseReceipt", () => {
     const receipt = parseReceipt(receiptPath);
     expect(receipt).not.toBeNull();
     expect(receipt!.pr_url).toBe("https://github.com/user/repo/pull/42");
+  });
+
+  it("parses sandbox when present", () => {
+    const receiptPath = join(ctx.dir, "receipt-sandbox.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-06-15T10:30:00Z",
+        "branch=feat/docker-test",
+        "slug=docker-test",
+        "tasks_completed=1",
+        "sandbox=docker",
+      ].join("\n") + "\n",
+    );
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.sandbox).toBe("docker");
+  });
+
+  it("parses sandbox=none when present", () => {
+    const receiptPath = join(ctx.dir, "receipt-sandbox-none.txt");
+    writeFileSync(
+      receiptPath,
+      [
+        "started_at=2025-06-15T10:30:00Z",
+        "branch=feat/local-test",
+        "slug=local-test",
+        "tasks_completed=0",
+        "sandbox=none",
+      ].join("\n") + "\n",
+    );
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.sandbox).toBe("none");
   });
 });
 
@@ -194,6 +231,31 @@ describe("initReceipt", () => {
     expect(content).not.toContain("worktree_path=");
   });
 
+  it("includes sandbox when provided", () => {
+    const receiptPath = join(ctx.dir, "receipt-sandbox.txt");
+    initReceipt(receiptPath, {
+      branch: "feat/docker",
+      slug: "docker-plan",
+      plan_file: "docker-plan.md",
+      sandbox: "docker",
+    });
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).toContain("sandbox=docker");
+  });
+
+  it("omits sandbox when not provided", () => {
+    const receiptPath = join(ctx.dir, "receipt-no-sandbox.txt");
+    initReceipt(receiptPath, {
+      branch: "main",
+      slug: "test",
+      plan_file: "test.md",
+    });
+
+    const content = readFileSync(receiptPath, "utf-8");
+    expect(content).not.toContain("sandbox=");
+  });
+
   it("generates a valid ISO timestamp", () => {
     const receiptPath = join(ctx.dir, "receipt.txt");
     initReceipt(receiptPath, {
@@ -234,6 +296,22 @@ describe("receipt round-trip", () => {
     expect(receipt!.plan_file).toBe("round-trip.md");
     expect(receipt!.tasks_completed).toBe(0);
     expect(receipt!.outcome).toBeUndefined();
+  });
+
+  it("round-trips sandbox field", () => {
+    const receiptPath = join(ctx.dir, "receipt-sandbox-rt.txt");
+    initReceipt(receiptPath, {
+      worktree_path: "/home/user/wt",
+      branch: "feat/docker-rt",
+      slug: "docker-rt",
+      plan_file: "docker-rt.md",
+      sandbox: "docker",
+    });
+
+    const receipt = parseReceipt(receiptPath);
+    expect(receipt).not.toBeNull();
+    expect(receipt!.sandbox).toBe("docker");
+    expect(receipt!.slug).toBe("docker-rt");
   });
 });
 

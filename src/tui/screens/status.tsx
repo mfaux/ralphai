@@ -117,6 +117,10 @@ export function buildInProgressLine(plan: InProgressPlan): {
 
   parts.push(livenessTag(plan.liveness));
 
+  if (plan.sandbox === "docker") {
+    parts.push("docker");
+  }
+
   return {
     label: plan.filename,
     hint: parts.join(" · "),

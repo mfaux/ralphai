@@ -80,18 +80,25 @@ export function formatDuration(ms: number): string {
 
 /**
  * Format a liveness tag to a human-readable status string.
+ * Appends " · docker" when the plan is running in Docker.
  */
 export function formatLiveness(plan: InProgressPlan): string {
+  let base: string;
   switch (plan.liveness.tag) {
     case "running":
-      return `running (PID ${plan.liveness.pid})`;
+      base = `running (PID ${plan.liveness.pid})`;
+      break;
     case "stalled":
-      return "stalled";
+      base = "stalled";
+      break;
     case "in_progress":
-      return "in progress";
+      base = "in progress";
+      break;
     case "outcome":
-      return plan.liveness.outcome;
+      base = plan.liveness.outcome;
+      break;
   }
+  return plan.sandbox === "docker" ? `${base} · docker` : base;
 }
 
 /**
@@ -335,6 +342,12 @@ function stopRunningDetail(
       text: `  PID ${plan.liveness.tag === "running" ? plan.liveness.pid : "?"}`,
       dim: true,
     });
+    if (plan.sandbox === "docker") {
+      lines.push({
+        text: "  Sandbox: docker",
+        dim: true,
+      });
+    }
     if (plan.totalTasks !== undefined) {
       lines.push({
         text: `  Progress: ${plan.tasksCompleted}/${plan.totalTasks} tasks`,
