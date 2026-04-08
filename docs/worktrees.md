@@ -97,3 +97,14 @@ Set to `""` (empty string) to disable.
   via `execSync`.
 - On failure, Ralphai exits with code 1 and prints the failing command.
 - In `--dry-run` mode, the setup command is not executed.
+
+## Docker sandbox and worktrees
+
+When `sandbox` is `"docker"`, Ralphai automatically detects whether the
+working directory is a git worktree and mounts the main repository's `.git`
+directory into the container. This is necessary because a worktree's `.git`
+file is a pointer back to the main repo's `.git/worktrees/<name>` directory
+— without this mount, git operations inside the container would fail.
+
+The mount is read-write so agents can create commits. No manual
+`dockerMounts` configuration is needed for worktree git operations.

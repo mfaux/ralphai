@@ -77,6 +77,24 @@ export function resolveWorktreeInfo(dir: string): {
 }
 
 /**
+ * Resolve the main `.git` directory path for a given working directory.
+ *
+ * If `dir` is a git worktree, returns the absolute path to the main
+ * repo's `.git` directory (e.g., `/path/to/main-repo/.git`).
+ * Returns `undefined` for non-worktree directories.
+ *
+ * Used by the Docker executor and setup command to mount the main
+ * `.git` directory into containers so git operations work in worktrees.
+ */
+export function resolveMainGitDir(dir: string): string | undefined {
+  const info = resolveWorktreeInfo(dir);
+  if (info.isWorktree) {
+    return join(info.mainWorktree, ".git");
+  }
+  return undefined;
+}
+
+/**
  * Run a setup command inside a freshly-created worktree directory.
  * Called only when a new worktree is created (not reused).
  *
@@ -100,6 +118,7 @@ export function executeSetupCommand(
 
   if (sandboxConfig?.sandbox === "docker") {
     console.log(`Running setup command in Docker: ${setupCommand}`);
+    const mainGitDir = resolveMainGitDir(worktreeDir);
     const dockerArgs = buildSetupDockerArgs({
       agentCommand: sandboxConfig.agentCommand,
       setupCommand,
@@ -107,6 +126,7 @@ export function executeSetupCommand(
       dockerImage: sandboxConfig.dockerConfig?.dockerImage,
       dockerEnvVars: sandboxConfig.dockerConfig?.dockerEnvVars,
       dockerMounts: sandboxConfig.dockerConfig?.dockerMounts,
+      mainGitDir,
     });
     const result = spawnSync("docker", dockerArgs, {
       stdio: "inherit",

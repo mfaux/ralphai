@@ -15,6 +15,7 @@ export { selectPlanForWorktree } from "./selection.ts";
 export {
   isGitWorktree,
   resolveWorktreeInfo,
+  resolveMainGitDir,
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,

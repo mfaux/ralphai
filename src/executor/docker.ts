@@ -14,8 +14,7 @@
  */
 
 import { spawn, type ChildProcess } from "child_process";
-import { createWriteStream } from "fs";
-import { existsSync } from "fs";
+import { createWriteStream, existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -27,6 +26,7 @@ import type {
 
 import { shellSplit } from "../runner.ts";
 import { detectAgentType } from "../show-config.ts";
+import { resolveMainGitDir } from "../worktree/management.ts";
 
 // ---------------------------------------------------------------------------
 // Container user and home directory
@@ -336,6 +336,71 @@ export interface DockerCommandOptions {
   dockerMounts?: string[];
   /** Optional nonce for RALPHAI_NONCE env var. */
   nonce?: string;
+  /**
+   * Absolute path to the main repo's `.git` directory.
+   * Required when the working directory is a git worktree so that
+   * git operations inside the container can follow the worktree's
+   * `.git` file pointer back to the main repo. Mounted read-write
+   * because agents need to create commits.
+   */
+  mainGitDir?: string;
+}
+
+/**
+ * Build the common prefix of a `docker run` command: container flags,
+ * worktree mount, env forwarding, credential mounts, and image.
+ *
+ * Both `buildDockerArgs` and `buildSetupDockerArgs` delegate here for
+ * the shared portion, then append their own tail (agent command vs
+ * setup command).
+ */
+function buildCommonDockerArgs(opts: {
+  agentCommand: string;
+  cwd: string;
+  dockerImage?: string;
+  dockerEnvVars?: string[];
+  dockerMounts?: string[];
+  mainGitDir?: string;
+}): string[] {
+  const {
+    agentCommand,
+    cwd,
+    dockerImage,
+    dockerEnvVars = [],
+    dockerMounts = [],
+    mainGitDir,
+  } = opts;
+
+  const agentType = detectAgentType(agentCommand);
+  const image = resolveDockerImage(agentCommand, dockerImage);
+
+  const args: string[] = ["run", "--rm"];
+
+  // Run as host user to avoid root-owned files in worktree
+  args.push(...getUserFlag());
+
+  // Set container HOME so tools and configs work for non-root user
+  args.push("-e", `HOME=${CONTAINER_HOME}`);
+
+  // Worktree bind mount (read-write)
+  args.push("-v", `${cwd}:${cwd}`);
+  args.push("-w", cwd);
+
+  // Main .git directory mount for worktrees (read-write — needed for commits)
+  if (mainGitDir) {
+    args.push("-v", `${mainGitDir}:${mainGitDir}`);
+  }
+
+  // Env var forwarding
+  args.push(...buildEnvFlags(agentType, dockerEnvVars));
+
+  // Credential file mounts
+  args.push(...buildMountFlags(agentType, dockerMounts));
+
+  // Image
+  args.push(image);
+
+  return args;
 }
 
 /**
@@ -359,38 +424,25 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerEnvVars = [],
     dockerMounts = [],
     nonce,
+    mainGitDir,
   } = opts;
 
-  const agentType = detectAgentType(agentCommand);
-  const image = resolveDockerImage(agentCommand, dockerImage);
+  const args = buildCommonDockerArgs({
+    agentCommand,
+    cwd,
+    dockerImage,
+    dockerEnvVars,
+    dockerMounts,
+    mainGitDir,
+  });
 
-  const args: string[] = ["run", "--rm"];
-
-  // Run as host user to avoid root-owned files in worktree
-  args.push(...getUserFlag());
-
-  // Set container HOME so tools and configs work for non-root user
-  args.push("-e", `HOME=${CONTAINER_HOME}`);
-
-  // Worktree bind mount (read-write so the agent can modify files)
-  args.push("-v", `${cwd}:${cwd}`);
-  args.push("-w", cwd);
-
-  // Env var forwarding
-  const envFlags = buildEnvFlags(agentType, dockerEnvVars);
-  args.push(...envFlags);
-
-  // Nonce env var (set explicitly with value, not from host env)
+  // Nonce env var (set explicitly with value, not from host env).
+  // Inserted before the image (second-to-last position in the common args)
+  // so it appears in the docker flags section.
   if (nonce) {
-    args.push("-e", `RALPHAI_NONCE=${nonce}`);
+    const imageIdx = args.length - 1;
+    args.splice(imageIdx, 0, "-e", `RALPHAI_NONCE=${nonce}`);
   }
-
-  // Credential file mounts
-  const mountFlags = buildMountFlags(agentType, dockerMounts);
-  args.push(...mountFlags);
-
-  // Image
-  args.push(image);
 
   // Agent command and prompt
   const parts = shellSplit(agentCommand);
@@ -417,6 +469,14 @@ export interface SetupDockerCommandOptions {
   dockerEnvVars?: string[];
   /** Extra bind mounts (from dockerMounts config). */
   dockerMounts?: string[];
+  /**
+   * Absolute path to the main repo's `.git` directory.
+   * Required when the working directory is a git worktree so that
+   * git operations inside the container can follow the worktree's
+   * `.git` file pointer back to the main repo. Mounted read-write
+   * because setup commands may need git access.
+   */
+  mainGitDir?: string;
 }
 
 /**
@@ -437,33 +497,17 @@ export function buildSetupDockerArgs(
     dockerImage,
     dockerEnvVars = [],
     dockerMounts = [],
+    mainGitDir,
   } = opts;
 
-  const agentType = detectAgentType(agentCommand);
-  const image = resolveDockerImage(agentCommand, dockerImage);
-
-  const args: string[] = ["run", "--rm"];
-
-  // Run as host user to avoid root-owned files in worktree
-  args.push(...getUserFlag());
-
-  // Set container HOME so tools and configs work for non-root user
-  args.push("-e", `HOME=${CONTAINER_HOME}`);
-
-  // Worktree bind mount (read-write so setup can install dependencies)
-  args.push("-v", `${cwd}:${cwd}`);
-  args.push("-w", cwd);
-
-  // Env var forwarding (same as agent execution)
-  const envFlags = buildEnvFlags(agentType, dockerEnvVars);
-  args.push(...envFlags);
-
-  // Credential file mounts (same as agent execution)
-  const mountFlags = buildMountFlags(agentType, dockerMounts);
-  args.push(...mountFlags);
-
-  // Image
-  args.push(image);
+  const args = buildCommonDockerArgs({
+    agentCommand,
+    cwd,
+    dockerImage,
+    dockerEnvVars,
+    dockerMounts,
+    mainGitDir,
+  });
 
   // Setup command via sh -c
   args.push("sh", "-c", setupCommand);
@@ -509,12 +553,41 @@ export interface DockerExecutorConfig {
  * The worktree is bind-mounted at its host path so file references
  * in agent output remain valid. Credential env vars and files are
  * forwarded per-agent following a strict allowlist.
+ *
+ * When the working directory is a git worktree, the main repo's
+ * `.git` directory is automatically mounted so git operations work.
  */
 export class DockerExecutor implements AgentExecutor {
   private readonly config: DockerExecutorConfig;
 
   constructor(config: DockerExecutorConfig = {}) {
     this.config = config;
+  }
+
+  /**
+   * Build the Docker args for a spawn invocation.
+   *
+   * Exposed for testing — allows verifying the constructed command
+   * without actually spawning a Docker process.
+   */
+  buildSpawnDockerArgs(opts: {
+    agentCommand: string;
+    prompt: string;
+    cwd: string;
+    nonce?: string;
+  }): string[] {
+    const mainGitDir = resolveMainGitDir(opts.cwd);
+
+    return buildDockerArgs({
+      agentCommand: opts.agentCommand,
+      prompt: opts.prompt,
+      cwd: opts.cwd,
+      dockerImage: this.config.dockerImage,
+      dockerEnvVars: this.config.dockerEnvVars,
+      dockerMounts: this.config.dockerMounts,
+      nonce: opts.nonce,
+      mainGitDir,
+    });
   }
 
   async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
@@ -528,13 +601,10 @@ export class DockerExecutor implements AgentExecutor {
       nonce,
     } = opts;
 
-    const dockerArgs = buildDockerArgs({
+    const dockerArgs = this.buildSpawnDockerArgs({
       agentCommand,
       prompt,
       cwd,
-      dockerImage: this.config.dockerImage,
-      dockerEnvVars: this.config.dockerEnvVars,
-      dockerMounts: this.config.dockerMounts,
       nonce,
     });
 
