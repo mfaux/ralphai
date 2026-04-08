@@ -527,9 +527,9 @@ Files that don't exist on the host are silently skipped. Additional mounts can b
 
 Ralphai publishes pre-built Docker images for supported agents:
 
-- `ghcr.io/ralphai/sandbox:claude`
-- `ghcr.io/ralphai/sandbox:opencode`
-- `ghcr.io/ralphai/sandbox:codex`
+- `ghcr.io/mfaux/ralphai-sandbox:claude`
+- `ghcr.io/mfaux/ralphai-sandbox:opencode`
+- `ghcr.io/mfaux/ralphai-sandbox:codex`
 
 Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), Bun, and the agent CLI. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
 

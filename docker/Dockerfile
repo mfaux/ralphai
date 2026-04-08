@@ -1,9 +1,9 @@
 # Parameterized sandbox image for Ralphai agent execution.
 #
 # Usage:
-#   docker build --build-arg AGENT=claude -t ghcr.io/ralphai/sandbox:claude docker/
-#   docker build --build-arg AGENT=opencode -t ghcr.io/ralphai/sandbox:opencode docker/
-#   docker build --build-arg AGENT=codex -t ghcr.io/ralphai/sandbox:codex docker/
+#   docker build --build-arg AGENT=claude -t ghcr.io/mfaux/ralphai-sandbox:claude docker/
+#   docker build --build-arg AGENT=opencode -t ghcr.io/mfaux/ralphai-sandbox:opencode docker/
+#   docker build --build-arg AGENT=codex -t ghcr.io/mfaux/ralphai-sandbox:codex docker/
 #
 # The AGENT arg controls which CLI is installed. All images share a common
 # base with git, Node.js, and Bun pre-installed.

@@ -198,7 +198,7 @@ If Docker cannot pull the pre-built image (network issues, private registry, rat
 
 **Steps:**
 
-1. Pull the image manually to diagnose: `docker pull ghcr.io/ralphai/sandbox:claude`
+1. Pull the image manually to diagnose: `docker pull ghcr.io/mfaux/ralphai-sandbox:claude`
 2. Check network connectivity and Docker Hub / GHCR rate limits.
 3. If using a private registry, ensure `docker login` is configured.
 4. As a workaround, build the image locally from the Ralphai Dockerfile and set `dockerImage` to the local tag:

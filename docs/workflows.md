@@ -120,7 +120,7 @@ Or in `config.json`:
 }
 ```
 
-When `dockerImage` is empty (the default), Ralphai auto-resolves the image from the agent name — e.g., `claude -p` uses `ghcr.io/ralphai/sandbox:claude`.
+When `dockerImage` is empty (the default), Ralphai auto-resolves the image from the agent name — e.g., `claude -p` uses `ghcr.io/mfaux/ralphai-sandbox:claude`.
 
 **Custom mounts and env vars:** Forward additional files or environment variables into the container:
 
