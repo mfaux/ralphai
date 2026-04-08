@@ -11,7 +11,7 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 import * as clack from "@clack/prompts";
-import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
+import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import {
   listPlanFolders,
@@ -39,7 +39,6 @@ import {
   detectProject,
   detectSetupCommand,
 } from "./project-detection.ts";
-import type { DetectedProject, WorkspacePackage } from "./project-detection.ts";
 import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
 import {
   resolveConfig,
@@ -62,17 +61,15 @@ import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
 import { runRalphaiStop, showStopHelp } from "./stop.ts";
 import { runClean, showCleanHelp } from "./clean.ts";
 import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
-import { runRalphaiStatus, printStatusOnce, showStatusHelp } from "./status.ts";
+import { runRalphaiStatus, showStatusHelp } from "./status.ts";
 import { runHitl } from "./hitl.ts";
 
-import { extractIssueFrontmatter } from "./frontmatter.ts";
-import { extractDependsOn } from "./frontmatter.ts";
+import { extractIssueFrontmatter, extractDependsOn } from "./frontmatter.ts";
 import {
   findHitlBlockers,
   formatPrdHitlSummary,
   type BlockedSubIssue,
 } from "./prd-hitl.ts";
-import { gatherPipelineState } from "./pipeline-state.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
@@ -91,7 +88,7 @@ import {
   pullPrdSubIssue,
   slugify,
 } from "./issues.ts";
-import type { PrdIssue, PullIssueOptions, PullIssueResult } from "./issues.ts";
+import type { PrdIssue, PullIssueOptions } from "./issues.ts";
 import { discoverPrdTarget } from "./prd-discovery.ts";
 import type { PrdDiscoveryResult } from "./prd-discovery.ts";
 import {
@@ -106,7 +103,7 @@ import {
   extractExecStderr,
   detectBaseBranch,
 } from "./git-helpers.ts";
-import { SUBCOMMANDS, parseRalphaiOptions } from "./parse-options.ts";
+import { parseRalphaiOptions } from "./parse-options.ts";
 import type {
   RalphaiSubcommand,
   RalphaiOptions,
@@ -2482,6 +2479,14 @@ async function runRalphaiInManagedWorktree(
                   : undefined,
               }
             : undefined,
+        // Mount the main repo's .git directory for worktree support.
+        // In managed worktree mode, cwd is always the main repo root,
+        // so worktrees created from it need this path mounted in Docker
+        // for git operations to work inside the container.
+        mainGitDir:
+          resolvedConfig.sandbox.value === "docker"
+            ? join(cwd, ".git")
+            : undefined,
       }
     : undefined;
 
@@ -2695,18 +2700,7 @@ async function runRalphaiInManagedWorktree(
     process.exit(1);
   }
 
-  try {
-    execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
-  } catch {
-    console.error(
-      `This repository has no commits yet. Git worktrees require at least one commit.`,
-    );
-    console.error(
-      `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
-    );
-    console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
-    process.exit(1);
-  }
+  ensureRepoHasCommit(cwd);
 
   const hasOnce = runArgs.includes("--once");
   const baseBranch = detectBaseBranch(cwd);

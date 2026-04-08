@@ -166,6 +166,45 @@ describe("buildDockerArgs", () => {
     expect(hasNonce).toBe(false);
   });
 
+  it("mounts main git dir when mainGitDir is provided", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/.ralphai-worktrees/my-plan",
+      mainGitDir: "/work/main-repo/.git",
+    });
+    // Should contain a -v mount for the main .git directory
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
+  });
+
+  it("main git dir mount is read-write (no :ro suffix)", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/.ralphai-worktrees/my-plan",
+      mainGitDir: "/work/main-repo/.git",
+    });
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    expect(gitMount).not.toContain(":ro");
+  });
+
+  it("does NOT add extra mount when mainGitDir is absent", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    // Should contain exactly one -v mount (the worktree)
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    // Filter out credential file mounts (they contain :ro)
+    const bindMounts = mountArgs.filter((m) => !m.includes(":ro"));
+    expect(bindMounts).toHaveLength(1);
+    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
+  });
+
   describe("feedbackWrapperPath — bind-mount feedback script", () => {
     const ctx = useTempDir();
 
@@ -461,6 +500,13 @@ describe("DockerExecutor", () => {
     });
     expect(typeof executor.spawn).toBe("function");
   });
+
+  it("accepts mainGitDir in config for worktree support", () => {
+    const executor = new DockerExecutor({
+      mainGitDir: "/work/main-repo/.git",
+    });
+    expect(typeof executor.spawn).toBe("function");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -483,6 +529,13 @@ describe("createExecutor — docker support", () => {
       dockerImage: "custom:v1",
       dockerEnvVars: ["MY_VAR"],
       dockerMounts: ["/a:/b"],
+    });
+    expect(executor).toBeInstanceOf(DockerExecutor);
+  });
+
+  it("passes mainGitDir through to DockerExecutor", () => {
+    const executor = createExecutor("docker", {
+      mainGitDir: "/work/main-repo/.git",
     });
     expect(executor).toBeInstanceOf(DockerExecutor);
   });
@@ -716,6 +769,42 @@ describe("buildSetupDockerArgs", () => {
       dockerMounts: ["/host/cache:/container/cache"],
     });
     expect(args).toContain("/host/cache:/container/cache");
+  });
+
+  it("mounts main git dir when mainGitDir is provided", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/.ralphai-worktrees/my-plan",
+      mainGitDir: "/work/main-repo/.git",
+    });
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
+  });
+
+  it("main git dir mount is read-write (no :ro suffix)", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/.ralphai-worktrees/my-plan",
+      mainGitDir: "/work/main-repo/.git",
+    });
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    expect(gitMount).not.toContain(":ro");
+  });
+
+  it("does NOT add extra mount when mainGitDir is absent", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
+    const bindMounts = mountArgs.filter((m) => !m.includes(":ro"));
+    expect(bindMounts).toHaveLength(1);
+    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
   });
 });
 

@@ -542,6 +542,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
       dockerImage: config.dockerImage.value || undefined,
       dockerEnvVars,
       dockerMounts: dockerMountsVal,
+      mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
     });
     console.log(`[dry-run] Docker command: ${formatDockerCommand(dockerArgs)}`);
   }
@@ -641,6 +642,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 .map((s: string) => s.trim())
                 .filter(Boolean)
             : undefined,
+          // Mount the main repo's .git directory for worktree support.
+          // Without this, git operations inside the container fail because
+          // the worktree's .git file points to a path outside the container.
+          mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
         }
       : undefined;
   const executor: AgentExecutor = createExecutor(
