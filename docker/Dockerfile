@@ -59,10 +59,18 @@ RUN if [ "$AGENT" = "claude" ]; then \
       npm install -g @anthropic-ai/claude-code; \
     fi
 
-# OpenCode: install via official install script, then move to global path
+# OpenCode: download the release binary directly.
+# The install script relies on the GitHub API to resolve the latest version,
+# which is rate-limited for unauthenticated requests and fails inside Docker
+# Buildx containers. Downloading via the /releases/latest redirect avoids
+# the API call entirely.
 RUN if [ "$AGENT" = "opencode" ]; then \
-      curl -fsSL https://opencode.ai/install | bash && \
-      cp /root/.opencode/bin/* /usr/local/bin/ 2>/dev/null || true; \
+      curl -fsSL -o /tmp/opencode.tar.gz \
+        "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz" && \
+      tar -xzf /tmp/opencode.tar.gz -C /tmp && \
+      mv /tmp/opencode /usr/local/bin/opencode && \
+      chmod 755 /usr/local/bin/opencode && \
+      rm -f /tmp/opencode.tar.gz; \
     fi
 
 # Codex: install via npm
