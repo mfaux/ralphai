@@ -25,7 +25,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
@@ -37,13 +37,13 @@ jobs:
           context: docker
           build-args: AGENT=${{ matrix.agent }}
           push: true
-          tags: ghcr.io/ralphai/sandbox:${{ matrix.agent }}
+          tags: ghcr.io/${{ github.repository_owner }}/ralphai-sandbox:${{ matrix.agent }}
           cache-from: type=gha,scope=${{ matrix.agent }}
           cache-to: type=gha,mode=max,scope=${{ matrix.agent }}
 
       - name: Smoke test — verify agent CLI is executable
         run: |
-          docker run --rm ghcr.io/ralphai/sandbox:${{ matrix.agent }} \
+          docker run --rm ghcr.io/${{ github.repository_owner }}/ralphai-sandbox:${{ matrix.agent }} \
             sh -c "
               git --version && \
               node --version && \

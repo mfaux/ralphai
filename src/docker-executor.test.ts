@@ -34,27 +34,27 @@ import { useTempDir } from "./test-utils.ts";
 // ---------------------------------------------------------------------------
 
 describe("resolveDockerImage", () => {
-  it("auto-resolves claude agent to ghcr.io/ralphai/sandbox:claude", () => {
+  it("auto-resolves claude agent to ghcr.io/mfaux/ralphai-sandbox:claude", () => {
     expect(resolveDockerImage("claude -p")).toBe(
-      "ghcr.io/ralphai/sandbox:claude",
+      "ghcr.io/mfaux/ralphai-sandbox:claude",
     );
   });
 
   it("auto-resolves opencode agent", () => {
     expect(resolveDockerImage("opencode run --agent build")).toBe(
-      "ghcr.io/ralphai/sandbox:opencode",
+      "ghcr.io/mfaux/ralphai-sandbox:opencode",
     );
   });
 
   it("auto-resolves codex agent", () => {
     expect(resolveDockerImage("codex exec")).toBe(
-      "ghcr.io/ralphai/sandbox:codex",
+      "ghcr.io/mfaux/ralphai-sandbox:codex",
     );
   });
 
   it("falls back to latest for unknown agent", () => {
     expect(resolveDockerImage("my-custom-agent")).toBe(
-      "ghcr.io/ralphai/sandbox:latest",
+      "ghcr.io/mfaux/ralphai-sandbox:latest",
     );
   });
 
@@ -66,7 +66,7 @@ describe("resolveDockerImage", () => {
 
   it("ignores empty dockerImage override", () => {
     expect(resolveDockerImage("claude -p", "")).toBe(
-      "ghcr.io/ralphai/sandbox:claude",
+      "ghcr.io/mfaux/ralphai-sandbox:claude",
     );
   });
 });
@@ -115,7 +115,7 @@ describe("buildDockerArgs", () => {
       prompt: "do stuff",
       cwd: "/work",
     });
-    expect(args).toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("uses dockerImage override", () => {
@@ -126,7 +126,7 @@ describe("buildDockerArgs", () => {
       dockerImage: "my-image:latest",
     });
     expect(args).toContain("my-image:latest");
-    expect(args).not.toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).not.toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("appends agent command and prompt at end", () => {
@@ -614,7 +614,7 @@ describe("buildSetupDockerArgs", () => {
       setupCommand: "npm install",
       cwd: "/work",
     });
-    expect(args).toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("uses dockerImage override", () => {
@@ -625,7 +625,7 @@ describe("buildSetupDockerArgs", () => {
       dockerImage: "my-image:latest",
     });
     expect(args).toContain("my-image:latest");
-    expect(args).not.toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).not.toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("wraps setup command with sh -c as entrypoint", () => {

@@ -176,7 +176,7 @@ describe("executeSetupCommand — Docker command construction", () => {
     executeSetupCommand("npm install", "/work", config);
 
     const args = spawnSyncCalls[0]!.args;
-    expect(args).toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("uses dockerImage override from config", () => {
@@ -191,7 +191,7 @@ describe("executeSetupCommand — Docker command construction", () => {
 
     const args = spawnSyncCalls[0]!.args;
     expect(args).toContain("my-custom-image:v2");
-    expect(args).not.toContain("ghcr.io/ralphai/sandbox:claude");
+    expect(args).not.toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
   });
 
   it("wraps setup command with sh -c", () => {

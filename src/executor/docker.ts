@@ -33,14 +33,14 @@ import { detectAgentType } from "../show-config.ts";
 // ---------------------------------------------------------------------------
 
 /** Default image registry prefix. */
-const IMAGE_REGISTRY = "ghcr.io/ralphai/sandbox";
+const IMAGE_REGISTRY = "ghcr.io/mfaux/ralphai-sandbox";
 
 /**
  * Resolve the Docker image for a given agent command.
  *
  * If `dockerImage` is provided (non-empty), it is used as-is.
  * Otherwise the image is auto-resolved from the agent command:
- *   "claude -p" → "ghcr.io/ralphai/sandbox:claude"
+ *   "claude -p" → "ghcr.io/mfaux/ralphai-sandbox:claude"
  *
  * Falls back to the "latest" tag for unrecognized agents.
  */
