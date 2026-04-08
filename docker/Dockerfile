@@ -45,8 +45,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install Bun to a global path (not /root/.bun)
+# Explicit chmod ensures the binary is world-executable for non-root
+# container users (the --user flag sets an arbitrary UID at runtime).
 ENV BUN_INSTALL=/usr/local
-RUN curl -fsSL https://bun.sh/install | bash
+RUN curl -fsSL https://bun.sh/install | bash && \
+    chmod 755 /usr/local/bin/bun
 
 # ---------------------------------------------------------------------------
 # Agent CLI installation (conditional on AGENT build arg)
