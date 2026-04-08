@@ -247,6 +247,46 @@ export function checkDockerAvailability(
 }
 
 // ---------------------------------------------------------------------------
+// Image pull
+// ---------------------------------------------------------------------------
+
+/** Result of a Docker image pull attempt. */
+export interface DockerPullResult {
+  /** Whether the pull succeeded. */
+  success: boolean;
+  /** The image that was pulled (or attempted). */
+  image: string;
+  /** Error message on failure. */
+  error?: string;
+}
+
+/**
+ * Pull the Docker image to ensure the local cache is up to date.
+ *
+ * Runs `docker pull --quiet <image>` synchronously. This is fail-open:
+ * if the pull fails (e.g. no network), the run continues with whatever
+ * image is cached locally. This avoids blocking offline use while still
+ * keeping images fresh when connectivity is available.
+ */
+export function pullDockerImage(
+  agentCommand: string,
+  dockerImage?: string,
+): DockerPullResult {
+  const image = resolveDockerImage(agentCommand, dockerImage);
+
+  try {
+    require("child_process").execSync(`docker pull --quiet ${image}`, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return { success: true, image };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Unknown error during docker pull";
+    return { success: false, image, error: message };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Command construction
 // ---------------------------------------------------------------------------
 

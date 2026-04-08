@@ -25,6 +25,7 @@ import { execQuiet, execOk } from "./exec.ts";
 import { createExecutor, type AgentExecutor } from "./executor/index.ts";
 import {
   checkDockerAvailability,
+  pullDockerImage,
   buildDockerArgs,
   formatDockerCommand,
 } from "./executor/docker.ts";
@@ -603,6 +604,23 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         console.error(`ERROR: ${dockerCheck.error}`);
         process.exit(1);
       }
+    }
+  }
+
+  // --- Pull Docker image to ensure local cache is up to date ---
+  // Fail-open: if the pull fails (e.g. no network), continue with the
+  // cached image. Skipped in dry-run mode (no side effects).
+  if (config.sandbox.value === "docker" && !dryRun) {
+    const pullResult = pullDockerImage(
+      agentCommand,
+      config.dockerImage.value || undefined,
+    );
+    if (pullResult.success) {
+      console.log(`Docker image up to date: ${pullResult.image}`);
+    } else {
+      console.warn(
+        `WARNING: Failed to pull ${pullResult.image} — using cached image if available.`,
+      );
     }
   }
 

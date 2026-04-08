@@ -533,6 +533,8 @@ Ralphai publishes pre-built Docker images for supported agents:
 
 Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), pnpm (via corepack), Bun, and the agent CLI. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
 
+At the start of each run, Ralphai pulls the resolved image (`docker pull --quiet`) to ensure the local cache is up to date. The pull is fail-open: if it fails (e.g., no network), the run continues with whatever image is cached locally.
+
 ### Stdio-based progress extraction
 
 Because the container's stdout and stderr are piped back to the runner process, all existing progress extraction, learnings extraction, and completion sentinel detection work unchanged. The `<progress>`, `<learnings>`, `<promise>`, and `<pr-summary>` sentinel tags are parsed from the container's output stream the same way they are parsed from a local process.
