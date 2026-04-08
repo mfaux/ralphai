@@ -41,6 +41,11 @@ function formatPrTitle(title: string): string {
   return `${type}: ${description}`;
 }
 
+/** Escape double quotes for shell-safe interpolation in `gh` commands. */
+function escapeQuotes(s: string): string {
+  return s.replace(/"/g, '\\"');
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -95,10 +100,6 @@ export interface ArchiveRunOptions {
   archiveDir: string;
   cwd: string;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Push
@@ -201,12 +202,11 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     learnings: options.learnings,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(planDescription);
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );
@@ -292,14 +292,13 @@ export function createContinuousPr(
     cwd,
     { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
   );
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
     ? formatPrTitle(prd.title)
     : `ralphai: ${firstPlanDescription}`;
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );
@@ -559,7 +558,6 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     summaries,
     learnings,
   });
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(prd.title);
 
   if (existingPrUrl) {
@@ -587,7 +585,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   // Create new draft PR
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );

@@ -15,12 +15,9 @@ import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import {
   listPlanFolders,
-  planPathForSlug,
-  listPlanSlugs,
   listPlanFiles,
   resolvePlanPath,
   planExistsForSlug,
-  countCompletedTasks,
   getPlanDescription,
 } from "./plan-detection.ts";
 import {
@@ -81,7 +78,6 @@ import {
   fetchIssueWithLabels,
   discoverParentIssue,
   issueBranchName,
-  issueDepSlug,
   commitTypeFromTitle,
   pullGithubIssueByNumber,
   pullGithubIssues,
