@@ -15,6 +15,7 @@ import {
   buildSetupDockerArgs,
   checkDockerAvailability,
   formatDockerCommand,
+  pullDockerImage,
   resolveDockerImage,
   DockerExecutor,
 } from "./executor/docker.ts";
@@ -672,5 +673,45 @@ describe("buildSetupDockerArgs", () => {
       dockerMounts: ["/host/cache:/container/cache"],
     });
     expect(args).toContain("/host/cache:/container/cache");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pullDockerImage
+// ---------------------------------------------------------------------------
+
+describe("pullDockerImage", () => {
+  it("resolves auto-detected image in result", () => {
+    // Use a definitely-nonexistent image so the pull fails fast
+    // without attempting a real network pull
+    const result = pullDockerImage(
+      "claude -p",
+      "localhost:1/nonexistent:never",
+    );
+    expect(result.image).toBe("localhost:1/nonexistent:never");
+  });
+
+  it("uses custom dockerImage when provided", () => {
+    const result = pullDockerImage("claude -p", "localhost:1/my-image:v1");
+    expect(result.image).toBe("localhost:1/my-image:v1");
+  });
+
+  it("returns success: false when docker pull fails", () => {
+    const result = pullDockerImage(
+      "claude -p",
+      "localhost:1/nonexistent:never",
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("auto-resolves image from agent command when no override", () => {
+    // Verify image resolution is correct without triggering a real pull.
+    // We can't call pullDockerImage with a real registry image in tests
+    // (it would timeout), so verify via resolveDockerImage instead —
+    // pullDockerImage delegates to it for image resolution.
+    expect(resolveDockerImage("opencode run --agent build")).toBe(
+      "ghcr.io/mfaux/ralphai-sandbox:opencode",
+    );
   });
 });
