@@ -562,4 +562,77 @@ describe("buildPrdPrBody", () => {
 
     expect(body).not.toContain("## Summary");
   });
+
+  it("includes Learnings section when learnings are provided", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+      learnings: [
+        "The auth module requires a warm-up call before use.",
+        "Rate limiting is enforced at the gateway level.",
+      ],
+    });
+
+    expect(body).toContain("## Learnings");
+    expect(body).toContain(
+      "- The auth module requires a warm-up call before use.",
+    );
+    expect(body).toContain("- Rate limiting is enforced at the gateway level.");
+  });
+
+  it("places Learnings section after Changes section", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+      learnings: ["Some learning"],
+    });
+
+    const changesIndex = body.indexOf("## Changes");
+    const learningsIndex = body.indexOf("## Learnings");
+    expect(changesIndex).toBeGreaterThan(-1);
+    expect(learningsIndex).toBeGreaterThan(changesIndex);
+  });
+
+  it("omits Learnings section when learnings is an empty array", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+      learnings: [],
+    });
+
+    expect(body).not.toContain("## Learnings");
+  });
+
+  it("omits Learnings section when learnings is not provided", () => {
+    initRepo(ctx.dir);
+
+    const body = buildPrdPrBody({
+      prd: { number: 42, title: "Add user dashboard" },
+      completedSubIssues: [10],
+      stuckSubIssues: [],
+      baseBranch: "main",
+      headBranch: "feat/add-user-dashboard",
+      cwd: ctx.dir,
+    });
+
+    expect(body).not.toContain("## Learnings");
+  });
 });
