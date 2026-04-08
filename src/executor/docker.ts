@@ -561,6 +561,14 @@ export interface DockerExecutorConfig {
   dockerEnvVars?: string[];
   /** Extra bind mounts (from dockerMounts config, CSV-parsed). */
   dockerMounts?: string[];
+  /**
+   * Path to the main repo's `.git` directory for worktree support.
+   * When the agent's working directory is a git worktree, this path
+   * must be mounted so git operations inside the container can resolve
+   * the object store, refs, and config from the main repository.
+   * Derived by the caller from `resolveWorktreeInfo()`.
+   */
+  mainGitDir?: string;
 }
 
 /**

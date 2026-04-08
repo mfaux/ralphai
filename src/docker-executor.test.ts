@@ -588,6 +588,13 @@ describe("DockerExecutor", () => {
     });
     expect(typeof executor.spawn).toBe("function");
   });
+
+  it("accepts mainGitDir in config for worktree support", () => {
+    const executor = new DockerExecutor({
+      mainGitDir: "/work/main-repo/.git",
+    });
+    expect(typeof executor.spawn).toBe("function");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -610,6 +617,13 @@ describe("createExecutor — docker support", () => {
       dockerImage: "custom:v1",
       dockerEnvVars: ["MY_VAR"],
       dockerMounts: ["/a:/b"],
+    });
+    expect(executor).toBeInstanceOf(DockerExecutor);
+  });
+
+  it("passes mainGitDir through to DockerExecutor", () => {
+    const executor = createExecutor("docker", {
+      mainGitDir: "/work/main-repo/.git",
     });
     expect(executor).toBeInstanceOf(DockerExecutor);
   });

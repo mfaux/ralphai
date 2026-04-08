@@ -49,6 +49,14 @@ so they are automatically available in every worktree without symlinks.
 `config.json` to embed pipeline file contents directly in the prompt,
 bypassing the agent's need to access external paths.
 
+## Docker sandbox mode
+
+When `sandbox` is `"docker"`, Ralphai automatically mounts the main
+repository's `.git` directory into the container so that git operations
+(commit, diff, status, etc.) work correctly inside worktrees. No extra
+configuration is needed — the mount is added whenever the agent's working
+directory is a git worktree.
+
 ## Setup command
 
 Fresh worktrees don't have `node_modules` or other dependency artifacts.

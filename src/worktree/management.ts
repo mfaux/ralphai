@@ -28,6 +28,13 @@ export interface SetupSandboxConfig {
   agentCommand: string;
   /** Docker-specific config (image, mounts, env vars). */
   dockerConfig?: DockerExecutorConfig;
+  /**
+   * Path to the main repo's `.git` directory for worktree support.
+   * When set, the setup Docker container mounts this path so git
+   * operations inside the container can resolve the worktree's
+   * object store, refs, and config.
+   */
+  mainGitDir?: string;
 }
 
 export function isGitWorktree(dir: string): boolean {
@@ -118,7 +125,8 @@ export function executeSetupCommand(
 
   if (sandboxConfig?.sandbox === "docker") {
     console.log(`Running setup command in Docker: ${setupCommand}`);
-    const mainGitDir = resolveMainGitDir(worktreeDir);
+    const mainGitDir =
+      sandboxConfig.mainGitDir ?? resolveMainGitDir(worktreeDir);
     const dockerArgs = buildSetupDockerArgs({
       agentCommand: sandboxConfig.agentCommand,
       setupCommand,

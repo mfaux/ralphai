@@ -224,6 +224,12 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
               : undefined,
           }
         : undefined,
+    // Mount the main repo's .git directory for worktree support.
+    // In HITL mode, cwd is always the main repo root, so worktrees
+    // created from it need this path mounted in Docker for git
+    // operations to work inside the container.
+    mainGitDir:
+      config.sandbox.value === "docker" ? join(cwd, ".git") : undefined,
   };
 
   const resolvedWorktreeDir = prepareWorktree(
