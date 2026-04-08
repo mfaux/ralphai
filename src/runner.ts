@@ -101,6 +101,8 @@ export interface RunnerResult {
   stuckSlugs: string[];
   /** Agent-generated PR summary from the last completed plan (if any). */
   lastPrSummary?: string;
+  /** Learnings accumulated across all iterations of this run. */
+  accumulatedLearnings: string[];
 }
 
 /** Options passed from the CLI layer to the runner. */
@@ -662,7 +664,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   // --- Dry-run mode ---
   if (dryRun) {
     runDryRun(opts, dirs);
-    return { stuckSlugs: [] };
+    return { stuckSlugs: [], accumulatedLearnings: [] };
   }
 
   // --- Signal handling ---
@@ -1378,5 +1380,5 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   process.removeListener("SIGINT", handleSignal);
   process.removeListener("SIGTERM", handleSignal);
 
-  return { stuckSlugs, lastPrSummary };
+  return { stuckSlugs, lastPrSummary, accumulatedLearnings };
 }

@@ -264,6 +264,7 @@ Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped),
 - A checklist of HITL sub-issues awaiting human review (if any)
 - A checklist of sub-issues blocked by HITL dependencies (if any)
 - A categorized commit log covering all changes on the branch
+- A **Learnings** section with merged, deduplicated learnings from all sub-issue runs (omitted if no learnings were produced)
 
 ### Stuck sub-issues
 
@@ -456,7 +457,7 @@ scope: ui
 
 ## Learnings System
 
-Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review. Learnings are also injected into subsequent iterations as anti-repeat memory.
+Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review — both for standalone single-plan PRs and for PRD aggregate PRs. For PRD runs, learnings from all sub-issue runs are merged and deduplicated into a single section. Learnings are also injected into subsequent iterations as anti-repeat memory.
 
 The prompt asks agents to report specific categories of information in their learnings — file paths modified or discovered, exported APIs and their signatures, architecture constraints or patterns observed, and error messages encountered with how they were resolved. The format remains free-form prose; the categories are guidance, not schema enforcement. Vague or empty learnings still work — the guidance is best-effort.
 

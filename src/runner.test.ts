@@ -563,6 +563,40 @@ describe("runRunner — RunnerResult", () => {
     expect(result.stuckSlugs).toEqual([]);
   });
 
+  test("returns accumulated learnings from the run", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "learnings-result");
+
+    writeFileSync(
+      join(backlogDir, "learnings-result.md"),
+      "# Plan: Learnings\n\n### Task 1: Test\n",
+    );
+
+    // Agent that emits a learning and completes
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">The auth module requires warm-up.</learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentScript,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: false,
+    };
+
+    const result = await runRunner(opts);
+
+    expect(result.accumulatedLearnings).toBeArrayOfSize(1);
+    expect(result.accumulatedLearnings[0]).toBe(
+      "The auth module requires warm-up.",
+    );
+  });
+
   test("dry-run returns empty stuckSlugs", async () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 
@@ -585,6 +619,7 @@ describe("runRunner — RunnerResult", () => {
     const result = await runRunner(opts);
 
     expect(result.stuckSlugs).toEqual([]);
+    expect(result.accumulatedLearnings).toEqual([]);
   });
 });
 

@@ -17,6 +17,7 @@ import {
 import { transitionDone } from "./label-lifecycle.ts";
 import { collectBacklogPlans } from "./plan-detection.ts";
 import type { BlockedSubIssue } from "./prd-hitl.ts";
+import { formatLearningsForPr } from "./learnings.ts";
 import {
   buildPrBody,
   buildContinuousPrBodyStructured,
@@ -38,6 +39,11 @@ import {
 function formatPrTitle(title: string): string {
   const { type, description } = commitTypeFromTitle(title);
   return `${type}: ${description}`;
+}
+
+/** Escape double quotes for shell-safe interpolation in `gh` commands. */
+function escapeQuotes(s: string): string {
+  return s.replace(/"/g, '\\"');
 }
 
 // ---------------------------------------------------------------------------
@@ -94,10 +100,6 @@ export interface ArchiveRunOptions {
   archiveDir: string;
   cwd: string;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Push
@@ -200,12 +202,11 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     learnings: options.learnings,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(planDescription);
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );
@@ -291,14 +292,13 @@ export function createContinuousPr(
     cwd,
     { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
   );
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = prd
     ? formatPrTitle(prd.title)
     : `ralphai: ${firstPlanDescription}`;
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );
@@ -403,9 +403,9 @@ export interface PrdPrBodyOptions {
   prRepo?: string;
   /** Agent-generated summaries keyed by sub-issue number. */
   summaries?: Map<number, string>;
+  /** Accumulated learnings from sub-issue runs. */
+  learnings?: string[];
 }
-
-/** Build a PR body for an aggregate PRD pull request. */
 export function buildPrdPrBody(options: PrdPrBodyOptions): string {
   const {
     prd,
@@ -419,6 +419,7 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
     issueRepo,
     prRepo,
     summaries,
+    learnings = [],
   } = options;
 
   const parts: string[] = [];
@@ -491,6 +492,12 @@ export function buildPrdPrBody(options: PrdPrBodyOptions): string {
   const formattedCommits = formatCommitsByCategory(categorized);
   parts.push("\n## Changes\n", formattedCommits);
 
+  // Learnings — merged from sub-issue runs
+  const learningsSection = formatLearningsForPr(learnings);
+  if (learningsSection) {
+    parts.push("\n\n" + learningsSection);
+  }
+
   return parts.join("\n");
 }
 
@@ -506,6 +513,8 @@ export interface CreatePrdPrOptions {
   issueRepo?: string;
   /** Agent-generated summaries keyed by sub-issue number. */
   summaries?: Map<number, string>;
+  /** Accumulated learnings from sub-issue runs. */
+  learnings?: string[];
 }
 
 /** Push branch and create (or update) a draft PR for a PRD aggregate run. */
@@ -521,6 +530,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     cwd,
     issueRepo,
     summaries,
+    learnings,
   } = options;
 
   const push = pushBranch(branch, cwd, true);
@@ -546,8 +556,8 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     issueRepo,
     prRepo,
     summaries,
+    learnings,
   });
-  const esc = (s: string) => s.replace(/"/g, '\\"');
   const prTitle = formatPrTitle(prd.title);
 
   if (existingPrUrl) {
@@ -575,7 +585,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   // Create new draft PR
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${esc(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
     prBody,
     cwd,
   );

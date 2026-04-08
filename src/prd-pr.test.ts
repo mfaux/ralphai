@@ -181,4 +181,46 @@ describe("skipPrCreation flag", () => {
     // PR creation should be attempted (will fail due to no remote, but message should appear)
     expect(output).toContain("Failed to push");
   });
+
+  test("runner returns accumulated learnings with skipPrCreation", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "learnings-prd");
+
+    writeFileSync(
+      join(backlogDir, "learnings-prd.md"),
+      "# Plan: Learnings PRD\n\nTest learnings accumulation.\n",
+    );
+
+    // Agent that emits a learning and completes
+    const agentWithLearning = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">The database requires connection pooling for performance.</learnings>"'`;
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: agentWithLearning,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: true,
+      skipPrCreation: true,
+    };
+
+    const origLog = console.log;
+    console.log = () => {};
+    let result;
+    try {
+      result = await runRunner(opts);
+    } finally {
+      console.log = origLog;
+    }
+
+    expect(result.accumulatedLearnings).toBeArrayOfSize(1);
+    expect(result.accumulatedLearnings[0]).toBe(
+      "The database requires connection pooling for performance.",
+    );
+  });
 });

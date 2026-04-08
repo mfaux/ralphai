@@ -15,12 +15,9 @@ import { RESET, DIM, TEXT } from "./utils.ts";
 import { runSelfUpdate } from "./self-update.ts";
 import {
   listPlanFolders,
-  planPathForSlug,
-  listPlanSlugs,
   listPlanFiles,
   resolvePlanPath,
   planExistsForSlug,
-  countCompletedTasks,
   getPlanDescription,
 } from "./plan-detection.ts";
 import {
@@ -81,7 +78,6 @@ import {
   fetchIssueWithLabels,
   discoverParentIssue,
   issueBranchName,
-  issueDepSlug,
   commitTypeFromTitle,
   pullGithubIssueByNumber,
   pullGithubIssues,
@@ -2141,6 +2137,7 @@ async function runPrdIssueTarget(
   const completedSubIssues: number[] = [];
   const blockedSubIssues: BlockedSubIssue[] = [];
   const subIssueSummaries = new Map<number, string>();
+  const prdLearnings: string[] = [];
   let completedCount = 0;
 
   for (const subIssueNumber of eligibleSubIssues) {
@@ -2243,6 +2240,12 @@ async function runPrdIssueTarget(
           subIssueSummaries.set(subIssueNumber, result.lastPrSummary);
         }
       }
+      // Collect learnings from this sub-issue (whether completed or stuck)
+      for (const learning of result.accumulatedLearnings) {
+        if (!prdLearnings.includes(learning)) {
+          prdLearnings.push(learning);
+        }
+      }
     } catch (error) {
       // Runner may exit on stuck detection or other errors
       stuckSubIssues.push(subIssueNumber);
@@ -2301,6 +2304,7 @@ async function runPrdIssueTarget(
       cwd: resolvedWorktreeDir,
       issueRepo,
       summaries: subIssueSummaries,
+      learnings: prdLearnings,
     });
     console.log(prResult.message);
   } else {
@@ -2889,7 +2893,7 @@ async function runRalphaiRunner(
   // --- Handle --help ---
   if (runArgs.includes("--help") || runArgs.includes("-h")) {
     showRunHelp();
-    return { stuckSlugs: [] };
+    return { stuckSlugs: [], accumulatedLearnings: [] };
   }
 
   // --- Reject unrecognized flags ---
@@ -2943,7 +2947,7 @@ async function runRalphaiRunner(
       workspaces: config.workspaces.value,
     });
     console.log(text);
-    return { stuckSlugs: [] };
+    return { stuckSlugs: [], accumulatedLearnings: [] };
   }
 
   // Check that ralphai has been initialized (global config exists).
