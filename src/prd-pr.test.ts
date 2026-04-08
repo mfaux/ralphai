@@ -98,7 +98,9 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
+
+const completeAgentWithLearning = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">JWT tokens need a 15-minute expiry for security.</learnings>"'`;
 
 // ---------------------------------------------------------------------------
 // skipPrCreation flag
@@ -222,5 +224,94 @@ describe("skipPrCreation flag", () => {
     expect(result.accumulatedLearnings[0]).toBe(
       "The database requires connection pooling for performance.",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Runner result includes accumulated learnings
+// ---------------------------------------------------------------------------
+
+describe("runner result learnings", () => {
+  let dir: string;
+  let savedHome: string | undefined;
+
+  beforeEach(() => {
+    savedHome = process.env.RALPHAI_HOME;
+    dir = createTmpGitRepo();
+  });
+
+  afterEach(() => {
+    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
+    else process.env.RALPHAI_HOME = savedHome;
+  });
+
+  test("runner result includes accumulated learnings from the run", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "with-learnings");
+
+    writeFileSync(
+      join(backlogDir, "with-learnings.md"),
+      "# Plan: With Learnings\n\nImplement a feature with learnings.\n",
+    );
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgentWithLearning,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: true,
+      skipPrCreation: true,
+    };
+
+    let result: Awaited<ReturnType<typeof runRunner>> | undefined;
+    await captureLogs(async () => {
+      result = await runRunner(opts);
+    });
+
+    expect(result).toBeDefined();
+    expect(result!.accumulatedLearnings).toBeDefined();
+    expect(result!.accumulatedLearnings).toContain(
+      "JWT tokens need a 15-minute expiry for security.",
+    );
+  });
+
+  test("runner result has empty learnings when agent produces none", async () => {
+    const { backlogDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "no-learnings");
+
+    writeFileSync(
+      join(backlogDir, "no-learnings.md"),
+      "# Plan: No Learnings\n\nImplement a feature without learnings.\n",
+    );
+
+    const opts: RunnerOptions = {
+      config: makeResolvedConfig({
+        agentCommand: completeAgent,
+        autoCommit: "true",
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      once: true,
+      skipPrCreation: true,
+    };
+
+    let result: Awaited<ReturnType<typeof runRunner>> | undefined;
+    await captureLogs(async () => {
+      result = await runRunner(opts);
+    });
+
+    expect(result).toBeDefined();
+    expect(result!.accumulatedLearnings).toBeDefined();
+    expect(result!.accumulatedLearnings).toHaveLength(0);
   });
 });

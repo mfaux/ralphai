@@ -2245,6 +2245,14 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
+      // Collect learnings from this sub-issue run (deduplicated)
+      if (result.accumulatedLearnings) {
+        for (const learning of result.accumulatedLearnings) {
+          if (!prdLearnings.includes(learning)) {
+            prdLearnings.push(learning);
+          }
+        }
+      }
       if (result.stuckSlugs.length > 0) {
         // Runner returned normally but the sub-issue got stuck
         stuckSubIssues.push(subIssueNumber);
