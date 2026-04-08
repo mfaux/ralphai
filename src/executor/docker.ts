@@ -306,6 +306,14 @@ export interface DockerCommandOptions {
   dockerMounts?: string[];
   /** Optional nonce for RALPHAI_NONCE env var. */
   nonce?: string;
+  /**
+   * Optional absolute path to the feedback wrapper script on the host.
+   *
+   * When set, the script is bind-mounted read-only into the container
+   * at the same path so the agent can invoke it. Without this, the
+   * script lives in pipeline state (~/.ralphai/…) which is not mounted.
+   */
+  feedbackWrapperPath?: string;
 }
 
 /**
@@ -329,6 +337,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerEnvVars = [],
     dockerMounts = [],
     nonce,
+    feedbackWrapperPath,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -339,6 +348,13 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
   // Worktree bind mount (read-write so the agent can modify files)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);
+
+  // Feedback wrapper script: lives in pipeline state (~/.ralphai/…)
+  // which is not otherwise mounted. Bind-mount the single file
+  // read-only so the agent can invoke it from inside the container.
+  if (feedbackWrapperPath && existsSync(feedbackWrapperPath)) {
+    args.push("-v", `${feedbackWrapperPath}:${feedbackWrapperPath}:ro`);
+  }
 
   // Env var forwarding
   const envFlags = buildEnvFlags(agentType, dockerEnvVars);
@@ -484,6 +500,7 @@ export class DockerExecutor implements AgentExecutor {
       outputLogPath,
       ipcBroadcast,
       nonce,
+      feedbackWrapperPath,
     } = opts;
 
     const dockerArgs = buildDockerArgs({
@@ -494,6 +511,7 @@ export class DockerExecutor implements AgentExecutor {
       dockerEnvVars: this.config.dockerEnvVars,
       dockerMounts: this.config.dockerMounts,
       nonce,
+      feedbackWrapperPath,
     });
 
     return new Promise((resolve) => {
