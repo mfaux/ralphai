@@ -99,7 +99,7 @@ Running `ralphai run` immediately after `ralphai init` may report a dirty workin
 
 ## "Not inside a git repository"
 
-Commands that operate on repo state, such as `run`, `worktree`, and `init`, require a git repository. If you run them outside one, Ralphai exits with:
+Commands that operate on repo state, such as `run` and `init`, require a git repository. If you run them outside one, Ralphai exits with:
 
 ```
 ERROR: <command> must be run inside a git repository.
@@ -159,6 +159,17 @@ When your test suite is large, the agent may spend most of its iteration budget 
 If you don't set `feedback-scope`, Ralphai tries to infer it from the `## Relevant Files` section in the plan. For plans that touch widely scattered files, consider splitting into smaller plans with narrower scope.
 
 You can also move slow tests (E2E, integration) to `prFeedbackCommands` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).
+
+## "`ralphai worktree` command not found"
+
+The `ralphai worktree clean` and `ralphai worktree list` subcommands have been removed. Use the replacements:
+
+| Old command              | Replacement                 |
+| ------------------------ | --------------------------- |
+| `ralphai worktree clean` | `ralphai clean --worktrees` |
+| `ralphai worktree list`  | `ralphai status`            |
+
+Running the old commands prints a redirect message with the replacement command.
 
 ## Docker Sandboxing Issues
 
