@@ -92,7 +92,7 @@ RUN git config --system --add safe.directory '*'
 # container process starts, which would shadow the 1777 parent.
 RUN mkdir -p /home/agent/.cache \
              /home/agent/.config \
-             /home/agent/.local/share \
+             /home/agent/.local/share/opencode \
              /home/agent/.local/bin && \
     chmod -R 1777 /home/agent
 
