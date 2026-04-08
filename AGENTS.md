@@ -55,3 +55,10 @@ When pulling GitHub issues into plan files, native GitHub blocking relationships
 ## Package Manager
 
 This project uses **bun**.
+
+## Docker Sandbox
+
+The sandbox container runs as the host user (non-root via `--user UID:GID`). This means every tool and directory inside the image must be accessible to an arbitrary UID.
+
+- **World-executable binaries.** Any binary installed in the Dockerfile must end with `chmod 755` — don't rely on install scripts to set correct permissions.
+- **Bind-mount shadowing.** When Docker bind-mounts a file (e.g. `auth.json`), it creates intermediate directories as root with default permissions (755). If those directories are inside `/home/agent`, the root-owned dir shadows the 1777 parent from the Dockerfile and the non-root user gets EACCES. **Fix:** pre-create the parent directory in the Dockerfile's `mkdir -p` block so it already exists with 1777 permissions before Docker's mount step. When adding new paths to `AGENT_FILE_MOUNTS` or `COMMON_FILE_MOUNTS` in `src/executor/docker.ts`, check whether the mount creates new intermediate directories under `/home/agent` and add them to `docker/Dockerfile` if so.

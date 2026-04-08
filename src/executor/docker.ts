@@ -111,7 +111,16 @@ const GIT_IDENTITY_VARS: readonly string[] = [
   "GIT_COMMITTER_EMAIL",
 ];
 
-/** Per-agent file paths (relative to home) to mount read-only. */
+/**
+ * Per-agent file paths (relative to home) to mount read-only.
+ *
+ * IMPORTANT: If a path here creates intermediate directories inside the
+ * container's /home/agent tree (e.g. ".local/share/opencode/auth.json"
+ * creates the "opencode/" dir), you must also pre-create that directory
+ * in docker/Dockerfile so it exists with 1777 permissions. Otherwise
+ * Docker's bind-mount setup creates it as root, shadowing the writable
+ * parent and causing EACCES for the non-root container user.
+ */
 const AGENT_FILE_MOUNTS: Readonly<Record<string, readonly string[]>> = {
   claude: [],
   opencode: [".local/share/opencode/auth.json", ".config/github-copilot/"],

@@ -91,7 +91,7 @@ RUN git config --system --add safe.directory '*'
 # mount setup can create intermediate directories as root before the
 # container process starts, which would shadow the 1777 parent.
 RUN mkdir -p /home/agent/.cache \
-             /home/agent/.config \
+             /home/agent/.config/github-copilot \
              /home/agent/.local/share/opencode \
              /home/agent/.local/bin && \
     chmod -R 1777 /home/agent
