@@ -208,9 +208,9 @@ If Docker cannot pull the pre-built image (network issues, private registry, rat
 
 ### Permission errors on bind mounts
 
-When the container cannot read or write the worktree bind mount, you may see permission denied errors from the agent or setup command.
+Docker containers run as the host user by default (via `--user UID:GID`), so files created inside the container are owned by the host user. This prevents the root-owned file issues that previously required `sudo rm -rf` for worktree cleanup.
 
-**Common causes:**
+If you still see permission denied errors, check these common causes:
 
 - **SELinux / AppArmor** — On distributions with mandatory access control (e.g., Fedora, RHEL), Docker bind mounts may require the `:z` or `:Z` suffix. Add the worktree mount with the correct label via `dockerMounts`:
   ```bash

@@ -29,6 +29,36 @@ import { shellSplit } from "../runner.ts";
 import { detectAgentType } from "../show-config.ts";
 
 // ---------------------------------------------------------------------------
+// Container user and home directory
+// ---------------------------------------------------------------------------
+
+/**
+ * Container home directory for the non-root agent user.
+ *
+ * All credential mounts, tool installations, and HOME-dependent config
+ * use this path instead of /root. The directory is created with open
+ * permissions in the Dockerfile so any UID can write to it.
+ */
+export const CONTAINER_HOME = "/home/agent";
+
+/**
+ * Get the `--user UID:GID` flag for running the container as the host user.
+ *
+ * Returns the flag pair when `process.getuid` and `process.getgid` are
+ * available (POSIX — Linux/macOS). Returns an empty array on Windows
+ * where these APIs do not exist.
+ */
+export function getUserFlag(): string[] {
+  if (
+    typeof process.getuid === "function" &&
+    typeof process.getgid === "function"
+  ) {
+    return ["--user", `${process.getuid()}:${process.getgid()}`];
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Image resolution
 // ---------------------------------------------------------------------------
 
@@ -151,7 +181,7 @@ export function buildMountFlags(
   for (const relPath of agentMounts) {
     const hostPath = join(home, relPath);
     if (existsSync(hostPath)) {
-      const containerPath = join("/root", relPath);
+      const containerPath = join(CONTAINER_HOME, relPath);
       flags.push("-v", `${hostPath}:${containerPath}:ro`);
     }
   }
@@ -160,7 +190,7 @@ export function buildMountFlags(
   for (const relPath of COMMON_FILE_MOUNTS) {
     const hostPath = join(home, relPath);
     if (existsSync(hostPath)) {
-      const containerPath = join("/root", relPath);
+      const containerPath = join(CONTAINER_HOME, relPath);
       flags.push("-v", `${hostPath}:${containerPath}:ro`);
     }
   }
@@ -336,6 +366,12 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
 
   const args: string[] = ["run", "--rm"];
 
+  // Run as host user to avoid root-owned files in worktree
+  args.push(...getUserFlag());
+
+  // Set container HOME so tools and configs work for non-root user
+  args.push("-e", `HOME=${CONTAINER_HOME}`);
+
   // Worktree bind mount (read-write so the agent can modify files)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);
@@ -407,6 +443,12 @@ export function buildSetupDockerArgs(
   const image = resolveDockerImage(agentCommand, dockerImage);
 
   const args: string[] = ["run", "--rm"];
+
+  // Run as host user to avoid root-owned files in worktree
+  args.push(...getUserFlag());
+
+  // Set container HOME so tools and configs work for non-root user
+  args.push("-e", `HOME=${CONTAINER_HOME}`);
 
   // Worktree bind mount (read-write so setup can install dependencies)
   args.push("-v", `${cwd}:${cwd}`);

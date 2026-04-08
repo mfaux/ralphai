@@ -1,5 +1,19 @@
 # Parameterized sandbox image for Ralphai agent execution.
 #
+# Design: Non-root container execution
+#
+# The container is designed to run as the host user (via `--user UID:GID`
+# at runtime) so that files created inside the container are owned by the
+# host user, not root. This prevents permission issues during worktree
+# cleanup.
+#
+# To support this:
+# - All tools (Bun, agent CLIs) are installed to global paths (/usr/local/bin)
+#   so they are accessible to any UID, not just root.
+# - A world-writable /home/agent directory is created as the container HOME.
+#   The runtime sets HOME=/home/agent via -e flag.
+# - No USER directive — the --user flag handles this at runtime.
+#
 # Usage:
 #   docker build --build-arg AGENT=claude -t ghcr.io/mfaux/ralphai-sandbox:claude docker/
 #   docker build --build-arg AGENT=opencode -t ghcr.io/mfaux/ralphai-sandbox:opencode docker/
@@ -30,9 +44,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
 # Enable corepack for pnpm and yarn support
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Install Bun
+# Install Bun to a global path (not /root/.bun)
+ENV BUN_INSTALL=/usr/local
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # Agent CLI installation (conditional on AGENT build arg)
@@ -45,9 +59,10 @@ RUN if [ "$AGENT" = "claude" ]; then \
       npm install -g @anthropic-ai/claude-code; \
     fi
 
-# OpenCode: install via official install script
+# OpenCode: install via official install script, then move to global path
 RUN if [ "$AGENT" = "opencode" ]; then \
-      curl -fsSL https://opencode.ai/install | bash; \
+      curl -fsSL https://opencode.ai/install | bash && \
+      cp /root/.opencode/bin/* /usr/local/bin/ 2>/dev/null || true; \
     fi
 
 # Codex: install via npm
@@ -58,8 +73,8 @@ RUN if [ "$AGENT" = "codex" ]; then \
 # Configure git defaults for container use
 RUN git config --system --add safe.directory '*'
 
-# Ensure agent install paths are on PATH (install scripts only update .bashrc,
-# which isn't sourced in non-interactive shells)
-ENV PATH="/root/.opencode/bin:${PATH}"
+# Create the container home directory with open permissions so any UID
+# can use it as HOME (the --user flag sets the UID at runtime)
+RUN mkdir -p /home/agent && chmod 1777 /home/agent
 
 WORKDIR /workspace

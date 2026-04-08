@@ -18,6 +18,8 @@ import {
   pullDockerImage,
   resolveDockerImage,
   DockerExecutor,
+  CONTAINER_HOME,
+  getUserFlag,
 } from "./executor/docker.ts";
 import { createExecutor } from "./executor/index.ts";
 import { LocalExecutor } from "./executor/local.ts";
@@ -86,6 +88,30 @@ describe("buildDockerArgs", () => {
     expect(args).toContain("--rm");
     expect(args[0]).toBe("run");
     expect(args[1]).toBe("--rm");
+  });
+
+  it("includes --user flag with host UID:GID", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const userIdx = args.indexOf("--user");
+    expect(userIdx).toBeGreaterThan(-1);
+    const uidGid = args[userIdx + 1];
+    expect(uidGid).toBe(`${process.getuid!()}:${process.getgid!()}`);
+  });
+
+  it("includes -e HOME=/home/agent", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const homeEnv = `HOME=${CONTAINER_HOME}`;
+    const homeIdx = args.indexOf(homeEnv);
+    expect(homeIdx).toBeGreaterThan(-1);
+    expect(args[homeIdx - 1]).toBe("-e");
   });
 
   it("bind-mounts worktree at host path", () => {
@@ -285,6 +311,28 @@ describe("buildMountFlags", () => {
     expect(mountArg).toContain(":ro");
   });
 
+  it("mounts credential files to CONTAINER_HOME, not /root", () => {
+    const home = ctx.dir;
+    writeFileSync(join(home, ".gitconfig"), "[user]\n  name = Test\n");
+    const flags = buildMountFlags("claude", [], home);
+    const mountArg = flags.find((f) => f.includes(".gitconfig"));
+    expect(mountArg).toBeDefined();
+    expect(mountArg).toContain(`${CONTAINER_HOME}/.gitconfig`);
+    expect(mountArg).not.toContain("/root/");
+  });
+
+  it("mounts opencode auth files to CONTAINER_HOME, not /root", () => {
+    const home = ctx.dir;
+    mkdirSync(join(home, ".local", "share", "opencode"), { recursive: true });
+    writeFileSync(join(home, ".local", "share", "opencode", "auth.json"), "{}");
+
+    const flags = buildMountFlags("opencode", [], home);
+    const authMount = flags.find((f) => f.includes("auth.json"));
+    expect(authMount).toBeDefined();
+    expect(authMount).toContain(CONTAINER_HOME);
+    expect(authMount).not.toContain("/root/");
+  });
+
   it("skips .gitconfig when it does not exist", () => {
     // Use a fresh temp dir with no .gitconfig
     const flags = buildMountFlags("claude", [], ctx.dir);
@@ -330,6 +378,39 @@ describe("buildMountFlags", () => {
     const flags = buildMountFlags("claude", [], home);
     const hasRalphai = flags.some((f) => f.includes(".ralphai"));
     expect(hasRalphai).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getUserFlag — host user ID forwarding
+// ---------------------------------------------------------------------------
+
+describe("getUserFlag", () => {
+  it("returns --user UID:GID on POSIX systems", () => {
+    // This test runs on Linux/macOS where getuid/getgid are available
+    const flags = getUserFlag();
+    expect(flags).toHaveLength(2);
+    expect(flags[0]).toBe("--user");
+    expect(flags[1]).toMatch(/^\d+:\d+$/);
+  });
+
+  it("returns current process UID:GID", () => {
+    const flags = getUserFlag();
+    expect(flags[1]).toBe(`${process.getuid!()}:${process.getgid!()}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CONTAINER_HOME constant
+// ---------------------------------------------------------------------------
+
+describe("CONTAINER_HOME", () => {
+  it("is /home/agent", () => {
+    expect(CONTAINER_HOME).toBe("/home/agent");
+  });
+
+  it("does not reference /root", () => {
+    expect(CONTAINER_HOME).not.toContain("/root");
   });
 });
 
@@ -585,6 +666,30 @@ describe("buildSetupDockerArgs", () => {
     });
     expect(args[0]).toBe("run");
     expect(args[1]).toBe("--rm");
+  });
+
+  it("includes --user flag with host UID:GID", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const userIdx = args.indexOf("--user");
+    expect(userIdx).toBeGreaterThan(-1);
+    const uidGid = args[userIdx + 1];
+    expect(uidGid).toBe(`${process.getuid!()}:${process.getgid!()}`);
+  });
+
+  it("includes -e HOME=/home/agent", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const homeEnv = `HOME=${CONTAINER_HOME}`;
+    const homeIdx = args.indexOf(homeEnv);
+    expect(homeIdx).toBeGreaterThan(-1);
+    expect(args[homeIdx - 1]).toBe("-e");
   });
 
   it("bind-mounts worktree at host path", () => {
