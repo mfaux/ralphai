@@ -344,6 +344,14 @@ export interface DockerCommandOptions {
    * because agents need to create commits.
    */
   mainGitDir?: string;
+  /**
+   * Optional absolute path to the feedback wrapper script on the host.
+   *
+   * When set, the script is bind-mounted read-only into the container
+   * at the same path so the agent can invoke it. Without this, the
+   * script lives in pipeline state (~/.ralphai/…) which is not mounted.
+   */
+  feedbackWrapperPath?: string;
 }
 
 /**
@@ -361,6 +369,7 @@ function buildCommonDockerArgs(opts: {
   dockerEnvVars?: string[];
   dockerMounts?: string[];
   mainGitDir?: string;
+  feedbackWrapperPath?: string;
 }): string[] {
   const {
     agentCommand,
@@ -369,6 +378,7 @@ function buildCommonDockerArgs(opts: {
     dockerEnvVars = [],
     dockerMounts = [],
     mainGitDir,
+    feedbackWrapperPath,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -389,6 +399,13 @@ function buildCommonDockerArgs(opts: {
   // Main .git directory mount for worktrees (read-write — needed for commits)
   if (mainGitDir) {
     args.push("-v", `${mainGitDir}:${mainGitDir}`);
+  }
+
+  // Feedback wrapper script: lives in pipeline state (~/.ralphai/…)
+  // which is not otherwise mounted. Bind-mount the single file
+  // read-only so the agent can invoke it from inside the container.
+  if (feedbackWrapperPath && existsSync(feedbackWrapperPath)) {
+    args.push("-v", `${feedbackWrapperPath}:${feedbackWrapperPath}:ro`);
   }
 
   // Env var forwarding
@@ -425,6 +442,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerMounts = [],
     nonce,
     mainGitDir,
+    feedbackWrapperPath,
   } = opts;
 
   const args = buildCommonDockerArgs({
@@ -434,6 +452,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerEnvVars,
     dockerMounts,
     mainGitDir,
+    feedbackWrapperPath,
   });
 
   // Nonce env var (set explicitly with value, not from host env).
@@ -575,6 +594,7 @@ export class DockerExecutor implements AgentExecutor {
     prompt: string;
     cwd: string;
     nonce?: string;
+    feedbackWrapperPath?: string;
   }): string[] {
     const mainGitDir = resolveMainGitDir(opts.cwd);
 
@@ -587,6 +607,7 @@ export class DockerExecutor implements AgentExecutor {
       dockerMounts: this.config.dockerMounts,
       nonce: opts.nonce,
       mainGitDir,
+      feedbackWrapperPath: opts.feedbackWrapperPath,
     });
   }
 
@@ -599,6 +620,7 @@ export class DockerExecutor implements AgentExecutor {
       outputLogPath,
       ipcBroadcast,
       nonce,
+      feedbackWrapperPath,
     } = opts;
 
     const dockerArgs = this.buildSpawnDockerArgs({
@@ -606,6 +628,7 @@ export class DockerExecutor implements AgentExecutor {
       prompt,
       cwd,
       nonce,
+      feedbackWrapperPath,
     });
 
     return new Promise((resolve) => {

@@ -28,6 +28,8 @@ export interface ExecutorSpawnOptions {
   ipcBroadcast?: (msg: IpcMessage) => void;
   /** Optional nonce injected as RALPHAI_NONCE env var. */
   nonce?: string;
+  /** Optional path to the feedback wrapper script (bind-mounted into Docker). */
+  feedbackWrapperPath?: string;
 }
 
 /** Result returned by `AgentExecutor.spawn()`. */

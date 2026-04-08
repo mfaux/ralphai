@@ -237,6 +237,49 @@ describe("buildDockerArgs", () => {
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
     expect(gitMount).toBeUndefined();
   });
+
+  describe("feedbackWrapperPath — bind-mount feedback script", () => {
+    const ctx = useTempDir();
+
+    it("bind-mounts feedback script read-only when file exists", () => {
+      const scriptPath = join(ctx.dir, "_ralphai_feedback.sh");
+      writeFileSync(scriptPath, "#!/bin/bash\nbun test", { mode: 0o755 });
+
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        feedbackWrapperPath: scriptPath,
+      });
+
+      const mountArg = args.find((a) => a.includes("_ralphai_feedback.sh"));
+      expect(mountArg).toBeDefined();
+      expect(mountArg).toBe(`${scriptPath}:${scriptPath}:ro`);
+    });
+
+    it("does NOT mount when feedbackWrapperPath is not set", () => {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+      });
+
+      const hasFeedback = args.some((a) => a.includes("_ralphai_feedback"));
+      expect(hasFeedback).toBe(false);
+    });
+
+    it("does NOT mount when feedbackWrapperPath file does not exist", () => {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        feedbackWrapperPath: "/nonexistent/path/_ralphai_feedback.sh",
+      });
+
+      const hasFeedback = args.some((a) => a.includes("_ralphai_feedback"));
+      expect(hasFeedback).toBe(false);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
