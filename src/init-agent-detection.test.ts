@@ -24,20 +24,49 @@ const AGENT_BINARIES = [
  * /usr/bin (for `which` itself and other essentials). Any directory that
  * contains a known agent binary is excluded so that detectInstalledAgent()
  * falls through to the OpenCode fallback.
+ *
+ * When a required tool directory (node/git) is excluded, a private bin dir
+ * with symlinks to only the essential tools is created instead.
  */
 function basePathWithoutAgents(): string {
   const nodeDir = dirname(execSync("which node", { encoding: "utf-8" }).trim());
   const gitDir = dirname(execSync("which git", { encoding: "utf-8" }).trim());
-  const dirs = new Set([nodeDir, gitDir, "/usr/bin", "/usr/local/bin", "/bin"]);
+  const candidates = new Set([
+    nodeDir,
+    gitDir,
+    "/usr/bin",
+    "/usr/local/bin",
+    "/bin",
+  ]);
+  const clean = [...candidates].filter(
+    (dir) => !AGENT_BINARIES.some((bin) => existsSync(join(dir, bin))),
+  );
 
-  // Remove any directory that contains a known agent binary
-  for (const dir of [...dirs]) {
-    if (AGENT_BINARIES.some((bin) => existsSync(join(dir, bin)))) {
-      dirs.delete(dir);
+  // node and git dirs are mandatory — if they were excluded because they
+  // contain an agent binary, create a private bin dir with symlinks instead.
+  for (const required of [nodeDir, gitDir]) {
+    if (!clean.includes(required)) {
+      const safeBinDir = execSync("mktemp -d", { encoding: "utf-8" }).trim();
+      for (const tool of [
+        "node",
+        "git",
+        "which",
+        "sh",
+        "env",
+        "basename",
+        "dirname",
+        "uname",
+      ]) {
+        const src = join(required, tool);
+        if (existsSync(src)) {
+          execSync(`ln -sf "${src}" "${join(safeBinDir, tool)}"`);
+        }
+      }
+      clean.push(safeBinDir);
     }
   }
 
-  return [...dirs].join(":");
+  return clean.join(":");
 }
 
 /**
