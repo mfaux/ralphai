@@ -260,6 +260,7 @@ Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code**
 - [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley — creator of the technique behind the loop
 - [Getting Started With Ralph](https://www.aihero.dev/getting-started-with-ralph) by Matt Pocock
 - [mattpocock/skills](https://github.com/mattpocock/skills) — inspiration for the planning and TDD skills
+- [Sandcastle](https://github.com/ai-hero/sandcastle) by AI Hero — demonstrated the ephemeral-container-per-invocation pattern for agent sandboxing
 - [Vercel CLI](https://github.com/vercel/vercel) for CLI DX inspiration
 
 ## License
