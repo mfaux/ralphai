@@ -55,4 +55,8 @@ RUN if [ "$AGENT" = "codex" ]; then \
 # Configure git defaults for container use
 RUN git config --system --add safe.directory '*'
 
+# Ensure agent install paths are on PATH (install scripts only update .bashrc,
+# which isn't sourced in non-interactive shells)
+ENV PATH="/root/.opencode/bin:${PATH}"
+
 WORKDIR /workspace
