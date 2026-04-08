@@ -14,8 +14,7 @@
  */
 
 import { spawn, type ChildProcess } from "child_process";
-import { createWriteStream } from "fs";
-import { existsSync } from "fs";
+import { createWriteStream, existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
