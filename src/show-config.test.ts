@@ -79,6 +79,21 @@ describe("detectAgentType", () => {
   it("is case-insensitive", () => {
     expect(detectAgentType("CLAUDE -p")).toBe("claude");
   });
+
+  it("matches only the binary name, not flag values", () => {
+    // opencode command with a --model flag that contains "claude" should
+    // detect as opencode, not claude.
+    expect(
+      detectAgentType(
+        "opencode run --agent build --model github-copilot/claude-opus-4.6",
+      ),
+    ).toBe("opencode");
+  });
+
+  it("ignores agent names appearing in non-binary arguments", () => {
+    expect(detectAgentType("my-tool --backend claude")).toBe("unknown");
+    expect(detectAgentType("codex --model opencode-v2")).toBe("codex");
+  });
 });
 
 // ---------------------------------------------------------------------------

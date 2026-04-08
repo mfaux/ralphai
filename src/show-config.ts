@@ -25,12 +25,17 @@ const AGENT_PATTERNS: ReadonlyArray<[pattern: string, type: string]> = [
 
 /**
  * Detect the agent type from the agent command string.
+ *
+ * Only the binary/command portion (first token) is matched so that flag
+ * values like `--model github-copilot/claude-opus-4` don't cause a
+ * false match.
  */
 export function detectAgentType(agentCommand: string): string {
   if (!agentCommand) return "unknown";
-  const lower = agentCommand.toLowerCase();
+  // Extract the first token (the binary name) and match against that.
+  const binary = (agentCommand.trim().split(/\s+/)[0] ?? "").toLowerCase();
   for (const [pattern, type] of AGENT_PATTERNS) {
-    if (lower.includes(pattern)) return type;
+    if (binary.includes(pattern)) return type;
   }
   return "unknown";
 }
