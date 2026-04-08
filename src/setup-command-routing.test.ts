@@ -247,6 +247,46 @@ describe("executeSetupCommand — Docker command construction", () => {
     expect(spawnSyncCalls).toHaveLength(1);
     expect(spawnSyncCalls[0]!.command).toBe("docker");
   });
+
+  it("mounts main git dir when mainGitDir is provided", () => {
+    const config: SetupSandboxConfig = {
+      sandbox: "docker",
+      agentCommand: "claude -p",
+      mainGitDir: "/work/main-repo/.git",
+    };
+    executeSetupCommand(
+      "bun install",
+      "/work/.ralphai-worktrees/my-plan",
+      config,
+    );
+
+    const args = spawnSyncCalls[0]!.args;
+    const mountArgs = args.filter(
+      (a: string, i: number) => i > 0 && args[i - 1] === "-v",
+    );
+    const gitMount = mountArgs.find((m: string) =>
+      m.includes("/work/main-repo/.git"),
+    );
+    expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
+  });
+
+  it("does NOT add main git dir mount when mainGitDir is absent", () => {
+    const config: SetupSandboxConfig = {
+      sandbox: "docker",
+      agentCommand: "claude -p",
+    };
+    executeSetupCommand("bun install", "/work/my-project", config);
+
+    const args = spawnSyncCalls[0]!.args;
+    const mountArgs = args.filter(
+      (a: string, i: number) => i > 0 && args[i - 1] === "-v",
+    );
+    // Only the worktree mount should be present (no credential mounts since
+    // host env is mocked and no files exist)
+    const bindMounts = mountArgs.filter((m: string) => !m.includes(":ro"));
+    expect(bindMounts).toHaveLength(1);
+    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
+  });
 });
 
 // ---------------------------------------------------------------------------

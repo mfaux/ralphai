@@ -2482,6 +2482,14 @@ async function runRalphaiInManagedWorktree(
                   : undefined,
               }
             : undefined,
+        // Mount the main repo's .git directory for worktree support.
+        // In managed worktree mode, cwd is always the main repo root,
+        // so worktrees created from it need this path mounted in Docker
+        // for git operations to work inside the container.
+        mainGitDir:
+          resolvedConfig.sandbox.value === "docker"
+            ? join(cwd, ".git")
+            : undefined,
       }
     : undefined;
 

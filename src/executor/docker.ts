@@ -306,6 +306,14 @@ export interface DockerCommandOptions {
   dockerMounts?: string[];
   /** Optional nonce for RALPHAI_NONCE env var. */
   nonce?: string;
+  /**
+   * Path to the main repo's `.git` directory for worktree support.
+   * When the cwd is a git worktree, the worktree's `.git` file points
+   * to a subdirectory of this path. Mounting it allows git operations
+   * inside the container to resolve the object store, refs, and config.
+   * The mount is read-write so the agent can create commits.
+   */
+  mainGitDir?: string;
 }
 
 /**
@@ -329,6 +337,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerEnvVars = [],
     dockerMounts = [],
     nonce,
+    mainGitDir,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -339,6 +348,11 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
   // Worktree bind mount (read-write so the agent can modify files)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);
+
+  // Main repo .git mount for worktree support (read-write for commits)
+  if (mainGitDir) {
+    args.push("-v", `${mainGitDir}:${mainGitDir}`);
+  }
 
   // Env var forwarding
   const envFlags = buildEnvFlags(agentType, dockerEnvVars);
@@ -381,6 +395,11 @@ export interface SetupDockerCommandOptions {
   dockerEnvVars?: string[];
   /** Extra bind mounts (from dockerMounts config). */
   dockerMounts?: string[];
+  /**
+   * Path to the main repo's `.git` directory for worktree support.
+   * See `DockerCommandOptions.mainGitDir` for details.
+   */
+  mainGitDir?: string;
 }
 
 /**
@@ -401,6 +420,7 @@ export function buildSetupDockerArgs(
     dockerImage,
     dockerEnvVars = [],
     dockerMounts = [],
+    mainGitDir,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -411,6 +431,11 @@ export function buildSetupDockerArgs(
   // Worktree bind mount (read-write so setup can install dependencies)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);
+
+  // Main repo .git mount for worktree support (read-write for commits)
+  if (mainGitDir) {
+    args.push("-v", `${mainGitDir}:${mainGitDir}`);
+  }
 
   // Env var forwarding (same as agent execution)
   const envFlags = buildEnvFlags(agentType, dockerEnvVars);
@@ -456,6 +481,14 @@ export interface DockerExecutorConfig {
   dockerEnvVars?: string[];
   /** Extra bind mounts (from dockerMounts config, CSV-parsed). */
   dockerMounts?: string[];
+  /**
+   * Path to the main repo's `.git` directory for worktree support.
+   * When the agent's working directory is a git worktree, this path
+   * must be mounted so git operations inside the container can resolve
+   * the object store, refs, and config from the main repository.
+   * Derived by the caller from `resolveWorktreeInfo()`.
+   */
+  mainGitDir?: string;
 }
 
 /**
@@ -493,6 +526,7 @@ export class DockerExecutor implements AgentExecutor {
       dockerImage: this.config.dockerImage,
       dockerEnvVars: this.config.dockerEnvVars,
       dockerMounts: this.config.dockerMounts,
+      mainGitDir: this.config.mainGitDir,
       nonce,
     });
 
