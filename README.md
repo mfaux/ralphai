@@ -31,10 +31,20 @@ Ralphai avoids this by starting each iteration with a **fresh agent session**: j
 
 ```bash
 npm install -g ralphai                          # install the CLI
-npx skills add mfaux/ralphai -g                 # install the planning skill
+npx skills add mfaux/ralphai -g                 # install skills for your coding agent
 ```
 
-The planning skill teaches your coding agent how to write Ralphai plan files. Once installed, ask your agent to "create a Ralphai plan" and it knows the format, principles, and where to put the file.
+Ralphai ships skills that teach your coding agent how to plan and execute work:
+
+- **write-a-prd** — create a product requirements document through interactive interview
+- **improve-codebase-architecture** — find and propose module-deepening refactors
+- **request-refactor-plan** — plan structural changes with tiny, verifiable commits
+- **triage-issue** — investigate bugs and create TDD fix plans
+- **prd-to-issues** — decompose a PRD into vertical-slice GitHub sub-issues
+- **tdd** — test-driven development with red-green-refactor loops
+- **ralphai-planning** — write Ralphai plan files for autonomous execution
+
+The recommended workflow: plan with a skill (write-a-prd, triage-issue, etc.), decompose PRDs with prd-to-issues, then let Ralphai run the issues autonomously.
 
 ## Get Started
 
@@ -52,7 +62,7 @@ Configuration and pipeline state are stored in `~/.ralphai/` (global state, not 
 
 ### 1. Write plans
 
-Ask your coding agent to create plan files in the Ralphai backlog. If you installed the planning skill, the agent already knows the format and output directory.
+Ask your coding agent to create plan files in the Ralphai backlog. If you installed the skills, the agent already knows the format and output directory.
 
 ```
 Create a Ralphai plan for adding dark mode support.
@@ -249,6 +259,7 @@ Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code**
 
 - [Ralph](https://ghuntley.com/ralph/) by Geoffrey Huntley — creator of the technique behind the loop
 - [Getting Started With Ralph](https://www.aihero.dev/getting-started-with-ralph) by Matt Pocock
+- [mattpocock/skills](https://github.com/mattpocock/skills) — inspiration for the planning and TDD skills
 - [Vercel CLI](https://github.com/vercel/vercel) for CLI DX inspiration
 
 ## License

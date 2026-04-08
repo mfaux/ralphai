@@ -654,6 +654,11 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     console.log(
       `${DIM}Label a GitHub issue with "${configObj.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
+    console.log();
+    console.log(
+      `${DIM}Install the planning and TDD skills to let your coding agent create issues for Ralphai:${RESET}`,
+    );
+    console.log(`       ${TEXT}$ npx skills add mfaux/ralphai -g${RESET}`);
   }
   console.log();
 }
