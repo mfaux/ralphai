@@ -519,9 +519,9 @@ Env vars that are unset or empty on the host are silently skipped.
 | Agent    | Mounted files (relative to `~`)                              |
 | -------- | ------------------------------------------------------------ |
 | OpenCode | `.local/share/opencode/auth.json`, `.config/github-copilot/` |
-| All      | `.gitconfig`                                                 |
+| All      | `.gitconfig`, `.agents/skills/`                              |
 
-Files that don't exist on the host are silently skipped. Additional mounts can be added via the `dockerMounts` config key.
+Files that don't exist on the host are silently skipped. Globally-installed skills (via `npx skills add ... -g`) are automatically available to agents in Docker mode through the `.agents/skills/` mount. Additional mounts can be added via the `dockerMounts` config key.
 
 ### Pre-built images
 
