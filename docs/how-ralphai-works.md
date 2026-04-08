@@ -531,7 +531,7 @@ Ralphai publishes pre-built Docker images for supported agents:
 - `ghcr.io/mfaux/ralphai-sandbox:opencode`
 - `ghcr.io/mfaux/ralphai-sandbox:codex`
 
-Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), Bun, and the agent CLI. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
+Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), pnpm (via corepack), Bun, and the agent CLI. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
 
 ### Stdio-based progress extraction
 
