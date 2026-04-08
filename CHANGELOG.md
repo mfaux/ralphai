@@ -1,22 +1,75 @@
 # Changelog
 
-## 0.7.0 (WIP)
+## 0.7.0
+
+**Breaking** — This release includes major structural changes. If upgrading from an earlier version, uninstall first:
+
+```sh
+ralphai uninstall && npm install -g ralphai@latest
+```
 
 ### Breaking
 
-- **`taskTimeout` renamed to `iterationTimeout`** — the config key, CLI flag (`--iteration-timeout`), and environment variable (`RALPHAI_ITERATION_TIMEOUT`) all use the new name. Update your `config.json`, scripts, and CI environments accordingly.
+- **Turns model replaced with tasks/subtasks** — the `--turns` flag and `turns` config key are removed. The runner now loops per-task until all tasks are complete, with stuck detection as the only safety stop. Plans use `#### N.M:` headings for subtasks.
+- **`taskTimeout` renamed to `iterationTimeout`** — the config key, CLI flag (`--iteration-timeout`), and environment variable (`RALPHAI_ITERATION_TIMEOUT`) all use the new name.
+- **Local `.ralphai/` directory removed** — config has migrated to global state (`~/.ralphai/`). Per-repo `ralphai.json` is no longer read from a local `.ralphai/` directory. (#112)
+- **Managed worktrees are the only execution path** — branch mode and direct mode are removed. All runs use managed worktrees. (#128)
+- **Deprecated features, shims, and migration guidance removed** — all v0.4/v0.5-era compatibility shims have been dropped. (#244)
+- **GitHub label taxonomy replaced** — the unified `ralphai` label has been replaced with standalone/subissue/PRD label types, then further consolidated from 12 per-family suffixed labels to 6 shared state labels. Run `ralphai init` to recreate labels. (#299, #315)
 
 ### Features
 
-- **Strict one-iteration-one-task execution** — each runner iteration now works on exactly one plan task (including its subtasks) instead of allowing the agent to combine multiple tasks. This keeps agent context focused and progress predictable.
-- **Subtask syntax** — plans can use `#### N.M:` headings to break tasks into subtasks. The agent completes all subtasks within a task before ending its iteration.
-- **.NET monorepo support** — `ralphai init` parses `.sln` files to discover `.csproj` projects as workspaces. Scoped plans rewrite `dotnet build` and `dotnet test` to target specific project paths (e.g., `dotnet build src/Api`).
-- **Mixed-repo detection** — when multiple ecosystems coexist (e.g., .NET + Node.js), Ralphai detects all of them and merges their feedback commands into a single list.
+- **Ink-based TUI dashboard** — `ralphai` (no arguments) now launches a full terminal UI with list + overlay layout, focus-highlighted panels, animated spinners, word-wrapping, agent output persistence, and keyboard navigation. Includes repo bar, elapsed time, and GitHub issue views with pull & run actions. (#115–#127, #335)
+- **PRD workflow** — `ralphai prd <number>` drives a parent GitHub issue through its sub-issue task list. Auto-detects single PRD issues in `--continuous` mode. Adds `--prd=N` flag, `ralphai-prd` label, PRD-driven branch naming, and PR creation for PRD parents. (#155–#160, #237, #253)
+- **Human-in-the-Loop (HITL) sub-issue support** — pause autonomous execution and request human input on specific sub-issues. (#342)
+- **Docker sandboxing** — optional `--docker` flag runs the agent inside a container for isolated execution. (#351)
+- **Feedback wrapper and scoped feedback** — a wrapper script captures and routes feedback per-scope, with richer iteration guidance. Two-tier feedback commands split loop-time checks from PR-time checks. (#324, #334)
+- **Completion gate** — verifies agent COMPLETE claims by re-running feedback commands before accepting task completion. (#307)
+- **Conventional commit branch names** — branch names and PR titles are derived from the plan's conventional commit type. (#305, #361)
+- **Agent-generated PR summaries** — PR descriptions now include agent-written summaries with categorized commits and diffstat. (#106, #184)
+- **Learnings in PR body** — learnings are captured in a PR body section instead of standalone files. (#193)
+- **Global state module** — repo identity and config live in `~/.ralphai/` with repo registration. Adds `ralphai repos` command. (#108, #109)
+- **`ralphai check`** — config/setup detection with `--capability` flag for scripting. (#153, #154)
+- **`ralphai uninstall`** — clean removal of Ralphai from a repo. (#111)
+- **`ralphai backlog-dir`** — prints the backlog directory path for scripting. (#110)
+- **`--plan` flag** — target a specific backlog plan by name. (#107)
+- **`setupCommand` config** — run a custom command (e.g., dependency install) when creating worktrees. (#158)
+- **GitHub integration default** — `ralphai init` enables GitHub integration by default, with all labels configurable. (#268, #269)
+- **Wizard mode for init** — guided setup with progressive disclosure. (#262)
+- **Close child issues on PR merge** — adds `ralphai:done` label on issue completion. (#177)
+- **TypeScript runner** — runner orchestration ported from shell to TypeScript. (#103)
+- **Skills shipped with CLI** — planning and TDD skills are bundled alongside `ralphai-planning`. (#362)
+- **Strict one-iteration-one-task execution** — each runner iteration works on exactly one plan task (including its subtasks). (#242)
+- **.NET monorepo support** — `ralphai init` parses `.sln` files to discover `.csproj` projects; mixed-repo detection merges feedback commands from multiple ecosystems. (#97, #98)
 
 ### Fixes
 
-- **PR body uses plan description** — PR bodies now contain the plan's description and a commit log instead of dumping raw plan file content.
-- **Nonce-stamped agent sentinels** — runner completion and metadata extraction now require a per-iteration nonce on `<promise>`, `<learnings>`, `<progress>`, and `<pr-summary>` tags so tool output cannot falsely signal plan completion. Bun project detection also preserves `bun run test` when a `test` script exists, so feedback loops use the repo's intended test runner instead of bypassing it with bare `bun test`.
+- **PR body uses plan description** — PR bodies contain the plan description and commit log instead of raw plan content.
+- **Nonce-stamped agent sentinels** — completion and metadata extraction require per-iteration nonces to prevent false signals.
+- Prevent IPC socket path truncation on long plan slugs (#325)
+- Auto-clean stale and zombie repo entries on startup (#229, #327)
+- Prevent shell metacharacter corruption in PR body (#308)
+- Fix auto-detect drain putting all issues on a single branch (#240)
+- Pull GitHub issues before exiting when backlog is empty (#235, #236)
+- Prevent PRD runner from re-pulling completed sub-issues (#228)
+- Reject PRD issues with no sub-issue task list (#227)
+- Initialize missing resume progress logs (#202)
+- Close agent stdin to prevent hang (#105)
+- Respect `--dry-run` flag before creating worktrees (#96)
+- Fix TUI subprocess timeout and dashboard rendering (#133, #136, #344)
+- Dry-run fails to detect GitHub issues with SSH host aliases (#145)
+
+### Refactors
+
+- Decompose monolithic `ralphai.ts`, `runner.ts`, and `issues.ts` into feature modules (#243)
+- Migrate test suite from vitest to bun:test (#171)
+- Remove external tool deps (jq, sha256sum, sed, timeout) for cross-platform portability (#93)
+- Speed up test suite with DI-based exec mock, in-process CLI, and parallel isolated runs (#316, #317)
+
+### Docs
+
+- Document PRD workflow across all docs (#255)
+- Add Testing section to AGENTS.md (#326)
 
 ## 0.6.0
 
