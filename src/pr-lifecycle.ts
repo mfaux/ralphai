@@ -26,6 +26,7 @@ import {
   categorizeCommits,
   formatCommitsByCategory,
 } from "./pr-description.ts";
+import { stripAnsi } from "./utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,6 +45,17 @@ function formatPrTitle(title: string): string {
 /** Escape double quotes for shell-safe interpolation in `gh` commands. */
 function escapeQuotes(s: string): string {
   return s.replace(/"/g, '\\"');
+}
+
+/**
+ * Safety-net: strip ANSI escape codes from text destined for GitHub PR
+ * titles or bodies.  Upstream extractors already strip ANSI from
+ * `<pr-summary>` and `<learnings>` blocks, but this catch-all ensures
+ * nothing leaks through — even if an agent builds a PR description from
+ * raw terminal output.
+ */
+function sanitizePrText(text: string): string {
+  return stripAnsi(text);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,12 +214,12 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     learnings: options.learnings,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
-  const prTitle = formatPrTitle(planDescription);
+  const prTitle = sanitizePrText(formatPrTitle(planDescription));
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
       `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
-    prBody,
+    sanitizePrText(prBody),
     cwd,
   );
   if (!prUrl) {
@@ -292,14 +304,14 @@ export function createContinuousPr(
     cwd,
     { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
   );
-  const prTitle = prd
-    ? formatPrTitle(prd.title)
-    : `ralphai: ${firstPlanDescription}`;
+  const prTitle = sanitizePrText(
+    prd ? formatPrTitle(prd.title) : `ralphai: ${firstPlanDescription}`,
+  );
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
       `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
-    prBody,
+    sanitizePrText(prBody),
     cwd,
   );
   if (!prUrl) {
@@ -346,7 +358,11 @@ export function updateContinuousPr(
     },
   );
   if (
-    execWithStdin(`gh pr edit "${prUrl}" --body-file -`, prBody, cwd) === null
+    execWithStdin(
+      `gh pr edit "${prUrl}" --body-file -`,
+      sanitizePrText(prBody),
+      cwd,
+    ) === null
   ) {
     return { ok: false, message: "Failed to update PR body" };
   }
@@ -379,7 +395,11 @@ export function finalizeContinuousPr(
     },
   );
   if (
-    execWithStdin(`gh pr edit "${prUrl}" --body-file -`, prBody, cwd) === null
+    execWithStdin(
+      `gh pr edit "${prUrl}" --body-file -`,
+      sanitizePrText(prBody),
+      cwd,
+    ) === null
   ) {
     return { ok: false, message: "Failed to refresh final draft PR body" };
   }
@@ -558,14 +578,14 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     summaries,
     learnings,
   });
-  const prTitle = formatPrTitle(prd.title);
+  const prTitle = sanitizePrText(formatPrTitle(prd.title));
 
   if (existingPrUrl) {
     // Update existing PR body
     if (
       execWithStdin(
         `gh pr edit "${existingPrUrl}" --body-file -`,
-        prBody,
+        sanitizePrText(prBody),
         cwd,
       ) === null
     ) {
@@ -586,7 +606,7 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
       `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
-    prBody,
+    sanitizePrText(prBody),
     cwd,
   );
   if (!prUrl) {
