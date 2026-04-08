@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.2
+
+### Features
+
+- Add pnpm and yarn support to Docker sandbox images via corepack (#366)
+- Auto-pull Docker image at run start to keep the local cache fresh (#367)
+
+### Fixes
+
+- Add opencode install path to Docker image PATH (#365)
+- Improve error message when Docker setup command fails — suggests `--docker-image` for missing runtimes (#366)
+
 ## 0.7.1
 
 ### Fixes
