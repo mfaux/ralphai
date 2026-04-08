@@ -78,7 +78,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/worktree/types.ts`      | Shared interfaces: `WorktreeEntry`, `SelectedWorktreePlan`, `GitHubFallbackOptions`.                  |
 | `src/worktree/parsing.ts`    | Parses `git worktree list --porcelain` output; filters ralphai-managed branches.                      |
 | `src/worktree/selection.ts`  | Plan selection priority logic for worktree runs (in-progress > backlog > attended > GitHub fallback). |
-| `src/worktree/management.ts` | Worktree creation, cleanup, setup commands, and `ralphai worktree` subcommand dispatch.               |
+| `src/worktree/management.ts` | Worktree creation, cleanup, and setup commands.                                                       |
 
 ## Supporting modules
 

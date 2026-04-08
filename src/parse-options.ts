@@ -39,6 +39,7 @@ export interface RalphaiOptions {
   stopSlug?: string; // positional arg for `stop` subcommand
   runTarget?: RunTarget; // positional target for `run` (issue number, plan path, or auto)
   runArgs: string[];
+  unknownCommand?: string; // first positional arg that doesn't match a known subcommand
   unknownFlags: string[];
   hitlIssueNumber?: number; // positional arg for `hitl` subcommand
 }
@@ -97,6 +98,7 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
   let configKey: string | undefined;
   const runArgs: string[] = [];
   const unknownFlags: string[] = [];
+  let unknownCommand: string | undefined;
   let hitlIssueNumber: number | undefined;
 
   let collectingRunArgs = false;
@@ -230,6 +232,9 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
           collectingHitlArgs = true;
           expectingHitlIssue = true;
         }
+      } else if (!subcommand) {
+        // Positional arg before any recognized subcommand — unknown command
+        unknownCommand = arg;
       } else {
         targetDir = arg;
       }
@@ -258,6 +263,7 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
     stopSlug,
     runTarget,
     runArgs,
+    unknownCommand,
     unknownFlags,
     hitlIssueNumber,
   };
