@@ -124,7 +124,7 @@ const AGENT_FILE_MOUNTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Common file paths (relative to home) mounted read-only for all agents. */
-const COMMON_FILE_MOUNTS: readonly string[] = [".gitconfig"];
+const COMMON_FILE_MOUNTS: readonly string[] = [".gitconfig", ".agents/skills/"];
 
 /**
  * Build the list of `-e VAR` flags for env var forwarding.
