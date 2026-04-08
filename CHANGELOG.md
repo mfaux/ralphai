@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+
+### Fixes
+
+- Handle `EACCES` permission errors when removing orphaned worktree directories — retries with `chmod -R u+rwx` and suggests `sudo rm -rf` on persistent failure (#368)
+- Deduplicate inlined worktree preparation in PRD code path — delegates to `prepareWorktree()` (#368)
+
 ## 0.7.2
 
 ### Features
