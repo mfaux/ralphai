@@ -73,8 +73,16 @@ RUN if [ "$AGENT" = "codex" ]; then \
 # Configure git defaults for container use
 RUN git config --system --add safe.directory '*'
 
-# Create the container home directory with open permissions so any UID
-# can use it as HOME (the --user flag sets the UID at runtime)
-RUN mkdir -p /home/agent && chmod 1777 /home/agent
+# Create the container home directory and common subdirectories with open
+# permissions so any UID can use them as HOME (the --user flag sets the UID
+# at runtime). Pre-creating these prevents EACCES errors when tools (Node,
+# Bun, etc.) try to mkdir $HOME/.cache or other XDG paths — Docker's bind
+# mount setup can create intermediate directories as root before the
+# container process starts, which would shadow the 1777 parent.
+RUN mkdir -p /home/agent/.cache \
+             /home/agent/.config \
+             /home/agent/.local/share \
+             /home/agent/.local/bin && \
+    chmod -R 1777 /home/agent
 
 WORKDIR /workspace
