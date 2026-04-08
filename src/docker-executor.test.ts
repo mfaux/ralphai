@@ -473,15 +473,18 @@ describe("buildMountFlags", () => {
     expect(flags).toContain("/host/path:/container/path:ro");
   });
 
-  it("mounts .agents/skills/ read-only when it exists", () => {
-    const home = ctx.dir;
-    mkdirSync(join(home, ".agents", "skills"), { recursive: true });
-    const flags = buildMountFlags("claude", [], home);
-    const skillsMount = flags.find((f) => f.includes(".agents/skills"));
-    expect(skillsMount).toBeDefined();
-    expect(skillsMount).toContain(":ro");
-    expect(skillsMount).toContain(CONTAINER_HOME);
-  });
+  it.skipIf(process.platform === "win32")(
+    "mounts .agents/skills/ read-only when it exists",
+    () => {
+      const home = ctx.dir;
+      mkdirSync(join(home, ".agents", "skills"), { recursive: true });
+      const flags = buildMountFlags("claude", [], home);
+      const skillsMount = flags.find((f) => f.includes(".agents/skills"));
+      expect(skillsMount).toBeDefined();
+      expect(skillsMount).toContain(":ro");
+      expect(skillsMount).toContain(CONTAINER_HOME);
+    },
+  );
 
   it("skips .agents/skills/ when it does not exist", () => {
     const flags = buildMountFlags("claude", [], ctx.dir);
