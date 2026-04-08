@@ -37,23 +37,7 @@ export interface SetupSandboxConfig {
 }
 
 export function isGitWorktree(dir: string): boolean {
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    const gitDir = execSync("git rev-parse --git-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    // In a worktree, --git-common-dir points to the main repo's .git
-    // while --git-dir points to .git/worktrees/<name>
-    return commonDir !== gitDir;
-  } catch {
-    return false;
-  }
+  return resolveWorktreeInfo(dir).isWorktree;
 }
 
 export function resolveWorktreeInfo(dir: string): {
@@ -363,7 +347,7 @@ export function cleanWorktrees(cwd: string): void {
     if (wt.branch.startsWith("ralphai/")) {
       const slug = wt.branch.replace("ralphai/", "");
       hasActivePlan = planExistsForSlug(inProgressDir, slug);
-      matchedSlugs = hasActivePlan ? [slug] : [slug]; // always try archiving the slug
+      matchedSlugs = [slug];
     } else {
       // feat/ or other managed branches: use receipt-based lookup
       matchedSlugs = findPlansByBranch(inProgressDir, wt.branch);
