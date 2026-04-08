@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Fixes
+
+- Use repo-owner namespace for GHCR Docker images (#364)
+
 ## 0.7.0
 
 **Breaking** — This release includes major structural changes. If upgrading from an earlier version, uninstall first:
