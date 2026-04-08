@@ -21,6 +21,8 @@ export {
   resolveDockerImage,
   buildEnvFlags,
   buildMountFlags,
+  getUserFlag,
+  CONTAINER_HOME,
   type DockerCheckResult,
   type DockerExecutorConfig,
   type DockerCommandOptions,

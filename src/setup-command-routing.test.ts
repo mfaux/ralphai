@@ -117,7 +117,12 @@ describe("executeSetupCommand — routing", () => {
     executeSetupCommand("bun install", "/work/my-project", config);
     expect(spawnSyncCalls).toHaveLength(1);
     expect(spawnSyncCalls[0]!.command).toBe("docker");
-    expect(execSyncCalls).toHaveLength(0);
+    // resolveMainGitDir may call execSync for git rev-parse, but no
+    // host setup command (like "bun install") should run via execSync
+    const hostSetupCalls = execSyncCalls.filter(
+      (c) => c.command === "bun install",
+    );
+    expect(hostSetupCalls).toHaveLength(0);
   });
 
   it("no-ops when setupCommand is empty (sandbox=none)", () => {

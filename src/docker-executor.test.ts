@@ -5,6 +5,7 @@
  * All tests use mocks — no real Docker required.
  */
 import { describe, it, expect } from "bun:test";
+import { execSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 
@@ -18,7 +19,10 @@ import {
   pullDockerImage,
   resolveDockerImage,
   DockerExecutor,
+  CONTAINER_HOME,
+  getUserFlag,
 } from "./executor/docker.ts";
+import { resolveMainGitDir } from "./worktree/management.ts";
 import { createExecutor } from "./executor/index.ts";
 import { LocalExecutor } from "./executor/local.ts";
 import {
@@ -86,6 +90,33 @@ describe("buildDockerArgs", () => {
     expect(args).toContain("--rm");
     expect(args[0]).toBe("run");
     expect(args[1]).toBe("--rm");
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "includes --user flag with host UID:GID",
+    () => {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+      });
+      const userIdx = args.indexOf("--user");
+      expect(userIdx).toBeGreaterThan(-1);
+      const uidGid = args[userIdx + 1];
+      expect(uidGid).toBe(`${process.getuid!()}:${process.getgid!()}`);
+    },
+  );
+
+  it("includes -e HOME=/home/agent", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const homeEnv = `HOME=${CONTAINER_HOME}`;
+    const homeIdx = args.indexOf(homeEnv);
+    expect(homeIdx).toBeGreaterThan(-1);
+    expect(args[homeIdx - 1]).toBe("-e");
   });
 
   it("bind-mounts worktree at host path", () => {
@@ -166,43 +197,48 @@ describe("buildDockerArgs", () => {
     expect(hasNonce).toBe(false);
   });
 
-  it("mounts main git dir when mainGitDir is provided", () => {
+  it("mounts mainGitDir read-write when provided", () => {
     const args = buildDockerArgs({
       agentCommand: "claude -p",
       prompt: "do stuff",
-      cwd: "/work/.ralphai-worktrees/my-plan",
+      cwd: "/work/my-worktree",
       mainGitDir: "/work/main-repo/.git",
     });
-    // Should contain a -v mount for the main .git directory
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    const vFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
+      return acc;
+    }, []);
+    const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
+    expect(gitMount).toBeDefined();
     expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
-  });
-
-  it("main git dir mount is read-write (no :ro suffix)", () => {
-    const args = buildDockerArgs({
-      agentCommand: "claude -p",
-      prompt: "do stuff",
-      cwd: "/work/.ralphai-worktrees/my-plan",
-      mainGitDir: "/work/main-repo/.git",
-    });
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    // Must NOT have :ro suffix — agent needs write access for commits
     expect(gitMount).not.toContain(":ro");
   });
 
-  it("does NOT add extra mount when mainGitDir is absent", () => {
+  it("does not add extra mount when mainGitDir is absent", () => {
     const args = buildDockerArgs({
       agentCommand: "claude -p",
       prompt: "do stuff",
       cwd: "/work/my-project",
     });
-    // Should contain exactly one -v mount (the worktree)
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    // Filter out credential file mounts (they contain :ro)
-    const bindMounts = mountArgs.filter((m) => !m.includes(":ro"));
-    expect(bindMounts).toHaveLength(1);
-    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
+    const vFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
+      return acc;
+    }, []);
+    // Should have exactly one -v mount for the worktree (plus any credential mounts)
+    const workdirMount = vFlags.find((f) =>
+      f.startsWith("/work/my-project:/work/my-project"),
+    );
+    expect(workdirMount).toBeDefined();
+    // No .git mount should exist
+    const gitMount = vFlags.find((f) => f.includes("/.git:"));
+    expect(gitMount).toBeUndefined();
   });
 
   describe("feedbackWrapperPath — bind-mount feedback script", () => {
@@ -367,6 +403,39 @@ describe("buildMountFlags", () => {
     expect(mountArg).toContain(":ro");
   });
 
+  it.skipIf(process.platform === "win32")(
+    "mounts credential files to CONTAINER_HOME, not /root",
+    () => {
+      const home = ctx.dir;
+      writeFileSync(join(home, ".gitconfig"), "[user]\n  name = Test\n");
+      const flags = buildMountFlags("claude", [], home);
+      const mountArg = flags.find((f) => f.includes(".gitconfig"));
+      expect(mountArg).toBeDefined();
+      expect(mountArg).toContain(`${CONTAINER_HOME}/.gitconfig`);
+      expect(mountArg).not.toContain("/root/");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "mounts opencode auth files to CONTAINER_HOME, not /root",
+    () => {
+      const home = ctx.dir;
+      mkdirSync(join(home, ".local", "share", "opencode"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(home, ".local", "share", "opencode", "auth.json"),
+        "{}",
+      );
+
+      const flags = buildMountFlags("opencode", [], home);
+      const authMount = flags.find((f) => f.includes("auth.json"));
+      expect(authMount).toBeDefined();
+      expect(authMount).toContain(CONTAINER_HOME);
+      expect(authMount).not.toContain("/root/");
+    },
+  );
+
   it("skips .gitconfig when it does not exist", () => {
     // Use a fresh temp dir with no .gitconfig
     const flags = buildMountFlags("claude", [], ctx.dir);
@@ -412,6 +481,39 @@ describe("buildMountFlags", () => {
     const flags = buildMountFlags("claude", [], home);
     const hasRalphai = flags.some((f) => f.includes(".ralphai"));
     expect(hasRalphai).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getUserFlag — host user ID forwarding
+// ---------------------------------------------------------------------------
+
+describe.skipIf(process.platform === "win32")("getUserFlag", () => {
+  it("returns --user UID:GID on POSIX systems", () => {
+    // This test runs on Linux/macOS where getuid/getgid are available
+    const flags = getUserFlag();
+    expect(flags).toHaveLength(2);
+    expect(flags[0]).toBe("--user");
+    expect(flags[1]).toMatch(/^\d+:\d+$/);
+  });
+
+  it("returns current process UID:GID", () => {
+    const flags = getUserFlag();
+    expect(flags[1]).toBe(`${process.getuid!()}:${process.getgid!()}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CONTAINER_HOME constant
+// ---------------------------------------------------------------------------
+
+describe("CONTAINER_HOME", () => {
+  it("is /home/agent", () => {
+    expect(CONTAINER_HOME).toBe("/home/agent");
+  });
+
+  it("does not reference /root", () => {
+    expect(CONTAINER_HOME).not.toContain("/root");
   });
 });
 
@@ -683,6 +785,33 @@ describe("buildSetupDockerArgs", () => {
     expect(args[1]).toBe("--rm");
   });
 
+  it.skipIf(process.platform === "win32")(
+    "includes --user flag with host UID:GID",
+    () => {
+      const args = buildSetupDockerArgs({
+        agentCommand: "claude -p",
+        setupCommand: "bun install",
+        cwd: "/work/my-project",
+      });
+      const userIdx = args.indexOf("--user");
+      expect(userIdx).toBeGreaterThan(-1);
+      const uidGid = args[userIdx + 1];
+      expect(uidGid).toBe(`${process.getuid!()}:${process.getgid!()}`);
+    },
+  );
+
+  it("includes -e HOME=/home/agent", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const homeEnv = `HOME=${CONTAINER_HOME}`;
+    const homeIdx = args.indexOf(homeEnv);
+    expect(homeIdx).toBeGreaterThan(-1);
+    expect(args[homeIdx - 1]).toBe("-e");
+  });
+
   it("bind-mounts worktree at host path", () => {
     const args = buildSetupDockerArgs({
       agentCommand: "claude -p",
@@ -771,40 +900,41 @@ describe("buildSetupDockerArgs", () => {
     expect(args).toContain("/host/cache:/container/cache");
   });
 
-  it("mounts main git dir when mainGitDir is provided", () => {
+  it("mounts mainGitDir read-write when provided", () => {
     const args = buildSetupDockerArgs({
       agentCommand: "claude -p",
       setupCommand: "bun install",
-      cwd: "/work/.ralphai-worktrees/my-plan",
+      cwd: "/work/my-worktree",
       mainGitDir: "/work/main-repo/.git",
     });
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
+    const vFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
+      return acc;
+    }, []);
+    const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
+    expect(gitMount).toBeDefined();
     expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
-  });
-
-  it("main git dir mount is read-write (no :ro suffix)", () => {
-    const args = buildSetupDockerArgs({
-      agentCommand: "claude -p",
-      setupCommand: "bun install",
-      cwd: "/work/.ralphai-worktrees/my-plan",
-      mainGitDir: "/work/main-repo/.git",
-    });
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    const gitMount = mountArgs.find((m) => m.includes("/work/main-repo/.git"));
     expect(gitMount).not.toContain(":ro");
   });
 
-  it("does NOT add extra mount when mainGitDir is absent", () => {
+  it("does not add extra mount when mainGitDir is absent", () => {
     const args = buildSetupDockerArgs({
       agentCommand: "claude -p",
       setupCommand: "bun install",
       cwd: "/work/my-project",
     });
-    const mountArgs = args.filter((a, i) => i > 0 && args[i - 1] === "-v");
-    const bindMounts = mountArgs.filter((m) => !m.includes(":ro"));
-    expect(bindMounts).toHaveLength(1);
-    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
+    const vFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
+      return acc;
+    }, []);
+    const gitMount = vFlags.find((f) => f.includes("/.git:"));
+    expect(gitMount).toBeUndefined();
   });
 });
 
@@ -845,5 +975,138 @@ describe("pullDockerImage", () => {
     expect(resolveDockerImage("opencode run --agent build")).toBe(
       "ghcr.io/mfaux/ralphai-sandbox:opencode",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveMainGitDir — worktree detection for Docker mounts
+// ---------------------------------------------------------------------------
+
+describe("resolveMainGitDir", () => {
+  const ctx = useTempDir();
+
+  it("returns undefined for a non-worktree git repo", () => {
+    execSync("git init", { cwd: ctx.dir, stdio: "ignore" });
+    expect(resolveMainGitDir(ctx.dir)).toBeUndefined();
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "returns the main .git path for a worktree directory",
+    () => {
+      const mainRepo = ctx.dir;
+      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+      execSync("git config user.email 'test@test.com'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git config user.name 'Test'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      writeFileSync(join(mainRepo, "file.txt"), "hello");
+      execSync("git add . && git commit -m 'init'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      const worktreeDir = join(mainRepo, "..", "test-worktree");
+      execSync(`git worktree add "${worktreeDir}" -b test-branch HEAD`, {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      try {
+        const result = resolveMainGitDir(worktreeDir);
+        expect(result).toBe(join(mainRepo, ".git"));
+      } finally {
+        execSync(`git worktree remove "${worktreeDir}"`, {
+          cwd: mainRepo,
+          stdio: "ignore",
+        });
+      }
+    },
+  );
+
+  it("returns undefined for a non-git directory", () => {
+    expect(resolveMainGitDir(ctx.dir)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DockerExecutor.buildSpawnDockerArgs — worktree auto-detection
+// ---------------------------------------------------------------------------
+
+describe("DockerExecutor.buildSpawnDockerArgs", () => {
+  const ctx = useTempDir();
+
+  it.skipIf(process.platform === "win32")(
+    "includes main .git mount when cwd is a worktree",
+    () => {
+      const mainRepo = ctx.dir;
+      execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+      execSync("git config user.email 'test@test.com'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      execSync("git config user.name 'Test'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      writeFileSync(join(mainRepo, "file.txt"), "hello");
+      execSync("git add . && git commit -m 'init'", {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      const worktreeDir = join(mainRepo, "..", "executor-test-worktree");
+      execSync(`git worktree add "${worktreeDir}" -b test-branch HEAD`, {
+        cwd: mainRepo,
+        stdio: "ignore",
+      });
+      try {
+        const executor = new DockerExecutor();
+        const args = executor.buildSpawnDockerArgs({
+          agentCommand: "claude -p",
+          prompt: "test prompt",
+          cwd: worktreeDir,
+        });
+        const vFlags = args.reduce<string[]>((acc, a, i) => {
+          if (a === "-v") {
+            const next = args[i + 1];
+            if (next) acc.push(next);
+          }
+          return acc;
+        }, []);
+        const gitMount = vFlags.find((f) => f.includes(join(mainRepo, ".git")));
+        expect(gitMount).toBeDefined();
+        expect(gitMount).toBe(
+          `${join(mainRepo, ".git")}:${join(mainRepo, ".git")}`,
+        );
+        // Must be read-write (no :ro suffix)
+        expect(gitMount).not.toContain(":ro");
+      } finally {
+        execSync(`git worktree remove "${worktreeDir}"`, {
+          cwd: mainRepo,
+          stdio: "ignore",
+        });
+      }
+    },
+  );
+
+  it("does not add .git mount when cwd is not a worktree", () => {
+    const mainRepo = ctx.dir;
+    execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+    const executor = new DockerExecutor();
+    const args = executor.buildSpawnDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: mainRepo,
+    });
+    const vFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
+      return acc;
+    }, []);
+    const gitMount = vFlags.find((f) => f.includes("/.git:"));
+    expect(gitMount).toBeUndefined();
   });
 });
