@@ -47,6 +47,7 @@ jobs:
             sh -c "
               git --version && \
               node --version && \
+              pnpm --version && \
               bun --version && \
               ${{ matrix.agent }} --version
             "

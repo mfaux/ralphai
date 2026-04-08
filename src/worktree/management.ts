@@ -119,7 +119,13 @@ export function executeSetupCommand(
         console.error(`  ${result.error.message}`);
       }
       console.error(
-        `\nFix the issue and re-run, or set ${TEXT}setupCommand${RESET} to "" in config to disable.`,
+        `\nThe sandbox image may be missing tools your project needs.`,
+      );
+      console.error(
+        `Use ${TEXT}--docker-image${RESET} to specify a custom image with your project's dependencies,`,
+      );
+      console.error(
+        `or set ${TEXT}setupCommand${RESET} to "" in config to disable setup.`,
       );
       process.exit(1);
     }
