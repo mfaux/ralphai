@@ -2626,85 +2626,18 @@ async function runRalphaiInManagedWorktree(
       }
 
       // --- Real PRD run: create worktree with PRD-derived branch ---
-      try {
-        execSync("git rev-parse HEAD", { cwd, stdio: "ignore" });
-      } catch {
-        console.error(
-          `This repository has no commits yet. Git worktrees require at least one commit.`,
-        );
-        console.error(
-          `\n  ${TEXT}git add . && git commit -m "initial commit"${RESET}`,
-        );
-        console.error(`\nThen re-run ${TEXT}ralphai run${RESET}.`);
-        process.exit(1);
-      }
-
+      ensureRepoHasCommit(cwd);
       const baseBranch = detectBaseBranch(cwd);
-      const worktreeBase = join(cwd, "..", ".ralphai-worktrees");
-      const desiredWorktreeDir = join(worktreeBase, prdSlug);
-      mkdirSync(worktreeBase, { recursive: true });
-
-      // Check for active worktree on this branch
       const activeWorktrees = listRalphaiWorktrees(cwd);
       const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
-
-      let resolvedWorktreeDir = desiredWorktreeDir;
-      if (activeWorktree) {
-        resolvedWorktreeDir = activeWorktree.path;
-        console.log(`Reusing existing worktree: ${resolvedWorktreeDir}`);
-        console.log(`Branch: ${branch}`);
-      } else {
-        if (existsSync(resolvedWorktreeDir)) {
-          console.log(
-            `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
-          );
-          execSync("git worktree prune", { cwd, stdio: "ignore" });
-          rmSync(resolvedWorktreeDir, { recursive: true, force: true });
-        }
-
-        let branchExists = false;
-        try {
-          execSync(`git show-ref --verify --quiet refs/heads/${branch}`, {
-            cwd,
-            stdio: "ignore",
-          });
-          branchExists = true;
-        } catch {
-          branchExists = false;
-        }
-
-        try {
-          if (branchExists) {
-            console.log(`Recreating worktree: ${resolvedWorktreeDir}`);
-            console.log(`Branch: ${branch}`);
-            execSync(`git worktree add "${resolvedWorktreeDir}" "${branch}"`, {
-              cwd,
-              stdio: ["inherit", "pipe", "pipe"],
-            });
-          } else {
-            console.log(`Creating worktree: ${resolvedWorktreeDir}`);
-            console.log(`Branch: ${branch} (from ${baseBranch})`);
-            execSync(
-              `git worktree add "${resolvedWorktreeDir}" -b "${branch}" "${baseBranch}"`,
-              { cwd, stdio: ["inherit", "pipe", "pipe"] },
-            );
-          }
-        } catch (err: unknown) {
-          const stderr = extractExecStderr(err);
-          console.error(`${TEXT}Error:${RESET} Failed to prepare worktree.`);
-          if (stderr) console.error(`  git: ${stderr}`);
-          process.exit(1);
-        }
-      }
-
-      // Run setup command in freshly-created worktrees (not reused ones)
-      if (!activeWorktree) {
-        executeSetupCommand(
-          setupCommand,
-          resolvedWorktreeDir,
-          setupSandboxConfig,
-        );
-      }
+      const resolvedWorktreeDir = prepareWorktree(
+        cwd,
+        prdSlug,
+        branch,
+        baseBranch,
+        setupCommand,
+        setupSandboxConfig,
+      );
 
       // NOTE: The feedback wrapper script is written by the runner to the
       // WIP slug directory (pipeline state), not the worktree. No wrapper

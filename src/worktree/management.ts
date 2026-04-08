@@ -206,7 +206,27 @@ export function prepareWorktree(
         `Cleaning up orphaned worktree directory: ${resolvedWorktreeDir}`,
       );
       execSync("git worktree prune", { cwd, stdio: "ignore" });
-      rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+      try {
+        rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "EACCES") {
+          // Retry after fixing permissions (common with node_modules/.bin)
+          try {
+            execSync(`chmod -R u+rwx "${resolvedWorktreeDir}"`, {
+              stdio: "ignore",
+            });
+            rmSync(resolvedWorktreeDir, { recursive: true, force: true });
+          } catch {
+            throw new Error(
+              `Could not remove orphaned worktree directory: ${resolvedWorktreeDir}\n` +
+                `Fix manually:\n\n` +
+                `  sudo rm -rf "${resolvedWorktreeDir}"\n`,
+            );
+          }
+        } else {
+          throw err;
+        }
+      }
     }
 
     let branchExists = false;
