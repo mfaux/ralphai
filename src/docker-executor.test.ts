@@ -202,7 +202,10 @@ describe("buildDockerArgs", () => {
       mainGitDir: "/work/main-repo/.git",
     });
     const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") acc.push(args[i + 1]);
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
       return acc;
     }, []);
     const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
@@ -219,7 +222,10 @@ describe("buildDockerArgs", () => {
       cwd: "/work/my-project",
     });
     const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") acc.push(args[i + 1]);
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
       return acc;
     }, []);
     // Should have exactly one -v mount for the worktree (plus any credential mounts)
@@ -828,7 +834,10 @@ describe("buildSetupDockerArgs", () => {
       mainGitDir: "/work/main-repo/.git",
     });
     const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") acc.push(args[i + 1]);
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
       return acc;
     }, []);
     const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
@@ -844,7 +853,10 @@ describe("buildSetupDockerArgs", () => {
       cwd: "/work/my-project",
     });
     const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") acc.push(args[i + 1]);
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
       return acc;
     }, []);
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
@@ -977,7 +989,10 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
         cwd: worktreeDir,
       });
       const vFlags = args.reduce<string[]>((acc, a, i) => {
-        if (a === "-v") acc.push(args[i + 1]);
+        if (a === "-v") {
+          const next = args[i + 1];
+          if (next) acc.push(next);
+        }
         return acc;
       }, []);
       const gitMount = vFlags.find((f) => f.includes(join(mainRepo, ".git")));
@@ -1005,7 +1020,10 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
       cwd: mainRepo,
     });
     const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") acc.push(args[i + 1]);
+      if (a === "-v") {
+        const next = args[i + 1];
+        if (next) acc.push(next);
+      }
       return acc;
     }, []);
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
