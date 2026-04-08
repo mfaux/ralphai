@@ -81,7 +81,7 @@ ralphai hitl 55 --dry-run    # preview without spawning agent or touching labels
 ralphai run                         # run in separate terminals
 ```
 
-Each invocation creates an isolated [worktree](worktrees.md) with its own branch and draft PR. Run multiple instances in separate terminals to work on plans in parallel. Use `ralphai worktree list` to see active runs and `ralphai worktree clean` to remove completed ones.
+Each invocation creates an isolated [worktree](worktrees.md) with its own branch and draft PR. Run multiple instances in separate terminals to work on plans in parallel. Use `ralphai status` to see active runs and `ralphai clean --worktrees` to remove completed ones.
 
 ## Docker sandboxing
 

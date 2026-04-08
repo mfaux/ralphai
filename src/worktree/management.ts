@@ -12,7 +12,6 @@ import {
 } from "../feedback-wrapper.ts";
 import { buildSetupDockerArgs } from "../executor/docker.ts";
 import type { DockerExecutorConfig } from "../executor/docker.ts";
-import type { RalphaiOptions } from "../parse-options.ts";
 import { listRalphaiWorktrees } from "./parsing.ts";
 
 /**
@@ -418,37 +417,4 @@ export function cleanWorktrees(cwd: string): void {
   }
 
   console.log(`\nCleaned ${cleaned} worktree(s).`);
-}
-
-export async function runRalphaiWorktree(
-  options: RalphaiOptions,
-  cwd: string,
-  showHelp: () => void,
-): Promise<void> {
-  const wtOpts = options.worktreeOptions ?? {
-    subcommand: "run",
-    runArgs: [],
-  };
-
-  // Handle --help
-  if (wtOpts.runArgs.includes("--help") || wtOpts.runArgs.includes("-h")) {
-    showHelp();
-    return;
-  }
-
-  // Dispatch worktree sub-subcommands
-  switch (wtOpts.subcommand) {
-    case "list":
-      listWorktrees(cwd);
-      return;
-    case "clean":
-      cleanWorktrees(cwd);
-      return;
-    case "run":
-      console.error("'ralphai worktree' no longer starts runs.");
-      console.error(
-        "Use 'ralphai run' to create or reuse a worktree and execute work.",
-      );
-      process.exit(1);
-  }
 }

@@ -69,7 +69,7 @@ This is expected. `ralphai run` starts from the main repo, then hands work off t
 
 - Run `ralphai status` to see the active plan and worktree state
 - Resume from the main repo with `ralphai run` or `ralphai run --plan=<file>`
-- Clean up abandoned finished worktrees with `ralphai worktree clean`
+- Clean up abandoned finished worktrees with `ralphai clean --worktrees`
 - Inspect `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt` for the exact worktree path and branch
 
 ## "How do I stop a running agent?"
