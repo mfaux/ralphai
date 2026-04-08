@@ -1532,7 +1532,7 @@ async function runRalphaiInit(
 }
 
 // ---------------------------------------------------------------------------
-// Worktree subcommand
+// Init subcommand
 // ---------------------------------------------------------------------------
 
 function showInitHelp(): void {

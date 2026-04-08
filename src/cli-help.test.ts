@@ -237,10 +237,10 @@ describe("CLI help and flags", () => {
   // Unknown command rejection
   // -------------------------------------------------------------------------
 
-  it("'worktree clean' prints Unknown command: worktree (not 'not set up')", async () => {
+  it("'worktree clean' prints redirect guidance (not 'not set up')", async () => {
     const result = await runCliInProcess(["worktree", "clean"], ctx.dir);
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Unknown command: worktree");
+    expect(result.stderr).toContain("ralphai clean --worktrees");
     expect(result.stderr).not.toContain("not set up");
   });
 
