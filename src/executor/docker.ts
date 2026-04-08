@@ -313,6 +313,14 @@ export interface DockerCommandOptions {
    * The mount is read-write so the agent can create commits.
    */
   mainGitDir?: string;
+  /**
+   * Optional absolute path to the feedback wrapper script on the host.
+   *
+   * When set, the script is bind-mounted read-only into the container
+   * at the same path so the agent can invoke it. Without this, the
+   * script lives in pipeline state (~/.ralphai/…) which is not mounted.
+   */
+  feedbackWrapperPath?: string;
 }
 
 /**
@@ -337,6 +345,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     dockerMounts = [],
     nonce,
     mainGitDir,
+    feedbackWrapperPath,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -351,6 +360,13 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
   // Main repo .git mount for worktree support (read-write for commits)
   if (mainGitDir) {
     args.push("-v", `${mainGitDir}:${mainGitDir}`);
+  }
+
+  // Feedback wrapper script: lives in pipeline state (~/.ralphai/…)
+  // which is not otherwise mounted. Bind-mount the single file
+  // read-only so the agent can invoke it from inside the container.
+  if (feedbackWrapperPath && existsSync(feedbackWrapperPath)) {
+    args.push("-v", `${feedbackWrapperPath}:${feedbackWrapperPath}:ro`);
   }
 
   // Env var forwarding
@@ -516,6 +532,7 @@ export class DockerExecutor implements AgentExecutor {
       outputLogPath,
       ipcBroadcast,
       nonce,
+      feedbackWrapperPath,
     } = opts;
 
     const dockerArgs = buildDockerArgs({
@@ -527,6 +544,7 @@ export class DockerExecutor implements AgentExecutor {
       dockerMounts: this.config.dockerMounts,
       mainGitDir: this.config.mainGitDir,
       nonce,
+      feedbackWrapperPath,
     });
 
     return new Promise((resolve) => {

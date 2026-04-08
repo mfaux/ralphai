@@ -972,6 +972,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           ? (msg) => ipcServer!.broadcast(msg)
           : undefined,
         nonce,
+        feedbackWrapperPath: wrapperPath,
       });
 
       if (timedOut) {
