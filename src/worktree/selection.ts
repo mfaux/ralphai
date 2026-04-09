@@ -2,6 +2,7 @@ import { TEXT, RESET } from "../utils.ts";
 import { getRepoPipelineDirs } from "../global-state.ts";
 import { findPlansByBranch } from "../receipt.ts";
 import { resolvePlanPath, listPlanFiles } from "../plan-detection.ts";
+import { isPlanRunnerAlive } from "../process-utils.ts";
 import type {
   WorktreeEntry,
   SelectedWorktreePlan,
@@ -13,6 +14,16 @@ export function selectPlanForWorktree(
   specificPlan?: string,
   activeWorktrees: WorktreeEntry[] = [],
   githubOptions?: GitHubFallbackOptions,
+  /**
+   * Liveness check for in-progress plans.
+   * Returns true if a runner process is alive for the given slug.
+   * Defaults to `isPlanRunnerAlive` from process-utils.
+   * Inject a custom function in tests to control behavior.
+   */
+  isRunnerAlive: (
+    inProgressDir: string,
+    slug: string,
+  ) => boolean = isPlanRunnerAlive,
 ): SelectedWorktreePlan | null {
   const { backlogDir, wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
 
@@ -58,10 +69,15 @@ export function selectPlanForWorktree(
 
   const inProgressPlans = listPlanFiles(inProgressDir);
 
-  // Plans without an active worktree are "unattended" — resume first
-  const unattendedPlans = inProgressPlans.filter(
-    (f) => !activeSlugs.has(f.replace(/\.md$/, "")),
-  );
+  // Plans without an active worktree are "unattended" — resume first.
+  // Also filter out plans with a live runner process to avoid conflicts
+  // with another runner working on the same plan.
+  const unattendedPlans = inProgressPlans.filter((f) => {
+    const slug = f.replace(/\.md$/, "");
+    if (activeSlugs.has(slug)) return false;
+    if (isRunnerAlive(inProgressDir, slug)) return false;
+    return true;
+  });
 
   if (unattendedPlans.length === 1) {
     const planFile = unattendedPlans[0]!;
@@ -89,9 +105,14 @@ export function selectPlanForWorktree(
   }
 
   // No backlog — try resuming an in-progress plan that has a worktree
-  const attendedPlans = inProgressPlans.filter((f) =>
-    activeSlugs.has(f.replace(/\.md$/, "")),
-  );
+  // but no live runner (stale/crashed runner). Plans with an active runner
+  // are excluded to avoid conflicts with parallel runs.
+  const attendedPlans = inProgressPlans.filter((f) => {
+    const slug = f.replace(/\.md$/, "");
+    if (!activeSlugs.has(slug)) return false;
+    if (isRunnerAlive(inProgressDir, slug)) return false;
+    return true;
+  });
 
   if (attendedPlans.length === 1) {
     const planFile = attendedPlans[0]!;
