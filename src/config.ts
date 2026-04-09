@@ -524,32 +524,6 @@ export function writeConfigFile(
 // Env var overrides
 // ---------------------------------------------------------------------------
 
-/** Env var name -> config key mapping. */
-const ENV_VAR_MAP: ReadonlyArray<
-  [envVar: string, configKey: keyof RalphaiConfig]
-> = [
-  ["RALPHAI_AGENT_COMMAND", "agentCommand"],
-  ["RALPHAI_SETUP_COMMAND", "setupCommand"],
-  ["RALPHAI_FEEDBACK_COMMANDS", "feedbackCommands"],
-  ["RALPHAI_PR_FEEDBACK_COMMANDS", "prFeedbackCommands"],
-  ["RALPHAI_BASE_BRANCH", "baseBranch"],
-  ["RALPHAI_MAX_STUCK", "maxStuck"],
-  ["RALPHAI_ITERATION_TIMEOUT", "iterationTimeout"],
-  ["RALPHAI_ISSUE_SOURCE", "issueSource"],
-  ["RALPHAI_STANDALONE_LABEL", "standaloneLabel"],
-  ["RALPHAI_SUBISSUE_LABEL", "subissueLabel"],
-  ["RALPHAI_PRD_LABEL", "prdLabel"],
-  ["RALPHAI_ISSUE_REPO", "issueRepo"],
-  ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
-  ["RALPHAI_ISSUE_HITL_LABEL", "issueHitlLabel"],
-  ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
-  ["RALPHAI_SANDBOX", "sandbox"],
-  ["RALPHAI_DOCKER_IMAGE", "dockerImage"],
-  ["RALPHAI_DOCKER_MOUNTS", "dockerMounts"],
-  ["RALPHAI_DOCKER_ENV_VARS", "dockerEnvVars"],
-  ["RALPHAI_REVIEW", "review"],
-];
-
 /**
  * Extract config overrides from environment variables.
  * Validates values and tracks source for --show-config.
