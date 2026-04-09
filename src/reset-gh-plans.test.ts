@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { existsSync, writeFileSync, mkdirSync, readdirSync } from "fs";
+import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import {
   runCliOutputInProcess,
@@ -157,6 +157,22 @@ describe("reset: GH-sourced plan handling", () => {
   // Single-plan reset (resetPlanBySlug)
   // -----------------------------------------------------------------------
 
+  /** Run resetPlanBySlug with RALPHAI_HOME set and console.log captured. */
+  function captureResetBySlug(slug: string): string[] {
+    const logs: string[] = [];
+    const origLog = console.log;
+    const origHome = process.env.RALPHAI_HOME;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    process.env.RALPHAI_HOME = testEnv().RALPHAI_HOME;
+    try {
+      resetPlanBySlug(ctx.dir, slug);
+    } finally {
+      console.log = origLog;
+      process.env.RALPHAI_HOME = origHome;
+    }
+    return logs;
+  }
+
   it("resetPlanBySlug removes GH plan and logs re-pull message", async () => {
     await runCliOutputInProcess(["init", "--yes"], ctx.dir, testEnv());
 
@@ -166,17 +182,7 @@ describe("reset: GH-sourced plan handling", () => {
     writeFileSync(join(planDir, "gh-55-search.md"), GH_FRONTMATTER);
     writeFileSync(join(planDir, "progress.md"), "## Progress");
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    const origHome = process.env.RALPHAI_HOME;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-    process.env.RALPHAI_HOME = testEnv().RALPHAI_HOME;
-    try {
-      resetPlanBySlug(ctx.dir, "gh-55-search");
-    } finally {
-      console.log = origLog;
-      process.env.RALPHAI_HOME = origHome;
-    }
+    const logs = captureResetBySlug("gh-55-search");
 
     // Plan should NOT be in backlog
     expect(existsSync(join(backlogDir, "gh-55-search.md"))).toBe(false);
@@ -194,17 +200,7 @@ describe("reset: GH-sourced plan handling", () => {
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "prd-charts.md"), LOCAL_CONTENT);
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    const origHome = process.env.RALPHAI_HOME;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-    process.env.RALPHAI_HOME = testEnv().RALPHAI_HOME;
-    try {
-      resetPlanBySlug(ctx.dir, "prd-charts");
-    } finally {
-      console.log = origLog;
-      process.env.RALPHAI_HOME = origHome;
-    }
+    const logs = captureResetBySlug("prd-charts");
 
     // Local plan should be in backlog
     expect(existsSync(join(backlogDir, "prd-charts.md"))).toBe(true);
@@ -221,17 +217,7 @@ describe("reset: GH-sourced plan handling", () => {
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "gh-88-malformed.md"), MALFORMED_FRONTMATTER);
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    const origHome = process.env.RALPHAI_HOME;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-    process.env.RALPHAI_HOME = testEnv().RALPHAI_HOME;
-    try {
-      resetPlanBySlug(ctx.dir, "gh-88-malformed");
-    } finally {
-      console.log = origLog;
-      process.env.RALPHAI_HOME = origHome;
-    }
+    const logs = captureResetBySlug("gh-88-malformed");
 
     // Malformed frontmatter should fall through to backlog
     expect(existsSync(join(backlogDir, "gh-88-malformed.md"))).toBe(true);

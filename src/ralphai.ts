@@ -919,15 +919,14 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
   const dest = join(backlogDir, `${slug}.md`);
   mkdirSync(backlogDir, { recursive: true });
 
-  // Determine if this is a GH-sourced plan before any file operations.
+  // Determine if this is a GH-sourced plan and restore issue labels
+  // before any file operations (both need frontmatter from the plan file).
   let isGhPlan = false;
   if (existsSync(planFile)) {
     const fm = extractIssueFrontmatter(planFile);
     isGhPlan = fm.source === "github" && !!fm.issue;
-  }
 
-  // Restore GitHub issue labels before moving the file (needs frontmatter).
-  if (existsSync(planFile)) {
+    // Restore GitHub issue labels (best-effort).
     try {
       const cfgResult = resolveConfig({
         cwd,
@@ -2321,14 +2320,6 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
-      // Collect learnings from this sub-issue run (deduplicated)
-      if (result.accumulatedLearnings) {
-        for (const learning of result.accumulatedLearnings) {
-          if (!prdLearnings.includes(learning)) {
-            prdLearnings.push(learning);
-          }
-        }
-      }
       if (result.stuckSlugs.length > 0) {
         // Runner returned normally but the sub-issue got stuck
         stuckSubIssues.push(subIssueNumber);
