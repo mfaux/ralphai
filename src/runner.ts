@@ -903,6 +903,44 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     let reviewDone = false;
     let reviewPassMadeChanges = false;
 
+    /** Mark the current plan as stuck: cleanup resources, update labels. */
+    function markStuck(reason: string): void {
+      console.log();
+      console.log(reason);
+      if (ipcServer) {
+        ipcServer.close();
+        ipcServer = null;
+        activeIpcServer = null;
+      }
+      if (activePidFile) {
+        try {
+          rmSync(activePidFile, { force: true });
+        } catch {
+          // Best-effort cleanup
+        }
+      }
+      activePidFile = null;
+      stuck = true;
+      skippedSlugs.add(planSlug);
+      stuckSlugs.push(planSlug);
+      updateReceiptOutcome(receiptFile, "stuck");
+      if (issueFm.source === "github" && issueFm.issue) {
+        let repo = issueRepo || null;
+        if (!repo && issueFm.issueUrl) {
+          const m = issueFm.issueUrl.match(
+            /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
+          );
+          repo = m?.[1] ?? null;
+        }
+        if (repo) {
+          transitionStuck({ number: issueFm.issue, repo }, cwd);
+          if (issueFm.prd) {
+            prdTransitionStuck({ number: issueFm.prd, repo }, cwd);
+          }
+        }
+      }
+    }
+
     // Detect plan format once per plan; the result flows into the
     // iteration log header and future downstream consumers.
     const planContent = readFileSync(planFile, "utf-8");
@@ -1035,54 +1073,13 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
         );
         if (stuckCount >= maxStuck) {
-          console.log(
+          markStuck(
             `Stuck: ${maxStuck} consecutive iterations with no progress on '${planSlug}'.`,
           );
           console.log(`Branch: ${branch}`);
           console.log(
             `Plan files remain in ${wipDir}/ — resume with another run.`,
           );
-          // Clean up PID file and IPC server
-          if (ipcServer) {
-            ipcServer.close();
-            ipcServer = null;
-            activeIpcServer = null;
-          }
-          if (activePidFile) {
-            try {
-              rmSync(activePidFile, { force: true });
-            } catch {
-              // Best-effort cleanup
-            }
-          }
-          activePidFile = null;
-          // Mark as stuck and skip to next work unit
-          stuck = true;
-          skippedSlugs.add(planSlug);
-          stuckSlugs.push(planSlug);
-
-          // Write outcome=stuck to receipt
-          updateReceiptOutcome(receiptFile, "stuck");
-
-          // Swap in-progress → stuck label on linked GitHub issue
-          if (issueFm.source === "github" && issueFm.issue) {
-            let repo = issueRepo || null;
-            if (!repo && issueFm.issueUrl) {
-              const m = issueFm.issueUrl.match(
-                /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
-              );
-              repo = m?.[1] ?? null;
-            }
-            if (repo) {
-              transitionStuck({ number: issueFm.issue, repo }, cwd);
-
-              // Propagate stuck to PRD parent when a sub-issue gets stuck
-              if (issueFm.prd) {
-                prdTransitionStuck({ number: issueFm.prd, repo }, cwd);
-              }
-            }
-          }
-
           break;
         }
       } else {
@@ -1152,7 +1149,22 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         }
 
         if (!gateResult.passed) {
-          // Max rejections reached — accept anyway but warn
+          // Max rejections reached — check for zero completion before
+          // force-accepting. A plan with zero tasks completed out of a
+          // non-zero total means the agent failed entirely; mark stuck
+          // instead of shipping an empty PR.
+          const currentCompleted = countCompletedTasks(
+            progressFile,
+            planFormat,
+          );
+          if (currentCompleted === 0 && totalTasks > 0) {
+            markStuck(
+              `Stuck: zero tasks completed (0/${totalTasks}) after ${maxGateRejections} gate rejections — refusing to force-accept.`,
+            );
+            break;
+          }
+
+          // Partial progress — accept anyway but warn
           console.log();
           console.log(
             `WARNING: Completion gate still failing after ${maxGateRejections} rejections — accepting COMPLETE anyway.`,
@@ -1226,7 +1238,19 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 }
 
                 if (!reGateResult.passed) {
-                  // Max rejections reached — accept anyway but warn
+                  // Zero-completion guard: same check as the pre-review gate
+                  const currentCompleted = countCompletedTasks(
+                    progressFile,
+                    planFormat,
+                  );
+                  if (currentCompleted === 0 && totalTasks > 0) {
+                    markStuck(
+                      `Stuck: zero tasks completed (0/${totalTasks}) after review pass and ${maxGateRejections} gate rejections — refusing to force-accept.`,
+                    );
+                    break;
+                  }
+
+                  // Partial progress — accept anyway but warn
                   console.log();
                   console.log(
                     `WARNING: Completion gate still failing after review pass and ${maxGateRejections} rejections — accepting anyway.`,

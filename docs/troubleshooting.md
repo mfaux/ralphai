@@ -15,6 +15,10 @@ Ralphai aborts when it detects 3 consecutive iterations with no new commits (con
 
 The `--resume` flag auto-commits any dirty working tree state and continues from where the agent left off, preserving the existing progress file.
 
+### "Plan stuck with zero tasks completed"
+
+If the agent claims COMPLETE but the progress file shows 0 out of N tasks completed, Ralphai marks the plan as stuck after exhausting the gate rejection budget (2 rejections). This typically means the agent failed to update the progress file in the expected format (checkbox `- [x]` items or `**Status:** Complete` markers). Check the agent output log in `pipeline/in-progress/<slug>/agent-output.log` to see what the agent produced, and verify the plan's task format matches what the agent is outputting.
+
 ## "Agent keeps making the same mistake"
 
 Learnings are extracted from the agent's output automatically and surfaced in the **Learnings** section of the draft PR. Ralphai also injects them into subsequent iterations as anti-repeat memory, so the agent sees past mistakes without manual intervention.
