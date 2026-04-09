@@ -33,6 +33,11 @@ Run `ralphai run` from the **main repository**, not from inside a worktree.
    dependencies are available before the agent starts.
 3. Ralphai runs the agent inside that worktree and keeps the main checkout clean.
 
+Plan selection checks runner liveness (via PID files) before resuming
+in-progress plans, so multiple `ralphai run` processes on the same repo
+will not conflict — each process only picks up plans that have no active
+runner.
+
 Configuration and pipeline data live in global state (`~/.ralphai/repos/<id>/`),
 so they are automatically available in every worktree without symlinks.
 

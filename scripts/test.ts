@@ -41,6 +41,7 @@ const ISOLATED = [
   "src/runner-github-drain.test.ts",
   "src/hitl.test.ts",
   "src/setup-command-routing.test.ts",
+  "src/plan-detection-race.test.ts",
 ];
 
 // Inherently slow tests (E2E runner loops, real process spawning, real sockets).

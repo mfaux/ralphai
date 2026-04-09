@@ -7,7 +7,7 @@
  * should still be force-accepted as before.
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, writeFileSync, existsSync, readFileSync } from "fs";
+import { mkdtempSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
@@ -98,7 +98,7 @@ describe("runRunner — zero-completion guard", () => {
   });
 
   test("marks plan as stuck when gate budget exhausted with zero tasks completed", async () => {
-    const { backlogDir, wipDir, archiveDir } = setupGlobalPipeline(dir);
+    const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "zero-comp");
 
     // Plan with checkbox-style tasks (totalTasks = 3)

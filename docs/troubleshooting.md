@@ -76,6 +76,16 @@ This is expected. `ralphai run` starts from the main repo, then hands work off t
 - Clean up abandoned finished worktrees with `ralphai clean --worktrees`
 - Inspect `~/.ralphai/repos/<id>/pipeline/in-progress/<slug>/receipt.txt` for the exact worktree path and branch
 
+## "Multiple `ralphai run` processes on the same repo"
+
+Running multiple `ralphai run` processes targeting the same repository is safe. Each runner writes a PID file (`runner.pid`) when it starts working on a plan. Plan selection checks this PID to avoid double-execution:
+
+- **Live runner PID:** The plan is skipped — another process is actively working on it.
+- **Dead/stale PID:** The plan is eligible for resumption — the previous runner crashed or was killed without cleanup.
+- **No PID file:** The plan is eligible — it was never started or was cleanly completed.
+
+If a runner crashes without cleaning up its PID file, the next `ralphai run` automatically detects the stale PID and resumes the plan. No manual intervention is needed.
+
 ## "How do I stop a running agent?"
 
 **Headless (`ralphai run`):** Press Ctrl-C in the terminal where the runner is active. The runner catches SIGINT/SIGTERM, finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`, so you can resume later.

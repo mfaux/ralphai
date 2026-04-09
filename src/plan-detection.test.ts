@@ -408,6 +408,96 @@ describe("detectPlan", () => {
       expect(result.blocked[0]!.slug).toBe("blocked");
     }
   });
+
+  it("skips in-progress plan with a live runner process", () => {
+    // In-progress plan with a "live" runner
+    const slugDir = join(dirs.wipDir, "active");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "active.md"), "# Plan: Active\n");
+
+    const result = detectPlan({
+      dirs,
+      isRunnerAlive: () => true, // simulate live runner
+    });
+
+    // Should not resume the in-progress plan — falls through to empty backlog
+    expect(result.detected).toBe(false);
+    if (!result.detected) {
+      expect(result.reason).toBe("empty-backlog");
+    }
+  });
+
+  it("skips in-progress plan with live runner and picks backlog instead", () => {
+    // In-progress plan with a live runner
+    const slugDir = join(dirs.wipDir, "active");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "active.md"), "# Plan: Active\n");
+    // Backlog plan available
+    writeFileSync(join(dirs.backlogDir, "new-work.md"), "# Plan: New Work\n");
+
+    const result = detectPlan({
+      dirs,
+      isRunnerAlive: () => true,
+    });
+
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("new-work");
+      expect(result.plan.resumed).toBe(false);
+    }
+  });
+
+  it("resumes in-progress plan with stale runner PID (dead process)", () => {
+    const slugDir = join(dirs.wipDir, "stale");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "stale.md"), "# Plan: Stale\n");
+
+    const result = detectPlan({
+      dirs,
+      isRunnerAlive: () => false, // simulate dead/stale runner
+    });
+
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("stale");
+      expect(result.plan.resumed).toBe(true);
+    }
+  });
+
+  it("resumes in-progress plan with no runner PID file", () => {
+    const slugDir = join(dirs.wipDir, "no-pid");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "no-pid.md"), "# Plan: No PID\n");
+
+    // Default isRunnerAlive reads runner.pid — no file means not alive
+    const result = detectPlan({ dirs });
+
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("no-pid");
+      expect(result.plan.resumed).toBe(true);
+    }
+  });
+
+  it("liveness check only applies in normal mode, not worktree mode", () => {
+    // Worktree mode should NOT apply liveness check because the worktree
+    // runner IS the process working on this plan.
+    const slugDir = join(dirs.wipDir, "my-plan");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "my-plan.md"), "# Plan\n");
+
+    const result = detectPlan({
+      dirs,
+      worktreeBranch: "ralphai/my-plan",
+      isRunnerAlive: () => true, // even with live runner, worktree mode resumes
+    });
+
+    expect(result.detected).toBe(true);
+    if (result.detected) {
+      expect(result.plan.planSlug).toBe("my-plan");
+      expect(result.plan.resumed).toBe(true);
+    }
+  });
 });
 
 describe("listPlanFolders", () => {

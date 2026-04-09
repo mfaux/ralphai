@@ -6,7 +6,12 @@ import { describe, test, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import { isPidAlive, readRunnerPid, stopRunner } from "./process-utils.ts";
+import {
+  isPidAlive,
+  readRunnerPid,
+  stopRunner,
+  isPlanRunnerAlive,
+} from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
 // isPidAlive
@@ -71,5 +76,37 @@ describe("readRunnerPid", () => {
 describe("stopRunner", () => {
   test("returns false for a non-existent PID", () => {
     expect(stopRunner(999999999)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isPlanRunnerAlive
+// ---------------------------------------------------------------------------
+
+describe("isPlanRunnerAlive", () => {
+  const ctx = useTempDir();
+
+  test("returns true when runner.pid contains a live PID", () => {
+    const slugDir = join(ctx.dir, "live-slug");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "runner.pid"), String(process.pid));
+    expect(isPlanRunnerAlive(ctx.dir, "live-slug")).toBe(true);
+  });
+
+  test("returns false when runner.pid contains a dead PID", () => {
+    const slugDir = join(ctx.dir, "dead-slug");
+    mkdirSync(slugDir, { recursive: true });
+    writeFileSync(join(slugDir, "runner.pid"), "999999999");
+    expect(isPlanRunnerAlive(ctx.dir, "dead-slug")).toBe(false);
+  });
+
+  test("returns false when no runner.pid file exists", () => {
+    const slugDir = join(ctx.dir, "no-pid-slug");
+    mkdirSync(slugDir, { recursive: true });
+    expect(isPlanRunnerAlive(ctx.dir, "no-pid-slug")).toBe(false);
+  });
+
+  test("returns false when slug directory does not exist", () => {
+    expect(isPlanRunnerAlive(ctx.dir, "nonexistent-slug")).toBe(false);
   });
 });

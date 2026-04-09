@@ -13,6 +13,7 @@ import {
 } from "fs";
 import { join, basename } from "path";
 import { extractDependsOn } from "./frontmatter.ts";
+import { isPlanRunnerAlive } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,13 +199,13 @@ export function detectPlanFormat(content: string): PlanFormatResult {
 
   // Priority 1: task headings
   const taskMatches = body.match(/^### Task \d+/gm);
-  if (taskMatches && taskMatches.length > 0) {
+  if (taskMatches) {
     return { format: "tasks", totalTasks: taskMatches.length };
   }
 
   // Priority 2: checkboxes (both unchecked and checked)
   const checkboxMatches = body.match(/^- \[[ x]\]/gm);
-  if (checkboxMatches && checkboxMatches.length > 0) {
+  if (checkboxMatches) {
     return { format: "checkboxes", totalTasks: checkboxMatches.length };
   }
 
@@ -351,8 +352,7 @@ export function checkDependencyStatus(
   }
 
   // --- Prefix match for issue-based slugs (gh-N) ---
-  const issueMatch = /^gh-(\d+)$/.exec(slug);
-  if (issueMatch) {
+  if (/^gh-\d+$/.test(slug)) {
     const prefix = `${slug}-`;
 
     if (hasEntryWithPrefix(dirs.archiveDir, prefix)) {
@@ -444,6 +444,13 @@ export function detectPlan(opts: {
   skippedSlugs?: Set<string>;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   targetPlan?: string;
+  /**
+   * Liveness check for in-progress plans.
+   * Returns true if a runner process is alive for the given slug.
+   * Defaults to `isPlanRunnerAlive` from process-utils.
+   * Inject a custom function in tests to control behavior.
+   */
+  isRunnerAlive?: (inProgressDir: string, slug: string) => boolean;
 }): DetectPlanResult {
   const {
     dirs,
@@ -451,6 +458,7 @@ export function detectPlan(opts: {
     dryRun = false,
     skippedSlugs,
     targetPlan,
+    isRunnerAlive = isPlanRunnerAlive,
   } = opts;
 
   // --- 1. Check for in-progress plans ---
@@ -466,9 +474,11 @@ export function detectPlan(opts: {
       }
     }
   } else {
-    // Normal mode: scan all in-progress slug-folders
+    // Normal mode: scan all in-progress slug-folders, skipping plans
+    // that have a live runner process (another runner is working on them).
     for (const folder of listPlanFolders(dirs.wipDir)) {
       if (skippedSlugs?.has(folder)) continue;
+      if (isRunnerAlive(dirs.wipDir, folder)) continue;
       const planFile = planPathForSlug(dirs.wipDir, folder);
       if (existsSync(planFile)) {
         inProgressPlans.push(planFile);
@@ -558,8 +568,28 @@ export function detectPlan(opts: {
 
   // --- 5. Promote to in-progress ---
   if (!dryRun) {
-    mkdirSync(destDir, { recursive: true });
-    renameSync(chosen, destPlan);
+    try {
+      mkdirSync(destDir, { recursive: true });
+      renameSync(chosen, destPlan);
+    } catch (err: unknown) {
+      // Another runner may have already promoted this plan (race condition).
+      // If the source file no longer exists (ENOENT), treat it as "claimed
+      // by another process" rather than crashing.
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as NodeJS.ErrnoException).code === "ENOENT"
+      ) {
+        return {
+          detected: false,
+          reason: "empty-backlog",
+          backlogCount: backlogPlans.length,
+          blocked,
+        };
+      }
+      throw err;
+    }
   }
 
   return {

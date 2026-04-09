@@ -45,6 +45,27 @@ export function readRunnerPid(wipDir: string): number | null {
 }
 
 /**
+ * Check whether an in-progress plan has a live runner process.
+ *
+ * Reads `<inProgressDir>/<slug>/runner.pid` and checks whether the
+ * process is alive. Returns true only when a PID file exists AND the
+ * process is still running. Returns false when there is no PID file
+ * or the recorded process is dead (stale/crashed runner).
+ *
+ * Used by plan selection to avoid picking up plans already being
+ * executed by another runner.
+ */
+export function isPlanRunnerAlive(
+  inProgressDir: string,
+  slug: string,
+): boolean {
+  const slugDir = join(inProgressDir, slug);
+  const pid = readRunnerPid(slugDir);
+  if (pid === null) return false;
+  return isPidAlive(pid);
+}
+
+/**
  * Send SIGTERM to a runner process.
  *
  * Returns true if the signal was delivered, false if the process doesn't exist
