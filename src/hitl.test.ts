@@ -429,6 +429,10 @@ describe("runHitl", () => {
     expect(labelCall).toBeDefined();
     expect(labelCall![0]).toContain("ralphai-subissue-hitl");
     expect(labelCall![0]).toContain("done");
+
+    // Verify other status labels are also removed
+    expect(labelCall![0]).toContain('--remove-label "in-progress"');
+    expect(labelCall![0]).toContain('--remove-label "stuck"');
   });
 
   // --- Label updates on abnormal exit ---

@@ -34,7 +34,7 @@ import {
   commitTypeFromTitle,
 } from "./issues.ts";
 import { execQuiet } from "./exec.ts";
-import { DONE_LABEL } from "./labels.ts";
+import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
 import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
 import { isGitWorktree, ensureRepoHasCommit } from "./worktree/management.ts";
 import { detectBaseBranch } from "./git-helpers.ts";
@@ -280,7 +280,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   if (exitCode === 0) {
     // Clean exit: remove HITL label, add done
     execQuiet(
-      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --add-label "${DONE_LABEL}"`,
+      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}" --add-label "${DONE_LABEL}"`,
       cwd,
     );
     const message = `Sub-issue #${issueNumber} completed. Removed "${hitlLabel}" label, added "${DONE_LABEL}".`;
