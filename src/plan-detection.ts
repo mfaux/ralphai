@@ -199,13 +199,13 @@ export function detectPlanFormat(content: string): PlanFormatResult {
 
   // Priority 1: task headings
   const taskMatches = body.match(/^### Task \d+/gm);
-  if (taskMatches && taskMatches.length > 0) {
+  if (taskMatches) {
     return { format: "tasks", totalTasks: taskMatches.length };
   }
 
   // Priority 2: checkboxes (both unchecked and checked)
   const checkboxMatches = body.match(/^- \[[ x]\]/gm);
-  if (checkboxMatches && checkboxMatches.length > 0) {
+  if (checkboxMatches) {
     return { format: "checkboxes", totalTasks: checkboxMatches.length };
   }
 

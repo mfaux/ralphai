@@ -166,8 +166,6 @@ function handleGateFailure(
     totalTasks: number;
     progressFile: string;
     planFormat: PlanFormat;
-    formatGateRejectionFn: typeof formatGateRejection;
-    countCompletedTasksFn: typeof countCompletedTasks;
     markStuckFn: (reason: string) => void;
     state: {
       gateRejectionCount: number;
@@ -181,8 +179,6 @@ function handleGateFailure(
     totalTasks,
     progressFile,
     planFormat,
-    formatGateRejectionFn,
-    countCompletedTasksFn,
     markStuckFn,
     state,
   } = opts;
@@ -190,7 +186,7 @@ function handleGateFailure(
   // Within rejection budget — reject and re-invoke
   if (state.gateRejectionCount < maxGateRejections) {
     state.gateRejectionCount++;
-    state.lastGateRejection = formatGateRejectionFn(gateResult, nonce);
+    state.lastGateRejection = formatGateRejection(gateResult, nonce);
     console.log();
     console.log(
       `Completion gate rejected${context} (${state.gateRejectionCount}/${maxGateRejections}): ${gateResult.reason}`,
@@ -203,7 +199,7 @@ function handleGateFailure(
   }
 
   // Budget exhausted — check for zero completion
-  const currentCompleted = countCompletedTasksFn(progressFile, planFormat);
+  const currentCompleted = countCompletedTasks(progressFile, planFormat);
   if (currentCompleted === 0 && totalTasks > 0) {
     markStuckFn(
       `Stuck: zero tasks completed (0/${totalTasks})${context} after ${maxGateRejections} gate rejections — refusing to force-accept.`,
@@ -1211,8 +1207,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           totalTasks,
           progressFile,
           planFormat,
-          formatGateRejectionFn: formatGateRejection,
-          countCompletedTasksFn: countCompletedTasks,
           markStuckFn: markStuck,
           state: gateState,
         };
