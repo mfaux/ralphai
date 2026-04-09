@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **`autoCommit` feature removed** — the `autoCommit` config key, `--auto-commit` / `--no-auto-commit` CLI flags, and `RALPHAI_AUTO_COMMIT` environment variable have been removed. Ralphai no longer commits changes on behalf of the agent; agents are expected to commit their own work.
+
 ## 0.7.3
 
 ### Fixes
