@@ -3,7 +3,7 @@
  *
  * Drives an AI coding agent to autonomously implement tasks from plan
  * files. Handles plan detection, iteration management, agent invocation,
- * stuck detection, auto-commit, learnings processing, and completion/PR
+ * stuck detection, learnings processing, and completion/PR
  * lifecycle.
  *
  * Exported entry point: `runRunner(options)`.
@@ -22,7 +22,7 @@ import {
 import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
-import { execQuiet, execOk } from "./exec.ts";
+import { execQuiet } from "./exec.ts";
 import { createExecutor, type AgentExecutor } from "./executor/index.ts";
 import {
   checkDockerAvailability,
@@ -644,7 +644,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const maxStuck = config.maxStuck.value;
   const iterationTimeout = config.iterationTimeout.value;
   const agentCommand = config.agentCommand.value;
-  const autoCommit = config.autoCommit.value === "true";
   const issueSource = config.issueSource.value;
   const standaloneLabel = config.standaloneLabel.value;
   const subissueLabel = config.subissueLabel.value;
@@ -1152,27 +1151,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       } else {
         stuckCount = 0;
         lastHash = currentHash;
-      }
-
-      // --- Auto-commit dirty state (AFTER stuck detection) ---
-      const hasDiff =
-        !execOk("git diff --quiet HEAD", cwd) ||
-        !execOk("git diff --cached --quiet", cwd);
-      if (hasDiff) {
-        if (!autoCommit) {
-          console.log(
-            "WARNING: Agent left uncommitted changes (autoCommit=false, skipping recovery commit).",
-          );
-        } else {
-          console.log(
-            "WARNING: Agent left uncommitted changes. Auto-committing recovery snapshot.",
-          );
-          execQuiet("git add -A", cwd);
-          execQuiet(
-            `git commit -m "chore(ralphai): auto-commit uncommitted changes from iteration ${iterationNumber}"`,
-            cwd,
-          );
-        }
       }
 
       // --- Update receipt tasks_completed from progress.md ---
