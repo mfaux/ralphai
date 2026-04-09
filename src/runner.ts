@@ -541,15 +541,6 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     }
   }
   const planScope = extractScope(planFile);
-  const scopeResult = resolveScope({
-    cwd,
-    planScope,
-    rootFeedbackCommands: config.feedbackCommands.value,
-    rootPrFeedbackCommands: config.prFeedbackCommands?.value ?? "",
-    workspacesConfig: config.workspaces.value
-      ? JSON.stringify(config.workspaces.value)
-      : undefined,
-  });
 
   const planDesc = getPlanDescription(planFile);
   console.log(`[dry-run] Plan: ${basename(planFile)}`);
@@ -617,6 +608,26 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   console.log(
     "[dry-run] No files moved, no worktrees created, no agent run executed.",
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the GitHub repo slug from explicit config or by parsing the issue URL.
+ * Returns null when neither source provides a value.
+ */
+function resolveIssueRepoSlug(
+  configRepo: string,
+  issueUrl: string | undefined,
+): string | null {
+  if (configRepo) return configRepo;
+  if (issueUrl) {
+    const m = issueUrl.match(/https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//);
+    return m?.[1] ?? null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -990,13 +1001,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       stuckSlugs.push(planSlug);
       updateReceiptOutcome(receiptFile, "stuck");
       if (issueFm.source === "github" && issueFm.issue) {
-        let repo = issueRepo || null;
-        if (!repo && issueFm.issueUrl) {
-          const m = issueFm.issueUrl.match(
-            /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
-          );
-          repo = m?.[1] ?? null;
-        }
+        const repo = resolveIssueRepoSlug(issueRepo, issueFm.issueUrl);
         if (repo) {
           transitionStuck({ number: issueFm.issue, repo }, cwd);
           if (issueFm.prd) {
@@ -1326,13 +1331,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         // under the same PRD parent are now done. If so, transition the
         // PRD parent to done.
         if (issueFm.prd && issueFm.source === "github") {
-          let prdRepo = issueRepo || null;
-          if (!prdRepo && issueFm.issueUrl) {
-            const m = issueFm.issueUrl.match(
-              /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
-            );
-            prdRepo = m?.[1] ?? null;
-          }
+          const prdRepo = resolveIssueRepoSlug(issueRepo, issueFm.issueUrl);
           if (prdRepo) {
             const allDone = checkAllPrdSubIssuesDone(prdRepo, issueFm.prd, cwd);
             if (allDone) {

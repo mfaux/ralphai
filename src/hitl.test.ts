@@ -8,14 +8,13 @@
  * Separate file because mock.module() leaks across tests in the same bun
  * process — must be listed in ISOLATED array in scripts/test.ts.
  */
-import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "fs";
+import { describe, test, expect, beforeEach, mock } from "bun:test";
+import { mkdtempSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { EventEmitter } from "events";
 
 import type { ParentIssueResult, IssueWithLabels } from "./issues.ts";
-import type { HitlOptions } from "./hitl.ts";
 
 // ---------------------------------------------------------------------------
 // Mocks
