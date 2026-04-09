@@ -61,7 +61,6 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
   issueHitlLabel: "RALPHAI_ISSUE_HITL_LABEL",
   agentInteractiveCommand: "RALPHAI_AGENT_INTERACTIVE_COMMAND",
-  autoCommit: "RALPHAI_AUTO_COMMIT",
   sandbox: "RALPHAI_SANDBOX",
   dockerImage: "RALPHAI_DOCKER_IMAGE",
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
@@ -189,16 +188,6 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   );
   lines.push(
     `  baseBranch         = ${config.baseBranch.value}  (${baseBranchSrc})`,
-  );
-
-  // autoCommit: CLI label is "--auto-commit" or "--no-auto-commit"
-  const autoCommitSrc = sourceLabel(
-    "autoCommit",
-    config.autoCommit.source,
-    input,
-  );
-  lines.push(
-    `  autoCommit         = ${config.autoCommit.value}  (${autoCommitSrc})`,
   );
 
   const sandboxSrc = sourceLabel("sandbox", config.sandbox.source, input);

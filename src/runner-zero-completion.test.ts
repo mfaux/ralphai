@@ -65,7 +65,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "true",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -123,7 +122,6 @@ describe("runRunner — zero-completion guard", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -187,7 +185,6 @@ describe("runRunner — zero-completion guard", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

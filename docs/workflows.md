@@ -175,7 +175,7 @@ ralphai run
 
 Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the interactive menu (`ralphai`) to see current progress and launch a new run from there.
 
-If the agent left uncommitted changes from a previous run, use `--resume` to auto-commit the dirty state before continuing:
+If the agent left uncommitted changes from a previous run, use `--resume` to commit the dirty state before continuing:
 
 ```bash
 ralphai run --resume

@@ -72,7 +72,6 @@ describe("init command", () => {
     expect(parsed).not.toHaveProperty("protectedBranches");
     // feedbackCommands should be an empty array when not detected
     expect(parsed.feedbackCommands).toEqual([]);
-    expect(parsed.autoCommit).toBe(false);
     expect(parsed.iterationTimeout).toBe(0);
   });
 
@@ -82,16 +81,14 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 15 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(15);
+    // Verify exactly 14 keys are present (includes repoPath)
+    expect(Object.keys(parsed)).toHaveLength(14);
 
     // Core settings from wizard
     expect(typeof parsed.agentCommand).toBe("string");
     expect(parsed.agentCommand.length).toBeGreaterThan(0);
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed.feedbackCommands).toEqual([]);
-
-    expect(parsed.autoCommit).toBe(false);
 
     // Runtime defaults
     expect(parsed.iterationTimeout).toBe(0);
@@ -119,8 +116,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agentCommand).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(15);
-    expect(parsed.autoCommit).toBe(false);
+    expect(Object.keys(parsed)).toHaveLength(14);
   });
 
   it("init --yes warns when agent command binary is not in PATH", async () => {

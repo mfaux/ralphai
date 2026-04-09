@@ -74,7 +74,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     dockerImage: "",
     dockerMounts: "",
@@ -138,7 +137,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "false",
       }),
       cwd: worktreeDir,
@@ -181,7 +179,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,
@@ -219,7 +216,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,
@@ -261,7 +257,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,

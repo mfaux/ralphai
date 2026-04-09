@@ -127,7 +127,6 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
-    expect(output).toContain("  autoCommit         = false  (default)");
     expect(output).toContain("  review             = true  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
@@ -204,18 +203,6 @@ describe("formatShowConfig", () => {
     const output = formatShowConfig(input);
     expect(output).toContain(
       "  baseBranch         = develop  (config (/home/user/.ralphai/repos/test-repo/config.json))",
-    );
-  });
-
-  it("shows cli source for autoCommit --no-auto-commit", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      autoCommit: { value: "false", source: "cli" },
-    });
-    input.rawFlags = { autoCommit: "--no-auto-commit" };
-    const output = formatShowConfig(input);
-    expect(output).toContain(
-      "  autoCommit         = false  (cli (--no-auto-commit))",
     );
   });
 

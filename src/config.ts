@@ -32,7 +32,6 @@ export interface RalphaiConfig {
   issueHitlLabel: string;
   agentInteractiveCommand: string;
   iterationTimeout: number;
-  autoCommit: string; // "true" | "false"
   sandbox: "none" | "docker";
   dockerImage: string;
   dockerMounts: string;
@@ -86,7 +85,6 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   issueHitlLabel: "ralphai-subissue-hitl",
   agentInteractiveCommand: "",
   iterationTimeout: 0,
-  autoCommit: "false",
   sandbox: "none",
   dockerImage: "",
   dockerMounts: "",
@@ -201,7 +199,6 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "issueHitlLabel",
   "agentInteractiveCommand",
   "iterationTimeout",
-  "autoCommit",
   "sandbox",
   "dockerImage",
   "dockerMounts",
@@ -394,14 +391,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.iterationTimeout = v as number;
   }
 
-  // autoCommit (boolean)
-  if ("autoCommit" in obj) {
-    const v = obj.autoCommit;
-    if (typeof v !== "boolean")
-      err(`'autoCommit' must be 'true' or 'false', got '${v}'`);
-    values.autoCommit = String(v);
-  }
-
   // sandbox (enum: "none" | "docker")
   if ("sandbox" in obj) {
     const v = String(obj.sandbox || "");
@@ -554,7 +543,6 @@ const ENV_VAR_MAP: ReadonlyArray<
   ["RALPHAI_ISSUE_COMMENT_PROGRESS", "issueCommentProgress"],
   ["RALPHAI_ISSUE_HITL_LABEL", "issueHitlLabel"],
   ["RALPHAI_AGENT_INTERACTIVE_COMMAND", "agentInteractiveCommand"],
-  ["RALPHAI_AUTO_COMMIT", "autoCommit"],
   ["RALPHAI_SANDBOX", "sandbox"],
   ["RALPHAI_DOCKER_IMAGE", "dockerImage"],
   ["RALPHAI_DOCKER_MOUNTS", "dockerMounts"],
@@ -657,13 +645,6 @@ export function applyEnvOverrides(
   const agentInteractiveCmd = get("RALPHAI_AGENT_INTERACTIVE_COMMAND");
   if (agentInteractiveCmd !== undefined)
     overrides.agentInteractiveCommand = agentInteractiveCmd;
-
-  // autoCommit (boolean)
-  const autoCommit = get("RALPHAI_AUTO_COMMIT");
-  if (autoCommit !== undefined) {
-    validateBoolean(autoCommit, "RALPHAI_AUTO_COMMIT");
-    overrides.autoCommit = autoCommit;
-  }
 
   // sandbox (enum: "none" | "docker")
   const sandbox = get("RALPHAI_SANDBOX");
@@ -768,12 +749,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       validateNonNegInt(v, "--iteration-timeout", "seconds");
       overrides.iterationTimeout = parseInt(v, 10);
       rawFlags.iterationTimeout = arg;
-    } else if (arg === "--auto-commit") {
-      overrides.autoCommit = "true";
-      rawFlags.autoCommit = "--auto-commit";
-    } else if (arg === "--no-auto-commit") {
-      overrides.autoCommit = "false";
-      rawFlags.autoCommit = "--no-auto-commit";
     } else if (arg === "--review") {
       overrides.review = "true";
       rawFlags.review = "--review";

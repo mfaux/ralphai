@@ -144,7 +144,6 @@ function makeResolvedConfig(overrides: Partial<Record<string, unknown>> = {}) {
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,

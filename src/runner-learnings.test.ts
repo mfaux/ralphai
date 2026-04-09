@@ -77,7 +77,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -139,7 +138,6 @@ describe("runRunner — in-memory learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -190,7 +188,6 @@ describe("runRunner — in-memory learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -233,7 +230,6 @@ describe("runRunner — in-memory learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -279,7 +275,6 @@ describe("runRunner — in-memory learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

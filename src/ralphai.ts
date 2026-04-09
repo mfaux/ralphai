@@ -281,8 +281,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   const sandbox: "none" | "docker" = sandboxConfirm ? "docker" : "none";
 
-  let autoCommit = false;
-
   // 6. GitHub Issues integration (enabled by default)
   clack.note(
     "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
@@ -344,7 +342,6 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     baseBranch,
     feedbackCommands: feedbackCommands || "",
     prFeedbackCommands: prFeedbackCommands || "",
-    autoCommit,
     sandbox,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
@@ -523,7 +520,6 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     prFeedbackCommands,
     baseBranch: answers.baseBranch,
     setupCommand: answers.setupCommand ?? "",
-    autoCommit: answers.autoCommit ?? false,
     iterationTimeout: 0,
     issueSource: answers.issueSource ?? "none",
     standaloneLabel: DEFAULTS.standaloneLabel,
@@ -1424,7 +1420,6 @@ async function runRalphaiInit(
       baseBranch: detectBaseBranch(cwd),
       feedbackCommands: detectedFeedbackStr,
       prFeedbackCommands: detectedPrFeedbackStr,
-      autoCommit: false,
       sandbox: sandboxValue,
       issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
@@ -1606,8 +1601,6 @@ const CONFIG_FLAG_PATTERNS = [
   /^--base-branch=/,
   /^--max-stuck=/,
   /^--iteration-timeout=/,
-  /^--auto-commit$/,
-  /^--no-auto-commit$/,
   /^--review$/,
   /^--no-review$/,
   /^--prompt-mode=/,
@@ -1649,7 +1642,7 @@ function showRunHelp(): void {
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
     "  --wizard, -w                     Interactively configure run options before starting",
     "  --once                           Run a single plan then exit (default: drain backlog)",
-    "  --resume, -r                     Auto-commit dirty state and continue",
+    "  --resume, -r                     Commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
     "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
@@ -1659,8 +1652,6 @@ function showRunHelp(): void {
     "  --base-branch=<branch>           Override base branch (default: main)",
     "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
-    "  --auto-commit                    Enable auto-commit of agent changes (per-iteration and resume recovery)",
-    "  --no-auto-commit                 Disable auto-commit recovery snapshots (default: off)",
     "  --sandbox=<mode>                 Execution sandbox mode: 'none' (local) or 'docker' (default: none)",
     "  --docker-image=<image>           Override Docker image (default: auto-resolve from agent name)",
     "  --docker-mounts=<csv>            Extra bind mounts for Docker sandbox (comma-separated)",
@@ -1674,7 +1665,7 @@ function showRunHelp(): void {
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
     "                  baseBranch, maxStuck, sandbox, dockerImage, dockerMounts, dockerEnvVars,",
-    "                  autoCommit, review, iterationTimeout, promptMode,",
+    "                  review, iterationTimeout, promptMode,",
     "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
     "                  issueRepo, issueCommentProgress",
     "",
@@ -1682,7 +1673,7 @@ function showRunHelp(): void {
     "                   RALPHAI_FEEDBACK_COMMANDS,",
     "                   RALPHAI_PR_FEEDBACK_COMMANDS,",
     "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
-    "                   RALPHAI_AUTO_COMMIT, RALPHAI_SANDBOX,",
+    "                   RALPHAI_SANDBOX,",
     "                   RALPHAI_DOCKER_IMAGE, RALPHAI_DOCKER_MOUNTS,",
     "                   RALPHAI_DOCKER_ENV_VARS, RALPHAI_REVIEW,",
     "                   RALPHAI_ITERATION_TIMEOUT,",

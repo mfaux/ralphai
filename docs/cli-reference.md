@@ -141,7 +141,7 @@ What it does:
 --prd=<number>                    Explicitly target a PRD issue (alternative to positional arg)
 --dry-run, -n                     Preview what would happen without changing anything
 --wizard, -w                      Interactively configure run options before starting
---resume, -r                      Auto-commit dirty state and continue
+--resume, -r                      Commit dirty state and continue
 --allow-dirty                     Skip the clean working tree check
 --plan=<file>                     Target a specific backlog plan (default: auto-detect)
 --agent-command=<command>         Override agent CLI command
@@ -152,8 +152,6 @@ What it does:
 --once                            Process a single work unit then exit
 --max-stuck=<n>                   Stuck threshold before abort (default: 3)
 --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
---auto-commit                     Enable auto-commit recovery snapshots
---no-auto-commit                  Disable auto-commit recovery snapshots (default)
 --sandbox=<mode>                  Execution sandbox mode: 'none' or 'docker' (default: auto-detected)
 --docker-image=<image>            Override Docker image (default: auto-resolve from agent name)
 --docker-mounts=<csv>             Extra bind mounts for Docker sandbox (comma-separated)
@@ -165,7 +163,7 @@ What it does:
 
 ### Wizard Mode
 
-`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 9 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, auto-commit, sandbox). Each option shows its current value and source (default, auto-detected, config file, env var, or CLI flag).
+`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 8 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, sandbox). Each option shows its current value and source (default, auto-detected, config file, env var, or CLI flag).
 
 Wizard overrides are injected as synthetic CLI flags. Explicit flags passed alongside `--wizard` take precedence (last-wins):
 
@@ -423,7 +421,6 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_FEEDBACK_COMMANDS`           | `feedbackCommands`        |
 | `RALPHAI_PR_FEEDBACK_COMMANDS`        | `prFeedbackCommands`      |
 | `RALPHAI_BASE_BRANCH`                 | `baseBranch`              |
-| `RALPHAI_AUTO_COMMIT`                 | `autoCommit`              |
 | `RALPHAI_REVIEW`                      | `review`                  |
 | `RALPHAI_MAX_STUCK`                   | `maxStuck`                |
 | `RALPHAI_ITERATION_TIMEOUT`           | `iterationTimeout`        |
@@ -453,7 +450,6 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                                                                                                                                                                                                                                                  |
 | `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
 | `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
-| `autoCommit`              | `false`                   | `RALPHAI_AUTO_COMMIT`               | Enable auto-commit recovery snapshots                                                                                                                                                                                                                                                                                     |
 | `review`                  | `true`                    | `RALPHAI_REVIEW`                    | Enable review pass after completion                                                                                                                                                                                                                                                                                       |
 | `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                                                                                                                                                                                                                                             |
 | `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                                                                                                                                                                                                                                                  |

@@ -95,7 +95,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -212,7 +211,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -256,7 +254,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -299,7 +296,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -333,7 +329,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -370,7 +365,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -407,7 +401,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -463,7 +456,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

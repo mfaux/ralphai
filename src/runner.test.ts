@@ -235,7 +235,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -374,7 +373,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -406,7 +404,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -443,7 +440,6 @@ describe("runRunner — completion", () => {
       config: makeResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -509,7 +505,6 @@ describe("runRunner — RunnerResult", () => {
       config: makeResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -547,7 +542,6 @@ describe("runRunner — RunnerResult", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -578,7 +572,6 @@ describe("runRunner — RunnerResult", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

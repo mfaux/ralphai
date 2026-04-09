@@ -1130,7 +1130,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         console.log(`WARNING: Agent command exited with status ${exitCode}.`);
       }
 
-      // --- Stuck detection (BEFORE auto-commit to avoid false progress) ---
+      // --- Stuck detection ---
       const currentHash = getCurrentCommitHash(cwd) ?? "";
       if (currentHash === lastHash) {
         stuckCount++;

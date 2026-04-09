@@ -74,7 +74,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -139,7 +138,6 @@ describe("drain-by-default", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -170,7 +168,6 @@ describe("drain-by-default", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -220,7 +217,6 @@ describe("--once flag", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -273,7 +269,6 @@ describe("exit summary", () => {
       config: makeResolvedConfig({
         agentCommand: stuckAgent,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -332,7 +327,6 @@ fi
       config: makeResolvedConfig({
         agentCommand: mixedAgent,
         maxStuck: 2,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -419,7 +413,6 @@ describe("priority: in-progress before backlog", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
