@@ -17,21 +17,15 @@ import {
   listPlanFolders,
   listPlanFiles,
   resolvePlanPath,
-  planExistsForSlug,
   getPlanDescription,
 } from "./plan-detection.ts";
-import {
-  parseReceipt,
-  checkReceiptSource,
-  findPlansByBranch,
-} from "./receipt.ts";
+import { checkReceiptSource } from "./receipt.ts";
 import {
   getRepoPipelineDirs,
   resolveRepoByNameOrPath,
   removeStaleRepos,
 } from "./global-state.ts";
 import {
-  detectFeedbackCommands,
   detectWorkspaces,
   detectProject,
   detectSetupCommand,
@@ -94,11 +88,7 @@ import {
 } from "./issue-dispatch.ts";
 import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
-import {
-  isInsideGitRepo,
-  extractExecStderr,
-  detectBaseBranch,
-} from "./git-helpers.ts";
+import { isInsideGitRepo, detectBaseBranch } from "./git-helpers.ts";
 import { parseRalphaiOptions } from "./parse-options.ts";
 import type {
   RalphaiSubcommand,
@@ -114,7 +104,6 @@ import {
 import {
   isGitWorktree,
   resolveWorktreeInfo,
-  executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,
   listRalphaiWorktrees,
@@ -122,7 +111,6 @@ import {
 } from "./worktree/index.ts";
 import type {
   WorktreeEntry,
-  SelectedWorktreePlan,
   GitHubFallbackOptions,
   SetupSandboxConfig,
 } from "./worktree/index.ts";
@@ -683,7 +671,6 @@ async function runRalphaiReset(
   }
 
   const planSlugs = listPlanFolders(wipDir);
-  const planFiles = planSlugs.map((slug) => `${slug}.md`);
 
   // Check for worktrees to clean
   let worktrees: WorktreeEntry[] = [];
@@ -693,7 +680,7 @@ async function runRalphaiReset(
     // Not in a git repo or git not available
   }
 
-  if (planFiles.length === 0 && worktrees.length === 0) {
+  if (planSlugs.length === 0 && worktrees.length === 0) {
     console.log("Nothing to reset — pipeline is already clean.");
     return;
   }
@@ -720,7 +707,7 @@ async function runRalphaiReset(
   console.log();
   console.log(`${TEXT}The following will be reset:${RESET}`);
   console.log();
-  if (planFiles.length > 0) {
+  if (planSlugs.length > 0) {
     if (localPlanFiles.length > 0) {
       console.log(
         `  ${TEXT}Plans${RESET}       ${DIM}${localPlanFiles.length} plan${localPlanFiles.length !== 1 ? "s" : ""} moved back to backlog${RESET}`,
@@ -857,7 +844,7 @@ async function runRalphaiReset(
   console.log(`${TEXT}Pipeline reset.${RESET}`);
   console.log();
   console.log(`${DIM}Actions:${RESET}`);
-  if (planFiles.length > 0) {
+  if (planSlugs.length > 0) {
     if (localPlanFiles.length > 0) {
       console.log(
         `  ${localPlanFiles.length} plan${localPlanFiles.length !== 1 ? "s" : ""} moved to backlog`,
@@ -869,7 +856,7 @@ async function runRalphaiReset(
       );
     }
     console.log(
-      `  Deleted progress.md and receipt.txt in ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""}`,
+      `  Deleted progress.md and receipt.txt in ${planSlugs.length} plan${planSlugs.length !== 1 ? "s" : ""}`,
     );
   }
   if (worktrees.length > 0) {
