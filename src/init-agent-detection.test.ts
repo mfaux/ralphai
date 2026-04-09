@@ -1,20 +1,42 @@
 import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { runCli, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
+
+/** Binary names of all agents that detectInstalledAgent() probes for. */
+const AGENT_BINARIES = [
+  "opencode",
+  "claude",
+  "codex",
+  "gemini",
+  "aider",
+  "goose",
+  "kiro-cli",
+  "amp",
+];
 
 /**
  * Build a PATH containing only the directories needed for node and git,
  * with no agent binaries. Uses `which` to find the real locations of
  * node and git, then builds a PATH from their parent directories plus
- * /usr/bin (for `which` itself and other essentials).
+ * /usr/bin (for `which` itself and other essentials). Any directory that
+ * contains a known agent binary is excluded so that detectInstalledAgent()
+ * falls through to the OpenCode fallback.
  */
 function basePathWithoutAgents(): string {
   const nodeDir = dirname(execSync("which node", { encoding: "utf-8" }).trim());
   const gitDir = dirname(execSync("which git", { encoding: "utf-8" }).trim());
   const dirs = new Set([nodeDir, gitDir, "/usr/bin", "/usr/local/bin", "/bin"]);
+
+  // Remove any directory that contains a known agent binary
+  for (const dir of [...dirs]) {
+    if (AGENT_BINARIES.some((bin) => existsSync(join(dir, bin)))) {
+      dirs.delete(dir);
+    }
+  }
+
   return [...dirs].join(":");
 }
 

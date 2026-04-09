@@ -676,14 +676,13 @@ async function runRalphaiReset(
   }
 
   const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
-  const inProgressDir = wipDir;
 
-  if (!existsSync(inProgressDir)) {
+  if (!existsSync(wipDir)) {
     console.log("Nothing to reset — no in-progress directory.");
     return;
   }
 
-  const planSlugs = listPlanFolders(inProgressDir);
+  const planSlugs = listPlanFolders(wipDir);
   const planFiles = planSlugs.map((slug) => `${slug}.md`);
 
   // Check for worktrees to clean
@@ -710,8 +709,6 @@ async function runRalphaiReset(
     for (const f of planFiles) {
       console.log(`    ${DIM}${f}${RESET}`);
     }
-  }
-  if (planFiles.length > 0) {
     console.log(
       `  ${TEXT}Artifacts${RESET}   ${DIM}progress.md + receipt.txt removed per plan${RESET}`,
     );
@@ -758,7 +755,7 @@ async function runRalphaiReset(
 
   // 1. Extract plan files from in-progress slug-folders back to backlog as flat files
   for (const slug of planSlugs) {
-    const src = join(inProgressDir, slug);
+    const src = join(wipDir, slug);
     const planFile = join(src, `${slug}.md`);
     const dest = join(backlogDir, `${slug}.md`);
     mkdirSync(backlogDir, { recursive: true });
@@ -829,8 +826,6 @@ async function runRalphaiReset(
     console.log(
       `  ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved to backlog`,
     );
-  }
-  if (planFiles.length > 0) {
     console.log(
       `  Deleted progress.md and receipt.txt in ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""}`,
     );
@@ -1260,6 +1255,34 @@ export async function runRalphai(args: string[]): Promise<void> {
         runArgs: options.runArgs,
       });
       break;
+    case "worktree": {
+      // The `worktree` subcommand has been removed. Print redirect guidance
+      // based on the sub-subcommand (parsed as targetDir by the arg parser).
+      const wtSub = options.targetDir;
+      if (wtSub === "clean") {
+        console.error(
+          `The ${TEXT}ralphai worktree clean${RESET} command has been removed.`,
+        );
+        console.error(`Use ${TEXT}ralphai clean --worktrees${RESET} instead.`);
+      } else if (wtSub === "list") {
+        console.error(
+          `The ${TEXT}ralphai worktree list${RESET} command has been removed.`,
+        );
+        console.error(`Use ${TEXT}ralphai status${RESET} instead.`);
+      } else {
+        console.error(
+          `The ${TEXT}ralphai worktree${RESET} command has been removed.`,
+        );
+        console.error(`\n${DIM}Replacements:${RESET}`);
+        console.error(
+          `  ${TEXT}ralphai clean --worktrees${RESET}  ${DIM}(replaces worktree clean)${RESET}`,
+        );
+        console.error(
+          `  ${TEXT}ralphai status${RESET}             ${DIM}(replaces worktree list)${RESET}`,
+        );
+      }
+      process.exit(1);
+    }
     default:
       showRalphaiHelp();
       break;
@@ -1677,11 +1700,6 @@ function showRunHelp(): void {
   console.log(lines.join("\n"));
 }
 
-/**
- * Resolve worktree state for the given directory.
- * Returns { isWorktree, mainWorktree } where mainWorktree is the root
- * of the main worktree (empty string if not in a worktree).
- */
 // ---------------------------------------------------------------------------
 // Explicit target handlers: `ralphai run <issue-number>` / `ralphai run <plan.md>`
 // ---------------------------------------------------------------------------
@@ -2227,6 +2245,14 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
+      // Collect learnings from this sub-issue run (deduplicated)
+      if (result.accumulatedLearnings) {
+        for (const learning of result.accumulatedLearnings) {
+          if (!prdLearnings.includes(learning)) {
+            prdLearnings.push(learning);
+          }
+        }
+      }
       if (result.stuckSlugs.length > 0) {
         // Runner returned normally but the sub-issue got stuck
         stuckSubIssues.push(subIssueNumber);

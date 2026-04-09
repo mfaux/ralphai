@@ -270,7 +270,7 @@ Behavior:
 
 - **No flags:** Cleans both archived plans from `pipeline/out/` and orphaned worktrees
 - **`--archive`:** Only removes archived plans (equivalent to `ralphai purge`)
-- **`--worktrees`:** Only removes orphaned worktrees (equivalent to `ralphai worktree clean`)
+- **`--worktrees`:** Only removes orphaned worktrees
 - **Nothing to clean:** Prints "Nothing to clean" and exits 0
 
 ## Stop

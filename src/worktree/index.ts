@@ -22,6 +22,5 @@ export {
   writeFeedbackWrapper,
   listWorktrees,
   cleanWorktrees,
-  runRalphaiWorktree,
   type SetupSandboxConfig,
 } from "./management.ts";

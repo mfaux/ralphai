@@ -12,7 +12,6 @@ import {
 } from "../feedback-wrapper.ts";
 import { buildSetupDockerArgs } from "../executor/docker.ts";
 import type { DockerExecutorConfig } from "../executor/docker.ts";
-import type { RalphaiOptions } from "../parse-options.ts";
 import { listRalphaiWorktrees } from "./parsing.ts";
 
 /**
@@ -38,23 +37,7 @@ export interface SetupSandboxConfig {
 }
 
 export function isGitWorktree(dir: string): boolean {
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    const gitDir = execSync("git rev-parse --git-dir", {
-      cwd: dir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
-    // In a worktree, --git-common-dir points to the main repo's .git
-    // while --git-dir points to .git/worktrees/<name>
-    return commonDir !== gitDir;
-  } catch {
-    return false;
-  }
+  return resolveWorktreeInfo(dir).isWorktree;
 }
 
 export function resolveWorktreeInfo(dir: string): {
@@ -364,7 +347,7 @@ export function cleanWorktrees(cwd: string): void {
     if (wt.branch.startsWith("ralphai/")) {
       const slug = wt.branch.replace("ralphai/", "");
       hasActivePlan = planExistsForSlug(inProgressDir, slug);
-      matchedSlugs = hasActivePlan ? [slug] : [slug]; // always try archiving the slug
+      matchedSlugs = [slug];
     } else {
       // feat/ or other managed branches: use receipt-based lookup
       matchedSlugs = findPlansByBranch(inProgressDir, wt.branch);
@@ -418,37 +401,4 @@ export function cleanWorktrees(cwd: string): void {
   }
 
   console.log(`\nCleaned ${cleaned} worktree(s).`);
-}
-
-export async function runRalphaiWorktree(
-  options: RalphaiOptions,
-  cwd: string,
-  showHelp: () => void,
-): Promise<void> {
-  const wtOpts = options.worktreeOptions ?? {
-    subcommand: "run",
-    runArgs: [],
-  };
-
-  // Handle --help
-  if (wtOpts.runArgs.includes("--help") || wtOpts.runArgs.includes("-h")) {
-    showHelp();
-    return;
-  }
-
-  // Dispatch worktree sub-subcommands
-  switch (wtOpts.subcommand) {
-    case "list":
-      listWorktrees(cwd);
-      return;
-    case "clean":
-      cleanWorktrees(cwd);
-      return;
-    case "run":
-      console.error("'ralphai worktree' no longer starts runs.");
-      console.error(
-        "Use 'ralphai run' to create or reuse a worktree and execute work.",
-      );
-      process.exit(1);
-  }
 }

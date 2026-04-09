@@ -17,16 +17,8 @@ export type RalphaiSubcommand =
   | "repos"
   | "config"
   | "seed"
-  | "hitl";
-
-export type WorktreeSubcommand = "run" | "list" | "clean";
-
-export interface WorktreeOptions {
-  subcommand: WorktreeSubcommand;
-  plan?: string; // --plan=<file>
-  dir?: string; // --dir=<path>
-  runArgs: string[]; // passthrough args for the runner (--agent-command, etc.)
-}
+  | "hitl"
+  | "worktree";
 
 export interface RalphaiOptions {
   subcommand: RalphaiSubcommand | undefined;
@@ -47,7 +39,6 @@ export interface RalphaiOptions {
   stopSlug?: string; // positional arg for `stop` subcommand
   runTarget?: RunTarget; // positional target for `run` (issue number, plan path, or auto)
   runArgs: string[];
-  worktreeOptions?: WorktreeOptions;
   unknownFlags: string[];
   hitlIssueNumber?: number; // positional arg for `hitl` subcommand
 }
@@ -84,6 +75,7 @@ export const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "config",
   "seed", // hidden — not listed in showRalphaiHelp()
   "hitl",
+  "worktree", // removed — prints redirect guidance
 ]);
 
 export function parseRalphaiOptions(args: string[]): RalphaiOptions {
@@ -104,7 +96,6 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
   const checkCapabilities: string[] = [];
   let configKey: string | undefined;
   const runArgs: string[] = [];
-  let worktreeOptions: WorktreeOptions | undefined;
   const unknownFlags: string[] = [];
   let hitlIssueNumber: number | undefined;
 
@@ -267,39 +258,7 @@ export function parseRalphaiOptions(args: string[]): RalphaiOptions {
     stopSlug,
     runTarget,
     runArgs,
-    worktreeOptions,
     unknownFlags,
     hitlIssueNumber,
   };
-}
-
-export const WORKTREE_SUBCOMMANDS = new Set<WorktreeSubcommand>([
-  "list",
-  "clean",
-]);
-
-export function parseWorktreeArgs(args: string[]): WorktreeOptions {
-  let wtSubcommand: WorktreeSubcommand = "run";
-  let plan: string | undefined;
-  let dir: string | undefined;
-  const wtRunArgs: string[] = [];
-
-  for (const arg of args) {
-    if (arg.startsWith("--plan=")) {
-      plan = arg.slice("--plan=".length);
-    } else if (arg.startsWith("--dir=")) {
-      dir = arg.slice("--dir=".length);
-    } else if (
-      !arg.startsWith("-") &&
-      wtSubcommand === "run" &&
-      WORKTREE_SUBCOMMANDS.has(arg as WorktreeSubcommand)
-    ) {
-      wtSubcommand = arg as WorktreeSubcommand;
-    } else {
-      // Everything else passes through to the runner
-      wtRunArgs.push(arg);
-    }
-  }
-
-  return { subcommand: wtSubcommand, plan, dir, runArgs: wtRunArgs };
 }
