@@ -741,7 +741,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
   // --- Main plan loop (drain-by-default) ---
   let plansCompleted = 0;
-  const completedPlans: string[] = [];
   let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
   const stuckSlugs: string[] = [];
@@ -1269,7 +1268,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         console.log(
           `Plan complete after ${iterationNumber} iterations: ${planDesc}`,
         );
-        completedPlans.push(basename(planFile));
 
         // Extract agent-generated PR description
         // Only recognize nonce-stamped tags to prevent false positives.
