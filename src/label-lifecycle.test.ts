@@ -233,3 +233,31 @@ describe("dry-run safety — label lifecycle", () => {
     expect(logs[0]).toContain("stuck");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Done transitions remove all other state labels
+// ---------------------------------------------------------------------------
+
+describe("done transitions remove all other state labels", () => {
+  it("transitionDone removes both in-progress and stuck", () => {
+    mockExecSync.mockReturnValue(Buffer.from(""));
+    transitionDone(ISSUE, "/tmp");
+
+    const calls = ghEditCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('--add-label "done"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
+    expect(calls[0]).toContain('--remove-label "stuck"');
+  });
+
+  it("prdTransitionDone removes both in-progress and stuck", () => {
+    mockExecSync.mockReturnValue(Buffer.from(""));
+    prdTransitionDone({ number: 100, repo: "acme/widgets" }, "/tmp");
+
+    const calls = ghEditCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('--add-label "done"');
+    expect(calls[0]).toContain('--remove-label "in-progress"');
+    expect(calls[0]).toContain('--remove-label "stuck"');
+  });
+});

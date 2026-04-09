@@ -8,13 +8,13 @@
  *
  * Every label transition in the system flows through this module:
  *   pull:  add in-progress  (family label stays)
- *   done:  remove in-progress, add done
+ *   done:  remove in-progress + stuck, add done
  *   stuck: remove in-progress, add stuck
  *   reset: remove in-progress + stuck  (family label stays)
  *
  * PRD parent propagation helpers:
  *   prdInProgress: add in-progress label to PRD parent
- *   prdDone:       add done label (remove in-progress) on PRD parent
+ *   prdDone:       add done label (remove in-progress + stuck) on PRD parent
  *   prdStuck:      add stuck label on PRD parent
  *
  * All functions are best-effort: failures are logged but never thrown.
@@ -100,6 +100,7 @@ export function transitionPull(
  * Done transition: in-progress → done.
  *
  * Used when work completes successfully and the plan is archived.
+ * Removes both in-progress and stuck labels to ensure a clean state.
  */
 export function transitionDone(
   issue: IssueMeta,
@@ -113,7 +114,7 @@ export function transitionDone(
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
+      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`,
     cwd,
   );
   if (result === null) {
@@ -231,7 +232,7 @@ export function prdTransitionInProgress(
  * PRD parent → done.
  *
  * Called when all sub-issues under a PRD are completed.
- * Adds the done label and removes the in-progress label.
+ * Adds the done label and removes both in-progress and stuck labels.
  */
 export function prdTransitionDone(
   issue: IssueMeta,
@@ -245,7 +246,7 @@ export function prdTransitionDone(
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
+      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`,
     cwd,
   );
   if (result === null) {
