@@ -698,16 +698,44 @@ async function runRalphaiReset(
     return;
   }
 
+  // Classify plans as GH-sourced or local for preview and action logic.
+  const ghPlanFiles: string[] = [];
+  const localPlanFiles: string[] = [];
+  for (const slug of planSlugs) {
+    const planFile = join(wipDir, slug, `${slug}.md`);
+    if (existsSync(planFile)) {
+      const fm = extractIssueFrontmatter(planFile);
+      if (fm.source === "github" && !!fm.issue) {
+        ghPlanFiles.push(`${slug}.md`);
+      } else {
+        localPlanFiles.push(`${slug}.md`);
+      }
+    } else {
+      // Missing plan file — treat as local (will be moved to backlog if it exists)
+      localPlanFiles.push(`${slug}.md`);
+    }
+  }
+
   // Show what will be reset
   console.log();
   console.log(`${TEXT}The following will be reset:${RESET}`);
   console.log();
   if (planFiles.length > 0) {
-    console.log(
-      `  ${TEXT}Plans${RESET}       ${DIM}${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved back to backlog${RESET}`,
-    );
-    for (const f of planFiles) {
-      console.log(`    ${DIM}${f}${RESET}`);
+    if (localPlanFiles.length > 0) {
+      console.log(
+        `  ${TEXT}Plans${RESET}       ${DIM}${localPlanFiles.length} plan${localPlanFiles.length !== 1 ? "s" : ""} moved back to backlog${RESET}`,
+      );
+      for (const f of localPlanFiles) {
+        console.log(`    ${DIM}${f}${RESET}`);
+      }
+    }
+    if (ghPlanFiles.length > 0) {
+      console.log(
+        `  ${TEXT}Plans${RESET}       ${DIM}${ghPlanFiles.length} plan${ghPlanFiles.length !== 1 ? "s" : ""} removed (re-pull from GitHub)${RESET}`,
+      );
+      for (const f of ghPlanFiles) {
+        console.log(`    ${DIM}${f}${RESET}`);
+      }
     }
     console.log(
       `  ${TEXT}Artifacts${RESET}   ${DIM}progress.md + receipt.txt removed per plan${RESET}`,
@@ -753,7 +781,9 @@ async function runRalphaiReset(
     // Config resolution failure is not critical — skip label restoration.
   }
 
-  // 1. Extract plan files from in-progress slug-folders back to backlog as flat files
+  // 1. Extract plan files from in-progress slug-folders back to backlog as flat files.
+  //    GH-sourced plans are deleted (they will be re-pulled from GitHub).
+  //    Local plans are moved back to backlog.
   for (const slug of planSlugs) {
     const src = join(wipDir, slug);
     const planFile = join(src, `${slug}.md`);
@@ -772,11 +802,16 @@ async function runRalphaiReset(
       }
     }
 
+    // Determine if this is a GH-sourced plan.
+    const isGhPlan = ghPlanFiles.includes(`${slug}.md`);
+
     rmSync(join(src, "progress.md"), { force: true });
     rmSync(join(src, "receipt.txt"), { force: true });
-    if (existsSync(planFile)) {
+    if (!isGhPlan && existsSync(planFile)) {
+      // Local plan: move back to backlog
       renameSync(planFile, dest);
     }
+    // GH plans: plan file is deleted along with the slug-folder below.
     rmSync(src, { recursive: true, force: true });
     actions++;
   }
@@ -823,9 +858,16 @@ async function runRalphaiReset(
   console.log();
   console.log(`${DIM}Actions:${RESET}`);
   if (planFiles.length > 0) {
-    console.log(
-      `  ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""} moved to backlog`,
-    );
+    if (localPlanFiles.length > 0) {
+      console.log(
+        `  ${localPlanFiles.length} plan${localPlanFiles.length !== 1 ? "s" : ""} moved to backlog`,
+      );
+    }
+    if (ghPlanFiles.length > 0) {
+      console.log(
+        `  ${ghPlanFiles.length} plan${ghPlanFiles.length !== 1 ? "s" : ""} removed (re-pull from GitHub)`,
+      );
+    }
     console.log(
       `  Deleted progress.md and receipt.txt in ${planFiles.length} plan${planFiles.length !== 1 ? "s" : ""}`,
     );
@@ -843,11 +885,23 @@ async function runRalphaiReset(
 // ---------------------------------------------------------------------------
 
 /**
- * Reset a single in-progress plan back to the backlog.
+ * Reset a single in-progress plan back to the backlog (local plans) or
+ * remove it from the pipeline entirely (GitHub-sourced plans).
  *
- * Moves the plan file from the in-progress slug-folder to the backlog
- * directory, deletes progress.md and receipt.txt, removes the slug
- * folder, and cleans up any associated worktree.
+ * For **local plans**: moves the plan file from the in-progress
+ * slug-folder to the backlog directory, deletes progress.md and
+ * receipt.txt, removes the slug folder, and cleans up any associated
+ * worktree.
+ *
+ * For **GitHub-sourced plans** (`source: "github"` with a truthy
+ * `issue` number in frontmatter): the plan file is NOT moved to
+ * backlog. Instead, it is deleted along with the slug-folder.
+ * The plan can be re-pulled from GitHub on the next `ralphai pull`.
+ * If frontmatter cannot be parsed, the plan is treated as local
+ * to prevent accidental data loss.
+ *
+ * In both cases, GitHub issue labels are restored (best-effort)
+ * before the plan is moved or deleted.
  *
  * Skips confirmation — callers are expected to confirm before calling.
  */
@@ -864,6 +918,13 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
   const planFile = join(slugDir, `${slug}.md`);
   const dest = join(backlogDir, `${slug}.md`);
   mkdirSync(backlogDir, { recursive: true });
+
+  // Determine if this is a GH-sourced plan before any file operations.
+  let isGhPlan = false;
+  if (existsSync(planFile)) {
+    const fm = extractIssueFrontmatter(planFile);
+    isGhPlan = fm.source === "github" && !!fm.issue;
+  }
 
   // Restore GitHub issue labels before moving the file (needs frontmatter).
   if (existsSync(planFile)) {
@@ -890,9 +951,11 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
   rmSync(join(slugDir, "progress.md"), { force: true });
   rmSync(join(slugDir, "receipt.txt"), { force: true });
   rmSync(join(slugDir, "runner.pid"), { force: true });
-  if (existsSync(planFile)) {
+  if (!isGhPlan && existsSync(planFile)) {
+    // Local plan: move back to backlog
     renameSync(planFile, dest);
   }
+  // GH plans: plan file is deleted along with the slug-folder below.
   rmSync(slugDir, { recursive: true, force: true });
 
   // Clean associated worktree
@@ -924,7 +987,11 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
     }
   }
 
-  console.log(`Reset '${slug}' — plan moved back to backlog.`);
+  if (isGhPlan) {
+    console.log(`Reset '${slug}' — removed (will re-pull from GitHub).`);
+  } else {
+    console.log(`Reset '${slug}' — plan moved back to backlog.`);
+  }
 }
 
 // ---------------------------------------------------------------------------
