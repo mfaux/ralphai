@@ -1152,7 +1152,56 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         }
 
         if (!gateResult.passed) {
-          // Max rejections reached — accept anyway but warn
+          // Max rejections reached — check for zero completion before
+          // force-accepting. A plan with zero tasks completed out of a
+          // non-zero total means the agent failed entirely; mark stuck
+          // instead of shipping an empty PR.
+          const currentCompleted = countCompletedTasks(
+            progressFile,
+            planFormat,
+          );
+          if (currentCompleted === 0 && totalTasks > 0) {
+            console.log();
+            console.log(
+              `Stuck: zero tasks completed (0/${totalTasks}) after ${maxGateRejections} gate rejections — refusing to force-accept.`,
+            );
+            // Clean up PID file and IPC server
+            if (ipcServer) {
+              ipcServer.close();
+              ipcServer = null;
+              activeIpcServer = null;
+            }
+            if (activePidFile) {
+              try {
+                rmSync(activePidFile, { force: true });
+              } catch {
+                // Best-effort cleanup
+              }
+            }
+            activePidFile = null;
+            stuck = true;
+            skippedSlugs.add(planSlug);
+            stuckSlugs.push(planSlug);
+            updateReceiptOutcome(receiptFile, "stuck");
+            if (issueFm.source === "github" && issueFm.issue) {
+              let repo = issueRepo || null;
+              if (!repo && issueFm.issueUrl) {
+                const m = issueFm.issueUrl.match(
+                  /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
+                );
+                repo = m?.[1] ?? null;
+              }
+              if (repo) {
+                transitionStuck({ number: issueFm.issue, repo }, cwd);
+                if (issueFm.prd) {
+                  prdTransitionStuck({ number: issueFm.prd, repo }, cwd);
+                }
+              }
+            }
+            break;
+          }
+
+          // Partial progress — accept anyway but warn
           console.log();
           console.log(
             `WARNING: Completion gate still failing after ${maxGateRejections} rejections — accepting COMPLETE anyway.`,
@@ -1226,7 +1275,55 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 }
 
                 if (!reGateResult.passed) {
-                  // Max rejections reached — accept anyway but warn
+                  // Zero-completion guard: same check as the pre-review gate
+                  const currentCompleted = countCompletedTasks(
+                    progressFile,
+                    planFormat,
+                  );
+                  if (currentCompleted === 0 && totalTasks > 0) {
+                    console.log();
+                    console.log(
+                      `Stuck: zero tasks completed (0/${totalTasks}) after review pass and ${maxGateRejections} gate rejections — refusing to force-accept.`,
+                    );
+                    if (ipcServer) {
+                      ipcServer.close();
+                      ipcServer = null;
+                      activeIpcServer = null;
+                    }
+                    if (activePidFile) {
+                      try {
+                        rmSync(activePidFile, { force: true });
+                      } catch {
+                        // Best-effort cleanup
+                      }
+                    }
+                    activePidFile = null;
+                    stuck = true;
+                    skippedSlugs.add(planSlug);
+                    stuckSlugs.push(planSlug);
+                    updateReceiptOutcome(receiptFile, "stuck");
+                    if (issueFm.source === "github" && issueFm.issue) {
+                      let repo = issueRepo || null;
+                      if (!repo && issueFm.issueUrl) {
+                        const m = issueFm.issueUrl.match(
+                          /https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\//,
+                        );
+                        repo = m?.[1] ?? null;
+                      }
+                      if (repo) {
+                        transitionStuck({ number: issueFm.issue, repo }, cwd);
+                        if (issueFm.prd) {
+                          prdTransitionStuck(
+                            { number: issueFm.prd, repo },
+                            cwd,
+                          );
+                        }
+                      }
+                    }
+                    break;
+                  }
+
+                  // Partial progress — accept anyway but warn
                   console.log();
                   console.log(
                     `WARNING: Completion gate still failing after review pass and ${maxGateRejections} rejections — accepting anyway.`,

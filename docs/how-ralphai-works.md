@@ -91,6 +91,8 @@ When the agent signals that all tasks are complete, Ralphai runs a **completion 
 
 If any check fails, the gate **rejects** and Ralphai re-invokes the agent with a fresh session that includes the rejection details. PR-tier failures are labeled `[PR-tier]` in the rejection message so the agent knows which commands failed and can fix them.
 
+The gate allows up to 2 consecutive rejections before force-accepting to prevent infinite loops. However, if the plan has **zero tasks completed** out of a non-zero total when the rejection budget is exhausted, the plan is marked **stuck** instead of force-accepted — zero progress indicates the agent failed entirely and should not produce a PR.
+
 ```
     Agent signals COMPLETE
               ▼
