@@ -234,6 +234,33 @@ describe("CLI help and flags", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Unknown command rejection
+  // -------------------------------------------------------------------------
+
+  it("'worktree clean' prints redirect guidance (not 'not set up')", async () => {
+    const result = await runCliInProcess(["worktree", "clean"], ctx.dir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("ralphai clean --worktrees");
+    expect(result.stderr).not.toContain("not set up");
+  });
+
+  it("'notacommand' prints Unknown command: notacommand", async () => {
+    const result = await runCliInProcess(["notacommand"], ctx.dir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown command: notacommand");
+  });
+
+  it("'clean path/to/repo' still works (valid subcommand + targetDir)", async () => {
+    // The clean command should dispatch to the clean handler, not error about
+    // unknown commands. It will fail with "not set up" because ctx.dir is not
+    // initialized, but that's the expected clean-handler behavior — the point
+    // is that it does NOT print "Unknown command: clean".
+    const result = await runCliInProcess(["clean", "path/to/repo"], ctx.dir);
+    // Should NOT be an unknown-command error
+    expect(result.stderr).not.toContain("Unknown command");
+  });
+
+  // -------------------------------------------------------------------------
   // NO_COLOR support
   // -------------------------------------------------------------------------
 

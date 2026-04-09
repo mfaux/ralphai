@@ -15,11 +15,11 @@ Back to the [README](../README.md) for setup and quickstart.
 ## Commands
 
 ```bash
-ralphai status                            # show active worktrees
+ralphai status                            # show active worktrees and pipeline state
 ralphai clean --worktrees                 # remove completed worktrees
 ```
 
-The lifecycle: `ralphai run` creates or reuses a worktree → runs the plan there → pushes a branch → opens or updates a draft PR → `ralphai clean --worktrees` removes finished worktrees.
+The lifecycle: `ralphai run` creates or reuses a worktree → runs the plan there → pushes a branch → opens or updates a draft PR → `ralphai clean --worktrees` removes completed worktrees.
 
 Run `ralphai run` from the **main repository**, not from inside a worktree.
 

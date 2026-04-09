@@ -1036,6 +1036,15 @@ export async function runRalphai(args: string[]): Promise<void> {
   let cwd = options.targetDir ? resolve(options.targetDir) : process.cwd();
   const helpRequested = args.includes("--help") || args.includes("-h");
 
+  // Reject unknown commands (positional args that don't match any subcommand)
+  if (options.unknownCommand) {
+    console.error(`Unknown command: ${options.unknownCommand}`);
+    console.error(
+      `${DIM}Run ${TEXT}ralphai --help${RESET}${DIM} for available commands.${RESET}`,
+    );
+    process.exit(1);
+  }
+
   // Handle --repo flag: resolve cwd from a known repo name or path
   if (options.repo) {
     const REPO_BLOCKED_COMMANDS = new Set<RalphaiSubcommand>(["run", "init"]);
@@ -1523,7 +1532,7 @@ async function runRalphaiInit(
 }
 
 // ---------------------------------------------------------------------------
-// Worktree subcommand
+// Init subcommand
 // ---------------------------------------------------------------------------
 
 function showInitHelp(): void {
