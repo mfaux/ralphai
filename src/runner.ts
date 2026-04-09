@@ -14,6 +14,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmdirSync,
   rmSync,
   writeFileSync,
   renameSync,
@@ -141,7 +142,6 @@ function rollbackPlan(planFile: string, backlogDir: string): void {
   renameSync(planFile, dest);
   // Remove the now-empty WIP folder (best-effort)
   try {
-    const { rmdirSync } = require("fs");
     rmdirSync(wipDir);
   } catch {
     // May have other files; that's OK

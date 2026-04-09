@@ -352,8 +352,7 @@ export function checkDependencyStatus(
   }
 
   // --- Prefix match for issue-based slugs (gh-N) ---
-  const issueMatch = /^gh-(\d+)$/.exec(slug);
-  if (issueMatch) {
+  if (/^gh-\d+$/.test(slug)) {
     const prefix = `${slug}-`;
 
     if (hasEntryWithPrefix(dirs.archiveDir, prefix)) {
