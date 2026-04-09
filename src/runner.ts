@@ -30,11 +30,7 @@ import {
   formatDockerCommand,
 } from "./executor/docker.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
-import {
-  getSocketPath,
-  type IpcMessage,
-  type OutputMessage,
-} from "./ipc-protocol.ts";
+import { getSocketPath, type IpcMessage } from "./ipc-protocol.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
@@ -49,12 +45,11 @@ import {
   detectCompletion,
   extractNoncedBlock,
 } from "./sentinel.ts";
-import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
+
 import {
   transitionStuck,
   prdTransitionStuck,
   prdTransitionDone,
-  type IssueMeta,
 } from "./label-lifecycle.ts";
 import {
   peekGithubIssues,
@@ -73,6 +68,7 @@ import {
   countCompletedTasks,
   getPlanDescription,
   type PipelineDirs,
+  type PlanFormat,
   type BlockedPlanInfo,
 } from "./plan-detection.ts";
 import {
@@ -151,6 +147,79 @@ function rollbackPlan(planFile: string, backlogDir: string): void {
     // May have other files; that's OK
   }
   console.log(`Rolled back: moved plan to ${dest}`);
+}
+
+/**
+ * Handle a failed gate result: reject (within budget), mark stuck (zero
+ * tasks), or force-accept (partial progress). Returns the disposition so
+ * the caller can decide control flow (`continue` / `break` / fall-through).
+ *
+ * Side-effects: increments `state.gateRejectionCount`, sets
+ * `state.lastGateRejection`, calls `markStuck()`, and logs warnings.
+ */
+function handleGateFailure(
+  gateResult: { passed: boolean; reason: string; details: string[] },
+  context: string,
+  opts: {
+    maxGateRejections: number;
+    nonce: string;
+    totalTasks: number;
+    progressFile: string;
+    planFormat: PlanFormat;
+    formatGateRejectionFn: typeof formatGateRejection;
+    countCompletedTasksFn: typeof countCompletedTasks;
+    markStuckFn: (reason: string) => void;
+    state: {
+      gateRejectionCount: number;
+      lastGateRejection: string | undefined;
+    };
+  },
+): "rejected" | "stuck" | "accepted" {
+  const {
+    maxGateRejections,
+    nonce,
+    totalTasks,
+    progressFile,
+    planFormat,
+    formatGateRejectionFn,
+    countCompletedTasksFn,
+    markStuckFn,
+    state,
+  } = opts;
+
+  // Within rejection budget — reject and re-invoke
+  if (state.gateRejectionCount < maxGateRejections) {
+    state.gateRejectionCount++;
+    state.lastGateRejection = formatGateRejectionFn(gateResult, nonce);
+    console.log();
+    console.log(
+      `Completion gate rejected${context} (${state.gateRejectionCount}/${maxGateRejections}): ${gateResult.reason}`,
+    );
+    for (const detail of gateResult.details) {
+      console.log(`  - ${detail}`);
+    }
+    console.log("Re-invoking agent to address the issues above.");
+    return "rejected";
+  }
+
+  // Budget exhausted — check for zero completion
+  const currentCompleted = countCompletedTasksFn(progressFile, planFormat);
+  if (currentCompleted === 0 && totalTasks > 0) {
+    markStuckFn(
+      `Stuck: zero tasks completed (0/${totalTasks})${context} after ${maxGateRejections} gate rejections — refusing to force-accept.`,
+    );
+    return "stuck";
+  }
+
+  // Partial progress — force-accept with warning
+  console.log();
+  console.log(
+    `WARNING: Completion gate still failing${context} after ${maxGateRejections} rejections — accepting anyway.`,
+  );
+  for (const detail of gateResult.details) {
+    console.log(`  - ${detail}`);
+  }
+  return "accepted";
 }
 
 function ensureProgressFile(progressFile: string): void {
@@ -895,9 +964,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     // Completion gate: tracks consecutive rejections to prevent infinite loops.
     // After maxGateRejections consecutive rejections the COMPLETE is accepted.
-    let gateRejectionCount = 0;
+    const gateState = {
+      gateRejectionCount: 0,
+      lastGateRejection: undefined as string | undefined,
+    };
     const maxGateRejections = 2;
-    let lastGateRejection: string | undefined;
 
     // Review pass: runs at most once per plan after the gate passes.
     let reviewDone = false;
@@ -989,7 +1060,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         feedbackScope: resolvedFeedbackScope,
         learnings: accumulatedLearnings,
         planFormat,
-        gateRejection: lastGateRejection,
+        gateRejection: gateState.lastGateRejection,
         nonce,
         wrapperPath,
       });
@@ -1134,48 +1205,30 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           cwd,
         });
 
-        if (!gateResult.passed && gateRejectionCount < maxGateRejections) {
-          gateRejectionCount++;
-          lastGateRejection = formatGateRejection(gateResult, nonce);
-          console.log();
-          console.log(
-            `Completion gate rejected (${gateRejectionCount}/${maxGateRejections}): ${gateResult.reason}`,
-          );
-          for (const detail of gateResult.details) {
-            console.log(`  - ${detail}`);
-          }
-          console.log("Re-invoking agent to address the issues above.");
-          continue;
-        }
+        const gateFailureOpts = {
+          maxGateRejections,
+          nonce,
+          totalTasks,
+          progressFile,
+          planFormat,
+          formatGateRejectionFn: formatGateRejection,
+          countCompletedTasksFn: countCompletedTasks,
+          markStuckFn: markStuck,
+          state: gateState,
+        };
 
         if (!gateResult.passed) {
-          // Max rejections reached — check for zero completion before
-          // force-accepting. A plan with zero tasks completed out of a
-          // non-zero total means the agent failed entirely; mark stuck
-          // instead of shipping an empty PR.
-          const currentCompleted = countCompletedTasks(
-            progressFile,
-            planFormat,
+          const disposition = handleGateFailure(
+            gateResult,
+            "",
+            gateFailureOpts,
           );
-          if (currentCompleted === 0 && totalTasks > 0) {
-            markStuck(
-              `Stuck: zero tasks completed (0/${totalTasks}) after ${maxGateRejections} gate rejections — refusing to force-accept.`,
-            );
-            break;
-          }
-
-          // Partial progress — accept anyway but warn
-          console.log();
-          console.log(
-            `WARNING: Completion gate still failing after ${maxGateRejections} rejections — accepting COMPLETE anyway.`,
-          );
-          for (const detail of gateResult.details) {
-            console.log(`  - ${detail}`);
-          }
+          if (disposition === "rejected") continue;
+          if (disposition === "stuck") break;
         }
 
         // Clear gate state on acceptance
-        lastGateRejection = undefined;
+        gateState.lastGateRejection = undefined;
 
         // --- Review pass: behavior-preserving simplification ---
         // Runs at most once per plan, after the gate passes. If the review
@@ -1188,11 +1241,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             console.log(
               `Running review pass on ${changedFiles.length} changed files...`,
             );
-            const wrapperFile = join(wipDir, FEEDBACK_WRAPPER_FILENAME);
-            const feedbackStep = existsSync(wrapperFile)
-              ? wrapperFile
-              : feedbackCommands;
-            const outputLogPath = join(wipDir, "agent-output.log");
+            const feedbackStep = wrapperPath ?? feedbackCommands;
             try {
               const reviewResult = await runReviewPass({
                 baseBranch,
@@ -1220,44 +1269,14 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                   cwd,
                 });
 
-                if (
-                  !reGateResult.passed &&
-                  gateRejectionCount < maxGateRejections
-                ) {
-                  gateRejectionCount++;
-                  lastGateRejection = formatGateRejection(reGateResult, nonce);
-                  console.log();
-                  console.log(
-                    `Completion gate rejected after review pass (${gateRejectionCount}/${maxGateRejections}): ${reGateResult.reason}`,
-                  );
-                  for (const detail of reGateResult.details) {
-                    console.log(`  - ${detail}`);
-                  }
-                  console.log("Re-invoking agent to address the issues above.");
-                  continue;
-                }
-
                 if (!reGateResult.passed) {
-                  // Zero-completion guard: same check as the pre-review gate
-                  const currentCompleted = countCompletedTasks(
-                    progressFile,
-                    planFormat,
+                  const disposition = handleGateFailure(
+                    reGateResult,
+                    " after review pass",
+                    gateFailureOpts,
                   );
-                  if (currentCompleted === 0 && totalTasks > 0) {
-                    markStuck(
-                      `Stuck: zero tasks completed (0/${totalTasks}) after review pass and ${maxGateRejections} gate rejections — refusing to force-accept.`,
-                    );
-                    break;
-                  }
-
-                  // Partial progress — accept anyway but warn
-                  console.log();
-                  console.log(
-                    `WARNING: Completion gate still failing after review pass and ${maxGateRejections} rejections — accepting anyway.`,
-                  );
-                  for (const detail of reGateResult.details) {
-                    console.log(`  - ${detail}`);
-                  }
+                  if (disposition === "rejected") continue;
+                  if (disposition === "stuck") break;
                 }
               } else {
                 console.log("Review pass: no simplifications needed.");
