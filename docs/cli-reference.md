@@ -13,7 +13,7 @@ ralphai <command> [options]
 | `hitl`         | Open interactive agent session for a HITL sub-issue                    |
 | `status`       | Show pipeline and worktree status                                      |
 | `stop`         | Stop running plan runners by sending SIGTERM                           |
-| `reset`        | Move in-progress plans back to backlog and clean up                    |
+| `reset`        | Reset in-progress plans and clean up                                   |
 | `clean`        | Remove archived plans and orphaned worktrees                           |
 | `repos`        | List all known repos with pipeline summaries                           |
 | `doctor`       | Check your Ralphai setup for problems                                  |
@@ -304,12 +304,13 @@ The runner handles SIGTERM gracefully: it finishes the current iteration, preser
 
 Resets pipeline state so you can start fresh:
 
-- **Plans** -> moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
+- **Local plans** -> moves plan files from `in-progress/<slug>/` back to `backlog/` as flat `.md` files
+- **GitHub-sourced plans** -> removes plan files from `in-progress/<slug>/` entirely (they are re-pulled from GitHub on the next `ralphai run`, picking up any edits made to the issue since the last pull)
 - **Artifacts** -> deletes `progress.md` and `receipt.txt` for each in-progress plan
 - **Worktrees** -> removes Ralphai-managed worktrees and force-deletes their branches
 - **GitHub labels** -> for plans sourced from GitHub issues, restores the intake label and removes the in-progress label (best-effort)
 
-Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over.
+Use `reset` when a run is stuck and you want to re-queue the plan, or when you want to abandon in-progress work and start over. For GitHub-sourced plans, this is particularly useful because the re-pull on the next run captures any edits you made to the issue body after the original pull.
 
 ## Doctor
 

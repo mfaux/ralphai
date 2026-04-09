@@ -213,6 +213,8 @@ ralphai reset --repo=~/work/api --yes   # reset a stuck plan remotely
 
 Use `ralphai repos` to list every initialized repo with plan counts. The `--repo` flag works with read-only commands like `status`, `doctor`, `reset`, `uninstall`, and `config`.
 
+> **Note:** `reset` moves local plans back to backlog but removes GitHub-sourced plans from the pipeline entirely. Removed GH plans are re-pulled from GitHub on the next `ralphai run`, so any edits to the issue body are picked up automatically.
+
 To clean up stale entries (from deleted temp dirs or old projects):
 
 ```bash

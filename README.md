@@ -127,7 +127,7 @@ ralphai stop             # stop the running plan runner (auto-selects if only on
 ralphai stop my-plan     # stop a specific plan runner by slug
 ralphai stop --all       # stop all running plan runners
 ralphai doctor           # validate your setup (agent, feedback commands, config)
-ralphai reset            # move in-progress plans back to backlog
+ralphai reset            # reset in-progress plans (local -> backlog, GH -> removed)
 ralphai clean            # remove archived plans and orphaned worktrees
 ralphai clean --archive  # clean only archived plans
 ralphai clean --worktrees # clean only orphaned worktrees
