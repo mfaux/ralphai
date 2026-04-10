@@ -26,6 +26,12 @@ import {
   MAX_FILES_IN_PROMPT,
   type AssembleReviewPromptOptions,
 } from "./review-pass.ts";
+import { LocalExecutor } from "./executor/index.ts";
+import type {
+  AgentExecutor,
+  ExecutorSpawnOptions,
+  ExecutorSpawnResult,
+} from "./executor/index.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -323,6 +329,7 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
     });
     expect(result.madeChanges).toBe(false);
     expect(result.output).toBe("");
@@ -346,6 +353,7 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
     });
     expect(result.madeChanges).toBe(true);
   });
@@ -366,6 +374,7 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
     });
     expect(result.madeChanges).toBe(false);
     // Output should contain the prompt echoed back by echo
@@ -386,6 +395,7 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
     });
     // echo receives the prompt as an argument, so output should contain prompt text
     expect(result.output).toContain("behavior-preserving");
@@ -407,6 +417,7 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
       outputLogPath: logPath,
     });
 
@@ -430,7 +441,149 @@ describe("runReviewPass", () => {
       feedbackStep: "true",
       iterationTimeout: 0,
       cwd: dir,
+      executor: new LocalExecutor(),
     });
     expect(result.madeChanges).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runReviewPass — executor boundary tests (mock executor)
+// ---------------------------------------------------------------------------
+
+describe("runReviewPass executor boundary", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = createTmpGitRepo();
+  });
+
+  afterEach(() => {
+    cleanupDir(dir);
+  });
+
+  test("calls executor.spawn with correct options", async () => {
+    // Set up a feature branch with a changed file
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "new-file.ts"), "export const x = 1;\n");
+    execSync('git add -A && git commit -m "add file"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    let capturedOpts: ExecutorSpawnOptions | undefined;
+    const mockExecutor: AgentExecutor = {
+      async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
+        capturedOpts = opts;
+        return { output: "mock output", exitCode: 0, timedOut: false };
+      },
+    };
+
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "my-agent -p",
+      feedbackStep: "bun test",
+      iterationTimeout: 300,
+      cwd: dir,
+      executor: mockExecutor,
+    });
+
+    expect(capturedOpts).toBeDefined();
+    expect(capturedOpts!.agentCommand).toBe("my-agent -p");
+    expect(capturedOpts!.prompt).toContain("new-file.ts");
+    expect(capturedOpts!.prompt).toContain("behavior-preserving");
+    expect(capturedOpts!.iterationTimeout).toBe(300);
+    expect(capturedOpts!.cwd).toBe(dir);
+  });
+
+  test("does not call executor.spawn when no files changed", async () => {
+    let spawnCalled = false;
+    const mockExecutor: AgentExecutor = {
+      async spawn(): Promise<ExecutorSpawnResult> {
+        spawnCalled = true;
+        return { output: "", exitCode: 0, timedOut: false };
+      },
+    };
+
+    const result = await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+    });
+
+    expect(spawnCalled).toBe(false);
+    expect(result.madeChanges).toBe(false);
+    expect(result.output).toBe("");
+  });
+
+  test("passes outputLogPath and ipcBroadcast to executor", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "file.ts"), "x\n");
+    execSync('git add -A && git commit -m "add"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    let capturedOpts: ExecutorSpawnOptions | undefined;
+    const mockExecutor: AgentExecutor = {
+      async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
+        capturedOpts = opts;
+        return { output: "", exitCode: 0, timedOut: false };
+      },
+    };
+
+    const logPath = join(dir, "agent-output.log");
+    const broadcasts: unknown[] = [];
+    const ipcBroadcast = (msg: unknown) => {
+      broadcasts.push(msg);
+    };
+
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+      outputLogPath: logPath,
+      ipcBroadcast: ipcBroadcast as any,
+    });
+
+    expect(capturedOpts).toBeDefined();
+    expect(capturedOpts!.outputLogPath).toBe(logPath);
+    expect(capturedOpts!.ipcBroadcast).toBe(ipcBroadcast);
+  });
+
+  test("returns executor output in result", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "file.ts"), "x\n");
+    execSync('git add -A && git commit -m "add"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    const mockExecutor: AgentExecutor = {
+      async spawn(): Promise<ExecutorSpawnResult> {
+        return {
+          output: "review suggestions applied",
+          exitCode: 0,
+          timedOut: false,
+        };
+      },
+    };
+
+    const result = await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+    });
+
+    expect(result.output).toBe("review suggestions applied");
   });
 });

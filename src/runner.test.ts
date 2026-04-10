@@ -1,8 +1,7 @@
 /**
  * Tests for src/runner.ts — the TypeScript runner orchestration loop.
  *
- * Focuses on testable internal helpers (spawnAgent) and
- * key runner behaviors (dry-run, stuck detection, completion detection).
+ * Focuses on key runner behaviors (dry-run, stuck detection, completion detection).
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import {
@@ -16,108 +15,9 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 
-import {
-  spawnAgent,
-  runRunner,
-  type RunnerOptions,
-  type RunnerResult,
-} from "./runner.ts";
+import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
-
-// ---------------------------------------------------------------------------
-// spawnAgent
-// ---------------------------------------------------------------------------
-
-describe("spawnAgent", () => {
-  test("captures agent output", async () => {
-    const result = await spawnAgent(
-      "echo",
-      "hello from agent",
-      0,
-      process.cwd(),
-    );
-    expect(result.output.trim()).toBe("hello from agent");
-    expect(result.exitCode).toBe(0);
-    expect(result.timedOut).toBe(false);
-  });
-
-  test("captures non-zero exit code", async () => {
-    const result = await spawnAgent(
-      "bash -c 'echo oops; exit 42'",
-      "",
-      0,
-      process.cwd(),
-    );
-    expect(result.exitCode).toBe(42);
-    expect(result.timedOut).toBe(false);
-    expect(result.output).toContain("oops");
-  });
-
-  test("handles agent timeout", async () => {
-    const result = await spawnAgent("sleep", "60", 1, process.cwd());
-    expect(result.timedOut).toBe(true);
-    // Exit code may be 124 or platform-dependent on abort
-  }, 10000);
-
-  test("handles non-existent command", async () => {
-    const result = await spawnAgent(
-      "nonexistent_command_12345",
-      "arg",
-      0,
-      process.cwd(),
-    );
-    expect(result.exitCode).not.toBe(0);
-    expect(result.timedOut).toBe(false);
-  });
-
-  test("captures both stdout and stderr", async () => {
-    const result = await spawnAgent(
-      "bash -c 'echo out; echo err >&2'",
-      "",
-      0,
-      process.cwd(),
-    );
-    expect(result.output).toContain("out");
-    expect(result.output).toContain("err");
-    expect(result.exitCode).toBe(0);
-  });
-
-  test("writes output to outputLogPath when provided", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "spawn-log-"));
-    const logPath = join(tmpDir, "agent-output.log");
-    const result = await spawnAgent(
-      "bash -c 'echo logged-stdout; echo logged-stderr >&2'",
-      "",
-      0,
-      process.cwd(),
-      logPath,
-    );
-    expect(result.exitCode).toBe(0);
-    expect(existsSync(logPath)).toBe(true);
-    const logContent = readFileSync(logPath, "utf-8");
-    expect(logContent).toContain("logged-stdout");
-    expect(logContent).toContain("logged-stderr");
-  });
-
-  test("appends to existing outputLogPath", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "spawn-log-"));
-    const logPath = join(tmpDir, "agent-output.log");
-    writeFileSync(logPath, "--- Turn 1 ---\nprevious content\n");
-    const result = await spawnAgent(
-      "echo",
-      "turn2-output",
-      0,
-      process.cwd(),
-      logPath,
-    );
-    expect(result.exitCode).toBe(0);
-    const logContent = readFileSync(logPath, "utf-8");
-    expect(logContent).toContain("--- Turn 1 ---");
-    expect(logContent).toContain("previous content");
-    expect(logContent).toContain("turn2-output");
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Helpers for integration tests
