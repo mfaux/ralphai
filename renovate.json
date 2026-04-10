@@ -3,11 +3,5 @@
   "extends": ["config:recommended", "group:allNonMajor"],
   "labels": ["dependencies"],
   "semanticCommitScope": "",
-  "minimumReleaseAge": "7 days",
-  "packageRules": [
-    {
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "automerge": true
-    }
-  ]
+  "minimumReleaseAge": "7 days"
 }
