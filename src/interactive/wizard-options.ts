@@ -9,6 +9,7 @@
  */
 
 import type { ConfigSource, ResolvedConfig, RalphaiConfig } from "../config.ts";
+import { configValues } from "../config.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,13 +131,13 @@ function buildPrompt(key: WizardConfigKey): PromptType {
  * resolved value (as a display string), a source hint, and prompt metadata.
  */
 export function buildWizardOptions(config: ResolvedConfig): WizardOption[] {
+  const cfg = configValues(config);
   return WIZARD_KEYS.map((key) => {
-    const resolved = config[key];
     return {
       key,
       label: LABELS[key],
-      currentValue: String(resolved.value),
-      sourceHint: SOURCE_HINTS[resolved.source],
+      currentValue: String(cfg[key]),
+      sourceHint: SOURCE_HINTS[config[key].source],
       prompt: buildPrompt(key),
     };
   });

@@ -28,6 +28,7 @@
 import { existsSync } from "fs";
 import {
   resolveConfig,
+  configValues,
   parseCLIArgs,
   ConfigError,
   type RalphaiConfig,
@@ -120,7 +121,7 @@ try {
       envVars: process.env as Record<string, string | undefined>,
       rawFlags,
       worktree,
-      workspaces: result.config.workspaces.value,
+      workspaces: configValues(result.config).workspaces,
     });
 
     process.stdout.write(text + "\n");
@@ -129,13 +130,14 @@ try {
 
   if (shellMode) {
     // Output shell variable assignments for eval
+    const cfg = configValues(result.config);
     const lines: string[] = [];
     for (const [key, shellVar] of CONFIG_TO_SHELL) {
-      const val = String(result.config[key].value ?? "");
+      const val = String(cfg[key] ?? "");
       lines.push(`${shellVar}='${shellEscape(val)}'`);
     }
     // Workspaces: store as raw JSON string for scope resolution
-    const ws = result.config.workspaces.value;
+    const ws = cfg.workspaces;
     if (ws) {
       lines.push(`CONFIG_WORKSPACES='${shellEscape(JSON.stringify(ws))}'`);
     }
@@ -144,10 +146,11 @@ try {
   }
 
   // JSON mode (default): output full JSON for programmatic consumption
+  const cfg = configValues(result.config);
   const config: Record<string, unknown> = {};
   const sources: Record<string, string> = {};
   for (const key of Object.keys(result.config) as Array<keyof RalphaiConfig>) {
-    config[key] = result.config[key].value;
+    config[key] = cfg[key];
     sources[key] = result.config[key].source;
   }
 

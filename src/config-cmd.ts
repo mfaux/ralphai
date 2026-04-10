@@ -12,6 +12,7 @@
 import { existsSync } from "fs";
 import {
   resolveConfig,
+  configValues,
   parseCLIArgs,
   ConfigError,
   getConfigFilePath,
@@ -108,7 +109,7 @@ export function runConfigCommand(options: ConfigCommandOptions): void {
       configFileExists: existsSync(result.configFilePath),
       envVars: process.env as Record<string, string | undefined>,
       rawFlags: {},
-      workspaces: result.config.workspaces.value,
+      workspaces: configValues(result.config).workspaces,
     });
     console.log(text);
   } catch (e) {

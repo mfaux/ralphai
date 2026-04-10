@@ -21,9 +21,9 @@ import { join } from "path";
 import { RESET, TEXT, DIM } from "./utils.ts";
 import {
   resolveConfig,
+  configValues,
   getConfigFilePath,
   DEFAULTS,
-  type ResolvedConfig,
 } from "./config.ts";
 import {
   detectIssueRepo,
@@ -92,10 +92,10 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     envVars: process.env as Record<string, string | undefined>,
     cliArgs: runArgs,
   });
-  const config = cfgResult.config;
+  const cfg = configValues(cfgResult.config);
 
   // --- Validate agentInteractiveCommand ---
-  const agentInteractiveCommand = config.agentInteractiveCommand.value;
+  const agentInteractiveCommand = cfg.agentInteractiveCommand;
   if (!agentInteractiveCommand) {
     console.error(
       `${TEXT}Error:${RESET} agentInteractiveCommand is not configured.`,
@@ -110,7 +110,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   }
 
   // --- Detect GitHub repo ---
-  const repo = detectIssueRepo(cwd, config.issueRepo.value);
+  const repo = detectIssueRepo(cwd, cfg.issueRepo);
   if (!repo) {
     console.error(
       "Could not detect GitHub repo from git remote. " +
@@ -120,7 +120,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   }
 
   // --- Discover parent PRD ---
-  const prdLabel = config.prdLabel.value || DEFAULTS.prdLabel;
+  const prdLabel = cfg.prdLabel || DEFAULTS.prdLabel;
   const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
 
   if (!parentResult.hasParent) {
@@ -165,7 +165,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   const parentTitle = parentResult.parentTitle!;
   const prdSlug = slugify(commitTypeFromTitle(parentTitle).description);
   const branch = issueBranchName(parentTitle);
-  const hitlLabel = config.issueHitlLabel.value || DEFAULTS.issueHitlLabel;
+  const hitlLabel = cfg.issueHitlLabel || DEFAULTS.issueHitlLabel;
 
   // --- Dry-run ---
   if (dryRun) {
@@ -195,28 +195,28 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
 
   // --- Prepare worktree ---
   ensureRepoHasCommit(cwd);
-  const baseBranch = config.baseBranch.value;
-  const setupCommand = config.setupCommand?.value ?? "";
-  const feedbackCommands = config.feedbackCommands.value
-    ? config.feedbackCommands.value.split(",").map((s: string) => s.trim())
+  const baseBranch = cfg.baseBranch;
+  const setupCommand = cfg.setupCommand ?? "";
+  const feedbackCommands = cfg.feedbackCommands
+    ? cfg.feedbackCommands.split(",").map((s: string) => s.trim())
     : [];
 
   // Build sandbox config for routing setup commands through Docker
   const setupSandboxConfig: SetupSandboxConfig = {
-    sandbox: config.sandbox.value as "none" | "docker",
-    agentCommand: config.agentCommand.value,
+    sandbox: cfg.sandbox as "none" | "docker",
+    agentCommand: cfg.agentCommand,
     dockerConfig:
-      config.sandbox.value === "docker"
+      cfg.sandbox === "docker"
         ? {
-            dockerImage: config.dockerImage.value || undefined,
-            dockerEnvVars: config.dockerEnvVars.value
-              ? config.dockerEnvVars.value
+            dockerImage: cfg.dockerImage || undefined,
+            dockerEnvVars: cfg.dockerEnvVars
+              ? cfg.dockerEnvVars
                   .split(",")
                   .map((s: string) => s.trim())
                   .filter(Boolean)
               : undefined,
-            dockerMounts: config.dockerMounts.value
-              ? config.dockerMounts.value
+            dockerMounts: cfg.dockerMounts
+              ? cfg.dockerMounts
                   .split(",")
                   .map((s: string) => s.trim())
                   .filter(Boolean)
@@ -227,8 +227,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     // In HITL mode, cwd is always the main repo root, so worktrees
     // created from it need this path mounted in Docker for git
     // operations to work inside the container.
-    mainGitDir:
-      config.sandbox.value === "docker" ? join(cwd, ".git") : undefined,
+    mainGitDir: cfg.sandbox === "docker" ? join(cwd, ".git") : undefined,
   };
 
   const resolvedWorktreeDir = prepareWorktree(
