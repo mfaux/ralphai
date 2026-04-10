@@ -187,9 +187,6 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   ensureRepoHasCommit(cwd);
   const baseBranch = cfg.baseBranch;
   const setupCommand = cfg.setupCommand;
-  const feedbackCommands = cfg.feedbackCommands
-    ? cfg.feedbackCommands.split(",").map((s: string) => s.trim())
-    : [];
 
   // Build sandbox config for routing setup commands through Docker
   const setupSandboxConfig: SetupSandboxConfig = {
