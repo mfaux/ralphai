@@ -42,11 +42,39 @@ import {
   detectDockerAvailable,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
-import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import {
+  IN_PROGRESS_LABEL,
+  DONE_LABEL,
+  STUCK_LABEL,
   prdTransitionInProgress,
   prdTransitionDone,
-} from "./label-lifecycle.ts";
+  detectIssueRepo,
+  fetchPrdIssueByNumber,
+  fetchIssueTitleByNumber,
+  fetchIssueWithLabels,
+  discoverParentIssue,
+  pullGithubIssueByNumber,
+  pullGithubIssues,
+  pullPrdSubIssue,
+  classifyIssue,
+  validateStandalone,
+  validateSubissue,
+  restoreIssueLabels,
+  discoverPrdTarget,
+  findHitlBlockers,
+  formatPrdHitlSummary,
+} from "./issue-lifecycle.ts";
+import type {
+  PrdIssue,
+  PullIssueOptions,
+  PrdDiscoveryResult,
+  BlockedSubIssue,
+} from "./issue-lifecycle.ts";
+import {
+  issueBranchName,
+  commitTypeFromTitle,
+  slugify,
+} from "./issue-naming.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -58,36 +86,9 @@ import { runHitl } from "./hitl.ts";
 
 import { extractIssueFrontmatter, extractDependsOn } from "./frontmatter.ts";
 import {
-  findHitlBlockers,
-  formatPrdHitlSummary,
-  type BlockedSubIssue,
-} from "./prd-hitl.ts";
-import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
 } from "./agents-md-template.ts";
-import {
-  detectIssueRepo,
-  fetchPrdIssueByNumber,
-  fetchIssueTitleByNumber,
-  fetchIssueWithLabels,
-  discoverParentIssue,
-  issueBranchName,
-  commitTypeFromTitle,
-  pullGithubIssueByNumber,
-  pullGithubIssues,
-  pullPrdSubIssue,
-  slugify,
-} from "./issues.ts";
-import type { PrdIssue, PullIssueOptions } from "./issues.ts";
-import { discoverPrdTarget } from "./prd-discovery.ts";
-import type { PrdDiscoveryResult } from "./prd-discovery.ts";
-import {
-  classifyIssue,
-  validateStandalone,
-  validateSubissue,
-} from "./issue-dispatch.ts";
-import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
 import { isInsideGitRepo, detectBaseBranch } from "./git-helpers.ts";
 import { parseRalphaiOptions } from "./parse-options.ts";
@@ -1887,7 +1888,7 @@ async function runIssueTarget(
 
   // --- Label-driven dispatch ---
   // Fetch the issue with labels for classification.
-  let issueInfo: import("./issues.ts").IssueWithLabels;
+  let issueInfo: import("./issue-lifecycle.ts").IssueWithLabels;
   try {
     issueInfo = fetchIssueWithLabels(repo, issueNumber, cwd);
   } catch (err: unknown) {
