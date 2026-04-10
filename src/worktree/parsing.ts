@@ -1,4 +1,5 @@
-import { execSync } from "child_process";
+import { execQuiet } from "../exec.ts";
+import type { ExecOptions } from "../exec.ts";
 import type { WorktreeEntry } from "./types.ts";
 
 export function parseWorktreeList(output: string): WorktreeEntry[] {
@@ -79,12 +80,11 @@ export function listRalphaiWorktrees(
   cwd: string,
   options?: ListWorktreesOptions,
 ): WorktreeEntry[] {
-  const output = execSync("git worktree list --porcelain", {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-    ...(options?.timeout != null ? { timeout: options.timeout } : {}),
-  });
+  const execOpts: ExecOptions | undefined =
+    options?.timeout != null ? { timeout: options.timeout } : undefined;
+  const output = execQuiet("git worktree list --porcelain", cwd, execOpts);
+
+  if (output == null) return [];
 
   return parseWorktreeList(output).filter((wt) =>
     isRalphaiManagedBranch(wt.branch),

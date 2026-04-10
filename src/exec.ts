@@ -129,6 +129,27 @@ export function execWithStdin(
   }
 }
 
+/**
+ * Run a command with inherited stdio (output streams to the terminal).
+ * Returns an `ExecRunResult` with the exit code. `stdout` and `stderr`
+ * are always empty strings because the streams are inherited, not captured.
+ *
+ * Use this for commands whose output should be visible to the user in
+ * real time (e.g. setup commands, cleanup operations).
+ */
+export function execInherit(cmd: string, cwd: string): ExecRunResult {
+  try {
+    _execSync(cmd, { cwd, stdio: "inherit" });
+    return { exitCode: 0, stdout: "", stderr: "" };
+  } catch (err: unknown) {
+    const exitCode =
+      err && typeof err === "object" && "status" in err
+        ? ((err as { status: number }).status ?? 1)
+        : 1;
+    return { exitCode, stdout: "", stderr: "" };
+  }
+}
+
 /** Run a command, returning true if it exits 0. */
 export function execOk(cmd: string, cwd: string): boolean {
   try {
