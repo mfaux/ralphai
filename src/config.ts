@@ -92,6 +92,61 @@ export function configValues(rc: ResolvedConfig): ConfigValues {
 }
 
 // ---------------------------------------------------------------------------
+// Effective sandbox resolution
+// ---------------------------------------------------------------------------
+
+/** Result of resolving the effective sandbox value at runner start. */
+export interface EffectiveSandboxResult {
+  /** The sandbox mode to use for this run. */
+  sandbox: "none" | "docker";
+  /**
+   * When set, the runner should exit with this error message.
+   * Indicates the user explicitly requested Docker but it's unavailable.
+   */
+  error?: string;
+}
+
+/**
+ * Resolve the effective sandbox value at runner start.
+ *
+ * When sandbox is "docker", re-checks Docker availability (it may have
+ * become unavailable between config resolution and runner start):
+ *
+ * - **Auto-detected** (`sandboxSource === "auto-detected"`): silently falls
+ *   back to `"none"` — the user never explicitly requested Docker.
+ * - **Explicit** (config/env/CLI): returns an error — the user asked for
+ *   Docker, so the failure is actionable.
+ *
+ * The `checkDocker` parameter allows injection for testing.
+ */
+export function computeEffectiveSandbox(
+  cfg: Pick<ConfigValues, "sandbox">,
+  sandboxSource: ConfigSource,
+  checkDocker: () => { available: boolean; error?: string } = () => ({
+    available: true,
+  }),
+): EffectiveSandboxResult {
+  if (cfg.sandbox !== "docker") {
+    return { sandbox: cfg.sandbox };
+  }
+
+  const dockerCheck = checkDocker();
+  if (dockerCheck.available) {
+    return { sandbox: "docker" };
+  }
+
+  // Docker unavailable — behaviour depends on how sandbox was set
+  if (sandboxSource === "auto-detected") {
+    return { sandbox: "none" };
+  }
+
+  return {
+    sandbox: "docker",
+    error: dockerCheck.error ?? "Docker is not available.",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
 
