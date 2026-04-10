@@ -214,14 +214,6 @@ export async function runCliOutputInProcess(
 }
 
 /**
- * Creates a temporary git-initialized directory for each test.
- * Returns an object with a `dir` getter that always points to the current test's directory.
- *
- * Usage:
- *   const ctx = useTempGitDir();
- *   it("does something", () => { runCli(["init", "--yes"], ctx.dir); });
- */
-/**
  * Creates a temporary directory for each test (no git init).
  * Useful for unit tests that only need a filesystem sandbox.
  */

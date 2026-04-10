@@ -10,7 +10,6 @@ import {
   configValues,
   DEFAULTS,
   type ResolvedConfig,
-  type ConfigValues,
   type RalphaiConfig,
 } from "./config.ts";
 import { makeTestConfig } from "./test-utils.ts";
