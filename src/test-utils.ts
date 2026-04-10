@@ -8,9 +8,11 @@ import { runRalphai } from "./ralphai.ts";
 import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
 import {
   DEFAULTS,
+  type ConfigSource,
   type ConfigValues,
   type RalphaiConfig,
   type ResolvedConfig,
+  type ResolvedValue,
 } from "./config.ts";
 
 function sleepMs(ms: number): void {
@@ -286,22 +288,37 @@ export function makeTestConfig(
 /**
  * Build a `ResolvedConfig` for tests with sensible defaults.
  *
- * Every key starts at its `DEFAULTS` value, then the caller's `overrides`
- * are spread on top. Each value is wrapped in `{ value, source: "default" }`.
- * This replaces the duplicated per-file `makeResolvedConfig()` helpers that
- * runner tests used to define locally.
+ * Every key starts at its `DEFAULTS` value wrapped with `source: "default"`.
+ * Plain-value `overrides` are merged on top (keeping `source: "default"`),
+ * then `resolvedOverrides` are applied last — these carry an explicit
+ * `{ value, source }` pair so tests can verify source-dependent behaviour.
  *
  * @example
+ *   // All defaults, agentCommand overridden with default source:
  *   const rc = makeTestResolvedConfig({ agentCommand: "echo hi" });
  *   // rc.agentCommand === { value: "echo hi", source: "default" }
+ *
+ *   // Explicit source:
+ *   const rc2 = makeTestResolvedConfig(undefined, {
+ *     agentCommand: { value: "claude -p", source: "config" },
+ *   });
+ *   // rc2.agentCommand === { value: "claude -p", source: "config" }
  */
 export function makeTestResolvedConfig(
   overrides?: Partial<RalphaiConfig>,
+  resolvedOverrides?: Partial<
+    Record<keyof RalphaiConfig, { value: unknown; source: ConfigSource }>
+  >,
 ): ResolvedConfig {
   const merged = { ...DEFAULTS, ...overrides };
   const resolved: Record<string, { value: unknown; source: string }> = {};
   for (const [key, value] of Object.entries(merged)) {
     resolved[key] = { value, source: "default" };
+  }
+  if (resolvedOverrides) {
+    for (const [key, rv] of Object.entries(resolvedOverrides)) {
+      resolved[key] = rv!;
+    }
   }
   return resolved as unknown as ResolvedConfig;
 }
