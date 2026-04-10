@@ -23,8 +23,8 @@ import {
   type RunnerOptions,
   type RunnerResult,
 } from "./runner.ts";
-import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // shellSplit
@@ -219,35 +219,6 @@ function setupGlobalPipeline(cwd: string): {
   return { ralphaiHome, ...dirs };
 }
 
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "none",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
-}
-
 // ---------------------------------------------------------------------------
 // runRunner — dry-run mode
 // ---------------------------------------------------------------------------
@@ -270,7 +241,7 @@ describe("runRunner — dry-run", () => {
     setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig(),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -288,7 +259,7 @@ describe("runRunner — dry-run", () => {
     setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig(),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -322,7 +293,7 @@ describe("runRunner — dry-run", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig(),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -371,8 +342,9 @@ describe("runRunner — completion", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -402,8 +374,9 @@ describe("runRunner — completion", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "agent-says-hello"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -437,9 +410,10 @@ describe("runRunner — completion", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -502,9 +476,10 @@ describe("runRunner — RunnerResult", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -540,8 +515,9 @@ describe("runRunner — RunnerResult", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -570,8 +546,9 @@ describe("runRunner — RunnerResult", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">The auth module requires warm-up.</learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -599,7 +576,7 @@ describe("runRunner — RunnerResult", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig(),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -638,7 +615,7 @@ describe("runRunner — no work", () => {
     const worktreeDir = createManagedWorktree(dir, "empty");
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig(),
       cwd: worktreeDir,
       isWorktree: true,
       mainWorktree: dir,

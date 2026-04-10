@@ -21,7 +21,7 @@ import {
 import type { DetailContent } from "./detail-pane.tsx";
 import type { PipelineState, InProgressPlan } from "../../pipeline-state.ts";
 import type { MenuContext } from "../menu-items.ts";
-import type { ResolvedConfig, ResolvedValue } from "../../config.ts";
+import { makeTestResolvedConfig } from "../../test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -58,37 +58,6 @@ function makeMenuContext(overrides?: Partial<MenuContext>): MenuContext {
     hasGitHubIssues: false,
     ...overrides,
   };
-}
-
-function rv<T>(
-  value: T,
-  source: "default" | "config" | "env" | "cli" = "default",
-): ResolvedValue<T> {
-  return { value, source };
-}
-
-function makeConfig(
-  overrides?: Partial<Record<string, ResolvedValue<unknown>>>,
-): ResolvedConfig {
-  return {
-    agentCommand: rv("opencode"),
-    setupCommand: rv(""),
-    feedbackCommands: rv("bun run build,bun test"),
-    prFeedbackCommands: rv(""),
-    baseBranch: rv("main"),
-    maxStuck: rv(3),
-    issueSource: rv("none" as const),
-    standaloneLabel: rv("ralphai-standalone"),
-    subissueLabel: rv("ralphai-subissue"),
-    prdLabel: rv("ralphai-prd"),
-    issueRepo: rv(""),
-    issueCommentProgress: rv("true"),
-    issueHitlLabel: rv("ralphai-subissue-hitl"),
-    iterationTimeout: rv(0),
-    sandbox: rv("none"),
-    workspaces: rv(null),
-    ...overrides,
-  } as ResolvedConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -583,9 +552,9 @@ describe("detailForItem — settings", () => {
   });
 
   it("shows config values with sources", () => {
-    const config = makeConfig({
-      agentCommand: rv("opencode", "config"),
-      baseBranch: rv("develop", "cli"),
+    const config = makeTestResolvedConfig(undefined, {
+      agentCommand: { value: "opencode", source: "config" },
+      baseBranch: { value: "develop", source: "cli" },
     });
     const detail = detailForItem("settings", null, false, undefined, config);
     expect(detail.title).toBe("Settings");
@@ -611,8 +580,8 @@ describe("detailForItem — settings", () => {
   });
 
   it("shows (not set) for empty string values", () => {
-    const config = makeConfig({
-      agentCommand: rv("", "default"),
+    const config = makeTestResolvedConfig(undefined, {
+      agentCommand: { value: "", source: "default" },
     });
     const detail = detailForItem("settings", null, false, undefined, config);
     const agentLine = detail.lines.find((l) =>

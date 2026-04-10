@@ -33,6 +33,7 @@ import {
 import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
 import {
   resolveConfig,
+  configValues,
   parseCLIArgs,
   ConfigError,
   getConfigFilePath,
@@ -759,7 +760,7 @@ async function runRalphaiReset(
       envVars: process.env,
       cliArgs: [],
     });
-    issueRepo = cfgResult.config.issueRepo.value;
+    issueRepo = configValues(cfgResult.config).issueRepo;
   } catch {
     // Config resolution failure is not critical — skip label restoration.
   }
@@ -916,7 +917,7 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
         envVars: process.env,
         cliArgs: [],
       });
-      const issueRepo = cfgResult.config.issueRepo.value;
+      const issueRepo = configValues(cfgResult.config).issueRepo;
       const labelResult = restoreIssueLabels({
         planPath: planFile,
         issueRepo,
@@ -2029,9 +2030,9 @@ async function runIssueTarget(
     backlogDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
-    standaloneLabel: worktreeConfig.standaloneLabel.value,
-    issueRepo: worktreeConfig.issueRepo.value || repo,
-    issueCommentProgress: worktreeConfig.issueCommentProgress.value === "true",
+    standaloneLabel: worktreeConfig.standaloneLabel,
+    issueRepo: worktreeConfig.issueRepo || repo,
+    issueCommentProgress: worktreeConfig.issueCommentProgress === "true",
     issueNumber,
   });
 
@@ -2184,7 +2185,7 @@ async function runPrdIssueTarget(
   // --- HITL sub-issue filtering ---
   // Before processing, check each sub-issue's labels for the HITL label.
   // HITL sub-issues require human review and are skipped by the automated runner.
-  const hitlLabel = worktreeConfig.issueHitlLabel.value;
+  const hitlLabel = worktreeConfig.issueHitlLabel;
   const hitlSubIssues: number[] = [];
   const eligibleSubIssues: number[] = [];
   for (const num of subIssues) {
@@ -2238,11 +2239,10 @@ async function runPrdIssueTarget(
       backlogDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      standaloneLabel: worktreeConfig.standaloneLabel.value,
-      subissueLabel: worktreeConfig.subissueLabel.value,
-      issueRepo: worktreeConfig.issueRepo.value || repo,
-      issueCommentProgress:
-        worktreeConfig.issueCommentProgress.value === "true",
+      standaloneLabel: worktreeConfig.standaloneLabel,
+      subissueLabel: worktreeConfig.subissueLabel,
+      issueRepo: worktreeConfig.issueRepo || repo,
+      issueCommentProgress: worktreeConfig.issueCommentProgress === "true",
       issueNumber: subIssueNumber,
     });
 
@@ -2375,7 +2375,7 @@ async function runPrdIssueTarget(
   if (completedCount > 0) {
     console.log();
     console.log("Creating PRD pull request...");
-    const issueRepo = worktreeConfig.issueRepo.value || repo;
+    const issueRepo = worktreeConfig.issueRepo || repo;
     const prResult = createPrdPr({
       branch,
       baseBranch: resolvedBaseBranch,
@@ -2420,7 +2420,7 @@ function resolveWorktreeConfig(
       cliArgs: runArgs,
     });
   }
-  return cfgResult.config;
+  return configValues(cfgResult.config);
 }
 
 /**
@@ -2518,6 +2518,8 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
+  let feedbackCommandsList: string[] = [];
+  let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
     const cfgResult = resolveConfig({
       cwd,
@@ -2525,57 +2527,50 @@ async function runRalphaiInManagedWorktree(
       cliArgs: runArgs,
     });
     resolvedConfig = cfgResult.config;
-    setupCommand = cfgResult.config.setupCommand.value;
-    resolvedIssueSource = cfgResult.config.issueSource.value;
-    resolvedIssueLabel = cfgResult.config.standaloneLabel.value;
-    resolvedIssuePrdLabel = cfgResult.config.prdLabel.value;
-    resolvedSubissueLabel = cfgResult.config.subissueLabel.value;
-    resolvedIssueRepo = cfgResult.config.issueRepo.value;
-    resolvedIssueCommentProgress =
-      cfgResult.config.issueCommentProgress.value === "true";
-    resolvedIssueHitlLabel = cfgResult.config.issueHitlLabel.value;
+    const cfg = configValues(cfgResult.config);
+    setupCommand = cfg.setupCommand;
+    resolvedIssueSource = cfg.issueSource;
+    resolvedIssueLabel = cfg.standaloneLabel;
+    resolvedIssuePrdLabel = cfg.prdLabel;
+    resolvedSubissueLabel = cfg.subissueLabel;
+    resolvedIssueRepo = cfg.issueRepo;
+    resolvedIssueCommentProgress = cfg.issueCommentProgress === "true";
+    resolvedIssueHitlLabel = cfg.issueHitlLabel;
+
+    // Parse feedback commands for the wrapper script (written to worktree root)
+    feedbackCommandsList = parseFeedbackCommands(cfg.feedbackCommands);
+
+    // Build sandbox config for routing setup commands through Docker
+    setupSandboxConfig = {
+      sandbox: cfg.sandbox as "none" | "docker",
+      agentCommand: cfg.agentCommand,
+      dockerConfig:
+        cfg.sandbox === "docker"
+          ? {
+              dockerImage: cfg.dockerImage || undefined,
+              dockerEnvVars: cfg.dockerEnvVars
+                ? cfg.dockerEnvVars
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : undefined,
+              dockerMounts: cfg.dockerMounts
+                ? cfg.dockerMounts
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : undefined,
+            }
+          : undefined,
+      // Mount the main repo's .git directory for worktree support.
+      // In managed worktree mode, cwd is always the main repo root,
+      // so worktrees created from it need this path mounted in Docker
+      // for git operations to work inside the container.
+      mainGitDir: cfg.sandbox === "docker" ? join(cwd, ".git") : undefined,
+    };
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
-
-  // Parse feedback commands for the wrapper script (written to worktree root)
-  const feedbackCommandsList = resolvedConfig
-    ? parseFeedbackCommands(resolvedConfig.feedbackCommands.value)
-    : [];
-
-  // Build sandbox config for routing setup commands through Docker
-  const setupSandboxConfig: SetupSandboxConfig | undefined = resolvedConfig
-    ? {
-        sandbox: resolvedConfig.sandbox.value as "none" | "docker",
-        agentCommand: resolvedConfig.agentCommand.value,
-        dockerConfig:
-          resolvedConfig.sandbox.value === "docker"
-            ? {
-                dockerImage: resolvedConfig.dockerImage.value || undefined,
-                dockerEnvVars: resolvedConfig.dockerEnvVars.value
-                  ? resolvedConfig.dockerEnvVars.value
-                      .split(",")
-                      .map((s: string) => s.trim())
-                      .filter(Boolean)
-                  : undefined,
-                dockerMounts: resolvedConfig.dockerMounts.value
-                  ? resolvedConfig.dockerMounts.value
-                      .split(",")
-                      .map((s: string) => s.trim())
-                      .filter(Boolean)
-                  : undefined,
-              }
-            : undefined,
-        // Mount the main repo's .git directory for worktree support.
-        // In managed worktree mode, cwd is always the main repo root,
-        // so worktrees created from it need this path mounted in Docker
-        // for git operations to work inside the container.
-        mainGitDir:
-          resolvedConfig.sandbox.value === "docker"
-            ? join(cwd, ".git")
-            : undefined,
-      }
-    : undefined;
 
   // --- Interactive wizard: `--wizard` / `-w` ---
   if (hasWizard && !hasHelp) {
@@ -3031,7 +3026,7 @@ async function runRalphaiRunner(
       envVars,
       rawFlags,
       worktree,
-      workspaces: config.workspaces.value,
+      workspaces: configValues(config).workspaces,
     });
     console.log(text);
     return { stuckSlugs: [], accumulatedLearnings: [] };
@@ -3055,12 +3050,13 @@ async function runRalphaiRunner(
 
   // Best-effort: ensure all issue-tracking labels exist. Non-throwing so
   // upgrading users don't need to re-run `ralphai init`. Skipped in dry-run.
-  if (!isDryRun && config.issueSource.value === "github") {
+  const cfg = configValues(config);
+  if (!isDryRun && cfg.issueSource === "github") {
     try {
       ensureGitHubLabels(cwd, {
-        standalone: config.standaloneLabel.value,
-        subissue: config.subissueLabel.value,
-        prd: config.prdLabel.value,
+        standalone: cfg.standaloneLabel,
+        subissue: cfg.subissueLabel,
+        prd: cfg.prdLabel,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

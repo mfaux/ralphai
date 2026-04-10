@@ -86,7 +86,13 @@ import {
   updateReceiptOutcome,
   checkReceiptSource,
 } from "./receipt.ts";
-import { type ResolvedConfig } from "./config.ts";
+import {
+  type ResolvedConfig,
+  type ConfigValues,
+  type ConfigSource,
+  configValues,
+  computeEffectiveSandbox,
+} from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -474,9 +480,14 @@ export function printExitSummary(
 // Dry-run mode
 // ---------------------------------------------------------------------------
 
-function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
-  const { config, cwd, isWorktree, mainWorktree } = opts;
-  const baseBranch = config.baseBranch.value;
+function runDryRun(
+  opts: RunnerOptions,
+  dirs: PipelineDirs,
+  cfg: ConfigValues,
+  effectiveSandbox: "none" | "docker",
+): void {
+  const { cwd, isWorktree, mainWorktree } = opts;
+  const baseBranch = cfg.baseBranch;
 
   console.log();
   console.log("========================================");
@@ -489,10 +500,10 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
     // Priority chain: PRD issues first, then regular issues.
     const peekOpts = {
       cwd,
-      issueSource: config.issueSource.value,
-      standaloneLabel: config.standaloneLabel.value,
-      issueRepo: config.issueRepo.value,
-      issuePrdLabel: config.prdLabel.value,
+      issueSource: cfg.issueSource,
+      standaloneLabel: cfg.standaloneLabel,
+      issueRepo: cfg.issueRepo,
+      issuePrdLabel: cfg.prdLabel,
     };
     const prdPeek = peekPrdIssues(peekOpts);
     if (prdPeek.found) {
@@ -579,16 +590,16 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
   );
 
   // Docker dry-run: print the full docker run command
-  if (config.sandbox.value === "docker") {
-    const agentCmd = config.agentCommand.value;
-    const dockerEnvVars = config.dockerEnvVars.value
-      ? config.dockerEnvVars.value
+  if (effectiveSandbox === "docker") {
+    const agentCmd = cfg.agentCommand;
+    const dockerEnvVars = cfg.dockerEnvVars
+      ? cfg.dockerEnvVars
           .split(",")
           .map((s: string) => s.trim())
           .filter(Boolean)
       : [];
-    const dockerMountsVal = config.dockerMounts.value
-      ? config.dockerMounts.value
+    const dockerMountsVal = cfg.dockerMounts
+      ? cfg.dockerMounts
           .split(",")
           .map((s: string) => s.trim())
           .filter(Boolean)
@@ -597,7 +608,7 @@ function runDryRun(opts: RunnerOptions, dirs: PipelineDirs): void {
       agentCommand: agentCmd,
       prompt: "<PROMPT>",
       cwd: worktreeDir,
-      dockerImage: config.dockerImage.value || undefined,
+      dockerImage: cfg.dockerImage || undefined,
       dockerEnvVars,
       dockerMounts: dockerMountsVal,
       mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
@@ -650,48 +661,47 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     skipPrCreation,
   } = opts;
 
+  // Convert to plain values — business logic uses ConfigValues, not
+  // ResolvedConfig. The only piece of source metadata we thread through
+  // is sandbox.source (needed by computeEffectiveSandbox).
+  const cfg = configValues(config);
+  const sandboxSource: ConfigSource = config.sandbox.source;
+
   // Unpack config values
-  const baseBranch = config.baseBranch.value;
-  const maxStuck = config.maxStuck.value;
-  const iterationTimeout = config.iterationTimeout.value;
-  const agentCommand = config.agentCommand.value;
-  const issueSource = config.issueSource.value;
-  const standaloneLabel = config.standaloneLabel.value;
-  const subissueLabel = config.subissueLabel.value;
-  const issuePrdLabel = config.prdLabel.value;
-  const issueRepo = config.issueRepo.value;
-  const issueCommentProgress = config.issueCommentProgress.value === "true";
-  const review = config.review.value === "true";
+  const baseBranch = cfg.baseBranch;
+  const maxStuck = cfg.maxStuck;
+  const iterationTimeout = cfg.iterationTimeout;
+  const agentCommand = cfg.agentCommand;
+  const issueSource = cfg.issueSource;
+  const standaloneLabel = cfg.standaloneLabel;
+  const subissueLabel = cfg.subissueLabel;
+  const issuePrdLabel = cfg.prdLabel;
+  const issueRepo = cfg.issueRepo;
+  const issueCommentProgress = cfg.issueCommentProgress === "true";
+  const review = cfg.review === "true";
 
   // --- Fail-early Docker availability check ---
-  // When sandbox was explicitly set to "docker" (config/env/CLI), fail hard
-  // if Docker is unavailable — the user asked for Docker, so the error is
-  // actionable. When sandbox was auto-detected, silently fall back to "none"
-  // instead — Docker may have become unavailable between config resolution
-  // and runner start, and the user never explicitly requested Docker.
-  if (config.sandbox.value === "docker") {
-    const dockerCheck = checkDockerAvailability();
-    if (!dockerCheck.available) {
-      if (config.sandbox.source === "auto-detected") {
-        // Silent fallback: override sandbox to "none" for this run
-        (config as { sandbox: { value: string; source: string } }).sandbox = {
-          value: "none",
-          source: "auto-detected",
-        };
-      } else {
-        console.error(`ERROR: ${dockerCheck.error}`);
-        process.exit(1);
-      }
-    }
+  // computeEffectiveSandbox re-probes Docker at runner start. When sandbox
+  // was auto-detected, it silently falls back to "none"; when explicit, it
+  // returns an actionable error.
+  const sandboxResult = computeEffectiveSandbox(
+    cfg,
+    sandboxSource,
+    checkDockerAvailability,
+  );
+  if (sandboxResult.error) {
+    console.error(`ERROR: ${sandboxResult.error}`);
+    process.exit(1);
   }
+  const effectiveSandbox = sandboxResult.sandbox;
 
   // --- Pull Docker image to ensure local cache is up to date ---
   // Fail-open: if the pull fails (e.g. no network), continue with the
   // cached image. Skipped in dry-run mode (no side effects).
-  if (config.sandbox.value === "docker" && !dryRun) {
+  if (effectiveSandbox === "docker" && !dryRun) {
     const pullResult = pullDockerImage(
       agentCommand,
-      config.dockerImage.value || undefined,
+      cfg.dockerImage || undefined,
     );
     if (pullResult.success) {
       console.log(`Docker image up to date: ${pullResult.image}`);
@@ -704,17 +714,17 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
   // Create the executor based on sandbox config
   const dockerConfig =
-    config.sandbox.value === "docker"
+    effectiveSandbox === "docker"
       ? {
-          dockerImage: config.dockerImage.value || undefined,
-          dockerEnvVars: config.dockerEnvVars.value
-            ? config.dockerEnvVars.value
+          dockerImage: cfg.dockerImage || undefined,
+          dockerEnvVars: cfg.dockerEnvVars
+            ? cfg.dockerEnvVars
                 .split(",")
                 .map((s: string) => s.trim())
                 .filter(Boolean)
             : undefined,
-          dockerMounts: config.dockerMounts.value
-            ? config.dockerMounts.value
+          dockerMounts: cfg.dockerMounts
+            ? cfg.dockerMounts
                 .split(",")
                 .map((s: string) => s.trim())
                 .filter(Boolean)
@@ -726,7 +736,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         }
       : undefined;
   const executor: AgentExecutor = createExecutor(
-    config.sandbox.value,
+    effectiveSandbox,
     dockerConfig,
   );
 
@@ -738,7 +748,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
   // --- Dry-run mode ---
   if (dryRun) {
-    runDryRun(opts, dirs);
+    runDryRun(opts, dirs, cfg, effectiveSandbox);
     return { stuckSlugs: [], accumulatedLearnings: [] };
   }
 
@@ -783,7 +793,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     if (!detectResult.detected) {
       // No plan found — try GitHub issues if backlog is empty
       if (detectResult.reason === "empty-backlog") {
-        const issueHitlLabel = config.issueHitlLabel.value;
+        const issueHitlLabel = cfg.issueHitlLabel;
         const pullOpts = {
           backlogDir: dirs.backlogDir,
           cwd,
@@ -857,10 +867,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const scopeResult = resolveScope({
       cwd,
       planScope,
-      rootFeedbackCommands: config.feedbackCommands.value,
-      rootPrFeedbackCommands: config.prFeedbackCommands?.value ?? "",
-      workspacesConfig: config.workspaces.value
-        ? JSON.stringify(config.workspaces.value)
+      rootFeedbackCommands: cfg.feedbackCommands,
+      rootPrFeedbackCommands: cfg.prFeedbackCommands ?? "",
+      workspacesConfig: cfg.workspaces
+        ? JSON.stringify(cfg.workspaces)
         : undefined,
     });
 
@@ -929,7 +939,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         branch,
         slug: planSlug,
         plan_file: basename(planFile),
-        sandbox: config.sandbox.value,
+        sandbox: effectiveSandbox,
       });
     } else {
       console.error("ERROR: Ralphai runs plans only inside managed worktrees.");

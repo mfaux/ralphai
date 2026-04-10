@@ -13,8 +13,8 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
-import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers (mirrors runner.test.ts patterns)
@@ -47,35 +47,6 @@ function setupGlobalPipeline(cwd: string) {
   process.env.RALPHAI_HOME = ralphaiHome;
   const dirs = getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
   return { ralphaiHome, ...dirs };
-}
-
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 10, // High to avoid stuck detection interfering
-    issueSource: "none",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +91,10 @@ describe("runRunner — zero-completion guard", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "iteration-marker-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration" --allow-empty-message; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        maxStuck: 10,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -183,8 +156,10 @@ describe("runRunner — zero-completion guard", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        maxStuck: 10,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,

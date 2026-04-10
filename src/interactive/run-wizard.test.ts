@@ -12,31 +12,15 @@
 
 import { describe, it, expect, mock, beforeEach } from "bun:test";
 import { join } from "path";
-import { runCli, useTempGitDir } from "../test-utils.ts";
-import type { ResolvedConfig, ConfigSource } from "../config.ts";
-import { DEFAULTS } from "../config.ts";
+import {
+  runCli,
+  useTempGitDir,
+  makeTestResolvedConfig,
+} from "../test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Build a ResolvedConfig where every key uses the given source. */
-function makeConfig(
-  overrides?: Partial<
-    Record<keyof typeof DEFAULTS, { value: unknown; source: ConfigSource }>
-  >,
-): ResolvedConfig {
-  const base: Record<string, { value: unknown; source: ConfigSource }> = {};
-  for (const [key, value] of Object.entries(DEFAULTS)) {
-    base[key] = { value, source: "default" };
-  }
-  if (overrides) {
-    for (const [key, rv] of Object.entries(overrides)) {
-      base[key] = rv!;
-    }
-  }
-  return base as unknown as ResolvedConfig;
-}
 
 // ---------------------------------------------------------------------------
 // CLI integration: help text
@@ -141,7 +125,7 @@ describe("runConfigWizard", () => {
 
   it("returns empty array when user selects nothing", async () => {
     mockMultiselect.mockResolvedValue([]);
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toEqual([]);
     expect(mockIntro).toHaveBeenCalled();
     expect(mockOutro).toHaveBeenCalled();
@@ -152,7 +136,7 @@ describe("runConfigWizard", () => {
     mockMultiselect.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toBeNull();
     expect(mockCancel).toHaveBeenCalled();
   });
@@ -163,7 +147,7 @@ describe("runConfigWizard", () => {
     mockText.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toBeNull();
     expect(mockCancel).toHaveBeenCalled();
   });
@@ -174,7 +158,7 @@ describe("runConfigWizard", () => {
     mockSelect.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toBeNull();
   });
 
@@ -184,7 +168,7 @@ describe("runConfigWizard", () => {
       .mockResolvedValueOnce("claude -p")
       .mockResolvedValueOnce("develop");
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toEqual([
       "--agent-command=claude -p",
       "--base-branch=develop",
@@ -195,12 +179,12 @@ describe("runConfigWizard", () => {
     mockMultiselect.mockResolvedValue(["maxStuck", "iterationTimeout"]);
     mockText.mockResolvedValueOnce("5").mockResolvedValueOnce("120");
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toEqual(["--max-stuck=5", "--iteration-timeout=120"]);
   });
 
   it("multiselect options show current values and source hints", async () => {
-    const config = makeConfig({
+    const config = makeTestResolvedConfig(undefined, {
       agentCommand: { value: "claude -p", source: "config" },
       maxStuck: { value: 5, source: "env" },
     });
@@ -223,7 +207,7 @@ describe("runConfigWizard", () => {
 
   it("shows all 9 options in multiselect", async () => {
     mockMultiselect.mockResolvedValue([]);
-    await runConfigWizard(makeConfig());
+    await runConfigWizard(makeTestResolvedConfig());
 
     const call = mockMultiselect.mock.calls[0]![0] as {
       options: { value: string }[];
@@ -241,7 +225,7 @@ describe("runConfigWizard", () => {
   });
 
   it("text prompt receives current value as initialValue", async () => {
-    const config = makeConfig({
+    const config = makeTestResolvedConfig(undefined, {
       agentCommand: { value: "opencode run --agent build", source: "default" },
     });
     mockMultiselect.mockResolvedValue(["agentCommand"]);
@@ -254,7 +238,7 @@ describe("runConfigWizard", () => {
   });
 
   it("select prompt receives current value as initialValue", async () => {
-    const config = makeConfig({
+    const config = makeTestResolvedConfig(undefined, {
       sandbox: { value: "docker", source: "config" },
     });
     mockMultiselect.mockResolvedValue(["sandbox"]);
@@ -288,7 +272,7 @@ describe("runConfigWizard", () => {
       .mockResolvedValueOnce("300");
     mockSelect.mockResolvedValue("docker");
 
-    const result = await runConfigWizard(makeConfig());
+    const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toEqual([
       "--agent-command=claude -p",
       "--setup-command=npm ci",

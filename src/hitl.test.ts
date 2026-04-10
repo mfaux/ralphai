@@ -76,6 +76,17 @@ mock.module("./worktree/management.ts", () => ({
 mock.module("./worktree/index.ts", () => ({
   prepareWorktree: mockPrepareWorktree,
   writeFeedbackWrapper: () => {},
+  parseWorktreeList: () => [],
+  isRalphaiManagedBranch: () => false,
+  listRalphaiWorktrees: () => [],
+  selectPlanForWorktree: () => null,
+  isGitWorktree: mockIsGitWorktree,
+  resolveWorktreeInfo: () => ({ isWorktree: false, mainWorktree: "" }),
+  resolveMainGitDir: () => undefined,
+  ensureRepoHasCommit: mockEnsureRepoHasCommit,
+  executeSetupCommand: () => {},
+  listWorktrees: () => [],
+  cleanWorktrees: () => {},
 }));
 
 // Mock git-helpers
@@ -83,6 +94,7 @@ const mockDetectBaseBranch = mock<(cwd?: string) => string>();
 mock.module("./git-helpers.ts", () => ({
   detectBaseBranch: mockDetectBaseBranch,
   extractExecStderr: () => "",
+  isInsideGitRepo: () => true,
 }));
 
 // Mock config — return a controlled resolved config
@@ -116,6 +128,7 @@ mock.module("child_process", () => {
 
 // Import module-under-test AFTER all mocks
 const { runHitl, spawnInteractiveAgent } = await import("./hitl.ts");
+const { makeTestResolvedConfig } = await import("./test-utils.ts");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,36 +137,6 @@ const { runHitl, spawnInteractiveAgent } = await import("./hitl.ts");
 function createTmpDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "ralphai-hitl-test-"));
   return dir;
-}
-
-function makeResolvedConfig(overrides: Partial<Record<string, unknown>> = {}) {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    agentInteractiveCommand: "opencode",
-    setupCommand: "",
-    feedbackCommands: "",
-    prFeedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "github",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const config: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    config[key] = { value, source: "default" };
-  }
-  return config;
 }
 
 function setupDefaultMocks(tmpDir: string) {
@@ -165,7 +148,12 @@ function setupDefaultMocks(tmpDir: string) {
 
   // Default config resolution
   mockResolveConfig.mockReturnValue({
-    config: makeResolvedConfig(),
+    config: makeTestResolvedConfig({
+      agentCommand: "echo",
+      agentInteractiveCommand: "opencode",
+      issueSource: "github",
+      review: "false",
+    }),
   });
 
   // Not in a worktree
@@ -311,7 +299,12 @@ describe("runHitl", () => {
 
   test("errors when agentInteractiveCommand is not configured", async () => {
     mockResolveConfig.mockReturnValue({
-      config: makeResolvedConfig({ agentInteractiveCommand: "" }),
+      config: makeTestResolvedConfig({
+        agentCommand: "echo",
+        agentInteractiveCommand: "",
+        issueSource: "github",
+        review: "false",
+      }),
     });
 
     let exitCode: number | undefined;
@@ -525,7 +518,11 @@ describe("runHitl", () => {
   test("uses config baseBranch for worktree creation, not detectBaseBranch()", async () => {
     // Config says "develop", but detectBaseBranch returns "main"
     mockResolveConfig.mockReturnValue({
-      config: makeResolvedConfig({ baseBranch: "develop" }),
+      config: makeTestResolvedConfig({
+        agentCommand: "echo",
+        agentInteractiveCommand: "opencode",
+        baseBranch: "develop",
+      }),
     });
     mockDetectBaseBranch.mockReturnValue("main");
 

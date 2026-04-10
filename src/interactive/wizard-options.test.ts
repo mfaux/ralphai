@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { ResolvedConfig, ConfigSource } from "../config.ts";
-import { DEFAULTS, parseCLIArgs } from "../config.ts";
+import { parseCLIArgs } from "../config.ts";
+import { makeTestResolvedConfig } from "../test-utils.ts";
 import {
   buildWizardOptions,
   selectionsToFlags,
@@ -21,24 +21,6 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Build a ResolvedConfig where every key uses the given source. */
-function makeConfig(
-  overrides?: Partial<
-    Record<keyof typeof DEFAULTS, { value: unknown; source: ConfigSource }>
-  >,
-): ResolvedConfig {
-  const base: Record<string, { value: unknown; source: ConfigSource }> = {};
-  for (const [key, value] of Object.entries(DEFAULTS)) {
-    base[key] = { value, source: "default" };
-  }
-  if (overrides) {
-    for (const [key, rv] of Object.entries(overrides)) {
-      base[key] = rv;
-    }
-  }
-  return base as unknown as ResolvedConfig;
-}
 
 /** Find a wizard option by key. */
 function findOption(
@@ -56,13 +38,13 @@ function findOption(
 
 describe("buildWizardOptions", () => {
   it("returns exactly 8 options in the expected order", () => {
-    const options = buildWizardOptions(makeConfig());
+    const options = buildWizardOptions(makeTestResolvedConfig());
     expect(options).toHaveLength(8);
     expect(options.map((o) => o.key)).toEqual([...WIZARD_KEYS]);
   });
 
   it("includes a human-readable label for every key", () => {
-    const options = buildWizardOptions(makeConfig());
+    const options = buildWizardOptions(makeTestResolvedConfig());
     for (const opt of options) {
       expect(opt.label).toBeString();
       expect(opt.label.length).toBeGreaterThan(0);
@@ -70,7 +52,7 @@ describe("buildWizardOptions", () => {
   });
 
   it("shows current values as strings", () => {
-    const config = makeConfig({
+    const config = makeTestResolvedConfig(undefined, {
       maxStuck: { value: 5, source: "config" },
       iterationTimeout: { value: 120, source: "env" },
     });
@@ -84,12 +66,12 @@ describe("buildWizardOptions", () => {
 
   describe("source hints", () => {
     it('maps "default" to "default"', () => {
-      const options = buildWizardOptions(makeConfig());
+      const options = buildWizardOptions(makeTestResolvedConfig());
       expect(findOption(options, "baseBranch").sourceHint).toBe("default");
     });
 
     it('maps "config" to "config file"', () => {
-      const config = makeConfig({
+      const config = makeTestResolvedConfig(undefined, {
         agentCommand: { value: "claude -p", source: "config" },
       });
       const options = buildWizardOptions(config);
@@ -99,7 +81,7 @@ describe("buildWizardOptions", () => {
     });
 
     it('maps "env" to "env var"', () => {
-      const config = makeConfig({
+      const config = makeTestResolvedConfig(undefined, {
         feedbackCommands: { value: "bun test", source: "env" },
       });
       const options = buildWizardOptions(config);
@@ -109,7 +91,7 @@ describe("buildWizardOptions", () => {
     });
 
     it('maps "cli" to "CLI flag"', () => {
-      const config = makeConfig({
+      const config = makeTestResolvedConfig(undefined, {
         maxStuck: { value: 10, source: "cli" },
       });
       const options = buildWizardOptions(config);
@@ -117,7 +99,7 @@ describe("buildWizardOptions", () => {
     });
 
     it("assigns correct source hints for all 6 keys with mixed sources", () => {
-      const config = makeConfig({
+      const config = makeTestResolvedConfig(undefined, {
         agentCommand: { value: "opencode", source: "config" },
         setupCommand: { value: "npm ci", source: "env" },
         feedbackCommands: { value: "bun test,bun run build", source: "cli" },
@@ -146,7 +128,7 @@ describe("buildWizardOptions", () => {
 
   describe("prompt metadata", () => {
     it("assigns text prompt to string keys", () => {
-      const options = buildWizardOptions(makeConfig());
+      const options = buildWizardOptions(makeTestResolvedConfig());
       for (const key of [
         "agentCommand",
         "setupCommand",
@@ -159,7 +141,7 @@ describe("buildWizardOptions", () => {
     });
 
     it("assigns text prompt with validation to maxStuck", () => {
-      const options = buildWizardOptions(makeConfig());
+      const options = buildWizardOptions(makeTestResolvedConfig());
       const prompt = findOption(options, "maxStuck").prompt;
       expect(prompt.kind).toBe("text");
       if (prompt.kind === "text") {
@@ -172,7 +154,7 @@ describe("buildWizardOptions", () => {
     });
 
     it("assigns text prompt with validation to iterationTimeout", () => {
-      const options = buildWizardOptions(makeConfig());
+      const options = buildWizardOptions(makeTestResolvedConfig());
       const prompt = findOption(options, "iterationTimeout").prompt;
       expect(prompt.kind).toBe("text");
       if (prompt.kind === "text") {

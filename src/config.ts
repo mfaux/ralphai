@@ -65,6 +65,87 @@ export type ResolvedConfig = {
   [K in keyof RalphaiConfig]: ResolvedValue<RalphaiConfig[K]>;
 };
 
+/**
+ * Plain config values without resolution metadata (source, raw).
+ *
+ * Use `configValues(rc)` to strip a `ResolvedConfig` down to just values.
+ * This is the type business-logic code should accept — it doesn't need to
+ * know where a value came from.
+ */
+export type ConfigValues = {
+  [K in keyof RalphaiConfig]: RalphaiConfig[K];
+};
+
+/**
+ * Strip resolution metadata from a `ResolvedConfig`, returning plain values.
+ *
+ * Consumers that only need config values (not source information) should
+ * call this once and pass the result around, avoiding `rc.someKey.value`
+ * boilerplate everywhere.
+ */
+export function configValues(rc: ResolvedConfig): ConfigValues {
+  const out = {} as Record<string, unknown>;
+  for (const key of Object.keys(rc) as Array<keyof ResolvedConfig>) {
+    out[key as string] = rc[key].value;
+  }
+  return out as ConfigValues;
+}
+
+// ---------------------------------------------------------------------------
+// Effective sandbox resolution
+// ---------------------------------------------------------------------------
+
+/** Result of resolving the effective sandbox value at runner start. */
+export interface EffectiveSandboxResult {
+  /** The sandbox mode to use for this run. */
+  sandbox: "none" | "docker";
+  /**
+   * When set, the runner should exit with this error message.
+   * Indicates the user explicitly requested Docker but it's unavailable.
+   */
+  error?: string;
+}
+
+/**
+ * Resolve the effective sandbox value at runner start.
+ *
+ * When sandbox is "docker", re-checks Docker availability (it may have
+ * become unavailable between config resolution and runner start):
+ *
+ * - **Auto-detected** (`sandboxSource === "auto-detected"`): silently falls
+ *   back to `"none"` — the user never explicitly requested Docker.
+ * - **Explicit** (config/env/CLI): returns an error — the user asked for
+ *   Docker, so the failure is actionable.
+ *
+ * The `checkDocker` parameter allows injection for testing.
+ */
+export function computeEffectiveSandbox(
+  cfg: Pick<ConfigValues, "sandbox">,
+  sandboxSource: ConfigSource,
+  checkDocker: () => { available: boolean; error?: string } = () => ({
+    available: true,
+  }),
+): EffectiveSandboxResult {
+  if (cfg.sandbox !== "docker") {
+    return { sandbox: cfg.sandbox };
+  }
+
+  const dockerCheck = checkDocker();
+  if (dockerCheck.available) {
+    return { sandbox: "docker" };
+  }
+
+  // Docker unavailable — behaviour depends on how sandbox was set
+  if (sandboxSource === "auto-detected") {
+    return { sandbox: "none" };
+  }
+
+  return {
+    sandbox: "docker",
+    error: dockerCheck.error ?? "Docker is not available.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -129,7 +210,6 @@ export function validateEnum(
 
 /**
  * Validate that `value` is "true" or "false".
- * Validate a boolean string value.
  */
 export function validateBoolean(value: string, label: string): void {
   validateEnum(value, label, ["true", "false"]);
@@ -137,7 +217,6 @@ export function validateBoolean(value: string, label: string): void {
 
 /**
  * Validate that `value` is a positive integer (>= 1).
- * Validate a positive integer string value.
  */
 export function validatePositiveInt(value: string, label: string): void {
   if (!/^[1-9][0-9]*$/.test(value)) {
@@ -149,7 +228,6 @@ export function validatePositiveInt(value: string, label: string): void {
 
 /**
  * Validate that `value` is a non-negative integer (>= 0).
- * Validate a non-negative integer string value.
  */
 export function validateNonNegInt(
   value: string,
@@ -166,7 +244,6 @@ export function validateNonNegInt(
 
 /**
  * Validate a comma-separated list has no empty entries.
- * Validate a comma-separated list string value.
  */
 export function validateCommaList(value: string, label: string): void {
   if (value === "") return;
@@ -259,6 +336,20 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     throw new ConfigError(`${filePath}: ${msg}`);
   }
 
+  /** Parse a value that accepts an array of strings or a comma-separated string. */
+  function parseStringListField(fieldName: string, v: unknown): string {
+    if (Array.isArray(v)) {
+      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
+        err(`'${fieldName}' array contains an empty entry`);
+      return v.join(",");
+    } else if (typeof v === "string") {
+      return v;
+    }
+    err(
+      `'${fieldName}' must be an array of strings or a comma-separated string, got ${typeof v}`,
+    );
+  }
+
   // agentCommand (string, non-empty)
   if ("agentCommand" in obj) {
     const v = obj.agentCommand;
@@ -277,34 +368,18 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
 
   // feedbackCommands (array of strings or comma-separated string)
   if ("feedbackCommands" in obj) {
-    const v = obj.feedbackCommands;
-    if (Array.isArray(v)) {
-      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
-        err("'feedbackCommands' array contains an empty entry");
-      values.feedbackCommands = v.join(",");
-    } else if (typeof v === "string") {
-      values.feedbackCommands = v;
-    } else {
-      err(
-        `'feedbackCommands' must be an array of strings or a comma-separated string, got ${typeof v}`,
-      );
-    }
+    values.feedbackCommands = parseStringListField(
+      "feedbackCommands",
+      obj.feedbackCommands,
+    );
   }
 
   // prFeedbackCommands (array of strings or comma-separated string)
   if ("prFeedbackCommands" in obj) {
-    const v = obj.prFeedbackCommands;
-    if (Array.isArray(v)) {
-      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
-        err("'prFeedbackCommands' array contains an empty entry");
-      values.prFeedbackCommands = v.join(",");
-    } else if (typeof v === "string") {
-      values.prFeedbackCommands = v;
-    } else {
-      err(
-        `'prFeedbackCommands' must be an array of strings or a comma-separated string, got ${typeof v}`,
-      );
-    }
+    values.prFeedbackCommands = parseStringListField(
+      "prFeedbackCommands",
+      obj.prFeedbackCommands,
+    );
   }
 
   // baseBranch (string, non-empty, no spaces)
@@ -409,34 +484,18 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
 
   // dockerMounts (CSV string or array of strings)
   if ("dockerMounts" in obj) {
-    const v = obj.dockerMounts;
-    if (Array.isArray(v)) {
-      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
-        err("'dockerMounts' array contains an empty entry");
-      values.dockerMounts = v.join(",");
-    } else if (typeof v === "string") {
-      values.dockerMounts = v;
-    } else {
-      err(
-        `'dockerMounts' must be an array of strings or a comma-separated string, got ${typeof v}`,
-      );
-    }
+    values.dockerMounts = parseStringListField(
+      "dockerMounts",
+      obj.dockerMounts,
+    );
   }
 
   // dockerEnvVars (CSV string or array of strings)
   if ("dockerEnvVars" in obj) {
-    const v = obj.dockerEnvVars;
-    if (Array.isArray(v)) {
-      if (v.some((s) => typeof s !== "string" || (s as string).trim() === ""))
-        err("'dockerEnvVars' array contains an empty entry");
-      values.dockerEnvVars = v.join(",");
-    } else if (typeof v === "string") {
-      values.dockerEnvVars = v;
-    } else {
-      err(
-        `'dockerEnvVars' must be an array of strings or a comma-separated string, got ${typeof v}`,
-      );
-    }
+    values.dockerEnvVars = parseStringListField(
+      "dockerEnvVars",
+      obj.dockerEnvVars,
+    );
   }
 
   // review (boolean)
@@ -667,8 +726,7 @@ export interface ParsedCLIArgs {
 }
 
 /**
- * Parse CLI arguments and extract config overrides.
- * Parses config-related CLI flags from the argument list.
+ * Parse config-related CLI flags from the argument list.
  * Non-config flags (--dry-run, --resume, etc.) are ignored here.
  */
 export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {

@@ -16,7 +16,6 @@ import { execSync } from "child_process";
 
 import type { PullIssueOptions, PullIssueResult } from "./issues.ts";
 import type { RunnerOptions } from "./runner.ts";
-import type { ResolvedConfig } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Mock pullGithubIssues and pullPrdSubIssue from ./issues.ts
@@ -39,6 +38,7 @@ mock.module("./issues.ts", () => ({
 const { runRunner } = await import("./runner.ts");
 
 const { getRepoPipelineDirs } = await import("./global-state.ts");
+const { makeTestResolvedConfig } = await import("./test-utils.ts");
 
 // ---------------------------------------------------------------------------
 // Helpers (shared pattern with runner-drain.test.ts)
@@ -77,35 +77,6 @@ function setupGlobalPipeline(cwd: string) {
   process.env.RALPHAI_HOME = ralphaiHome;
   const dirs = getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
   return { ralphaiHome, ...dirs };
-}
-
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "github",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
 }
 
 /** Capture console.log output during an async function. */
@@ -209,8 +180,10 @@ describe("runner GitHub drain behavior", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -252,8 +225,10 @@ describe("runner GitHub drain behavior", () => {
     }));
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -294,8 +269,10 @@ describe("runner GitHub drain behavior", () => {
     }));
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -327,8 +304,10 @@ describe("runner GitHub drain behavior", () => {
     }));
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -363,8 +342,10 @@ describe("runner GitHub drain behavior", () => {
     }));
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -399,8 +380,10 @@ describe("runner GitHub drain behavior", () => {
     }));
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -454,8 +437,10 @@ describe("runner GitHub drain behavior", () => {
     });
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        issueSource: "github",
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
