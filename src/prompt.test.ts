@@ -542,4 +542,66 @@ describe("assemblePrompt", () => {
     expect(step4Idx).toBeLessThan(scopeIdx);
     expect(scopeIdx).toBeLessThan(step5Idx);
   });
+
+  // --- Terse mode ---
+
+  it("includes terse instruction when terse is true", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    expect(prompt).toContain("TERSE MODE:");
+  });
+
+  it("omits terse instruction when terse is false", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: false }));
+    expect(prompt).not.toContain("TERSE MODE:");
+  });
+
+  it("omits terse instruction when terse is omitted", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("TERSE MODE:");
+  });
+
+  it("terse instruction mentions dropping articles, filler, pleasantries, and hedging", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    expect(prompt).toContain("articles");
+    expect(prompt).toContain("filler");
+    expect(prompt).toContain("pleasantries");
+    expect(prompt).toContain("hedging");
+  });
+
+  it("terse instruction specifies that technical terms must remain exact", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    expect(prompt).toContain("technical terms");
+    expect(prompt).toContain("exactly as-is");
+  });
+
+  it("terse instruction exempts structured blocks, commit messages, and code", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    expect(prompt).toContain("<learnings>");
+    expect(prompt).toContain("<progress>");
+    expect(prompt).toContain("<pr-summary>");
+    expect(prompt).toContain("commit messages");
+    expect(prompt).toContain("exempt from terse");
+  });
+
+  it("terse instruction appears before the file references", () => {
+    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    const terseIdx = prompt.indexOf("TERSE MODE:");
+    const fileRefIdx = prompt.indexOf('<file path="plan.md">');
+    expect(terseIdx).toBeGreaterThanOrEqual(0);
+    expect(fileRefIdx).toBeGreaterThan(terseIdx);
+  });
+
+  it("terse instruction does not affect review pass or HITL prompts (assemblePrompt only)", () => {
+    // This test confirms terse is a property of assemblePrompt only.
+    // Review and HITL have separate prompt assembly functions that
+    // do not accept a terse option — verified by type system.
+    const promptWithTerse = assemblePrompt(baseOptions({ terse: true }));
+    const promptWithout = assemblePrompt(baseOptions({ terse: false }));
+    // Both should have file refs and instructions — only terse preamble differs
+    expect(promptWithTerse).toContain("TERSE MODE:");
+    expect(promptWithout).not.toContain("TERSE MODE:");
+    // Both should still contain the core instruction steps
+    expect(promptWithTerse).toContain("1. Review the plan");
+    expect(promptWithout).toContain("1. Review the plan");
+  });
 });

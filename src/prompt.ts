@@ -54,6 +54,14 @@ export interface AssemblePromptOptions {
    * generated), step 4 falls back to raw commands.
    */
   wrapperPath?: string;
+  /**
+   * When true, a terse communication instruction is prepended to the
+   * prompt, directing the agent to drop filler words, articles,
+   * pleasantries, and hedging while keeping technical terms, code, commit
+   * messages, and structured XML blocks (`<learnings>`, `<progress>`,
+   * `<pr-summary>`) verbatim.
+   */
+  terse?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +108,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     gateRejection,
     nonce,
     wrapperPath,
+    terse = false,
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -204,8 +213,15 @@ Ralphai extracts this block and appends it to the progress file automatically. D
     ? `\n<completion-gate-rejection>\n${gateRejection}\n</completion-gate-rejection>\n`
     : "";
 
+  // --- Terse communication instruction ---
+  // When enabled, prepended at the very top of the prompt (before file
+  // references) to maximize influence on agent behavior.
+  const terseInstruction = terse
+    ? `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`
+    : "";
+
   // --- Assemble the prompt ---
-  return `${fileRefs}${scopeHint}${gateSection}${learningsSection}
+  return `${terseInstruction}${fileRefs}${scopeHint}${gateSection}${learningsSection}
 1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${learningsHint}
 2. ${step2}
 3. Implement it with small, focused changes. Testing strategy depends on task type:
