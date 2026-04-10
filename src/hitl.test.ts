@@ -69,6 +69,7 @@ const mockPrepareWorktree =
 
 mock.module("./worktree/management.ts", () => ({
   isGitWorktree: mockIsGitWorktree,
+  resolveMainRepo: (dir: string) => dir,
   ensureRepoHasCommit: mockEnsureRepoHasCommit,
   resolveMainGitDir: () => undefined,
 }));
@@ -82,6 +83,7 @@ mock.module("./worktree/index.ts", () => ({
   selectPlanForWorktree: () => null,
   isGitWorktree: mockIsGitWorktree,
   resolveWorktreeInfo: () => ({ isWorktree: false, mainWorktree: "" }),
+  resolveMainRepo: (dir: string) => dir,
   resolveMainGitDir: () => undefined,
   ensureRepoHasCommit: mockEnsureRepoHasCommit,
   executeSetupCommand: () => {},

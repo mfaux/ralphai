@@ -16,6 +16,7 @@ export {
   isGitWorktree,
   resolveWorktreeInfo,
   resolveMainGitDir,
+  resolveMainRepo,
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,

@@ -31,7 +31,7 @@ import {
 import { execQuiet } from "./exec.ts";
 import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
 import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
-import { isGitWorktree, ensureRepoHasCommit } from "./worktree/management.ts";
+import { resolveMainRepo, ensureRepoHasCommit } from "./worktree/management.ts";
 import { shellSplit } from "./runner.ts";
 import { formatFileRef } from "./prompt.ts";
 
@@ -63,16 +63,11 @@ export interface HitlResult {
  * the HITL label and adds `done`. On abnormal exit, leaves labels unchanged.
  */
 export async function runHitl(options: HitlOptions): Promise<HitlResult> {
-  const { issueNumber, cwd, dryRun, runArgs } = options;
+  const { issueNumber, dryRun, runArgs } = options;
+  let { cwd } = options;
 
   // --- Validate git context ---
-  if (isGitWorktree(cwd)) {
-    console.error("'ralphai hitl' must be run from the main repository.");
-    console.error(
-      "You are inside a worktree. Run this command from the main repo.",
-    );
-    process.exit(1);
-  }
+  cwd = resolveMainRepo(cwd);
 
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(

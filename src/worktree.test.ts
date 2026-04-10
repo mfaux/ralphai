@@ -116,10 +116,12 @@ describe("worktree", () => {
       expect(result.stdout).toContain("worktree");
     });
 
-    it("run rejects execution from inside a worktree when not initialized", async () => {
+    it("run resolves to the main repo when invoked from a worktree (not initialized)", async () => {
       const result = await runCliInProcess(["run"], worktreeDir, env());
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("must be run from the main repository");
+      // Should resolve to the main repo and then fail because ralphai is not set up
+      expect(result.stderr).toContain("Detected worktree");
+      expect(result.stderr).toContain("not set up");
     });
   });
 });

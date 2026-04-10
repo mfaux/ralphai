@@ -105,6 +105,7 @@ import {
 import {
   isGitWorktree,
   resolveWorktreeInfo,
+  resolveMainRepo,
   ensureRepoHasCommit,
   prepareWorktree,
   listRalphaiWorktrees,
@@ -1822,13 +1823,7 @@ async function runIssueTarget(
   // Validate run args (reject unrecognised flags)
   validateRunArgs(runArgs);
 
-  if (isGitWorktree(cwd)) {
-    console.error("'ralphai run' must be run from the main repository.");
-    console.error(
-      "You are inside a worktree. Run this command from the main repo.",
-    );
-    process.exit(1);
-  }
+  cwd = resolveMainRepo(cwd);
 
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
@@ -2656,13 +2651,7 @@ async function runRalphaiInManagedWorktree(
       // Validate early (before worktree creation) — both dry-run and real runs
       validateRunArgs(runArgs);
 
-      if (isGitWorktree(cwd)) {
-        console.error(`'ralphai run' must be run from the main repository.`);
-        console.error(
-          "You are inside a worktree. Run this command from the main repo.",
-        );
-        process.exit(1);
-      }
+      cwd = resolveMainRepo(cwd);
 
       if (!existsSync(getConfigFilePath(cwd))) {
         console.error(
@@ -2776,13 +2765,7 @@ async function runRalphaiInManagedWorktree(
 
   validateRunArgs(runArgs);
 
-  if (isGitWorktree(cwd)) {
-    console.error(`'ralphai run' must be run from the main repository.`);
-    console.error(
-      "You are inside a worktree. Run this command from the main repo.",
-    );
-    process.exit(1);
-  }
+  cwd = resolveMainRepo(cwd);
 
   if (!existsSync(getConfigFilePath(cwd))) {
     console.error(
