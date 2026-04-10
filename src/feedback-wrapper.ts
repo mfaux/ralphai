@@ -56,9 +56,9 @@ export function generateFeedbackWrapper(
     return generateEmptyWrapper();
   }
 
-  const escapedCommands = commands.map((cmd) => escapeForShell(cmd));
-  const commandBlocks = escapedCommands
-    .map((cmd, i) => generateCommandBlock(cmd, i + 1, commands.length))
+  const total = commands.length;
+  const commandBlocks = commands
+    .map((cmd, i) => `run_command ${escapeForShell(cmd)} ${i + 1} ${total}`)
     .join("\n");
 
   return `#!/usr/bin/env bash
@@ -135,17 +135,6 @@ function generateEmptyWrapper(): string {
 echo "No feedback commands configured."
 exit 0
 `;
-}
-
-/**
- * Generate the shell block for a single command invocation.
- */
-function generateCommandBlock(
-  escapedCmd: string,
-  index: number,
-  total: number,
-): string {
-  return `run_command ${escapedCmd} ${index} ${total}`;
 }
 
 /**
