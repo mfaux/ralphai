@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import {
   loadReducer,
   INITIAL_LOAD_STATE,

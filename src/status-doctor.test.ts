@@ -5,7 +5,7 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 import { runCliInProcess, stripLogo, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // GitHub Issues integration

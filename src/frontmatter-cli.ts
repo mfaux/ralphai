@@ -1,5 +1,5 @@
 /**
- * Frontmatter CLI — thin wrapper around src/frontmatter.ts for shell callers.
+ * Frontmatter CLI — thin wrapper around src/plan-lifecycle.ts for shell callers.
  *
  * Usage:
  *   node frontmatter-cli.mjs scope          <file>
@@ -17,7 +17,7 @@ import {
   extractScope,
   extractDependsOn,
   extractIssueFrontmatter,
-} from "./frontmatter.ts";
+} from "./plan-lifecycle.ts";
 
 const [command, file] = process.argv.slice(2);
 

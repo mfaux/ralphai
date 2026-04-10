@@ -8,7 +8,7 @@ import {
   runCliOutputInProcess,
   useTempGitDir,
 } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Flat backlog plan discovery (TypeScript side)

@@ -36,7 +36,6 @@ import {
 } from "./executor/docker.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import { getSocketPath } from "./ipc-protocol.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
 import { assemblePrompt } from "./prompt.ts";
 import {
   FEEDBACK_WRAPPER_FILENAME,
@@ -64,24 +63,21 @@ import {
   detectPlanFormat,
   countCompletedTasks,
   getPlanDescription,
-  type PipelineDirs,
-  type PlanFormat,
-  type BlockedPlanInfo,
-} from "./plan-detection.ts";
-import {
+  getRepoPipelineDirs,
   extractScope,
   extractIssueFrontmatter,
   extractFeedbackScope,
-} from "./frontmatter.ts";
-import { resolveScope } from "./scope.ts";
-import { detectFeedbackScope } from "./scope-detection.ts";
-import {
   initReceipt,
   updateReceiptTasks,
   updateReceiptPrUrl,
   updateReceiptOutcome,
   checkReceiptSource,
-} from "./receipt.ts";
+  type PipelineDirs,
+  type PlanFormat,
+  type BlockedPlanInfo,
+} from "./plan-lifecycle.ts";
+import { resolveScope } from "./scope.ts";
+import { detectFeedbackScope } from "./scope-detection.ts";
 import {
   type ResolvedConfig,
   type ConfigValues,

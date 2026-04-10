@@ -18,13 +18,11 @@ import {
   listPlanFiles,
   resolvePlanPath,
   getPlanDescription,
-} from "./plan-detection.ts";
-import { checkReceiptSource } from "./receipt.ts";
-import {
+  checkReceiptSource,
   getRepoPipelineDirs,
   resolveRepoByNameOrPath,
   removeStaleRepos,
-} from "./global-state.ts";
+} from "./plan-lifecycle.ts";
 import {
   detectWorkspaces,
   detectProject,
@@ -82,7 +80,7 @@ import { runRalphaiDoctor, showDoctorHelp } from "./doctor.ts";
 import { runRalphaiStatus, showStatusHelp } from "./status.ts";
 import { runHitl } from "./hitl.ts";
 
-import { extractIssueFrontmatter, extractDependsOn } from "./frontmatter.ts";
+import { extractIssueFrontmatter, extractDependsOn } from "./plan-lifecycle.ts";
 import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,

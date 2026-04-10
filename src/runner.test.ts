@@ -16,7 +16,7 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions, type RunnerResult } from "./runner.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------

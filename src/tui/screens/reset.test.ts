@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { InProgressPlan, LivenessStatus } from "../../pipeline-state.ts";
+import type { InProgressPlan, LivenessStatus } from "../../plan-lifecycle.ts";
 import { livenessHint, buildResetItems, resetSelect } from "./reset.tsx";
 
 // ---------------------------------------------------------------------------

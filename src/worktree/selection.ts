@@ -1,7 +1,10 @@
 import { TEXT, RESET } from "../utils.ts";
-import { getRepoPipelineDirs } from "../global-state.ts";
-import { findPlansByBranch } from "../receipt.ts";
-import { resolvePlanPath, listPlanFiles } from "../plan-detection.ts";
+import {
+  getRepoPipelineDirs,
+  findPlansByBranch,
+  resolvePlanPath,
+  listPlanFiles,
+} from "../plan-lifecycle.ts";
 import { isPlanRunnerAlive } from "../process-utils.ts";
 import type {
   WorktreeEntry,

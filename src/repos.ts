@@ -2,7 +2,7 @@
  * repos command — list all known repos with pipeline summaries.
  */
 
-import { listAllRepos, removeStaleRepos } from "./global-state.ts";
+import { listAllRepos, removeStaleRepos } from "./plan-lifecycle.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 
 export function runRepos(opts?: { clean?: boolean }): void {

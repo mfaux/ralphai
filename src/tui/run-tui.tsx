@@ -27,7 +27,7 @@ import {
   ENTER_ALT_SCREEN,
 } from "./terminal-safety.ts";
 import { applyNoColorOverride } from "./color-support.ts";
-import { gatherPipelineState } from "../pipeline-state.ts";
+import { gatherPipelineState } from "../plan-lifecycle.ts";
 import { listRalphaiWorktrees } from "../worktree/parsing.ts";
 import { peekGithubIssues, peekPrdIssues } from "../issue-lifecycle.ts";
 import { TUI_SUBPROCESS_TIMEOUT_MS } from "./hooks/use-pipeline-state.ts";

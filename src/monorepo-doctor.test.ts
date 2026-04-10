@@ -4,7 +4,7 @@ import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath, writeConfigFile } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Doctor workspace feedback validation

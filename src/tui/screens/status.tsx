@@ -32,7 +32,7 @@ import type {
   BacklogPlan,
   InProgressPlan,
   LivenessStatus,
-} from "../../pipeline-state.ts";
+} from "../../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

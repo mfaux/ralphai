@@ -10,7 +10,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { compareVersions } from "./utils.ts";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
-import { getRalphaiHome } from "./global-state.ts";
+import { getRalphaiHome } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

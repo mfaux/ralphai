@@ -16,8 +16,8 @@ import {
   initReceipt,
   updateReceiptTasks,
   checkReceiptSource,
-} from "./receipt.ts";
-import type { PlanFormat } from "./plan-detection.ts";
+  type PlanFormat,
+} from "./plan-lifecycle.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];

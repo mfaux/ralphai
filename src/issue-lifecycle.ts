@@ -12,7 +12,7 @@ import type { ExecOptions } from "./exec.ts";
 // Re-export so consumers that imported checkGhAvailable from issues.ts still work
 export { checkGhAvailable } from "./exec.ts";
 import { DEFAULTS } from "./config.ts";
-import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { extractIssueFrontmatter } from "./plan-lifecycle.ts";
 
 // Re-export all naming utilities
 export {

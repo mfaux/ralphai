@@ -285,24 +285,26 @@ export function CleanScreen({
         // This is deferred to avoid circular imports at module level
         import("../../clean.ts").then(
           ({ scanArchive, countOrphanedWorktrees }) => {
-            import("../../global-state.ts").then(({ getRepoPipelineDirs }) => {
-              const { archiveDir } = getRepoPipelineDirs(cwd);
-              const archiveSummary = scanArchive(archiveDir);
-              const worktreeCount = countOrphanedWorktrees(cwd);
-              const result = { archiveSummary, worktreeCount };
-              setScanResult(result);
+            import("../../plan-lifecycle.ts").then(
+              ({ getRepoPipelineDirs }) => {
+                const { archiveDir } = getRepoPipelineDirs(cwd);
+                const archiveSummary = scanArchive(archiveDir);
+                const worktreeCount = countOrphanedWorktrees(cwd);
+                const result = { archiveSummary, worktreeCount };
+                setScanResult(result);
 
-              if (!archiveSummary && worktreeCount === 0) {
-                setOutcome({
-                  archiveDeleted: false,
-                  archiveSummary: null,
-                  worktreeResult: null,
-                });
-                setPhase("done");
-              } else {
-                setPhase("preview");
-              }
-            });
+                if (!archiveSummary && worktreeCount === 0) {
+                  setOutcome({
+                    archiveDeleted: false,
+                    archiveSummary: null,
+                    worktreeResult: null,
+                  });
+                  setPhase("done");
+                } else {
+                  setPhase("preview");
+                }
+              },
+            );
           },
         );
       }

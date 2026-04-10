@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 import { runRunner, type RunnerOptions } from "./runner.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
 

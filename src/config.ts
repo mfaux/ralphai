@@ -9,7 +9,7 @@
 import { execSync } from "child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, resolve } from "path";
-import { resolveRepoStateDir } from "./global-state.ts";
+import { resolveRepoStateDir } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

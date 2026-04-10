@@ -15,9 +15,12 @@ import { join } from "path";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
-import { planPathForSlug, planExistsForSlug } from "./plan-detection.ts";
-import { findPlansByBranch } from "./receipt.ts";
+import {
+  getRepoPipelineDirs,
+  planPathForSlug,
+  planExistsForSlug,
+  findPlansByBranch,
+} from "./plan-lifecycle.ts";
 import { listRalphaiWorktrees } from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -290,10 +293,8 @@ export async function runClean(options: CleanOptions): Promise<void> {
   }
 
   // --- Execute ---
-  let archivedDeleted = false;
   if (archiveSummary) {
     deleteArchive(archiveDir);
-    archivedDeleted = true;
   }
 
   let worktreeResult: WorktreeCleanResult | null = null;
@@ -305,7 +306,7 @@ export async function runClean(options: CleanOptions): Promise<void> {
   console.log(`${TEXT}Cleaned.${RESET}`);
   console.log();
   console.log(`${DIM}Deleted:${RESET}`);
-  if (archivedDeleted && archiveSummary) {
+  if (archiveSummary) {
     if (archiveSummary.planFiles > 0) {
       console.log(
         `  ${archiveSummary.planFiles} archived plan${archiveSummary.planFiles !== 1 ? "s" : ""}`,

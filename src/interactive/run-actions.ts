@@ -8,7 +8,7 @@
  * been removed — the Ink TUI handles all user interaction directly.
  */
 
-import type { PipelineState, BacklogPlan } from "../pipeline-state.ts";
+import type { PipelineState, BacklogPlan } from "../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers — next-plan detection from PipelineState

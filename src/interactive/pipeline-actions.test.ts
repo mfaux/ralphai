@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { PipelineState, InProgressPlan } from "../pipeline-state.ts";
+import type { PipelineState, InProgressPlan } from "../plan-lifecycle.ts";
 import {
   stalledPlans,
   runningPlans,

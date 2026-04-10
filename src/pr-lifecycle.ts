@@ -12,7 +12,7 @@
 import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
 import { execQuiet, execWithStdin } from "./exec.ts";
-import { extractIssueFrontmatter } from "./frontmatter.ts";
+import { extractIssueFrontmatter } from "./plan-lifecycle.ts";
 import {
   checkGhAvailable,
   commitTypeFromTitle,

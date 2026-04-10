@@ -26,7 +26,7 @@ import type {
 } from "../components/selectable-list.tsx";
 import { SelectableList } from "../components/selectable-list.tsx";
 import type { DispatchResult } from "../types.ts";
-import type { InProgressPlan } from "../../pipeline-state.ts";
+import type { InProgressPlan } from "../../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -13,13 +13,12 @@ import { existsSync } from "fs";
 import {
   resolveConfig,
   configValues,
-  parseCLIArgs,
   ConfigError,
   getConfigFilePath,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import { runCheck, SUPPORTED_CAPABILITIES } from "./check.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 
 // ---------------------------------------------------------------------------

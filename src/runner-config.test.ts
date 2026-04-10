@@ -5,7 +5,7 @@ import { execSync, execFileSync } from "child_process";
 import { fileURLToPath } from "url";
 import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

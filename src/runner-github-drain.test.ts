@@ -37,7 +37,7 @@ mock.module("./issue-lifecycle.ts", () => ({
 // Import runner AFTER mocking so it picks up the mocked issues module
 const { runRunner } = await import("./runner.ts");
 
-const { getRepoPipelineDirs } = await import("./global-state.ts");
+const { getRepoPipelineDirs } = await import("./plan-lifecycle.ts");
 const { makeTestResolvedConfig } = await import("./test-utils.ts");
 
 // ---------------------------------------------------------------------------

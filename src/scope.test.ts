@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { extractScope } from "./frontmatter.ts";
+import { extractScope } from "./plan-lifecycle.ts";
 import { resolveScope } from "./scope.ts";
 import { useTempDir, useTempGitDir } from "./test-utils.ts";
 

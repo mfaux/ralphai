@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { checkDependencyStatus, planReadiness } from "./plan-detection.ts";
-import type { PipelineDirs } from "./plan-detection.ts";
+import { checkDependencyStatus, planReadiness } from "./plan-lifecycle.ts";
+import type { PipelineDirs } from "./plan-lifecycle.ts";
 import { buildIssuePlanContent } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------

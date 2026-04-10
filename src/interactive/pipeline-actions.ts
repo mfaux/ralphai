@@ -9,7 +9,7 @@
  * been removed — the Ink TUI handles all user interaction directly.
  */
 
-import type { PipelineState, InProgressPlan } from "../pipeline-state.ts";
+import type { PipelineState, InProgressPlan } from "../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers — filter in-progress plans by liveness

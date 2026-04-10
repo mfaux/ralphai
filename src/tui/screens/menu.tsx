@@ -18,7 +18,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
 
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import type { MenuItem, MenuGroup, MenuContext } from "../menu-items.ts";
 import { buildMenuItems, isPipelineEmpty } from "../menu-items.ts";
 import type { ResolvedConfig } from "../../config.ts";

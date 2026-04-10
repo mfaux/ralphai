@@ -6,11 +6,11 @@ import { existsSync } from "fs";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
 import { getConfigFilePath } from "./config.ts";
 import { listRalphaiWorktrees } from "./worktree/index.ts";
-import { gatherPipelineState } from "./pipeline-state.ts";
+import { gatherPipelineState } from "./plan-lifecycle.ts";
 import type { WorktreeEntry } from "./worktree/index.ts";
 
 // Re-export frontmatter utilities that were historically exported from ralphai.ts
-export { extractScope, extractDependsOn } from "./frontmatter.ts";
+export { extractScope, extractDependsOn } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Help
