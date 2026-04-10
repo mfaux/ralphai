@@ -65,6 +65,32 @@ export type ResolvedConfig = {
   [K in keyof RalphaiConfig]: ResolvedValue<RalphaiConfig[K]>;
 };
 
+/**
+ * Plain config values without resolution metadata (source, raw).
+ *
+ * Use `configValues(rc)` to strip a `ResolvedConfig` down to just values.
+ * This is the type business-logic code should accept — it doesn't need to
+ * know where a value came from.
+ */
+export type ConfigValues = {
+  [K in keyof RalphaiConfig]: RalphaiConfig[K];
+};
+
+/**
+ * Strip resolution metadata from a `ResolvedConfig`, returning plain values.
+ *
+ * Consumers that only need config values (not source information) should
+ * call this once and pass the result around, avoiding `rc.someKey.value`
+ * boilerplate everywhere.
+ */
+export function configValues(rc: ResolvedConfig): ConfigValues {
+  const out = {} as Record<string, unknown>;
+  for (const key of Object.keys(rc) as Array<keyof ResolvedConfig>) {
+    out[key as string] = rc[key].value;
+  }
+  return out as ConfigValues;
+}
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------

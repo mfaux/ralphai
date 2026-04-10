@@ -6,6 +6,7 @@ import { beforeEach, afterEach } from "bun:test";
 import { stripAnsi } from "./utils.ts";
 import { runRalphai } from "./ralphai.ts";
 import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
+import { DEFAULTS, type ConfigValues } from "./config.ts";
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -264,4 +265,23 @@ export function useTempGitDir() {
       return testDir;
     },
   };
+}
+
+/**
+ * Build a `ConfigValues` object for tests with sensible defaults.
+ *
+ * Every key starts at its `DEFAULTS` value (from `src/config.ts`), then
+ * the caller's `overrides` are spread on top. This replaces the duplicated
+ * per-file `makeResolvedConfig()` helpers — tests that only need plain
+ * config values can use `makeTestConfig()` directly.
+ *
+ * @example
+ *   const cfg = makeTestConfig({ agentCommand: "echo hi", maxStuck: 1 });
+ *   expect(cfg.agentCommand).toBe("echo hi");
+ *   expect(cfg.baseBranch).toBe("main"); // default preserved
+ */
+export function makeTestConfig(
+  overrides?: Partial<ConfigValues>,
+): ConfigValues {
+  return { ...DEFAULTS, ...overrides };
 }
