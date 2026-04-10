@@ -55,13 +55,15 @@ export interface AssemblePromptOptions {
    */
   wrapperPath?: string;
   /**
-   * When true, a terse communication instruction is prepended to the
-   * prompt, directing the agent to drop filler words, articles,
-   * pleasantries, and hedging while keeping technical terms, code, commit
-   * messages, and structured XML blocks (`<learnings>`, `<progress>`,
+   * When true, the terse communication instruction is omitted from the
+   * prompt, allowing the agent to use full, unabridged prose. When false
+   * or omitted (the default), the prompt includes a terse instruction
+   * directing the agent to drop filler words, articles, pleasantries,
+   * and hedging while keeping technical terms, code, commit messages,
+   * and structured XML blocks (`<learnings>`, `<progress>`,
    * `<pr-summary>`) verbatim.
    */
-  terse?: boolean;
+  verbose?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +110,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     gateRejection,
     nonce,
     wrapperPath,
-    terse = false,
+    verbose = false,
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -214,11 +216,10 @@ Ralphai extracts this block and appends it to the progress file automatically. D
     : "";
 
   // --- Terse communication instruction ---
-  // When enabled, prepended at the very top of the prompt (before file
-  // references) to maximize influence on agent behavior.
-  const terseInstruction = terse
-    ? `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`
-    : "";
+  // Included by default (concise mode). Omitted when verbose is true.
+  const terseInstruction = verbose
+    ? ""
+    : `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`;
 
   // --- Assemble the prompt ---
   return `${terseInstruction}${fileRefs}${scopeHint}${gateSection}${learningsSection}

@@ -158,8 +158,7 @@ What it does:
 --docker-env-vars=<csv>           Extra env vars to forward into Docker sandbox (comma-separated)
 --review                          Enable review pass after completion (default)
 --no-review                       Disable review pass after completion
---terse                           Enable terse mode (reduce agent output verbosity)
---no-terse                        Disable terse mode (default: off)
+--verbose                         Enable verbose mode (full unabridged agent output; default: concise)
 --show-config                     Print resolved settings and exit
 ```
 
@@ -425,7 +424,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_PR_FEEDBACK_COMMANDS`        | `prFeedbackCommands`      |
 | `RALPHAI_BASE_BRANCH`                 | `baseBranch`              |
 | `RALPHAI_REVIEW`                      | `review`                  |
-| `RALPHAI_TERSE`                       | `terse`                   |
+| `RALPHAI_VERBOSE`                     | `verbose`                 |
 | `RALPHAI_MAX_STUCK`                   | `maxStuck`                |
 | `RALPHAI_ITERATION_TIMEOUT`           | `iterationTimeout`        |
 | `RALPHAI_NO_UPDATE_CHECK`             | _(none)_                  |
@@ -455,7 +454,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
 | `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
 | `review`                  | `true`                    | `RALPHAI_REVIEW`                    | Enable review pass after completion                                                                                                                                                                                                                                                                                       |
-| `terse`                   | `false`                   | `RALPHAI_TERSE`                     | Enable terse mode to reduce agent output verbosity. When enabled, the iteration prompt instructs the agent to drop filler words, articles, pleasantries, and hedging while preserving technical accuracy.                                                                                                                 |
+| `verbose`                 | `false`                   | `RALPHAI_VERBOSE`                   | Enable verbose mode for full unabridged agent output. By default, the iteration prompt instructs the agent to drop filler words, articles, pleasantries, and hedging while preserving technical accuracy. Setting verbose to true disables this concise instruction.                                                      |
 | `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                                                                                                                                                                                                                                             |
 | `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                                                                                                                                                                                                                                                  |
 | `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                                                                                                                                                                                                                                                      |

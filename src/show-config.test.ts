@@ -128,7 +128,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  review             = true  (default)");
-    expect(output).toContain("  terse              = false  (default)");
+    expect(output).toContain("  verbose            = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
@@ -231,37 +231,25 @@ describe("formatShowConfig", () => {
     );
   });
 
-  it("shows cli source for terse --terse", () => {
+  it("shows cli source for verbose --verbose", () => {
     const input = defaultInput();
     input.config = makeResolved({
-      terse: { value: "true", source: "cli" },
+      verbose: { value: "true", source: "cli" },
     });
-    input.rawFlags = { terse: "--terse" };
+    input.rawFlags = { verbose: "--verbose" };
     const output = formatShowConfig(input);
-    expect(output).toContain("  terse              = true  (cli (--terse))");
+    expect(output).toContain("  verbose            = true  (cli (--verbose))");
   });
 
-  it("shows cli source for terse --no-terse", () => {
+  it("shows env source for verbose", () => {
     const input = defaultInput();
     input.config = makeResolved({
-      terse: { value: "false", source: "cli" },
+      verbose: { value: "true", source: "env" },
     });
-    input.rawFlags = { terse: "--no-terse" };
+    input.envVars = { RALPHAI_VERBOSE: "true" };
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  terse              = false  (cli (--no-terse))",
-    );
-  });
-
-  it("shows env source for terse", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      terse: { value: "true", source: "env" },
-    });
-    input.envVars = { RALPHAI_TERSE: "true" };
-    const output = formatShowConfig(input);
-    expect(output).toContain(
-      "  terse              = true  (env (RALPHAI_TERSE=true))",
+      "  verbose            = true  (env (RALPHAI_VERBOSE=true))",
     );
   });
 

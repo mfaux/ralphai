@@ -472,8 +472,9 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(baseOptions({ nonce }));
     expect(prompt).toContain(`<learnings nonce="${nonce}">`);
     expect(prompt).toContain(`<learnings nonce="${nonce}">none</learnings>`);
-    // Must NOT contain bare <learnings>
-    expect(prompt).not.toMatch(/<learnings>(?!\.)/);
+    // Must NOT contain bare <learnings> as a functional tag (the terse
+    // instruction mentions it in prose as "<learnings>," which is exempt)
+    expect(prompt).not.toMatch(/<learnings>(?![,.])/);
   });
 
   it("includes nonce-stamped progress tags when nonce is provided", () => {
@@ -543,25 +544,25 @@ describe("assemblePrompt", () => {
     expect(scopeIdx).toBeLessThan(step5Idx);
   });
 
-  // --- Terse mode ---
+  // --- Terse mode (on by default; verbose disables it) ---
 
-  it("includes terse instruction when terse is true", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: true }));
+  it("includes terse instruction by default (verbose omitted)", () => {
+    const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("TERSE MODE:");
   });
 
-  it("omits terse instruction when terse is false", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: false }));
-    expect(prompt).not.toContain("TERSE MODE:");
+  it("includes terse instruction when verbose is false", () => {
+    const prompt = assemblePrompt(baseOptions({ verbose: false }));
+    expect(prompt).toContain("TERSE MODE:");
   });
 
-  it("omits terse instruction when terse is omitted", () => {
-    const prompt = assemblePrompt(baseOptions());
+  it("omits terse instruction when verbose is true", () => {
+    const prompt = assemblePrompt(baseOptions({ verbose: true }));
     expect(prompt).not.toContain("TERSE MODE:");
   });
 
   it("terse instruction mentions dropping articles, filler, pleasantries, and hedging", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    const prompt = assemblePrompt(baseOptions({ verbose: false }));
     expect(prompt).toContain("articles");
     expect(prompt).toContain("filler");
     expect(prompt).toContain("pleasantries");
@@ -569,13 +570,13 @@ describe("assemblePrompt", () => {
   });
 
   it("terse instruction specifies that technical terms must remain exact", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    const prompt = assemblePrompt(baseOptions({ verbose: false }));
     expect(prompt).toContain("technical terms");
     expect(prompt).toContain("exactly as-is");
   });
 
   it("terse instruction exempts structured blocks, commit messages, and code", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    const prompt = assemblePrompt(baseOptions({ verbose: false }));
     expect(prompt).toContain("<learnings>");
     expect(prompt).toContain("<progress>");
     expect(prompt).toContain("<pr-summary>");
@@ -584,7 +585,7 @@ describe("assemblePrompt", () => {
   });
 
   it("terse instruction appears before the file references", () => {
-    const prompt = assemblePrompt(baseOptions({ terse: true }));
+    const prompt = assemblePrompt(baseOptions());
     const terseIdx = prompt.indexOf("TERSE MODE:");
     const fileRefIdx = prompt.indexOf('<file path="plan.md">');
     expect(terseIdx).toBeGreaterThanOrEqual(0);
@@ -594,14 +595,14 @@ describe("assemblePrompt", () => {
   it("terse instruction does not affect review pass or HITL prompts (assemblePrompt only)", () => {
     // This test confirms terse is a property of assemblePrompt only.
     // Review and HITL have separate prompt assembly functions that
-    // do not accept a terse option — verified by type system.
-    const promptWithTerse = assemblePrompt(baseOptions({ terse: true }));
-    const promptWithout = assemblePrompt(baseOptions({ terse: false }));
-    // Both should have file refs and instructions — only terse preamble differs
-    expect(promptWithTerse).toContain("TERSE MODE:");
-    expect(promptWithout).not.toContain("TERSE MODE:");
+    // do not accept a verbose option — verified by type system.
+    const promptDefault = assemblePrompt(baseOptions());
+    const promptVerbose = assemblePrompt(baseOptions({ verbose: true }));
+    // Default (concise) should have terse preamble; verbose should not
+    expect(promptDefault).toContain("TERSE MODE:");
+    expect(promptVerbose).not.toContain("TERSE MODE:");
     // Both should still contain the core instruction steps
-    expect(promptWithTerse).toContain("1. Review the plan");
-    expect(promptWithout).toContain("1. Review the plan");
+    expect(promptDefault).toContain("1. Review the plan");
+    expect(promptVerbose).toContain("1. Review the plan");
   });
 });
