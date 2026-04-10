@@ -32,6 +32,13 @@ export function setExecImpl(impl: ExecSyncFn): () => void {
   };
 }
 
+/** Extract exit code from an execSync error, defaulting to 1. */
+function exitCodeFrom(err: unknown): number {
+  return err && typeof err === "object" && "status" in err
+    ? ((err as { status: number }).status ?? 1)
+    : 1;
+}
+
 /** Options for exec utilities that support timeout. */
 export interface ExecOptions {
   /**
@@ -72,10 +79,6 @@ export function execRun(
     });
     return { exitCode: 0, stdout: String(stdout).trim(), stderr: "" };
   } catch (err: unknown) {
-    const exitCode =
-      err && typeof err === "object" && "status" in err
-        ? ((err as { status: number }).status ?? 1)
-        : 1;
     const stderr =
       err && typeof err === "object" && "stderr" in err
         ? String((err as { stderr: unknown }).stderr).trim()
@@ -84,7 +87,7 @@ export function execRun(
       err && typeof err === "object" && "stdout" in err
         ? String((err as { stdout: unknown }).stdout).trim()
         : "";
-    return { exitCode, stdout, stderr };
+    return { exitCode: exitCodeFrom(err), stdout, stderr };
   }
 }
 
@@ -129,6 +132,23 @@ export function execWithStdin(
   }
 }
 
+/**
+ * Run a command with inherited stdio (output streams to the terminal).
+ * Returns an `ExecRunResult` with the exit code. `stdout` and `stderr`
+ * are always empty strings because the streams are inherited, not captured.
+ *
+ * Use this for commands whose output should be visible to the user in
+ * real time (e.g. setup commands, cleanup operations).
+ */
+export function execInherit(cmd: string, cwd: string): ExecRunResult {
+  try {
+    _execSync(cmd, { cwd, stdio: "inherit" });
+    return { exitCode: 0, stdout: "", stderr: "" };
+  } catch (err: unknown) {
+    return { exitCode: exitCodeFrom(err), stdout: "", stderr: "" };
+  }
+}
+
 /** Run a command, returning true if it exits 0. */
 export function execOk(cmd: string, cwd: string): boolean {
   try {
@@ -150,21 +170,12 @@ export function execOk(cmd: string, cwd: string): boolean {
 export function checkGhAvailable(options?: ExecOptions): boolean {
   const timeoutOpt =
     options?.timeout != null ? { timeout: options.timeout } : {};
-  try {
-    _execSync("gh --version", {
-      stdio: ["pipe", "pipe", "pipe"],
-      ...timeoutOpt,
-    });
-  } catch {
-    return false;
-  }
-  try {
-    _execSync("gh auth status", {
-      stdio: ["pipe", "pipe", "pipe"],
-      ...timeoutOpt,
-    });
-  } catch {
-    return false;
+  for (const cmd of ["gh --version", "gh auth status"]) {
+    try {
+      _execSync(cmd, { stdio: ["pipe", "pipe", "pipe"], ...timeoutOpt });
+    } catch {
+      return false;
+    }
   }
   return true;
 }

@@ -26,7 +26,7 @@ import type {
 
 import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
-import { resolveMainGitDir } from "../worktree/management.ts";
+import { resolveMainGitDir } from "../worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Container user and home directory

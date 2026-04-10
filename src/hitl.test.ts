@@ -81,9 +81,6 @@ mock.module("./worktree/management.ts", () => ({
 
 mock.module("./worktree/index.ts", () => ({
   prepareWorktree: mockPrepareWorktree,
-  writeFeedbackWrapper: () => {},
-  parseWorktreeList: () => [],
-  isRalphaiManagedBranch: () => false,
   listRalphaiWorktrees: () => [],
   selectPlanForWorktree: () => null,
   isGitWorktree: mockIsGitWorktree,
@@ -92,8 +89,6 @@ mock.module("./worktree/index.ts", () => ({
   resolveMainGitDir: () => undefined,
   ensureRepoHasCommit: mockEnsureRepoHasCommit,
   executeSetupCommand: () => {},
-  listWorktrees: () => [],
-  cleanWorktrees: () => {},
 }));
 
 // Mock git-helpers
@@ -142,8 +137,7 @@ const { makeTestResolvedConfig } = await import("./test-utils.ts");
 // ---------------------------------------------------------------------------
 
 function createTmpDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "ralphai-hitl-test-"));
-  return dir;
+  return mkdtempSync(join(tmpdir(), "ralphai-hitl-test-"));
 }
 
 function setupDefaultMocks(tmpDir: string) {

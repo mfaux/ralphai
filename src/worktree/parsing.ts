@@ -1,4 +1,5 @@
-import { execSync } from "child_process";
+import { execQuiet } from "../exec.ts";
+import type { ExecOptions } from "../exec.ts";
 import type { WorktreeEntry } from "./types.ts";
 
 export function parseWorktreeList(output: string): WorktreeEntry[] {
@@ -66,25 +67,13 @@ export function isRalphaiManagedBranch(branch: string): boolean {
   );
 }
 
-export interface ListWorktreesOptions {
-  /**
-   * Subprocess timeout in milliseconds. When set, `git worktree list`
-   * is killed after this many milliseconds. Useful for TUI contexts
-   * where a hung git process must not block the event loop.
-   */
-  timeout?: number;
-}
-
 export function listRalphaiWorktrees(
   cwd: string,
-  options?: ListWorktreesOptions,
+  options?: ExecOptions,
 ): WorktreeEntry[] {
-  const output = execSync("git worktree list --porcelain", {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-    ...(options?.timeout != null ? { timeout: options.timeout } : {}),
-  });
+  const output = execQuiet("git worktree list --porcelain", cwd, options);
+
+  if (output == null) return [];
 
   return parseWorktreeList(output).filter((wt) =>
     isRalphaiManagedBranch(wt.branch),

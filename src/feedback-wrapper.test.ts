@@ -19,8 +19,8 @@ import {
   parseFeedbackCommands,
   FEEDBACK_WRAPPER_FILENAME,
   DEFAULT_TIMEOUT_SECONDS,
+  writeFeedbackWrapper,
 } from "./feedback-wrapper.ts";
-import { writeFeedbackWrapper } from "./worktree/management.ts";
 
 // ---------------------------------------------------------------------------
 // parseFeedbackCommands — pure logic

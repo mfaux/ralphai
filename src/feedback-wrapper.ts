@@ -1,3 +1,6 @@
+import { writeFileSync } from "fs";
+import { join } from "path";
+
 /**
  * Feedback wrapper script generator.
  *
@@ -12,8 +15,8 @@
  * wrapper out of the user's worktree so it doesn't appear as an
  * untracked file in `git status`.
  *
- * This module exports a pure function — no I/O. The caller
- * (`writeFeedbackWrapper` in worktree/management.ts) handles writing.
+ * `writeFeedbackWrapper` handles writing the generated script to disk.
+ * `generateFeedbackWrapper` is a pure function — no I/O.
  */
 
 /** Filename of the generated wrapper script. */
@@ -53,9 +56,9 @@ export function generateFeedbackWrapper(
     return generateEmptyWrapper();
   }
 
-  const escapedCommands = commands.map((cmd) => escapeForShell(cmd));
-  const commandBlocks = escapedCommands
-    .map((cmd, i) => generateCommandBlock(cmd, i + 1, commands.length))
+  const total = commands.length;
+  const commandBlocks = commands
+    .map((cmd, i) => `run_command ${escapeForShell(cmd)} ${i + 1} ${total}`)
     .join("\n");
 
   return `#!/usr/bin/env bash
@@ -135,21 +138,33 @@ exit 0
 }
 
 /**
- * Generate the shell block for a single command invocation.
- */
-function generateCommandBlock(
-  escapedCmd: string,
-  index: number,
-  total: number,
-): string {
-  return `run_command ${escapedCmd} ${index} ${total}`;
-}
-
-/**
  * Escape a command string for safe embedding in a shell script as a
  * single-quoted argument. Single quotes within the command are escaped
  * using the `'\''` idiom (end quote, escaped quote, start quote).
  */
 function escapeForShell(cmd: string): string {
   return `'${cmd.replace(/'/g, "'\\''")}'`;
+}
+
+// ---------------------------------------------------------------------------
+// File I/O
+// ---------------------------------------------------------------------------
+
+/**
+ * Write the feedback wrapper script to the given directory.
+ * Typically called with the WIP slug directory so the script stays
+ * out of the user's worktree (no untracked-file noise in git status).
+ * Skipped on Windows (process.platform === "win32") and when no
+ * feedback commands are configured.
+ */
+export function writeFeedbackWrapper(
+  targetDir: string,
+  feedbackCommands?: string[],
+): void {
+  if (process.platform === "win32") return;
+  if (!feedbackCommands || feedbackCommands.length === 0) return;
+
+  const script = generateFeedbackWrapper(feedbackCommands);
+  const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
+  writeFileSync(wrapperPath, script, { mode: 0o755 });
 }

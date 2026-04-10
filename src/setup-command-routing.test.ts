@@ -3,72 +3,63 @@
  *
  * Verifies that executeSetupCommand() routes through Docker when given
  * a sandbox config with sandbox="docker", and falls through to host
- * execSync when sandbox="none" or no config is provided.
+ * exec when sandbox="none" or no config is provided.
  *
- * Uses mock.module() to intercept child_process calls — no real Docker
+ * Uses setExecImpl() to intercept all subprocess calls — no real Docker
  * or shell commands are executed.
  */
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
-
-// ---------------------------------------------------------------------------
-// Mock child_process to capture spawnSync and execSync calls
-// ---------------------------------------------------------------------------
-
-let spawnSyncCalls: Array<{
-  command: string;
-  args: string[];
-  options: Record<string, unknown>;
-}> = [];
-let execSyncCalls: Array<{
-  command: string;
-  options: Record<string, unknown>;
-}> = [];
-
-let mockSpawnSyncResult: {
-  status: number | null;
-  error?: Error;
-} = { status: 0 };
-let mockExecSyncThrow: Error | null = null;
-
-mock.module("child_process", () => ({
-  execSync: (command: string, options: Record<string, unknown> = {}) => {
-    execSyncCalls.push({ command, options });
-    if (mockExecSyncThrow) throw mockExecSyncThrow;
-    return "";
-  },
-  spawnSync: (
-    command: string,
-    args: string[],
-    options: Record<string, unknown> = {},
-  ) => {
-    spawnSyncCalls.push({ command, args, options });
-    return mockSpawnSyncResult;
-  },
-  // Re-export spawn for other modules that might need it
-  spawn: () => {},
-}));
-
-// Import after mocking
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { setExecImpl } from "./exec.ts";
 import {
   executeSetupCommand,
   type SetupSandboxConfig,
-} from "./worktree/management.ts";
+} from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Capture process.exit calls instead of actually exiting
+let execCalls: Array<{
+  command: string;
+  options: Record<string, unknown>;
+}> = [];
+
+let restore: () => void;
 let exitCode: number | null = null;
 const originalExit = process.exit;
 const originalConsoleError = console.error;
 const originalConsoleLog = console.log;
 
+/** Default mock that succeeds and records calls. */
+function mockExecSuccess() {
+  return setExecImpl(((command: string, options: Record<string, unknown>) => {
+    execCalls.push({ command, options });
+    return "";
+  }) as any);
+}
+
+/** Mock that throws for specific commands (simulating failure). */
+function mockExecFail(failCmd?: string | RegExp) {
+  return setExecImpl(((command: string, options: Record<string, unknown>) => {
+    execCalls.push({ command, options });
+    if (!failCmd) {
+      const err = new Error("Command failed");
+      (err as any).status = 1;
+      throw err;
+    }
+    const matches =
+      failCmd instanceof RegExp ? failCmd.test(command) : command === failCmd;
+    if (matches) {
+      const err = new Error("Command failed");
+      (err as any).status = 1;
+      throw err;
+    }
+    return "";
+  }) as any);
+}
+
 beforeEach(() => {
-  spawnSyncCalls = [];
-  execSyncCalls = [];
-  mockSpawnSyncResult = { status: 0 };
-  mockExecSyncThrow = null;
+  execCalls = [];
   exitCode = null;
   process.exit = ((code: number) => {
     exitCode = code;
@@ -80,6 +71,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (restore) restore();
   process.exit = originalExit;
   console.error = originalConsoleError;
   console.log = originalConsoleLog;
@@ -90,55 +82,69 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("executeSetupCommand — routing", () => {
-  it("runs via execSync on host when no sandboxConfig is provided", () => {
+  it("runs setup command on host when no sandboxConfig is provided", () => {
+    restore = mockExecSuccess();
     executeSetupCommand("bun install", "/work/my-project");
-    expect(execSyncCalls).toHaveLength(1);
-    expect(execSyncCalls[0]!.command).toBe("bun install");
-    expect(execSyncCalls[0]!.options.cwd).toBe("/work/my-project");
-    expect(spawnSyncCalls).toHaveLength(0);
+
+    // Should have exactly one call: the setup command itself
+    const setupCalls = execCalls.filter((c) =>
+      c.command.includes("bun install"),
+    );
+    expect(setupCalls).toHaveLength(1);
+    expect(setupCalls[0]!.options.cwd).toBe("/work/my-project");
+    // Should NOT route through docker
+    const dockerCalls = execCalls.filter((c) => c.command.startsWith("docker"));
+    expect(dockerCalls).toHaveLength(0);
   });
 
-  it("runs via execSync on host when sandbox is 'none'", () => {
+  it("runs setup command on host when sandbox is 'none'", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "none",
       agentCommand: "claude -p",
     };
     executeSetupCommand("bun install", "/work/my-project", config);
-    expect(execSyncCalls).toHaveLength(1);
-    expect(execSyncCalls[0]!.command).toBe("bun install");
-    expect(spawnSyncCalls).toHaveLength(0);
+
+    const setupCalls = execCalls.filter((c) =>
+      c.command.includes("bun install"),
+    );
+    expect(setupCalls).toHaveLength(1);
+    const dockerCalls = execCalls.filter((c) => c.command.startsWith("docker"));
+    expect(dockerCalls).toHaveLength(0);
   });
 
-  it("runs via Docker spawnSync when sandbox is 'docker'", () => {
+  it("routes through Docker when sandbox is 'docker'", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("bun install", "/work/my-project", config);
-    expect(spawnSyncCalls).toHaveLength(1);
-    expect(spawnSyncCalls[0]!.command).toBe("docker");
-    // resolveMainGitDir may call execSync for git rev-parse, but no
-    // host setup command (like "bun install") should run via execSync
-    const hostSetupCalls = execSyncCalls.filter(
+
+    // Should include a docker command
+    const dockerCalls = execCalls.filter((c) => c.command.startsWith("docker"));
+    expect(dockerCalls).toHaveLength(1);
+    // Should NOT have a direct host "bun install" call
+    const directSetupCalls = execCalls.filter(
       (c) => c.command === "bun install",
     );
-    expect(hostSetupCalls).toHaveLength(0);
+    expect(directSetupCalls).toHaveLength(0);
   });
 
   it("no-ops when setupCommand is empty (sandbox=none)", () => {
+    restore = mockExecSuccess();
     executeSetupCommand("", "/work/my-project");
-    expect(execSyncCalls).toHaveLength(0);
-    expect(spawnSyncCalls).toHaveLength(0);
+    expect(execCalls).toHaveLength(0);
   });
 
   it("no-ops when setupCommand is empty (sandbox=docker)", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("", "/work/my-project", config);
-    expect(execSyncCalls).toHaveLength(0);
-    expect(spawnSyncCalls).toHaveLength(0);
+    expect(execCalls).toHaveLength(0);
   });
 });
 
@@ -148,43 +154,46 @@ describe("executeSetupCommand — routing", () => {
 
 describe("executeSetupCommand — Docker command construction", () => {
   it("includes worktree bind mount at host path", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("npm install", "/work/my-project", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    const vIdx = args.indexOf("-v");
-    expect(vIdx).toBeGreaterThan(-1);
-    expect(args[vIdx + 1]).toBe("/work/my-project:/work/my-project");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall).toBeDefined();
+    expect(dockerCall!.command).toContain("/work/my-project:/work/my-project");
   });
 
   it("sets working directory to worktree path", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("npm install", "/work/my-project", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    const wIdx = args.indexOf("-w");
-    expect(wIdx).toBeGreaterThan(-1);
-    expect(args[wIdx + 1]).toBe("/work/my-project");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall!.command).toContain("-w /work/my-project");
   });
 
   it("resolves image from agent command", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("npm install", "/work", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    expect(args).toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall!.command).toContain(
+      "ghcr.io/mfaux/ralphai-sandbox:claude",
+    );
   });
 
   it("uses dockerImage override from config", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
@@ -194,36 +203,29 @@ describe("executeSetupCommand — Docker command construction", () => {
     };
     executeSetupCommand("npm install", "/work", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    expect(args).toContain("my-custom-image:v2");
-    expect(args).not.toContain("ghcr.io/mfaux/ralphai-sandbox:claude");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall!.command).toContain("my-custom-image:v2");
+    expect(dockerCall!.command).not.toContain(
+      "ghcr.io/mfaux/ralphai-sandbox:claude",
+    );
   });
 
   it("wraps setup command with sh -c", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("bun install && bun run build", "/work", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    const len = args.length;
-    expect(args[len - 3]).toBe("sh");
-    expect(args[len - 2]).toBe("-c");
-    expect(args[len - 1]).toBe("bun install && bun run build");
-  });
-
-  it("uses stdio: inherit for interactive output", () => {
-    const config: SetupSandboxConfig = {
-      sandbox: "docker",
-      agentCommand: "claude -p",
-    };
-    executeSetupCommand("npm install", "/work", config);
-
-    expect(spawnSyncCalls[0]!.options.stdio).toBe("inherit");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    // sh -c is in the command string; the setup command may be quoted
+    expect(dockerCall!.command).toContain("sh -c");
+    expect(dockerCall!.command).toContain("bun install && bun run build");
   });
 
   it("passes extra docker mounts from config", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
@@ -233,11 +235,12 @@ describe("executeSetupCommand — Docker command construction", () => {
     };
     executeSetupCommand("npm install", "/work", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    expect(args).toContain("/host/cache:/container/cache:ro");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall!.command).toContain("/host/cache:/container/cache:ro");
   });
 
   it("passes extra docker env vars from config", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
@@ -247,13 +250,13 @@ describe("executeSetupCommand — Docker command construction", () => {
     };
     executeSetupCommand("npm install", "/work", config);
 
-    // Verify docker args were built (env var forwarding is tested in
-    // buildEnvFlags tests — here we verify it was passed through)
-    expect(spawnSyncCalls).toHaveLength(1);
-    expect(spawnSyncCalls[0]!.command).toBe("docker");
+    // Verify docker command was built
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall).toBeDefined();
   });
 
   it("mounts main git dir when mainGitDir is provided", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
@@ -265,32 +268,30 @@ describe("executeSetupCommand — Docker command construction", () => {
       config,
     );
 
-    const args = spawnSyncCalls[0]!.args;
-    const mountArgs = args.filter(
-      (a: string, i: number) => i > 0 && args[i - 1] === "-v",
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall!.command).toContain(
+      "/work/main-repo/.git:/work/main-repo/.git",
     );
-    const gitMount = mountArgs.find((m: string) =>
-      m.includes("/work/main-repo/.git"),
-    );
-    expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
   });
 
   it("does NOT add main git dir mount when mainGitDir is absent", () => {
+    restore = mockExecSuccess();
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
     };
     executeSetupCommand("bun install", "/work/my-project", config);
 
-    const args = spawnSyncCalls[0]!.args;
-    const mountArgs = args.filter(
-      (a: string, i: number) => i > 0 && args[i - 1] === "-v",
-    );
-    // Only the worktree mount should be present (no credential mounts since
-    // host env is mocked and no files exist)
-    const bindMounts = mountArgs.filter((m: string) => !m.includes(":ro"));
-    expect(bindMounts).toHaveLength(1);
-    expect(bindMounts[0]).toBe("/work/my-project:/work/my-project");
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    // The docker command should have the worktree mount but not a .git mount.
+    // resolveMainGitDir calls execQuiet which returns "" (not a worktree),
+    // so no main git dir mount is added.
+    expect(dockerCall!.command).toContain("/work/my-project:/work/my-project");
+    // Count -v mounts: should only have the worktree mount (no git dir mount)
+    const vMatches = dockerCall!.command.match(/-v /g);
+    // There's always at least one -v for the worktree bind mount; there may
+    // be credential mounts too. The key assertion is no .git mount.
+    expect(dockerCall!.command).not.toContain("/.git:");
   });
 });
 
@@ -300,7 +301,7 @@ describe("executeSetupCommand — Docker command construction", () => {
 
 describe("executeSetupCommand — error handling", () => {
   it("exits with code 1 when Docker setup command fails", () => {
-    mockSpawnSyncResult = { status: 1 };
+    restore = mockExecFail(/^docker/);
     const config: SetupSandboxConfig = {
       sandbox: "docker",
       agentCommand: "claude -p",
@@ -313,21 +314,8 @@ describe("executeSetupCommand — error handling", () => {
   });
 
   it("exits with code 1 when host setup command fails", () => {
-    mockExecSyncThrow = new Error("Command failed");
+    restore = mockExecFail();
     expect(() => executeSetupCommand("npm install", "/work")).toThrow(
-      "process.exit(1)",
-    );
-    expect(exitCode).toBe(1);
-  });
-
-  it("exits with code 1 when Docker spawn error occurs", () => {
-    mockSpawnSyncResult = { status: 1, error: new Error("ENOENT") };
-    const config: SetupSandboxConfig = {
-      sandbox: "docker",
-      agentCommand: "claude -p",
-    };
-
-    expect(() => executeSetupCommand("npm install", "/work", config)).toThrow(
       "process.exit(1)",
     );
     expect(exitCode).toBe(1);

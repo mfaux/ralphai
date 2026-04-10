@@ -41,8 +41,8 @@ import { assemblePrompt } from "./prompt.ts";
 import {
   FEEDBACK_WRAPPER_FILENAME,
   parseFeedbackCommands,
+  writeFeedbackWrapper,
 } from "./feedback-wrapper.ts";
-import { writeFeedbackWrapper } from "./worktree/index.ts";
 import { stripAnsi } from "./utils.ts";
 
 import {

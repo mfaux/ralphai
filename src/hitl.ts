@@ -30,8 +30,12 @@ import {
 } from "./issues.ts";
 import { execQuiet } from "./exec.ts";
 import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
-import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
-import { resolveMainRepo, ensureRepoHasCommit } from "./worktree/management.ts";
+import {
+  prepareWorktree,
+  resolveMainRepo,
+  ensureRepoHasCommit,
+  type SetupSandboxConfig,
+} from "./worktree/index.ts";
 import { shellSplit } from "./shell-split.ts";
 import { formatFileRef } from "./prompt.ts";
 
