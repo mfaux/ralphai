@@ -37,7 +37,6 @@ import { execQuiet } from "./exec.ts";
 import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
 import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
 import { isGitWorktree, ensureRepoHasCommit } from "./worktree/management.ts";
-import { detectBaseBranch } from "./git-helpers.ts";
 import { shellSplit } from "./runner.ts";
 import { formatFileRef } from "./prompt.ts";
 
@@ -196,7 +195,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
 
   // --- Prepare worktree ---
   ensureRepoHasCommit(cwd);
-  const baseBranch = detectBaseBranch(cwd);
+  const baseBranch = config.baseBranch.value;
   const setupCommand = config.setupCommand?.value ?? "";
   const feedbackCommands = config.feedbackCommands.value
     ? config.feedbackCommands.value.split(",").map((s: string) => s.trim())

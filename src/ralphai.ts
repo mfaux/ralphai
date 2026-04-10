@@ -1786,6 +1786,7 @@ async function runIssueTarget(
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
+    baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
@@ -1798,6 +1799,7 @@ async function runIssueTarget(
     standaloneLabel,
     subissueLabel,
     prdLabel,
+    baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
   } = flags;
 
@@ -1934,6 +1936,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
   }
@@ -1983,6 +1986,7 @@ async function runIssueTarget(
       hasShowConfig,
       setupCommand,
       feedbackCommands,
+      baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
   }
@@ -2006,12 +2010,11 @@ async function runIssueTarget(
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
 
-  const baseBranch = detectBaseBranch(cwd);
   const resolvedWorktreeDir = prepareWorktree(
     cwd,
     issueSlug,
     branch,
-    baseBranch,
+    resolvedBaseBranch,
     setupCommand,
     setupSandboxConfig,
   ); // Pull the issue into a plan file in the worktree's pipeline
@@ -2094,11 +2097,17 @@ async function runPrdIssueTarget(
     hasShowConfig: boolean;
     setupCommand: string;
     feedbackCommands: string[];
+    baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
   },
 ): Promise<void> {
-  const { isDryRun, setupCommand, feedbackCommands, setupSandboxConfig } =
-    flags;
+  const {
+    isDryRun,
+    setupCommand,
+    feedbackCommands,
+    baseBranch: resolvedBaseBranch,
+    setupSandboxConfig,
+  } = flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
   const branch = issueBranchName(prd.title);
@@ -2147,12 +2156,11 @@ async function runPrdIssueTarget(
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
 
-  const baseBranch = detectBaseBranch(cwd);
   const resolvedWorktreeDir = prepareWorktree(
     cwd,
     prdSlug,
     branch,
-    baseBranch,
+    resolvedBaseBranch,
     setupCommand,
     setupSandboxConfig,
   );
@@ -2370,7 +2378,7 @@ async function runPrdIssueTarget(
     const issueRepo = worktreeConfig.issueRepo.value || repo;
     const prResult = createPrdPr({
       branch,
-      baseBranch,
+      baseBranch: resolvedBaseBranch,
       prd,
       completedSubIssues,
       stuckSubIssues,
@@ -2601,6 +2609,10 @@ async function runRalphaiInManagedWorktree(
   // --- Handle explicit positional target: `ralphai run 42` or `ralphai run my-feature.md` ---
   const target = options.runTarget;
 
+  // Use the resolved config baseBranch (respects --base-branch, env, config file),
+  // falling back to auto-detection only if config resolution failed.
+  const baseBranch = resolvedConfig?.baseBranch.value ?? detectBaseBranch(cwd);
+
   if (target?.type === "issue") {
     return runIssueTarget(target.number, options, runArgs, cwd, {
       isDryRun,
@@ -2611,6 +2623,7 @@ async function runRalphaiInManagedWorktree(
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
+      baseBranch,
       setupSandboxConfig,
     });
   }
@@ -2711,7 +2724,6 @@ async function runRalphaiInManagedWorktree(
 
       // --- Real PRD run: create worktree with PRD-derived branch ---
       ensureRepoHasCommit(cwd);
-      const baseBranch = detectBaseBranch(cwd);
       const activeWorktrees = listRalphaiWorktrees(cwd);
       const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
       const resolvedWorktreeDir = prepareWorktree(
@@ -2782,7 +2794,6 @@ async function runRalphaiInManagedWorktree(
   ensureRepoHasCommit(cwd);
 
   const hasOnce = runArgs.includes("--once");
-  const baseBranch = detectBaseBranch(cwd);
 
   // Build GitHub fallback options so selectPlanForWorktree can pull an issue
   // when the local backlog is empty and issueSource is "github".
@@ -2881,6 +2892,7 @@ async function runRalphaiInManagedWorktree(
             hasShowConfig: false,
             setupCommand,
             feedbackCommands: feedbackCommandsList,
+            baseBranch,
             setupSandboxConfig,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done

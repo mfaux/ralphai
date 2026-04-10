@@ -521,6 +521,31 @@ describe("runHitl", () => {
     // baseBranch
     expect(call[3]).toBe("main");
   });
+
+  test("uses config baseBranch for worktree creation, not detectBaseBranch()", async () => {
+    // Config says "develop", but detectBaseBranch returns "main"
+    mockResolveConfig.mockReturnValue({
+      config: makeResolvedConfig({ baseBranch: "develop" }),
+    });
+    mockDetectBaseBranch.mockReturnValue("main");
+
+    const hitlPromise = runHitl({
+      issueNumber: 42,
+      cwd: tmpDir,
+      dryRun: false,
+      runArgs: [],
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    mockChildProcess!.emit("close", 0);
+    await hitlPromise;
+
+    expect(mockPrepareWorktree).toHaveBeenCalledTimes(1);
+    const call = mockPrepareWorktree.mock.calls[0]!;
+    // baseBranch should come from config, not detectBaseBranch
+    expect(call[3]).toBe("develop");
+    expect(mockDetectBaseBranch).not.toHaveBeenCalled();
+  });
 });
 
 describe("spawnInteractiveAgent", () => {
