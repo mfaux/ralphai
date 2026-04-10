@@ -13,6 +13,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "fs";
@@ -24,7 +25,6 @@ import {
   assembleReviewPrompt,
   runReviewPass,
   MAX_FILES_IN_PROMPT,
-  type AssembleReviewPromptOptions,
 } from "./review-pass.ts";
 import { LocalExecutor } from "./executor/index.ts";
 import type {
@@ -51,13 +51,10 @@ function createTmpGitRepo(): string {
 }
 
 function cleanupDir(dir: string): void {
-  if (existsSync(dir)) {
-    try {
-      const { rmSync } = require("fs");
-      rmSync(dir, { recursive: true, force: true });
-    } catch {
-      // Best-effort cleanup
-    }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup
   }
 }
 
