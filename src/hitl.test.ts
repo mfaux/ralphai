@@ -518,7 +518,11 @@ describe("runHitl", () => {
   test("uses config baseBranch for worktree creation, not detectBaseBranch()", async () => {
     // Config says "develop", but detectBaseBranch returns "main"
     mockResolveConfig.mockReturnValue({
-      config: makeResolvedConfig({ baseBranch: "develop" }),
+      config: makeTestResolvedConfig({
+        agentCommand: "echo",
+        agentInteractiveCommand: "opencode",
+        baseBranch: "develop",
+      }),
     });
     mockDetectBaseBranch.mockReturnValue("main");
 
