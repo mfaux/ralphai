@@ -196,7 +196,7 @@ ERROR: Docker is not installed. Install Docker from https://docs.docker.com/get-
 or use sandbox='none' to run without containerization.
 ```
 
-**Fix:** Install Docker or set `sandbox` to `"none"` (the default).
+**Fix:** Install Docker or set `sandbox` to `"none"` to run without containerization.
 
 ### "Docker daemon is not running"
 

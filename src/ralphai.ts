@@ -1698,7 +1698,7 @@ function showRunHelp(): void {
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
     "  --setup-command=<command>        Command to run in worktree after creation (e.g. 'bun install')",
     "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
-    "  --pr-feedback-commands=<list>    Comma-separated PR feedback commands (run after PR creation)",
+    "  --pr-feedback-commands=<list>    Comma-separated PR feedback commands (run before PR creation)",
     "  --base-branch=<branch>           Override base branch (default: main)",
     "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
     "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
