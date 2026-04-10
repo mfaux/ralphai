@@ -14,7 +14,7 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 | File                    | Role                                                                                                                                                                                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/runner.ts`         | The agent feedback loop. Iterates: invoke agent, check for commits, run feedback commands, detect stuck, handle completion and PR creation. Also owns sentinel detection, progress appending, and learning content parsing. |
-| `src/plan-detection.ts` | Plan file discovery, frontmatter parsing, dependency resolution, and next-plan selection.                                                                                                                                   |
+| `src/plan-lifecycle.ts` | Unified module for all plan operations: listing, dependency checking, frontmatter extraction, receipt handling, pipeline directory resolution, repo registry, and pipeline state gathering.                                 |
 | `src/prompt.ts`         | Builds the prompt passed to the agent each iteration.                                                                                                                                                                       |
 
 ## Executor subsystem (`src/executor/`)
@@ -90,31 +90,27 @@ Internal-only symbols (e.g. `parseWorktreeList`, `isRalphaiManagedBranch`, `Sele
 
 ## Supporting modules
 
-| File                       | Role                                                                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                                                                                   |
-| `src/show-config.ts`       | `--show-config` output formatting.                                                                                                                     |
-| `src/issue-lifecycle.ts`   | All issue operations: label constants, label transitions, GitHub issue pulling, dispatch classification, PRD discovery, HITL helpers, and reset logic. |
-| `src/issue-naming.ts`      | Pure naming utilities: slugs, branch names, commit-type extraction, dependency slugs.                                                                  |
-| `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).                                                                  |
-| `src/plan-lifecycle.ts`    | Unified facade for all plan operations. Re-exports from `plan-detection`, `frontmatter`, `receipt`, `global-state`, `pipeline-state`.                  |
-| `src/receipt.ts`           | Completion receipt parsing and source checking.                                                                                                        |
-| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                                                                                             |
-| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                                                                                       |
-| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                                                                                              |
-| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                                                                                     |
-| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                                                                                       |
-| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                                                                                            |
-| `src/learnings.ts`         | Learnings formatting for prompts and PR bodies (pure functions).                                                                                       |
-| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                                                                                       |
-| `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.                                                                |
-| `src/feedback-wrapper.ts`  | Generates and writes `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree).                                                         |
-| `src/process-utils.ts`     | Child process helpers.                                                                                                                                 |
-| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                                                                                    |
-| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                                                                              |
-| `src/ipc-server.ts`        | IPC server for agent communication.                                                                                                                    |
-| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                                                                                          |
-| `src/self-update.ts`       | `ralphai update` self-update logic.                                                                                                                    |
+| File                       | Role                                                                                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                                                                                                                                       |
+| `src/show-config.ts`       | `--show-config` output formatting.                                                                                                                                                                         |
+| `src/issue-lifecycle.ts`   | All issue operations: label constants, label transitions, GitHub issue pulling, dispatch classification, PRD discovery, HITL helpers, and reset logic.                                                     |
+| `src/issue-naming.ts`      | Pure naming utilities: slugs, branch names, commit-type extraction, dependency slugs.                                                                                                                      |
+| `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).                                                                                                                      |
+| `src/plan-lifecycle.ts`    | Unified module for all plan operations: listing, dependency checking, task counting, frontmatter extraction, receipt handling, pipeline directory resolution, repo registry, and pipeline state gathering. |
+| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                                                                                                                                                  |
+| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                                                                                                                                         |
+| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                                                                                                                                                |
+| `src/learnings.ts`         | Learnings formatting for prompts and PR bodies (pure functions).                                                                                                                                           |
+| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                                                                                                                                           |
+| `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.                                                                                                                    |
+| `src/feedback-wrapper.ts`  | Generates and writes `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree).                                                                                                             |
+| `src/process-utils.ts`     | Child process helpers.                                                                                                                                                                                     |
+| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                                                                                                                                        |
+| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                                                                                                                                  |
+| `src/ipc-server.ts`        | IPC server for agent communication.                                                                                                                                                                        |
+| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                                                                                                                                              |
+| `src/self-update.ts`       | `ralphai update` self-update logic.                                                                                                                                                                        |
 
 ## Dependency direction
 
@@ -124,8 +120,8 @@ cli.ts
        -> parse-options.ts, git-helpers.ts, seed.ts       (leaf utilities)
        -> doctor.ts, status.ts, hitl.ts                   (subcommand handlers)
        -> worktree/index.ts -> parsing, selection, management
-       -> runner.ts -> plan-detection.ts, prompt.ts
-       -> config.ts, issue-lifecycle.ts, receipt.ts, ...  (supporting modules)
+       -> runner.ts -> plan-lifecycle.ts, prompt.ts
+       -> config.ts, issue-lifecycle.ts, plan-lifecycle.ts, ...  (supporting modules)
   -> tui/run-tui.tsx  (Ink TUI, launched when no subcommand + TTY)
        -> tui/app.tsx -> screens/, components/, hooks/
        -> tui/menu-items.ts -> interactive/run-actions.ts, pipeline-actions.ts
@@ -141,8 +137,8 @@ Modules import from leaf utilities and supporting modules. `ralphai.ts` is the r
 - **New TUI menu item:** Add the item to `buildMenuItems()` in `src/tui/menu-items.ts` with a hotkey, add the action type to `ActionType` in `src/tui/types.ts`, and add routing in `resolveAction()`.
 - **New worktree behavior:** Add to the appropriate `src/worktree/` sub-module, or create a new one and re-export through `index.ts`.
 - **New feedback or iteration logic:** Modify `src/runner.ts`.
-- **New plan selection or dependency logic:** Modify `src/plan-detection.ts`.
-- **New plan-related operations:** Add to the appropriate underlying module and re-export through `src/plan-lifecycle.ts`. Use `src/plan-lifecycle.fixtures.ts` for shared test builders.
+- **New plan selection or dependency logic:** Modify `src/plan-lifecycle.ts`.
+- **New plan-related operations:** Add to `src/plan-lifecycle.ts`. Use `src/plan-lifecycle.fixtures.ts` for shared test builders.
 - **New config key:** Add to `src/config.ts` and update `docs/cli-reference.md`.
 
 ## Config access pattern

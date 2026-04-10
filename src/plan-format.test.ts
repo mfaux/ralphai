@@ -3,7 +3,7 @@ import {
   detectPlanFormat,
   countPlanTasksFromContent,
   countCompletedFromProgress,
-} from "./plan-detection.ts";
+} from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // detectPlanFormat

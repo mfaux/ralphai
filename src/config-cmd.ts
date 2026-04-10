@@ -13,7 +13,6 @@ import { existsSync } from "fs";
 import {
   resolveConfig,
   configValues,
-  parseCLIArgs,
   ConfigError,
   getConfigFilePath,
 } from "./config.ts";

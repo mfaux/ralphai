@@ -293,10 +293,8 @@ export async function runClean(options: CleanOptions): Promise<void> {
   }
 
   // --- Execute ---
-  let archivedDeleted = false;
   if (archiveSummary) {
     deleteArchive(archiveDir);
-    archivedDeleted = true;
   }
 
   let worktreeResult: WorktreeCleanResult | null = null;
@@ -308,7 +306,7 @@ export async function runClean(options: CleanOptions): Promise<void> {
   console.log(`${TEXT}Cleaned.${RESET}`);
   console.log();
   console.log(`${DIM}Deleted:${RESET}`);
-  if (archivedDeleted && archiveSummary) {
+  if (archiveSummary) {
     if (archiveSummary.planFiles > 0) {
       console.log(
         `  ${archiveSummary.planFiles} archived plan${archiveSummary.planFiles !== 1 ? "s" : ""}`,

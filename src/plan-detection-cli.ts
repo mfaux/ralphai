@@ -1,5 +1,5 @@
 /**
- * Plan Detection CLI -- thin wrapper around src/plan-detection.ts for shell callers.
+ * Plan Detection CLI -- thin wrapper around src/plan-lifecycle.ts for shell callers.
  *
  * Usage:
  *   node plan-detection-cli.mjs detect     <wip-dir> <backlog-dir> <archive-dir> [--worktree-branch=<branch>] [--dry-run] [--skip-slug=<slug>]...

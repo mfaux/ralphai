@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import type { PipelineDirs } from "./plan-detection.ts";
+import type { PipelineDirs } from "./plan-lifecycle.ts";
 
 // Track calls through the original renameSync
 const originalFs = await import("fs");
@@ -34,7 +34,7 @@ mock.module("fs", () => ({
 }));
 
 // Import AFTER mock.module so the mock is active
-const { detectPlan } = await import("./plan-detection.ts");
+const { detectPlan } = await import("./plan-lifecycle.ts");
 
 function makeDirs(base: string): PipelineDirs {
   const wipDir = join(base, "in-progress");
