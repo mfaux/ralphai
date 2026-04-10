@@ -159,6 +159,8 @@ What it does:
 --review                          Enable review pass after completion (default)
 --no-review                       Disable review pass after completion
 --verbose                         Enable verbose mode (full unabridged agent output; default: concise)
+--prompt-mode=<mode>              Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)
+--issue-hitl-label=<label>        Label marking sub-issues as requiring human interaction
 --show-config                     Print resolved settings and exit
 ```
 
@@ -417,39 +419,37 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### Environment Variables
 
-| Env Var                               | Config Key                |
-| ------------------------------------- | ------------------------- |
-| `RALPHAI_AGENT_COMMAND`               | `agentCommand`            |
-| `RALPHAI_FEEDBACK_COMMANDS`           | `feedbackCommands`        |
-| `RALPHAI_PR_FEEDBACK_COMMANDS`        | `prFeedbackCommands`      |
-| `RALPHAI_BASE_BRANCH`                 | `baseBranch`              |
-| `RALPHAI_REVIEW`                      | `review`                  |
-| `RALPHAI_VERBOSE`                     | `verbose`                 |
-| `RALPHAI_MAX_STUCK`                   | `maxStuck`                |
-| `RALPHAI_ITERATION_TIMEOUT`           | `iterationTimeout`        |
-| `RALPHAI_NO_UPDATE_CHECK`             | _(none)_                  |
-| `RALPHAI_ISSUE_SOURCE`                | `issueSource`             |
-| `RALPHAI_ISSUE_LABEL`                 | `issueLabel`              |
-| `RALPHAI_ISSUE_IN_PROGRESS_LABEL`     | `issueInProgressLabel`    |
-| `RALPHAI_ISSUE_DONE_LABEL`            | `issueDoneLabel`          |
-| `RALPHAI_ISSUE_STUCK_LABEL`           | `issueStuckLabel`         |
-| `RALPHAI_ISSUE_PRD_LABEL`             | `issuePrdLabel`           |
-| `RALPHAI_ISSUE_PRD_IN_PROGRESS_LABEL` | `issuePrdInProgressLabel` |
-| `RALPHAI_ISSUE_PRD_DONE_LABEL`        | `issuePrdDoneLabel`       |
-| `RALPHAI_ISSUE_REPO`                  | `issueRepo`               |
-| `RALPHAI_ISSUE_COMMENT_PROGRESS`      | `issueCommentProgress`    |
-| `RALPHAI_ISSUE_HITL_LABEL`            | `issueHitlLabel`          |
-| `RALPHAI_AGENT_INTERACTIVE_COMMAND`   | `agentInteractiveCommand` |
-| `RALPHAI_SANDBOX`                     | `sandbox`                 |
-| `RALPHAI_DOCKER_IMAGE`                | `dockerImage`             |
-| `RALPHAI_DOCKER_MOUNTS`               | `dockerMounts`            |
-| `RALPHAI_DOCKER_ENV_VARS`             | `dockerEnvVars`           |
+| Env Var                             | Config Key                |
+| ----------------------------------- | ------------------------- |
+| `RALPHAI_AGENT_COMMAND`             | `agentCommand`            |
+| `RALPHAI_SETUP_COMMAND`             | `setupCommand`            |
+| `RALPHAI_FEEDBACK_COMMANDS`         | `feedbackCommands`        |
+| `RALPHAI_PR_FEEDBACK_COMMANDS`      | `prFeedbackCommands`      |
+| `RALPHAI_BASE_BRANCH`               | `baseBranch`              |
+| `RALPHAI_REVIEW`                    | `review`                  |
+| `RALPHAI_VERBOSE`                   | `verbose`                 |
+| `RALPHAI_MAX_STUCK`                 | `maxStuck`                |
+| `RALPHAI_ITERATION_TIMEOUT`         | `iterationTimeout`        |
+| `RALPHAI_NO_UPDATE_CHECK`           | _(none)_                  |
+| `RALPHAI_ISSUE_SOURCE`              | `issueSource`             |
+| `RALPHAI_STANDALONE_LABEL`          | `standaloneLabel`         |
+| `RALPHAI_SUBISSUE_LABEL`            | `subissueLabel`           |
+| `RALPHAI_PRD_LABEL`                 | `prdLabel`                |
+| `RALPHAI_ISSUE_REPO`                | `issueRepo`               |
+| `RALPHAI_ISSUE_COMMENT_PROGRESS`    | `issueCommentProgress`    |
+| `RALPHAI_ISSUE_HITL_LABEL`          | `issueHitlLabel`          |
+| `RALPHAI_AGENT_INTERACTIVE_COMMAND` | `agentInteractiveCommand` |
+| `RALPHAI_SANDBOX`                   | `sandbox`                 |
+| `RALPHAI_DOCKER_IMAGE`              | `dockerImage`             |
+| `RALPHAI_DOCKER_MOUNTS`             | `dockerMounts`            |
+| `RALPHAI_DOCKER_ENV_VARS`           | `dockerEnvVars`           |
 
 ### Config Keys
 
 | Key                       | Default                   | Env Var                             | Description                                                                                                                                                                                                                                                                                                               |
 | ------------------------- | ------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agentCommand`            | _(none)_                  | `RALPHAI_AGENT_COMMAND`             | CLI command to invoke the coding agent                                                                                                                                                                                                                                                                                    |
+| `setupCommand`            | `""`                      | `RALPHAI_SETUP_COMMAND`             | Command to run in worktree after creation (e.g. `bun install`)                                                                                                                                                                                                                                                            |
 | `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                                                                                                                                                                                                                                                  |
 | `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
 | `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
@@ -462,13 +462,14 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `subissueLabel`           | `"ralphai-subissue"`      | `RALPHAI_SUBISSUE_LABEL`            | Family label for PRD sub-issues                                                                                                                                                                                                                                                                                           |
 | `prdLabel`                | `"ralphai-prd"`           | `RALPHAI_PRD_LABEL`                 | Family label for PRD parent issues                                                                                                                                                                                                                                                                                        |
 | `issueRepo`               | _(auto-detected)_         | `RALPHAI_ISSUE_REPO`                | GitHub `owner/repo` for issue queries                                                                                                                                                                                                                                                                                     |
-| `issueCommentProgress`    | `false`                   | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                                                                                                                                                                                                                                                   |
+| `issueCommentProgress`    | `true`                    | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                                                                                                                                                                                                                                                   |
 | `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                                                                                                                                                                                                                                                   |
 | `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                                                                                                                                                                                                                                        |
 | `sandbox`                 | _(auto-detected)_         | `RALPHAI_SANDBOX`                   | Execution sandbox mode (`"none"` for local, `"docker"` for containerized). When unset, auto-detects Docker availability: defaults to `"docker"` if Docker is running, `"none"` otherwise. `--show-config` reports source as `auto-detected`. Plans running in Docker show a `docker` tag in `ralphai status` and the TUI. |
 | `dockerImage`             | `""`                      | `RALPHAI_DOCKER_IMAGE`              | Override Docker image (default: auto-resolve from agent name, e.g. `ghcr.io/mfaux/ralphai-sandbox:claude`)                                                                                                                                                                                                                |
 | `dockerMounts`            | `""`                      | `RALPHAI_DOCKER_MOUNTS`             | Extra bind mounts for Docker sandbox (comma-separated, e.g. `/host:/container:ro`)                                                                                                                                                                                                                                        |
 | `dockerEnvVars`           | `""`                      | `RALPHAI_DOCKER_ENV_VARS`           | Extra env vars to forward into Docker sandbox (comma-separated)                                                                                                                                                                                                                                                           |
+| `workspaces`              | `null`                    | _(none)_                            | Per-package feedback command overrides for monorepos (see [Workspaces](#workspaces) below)                                                                                                                                                                                                                                |
 
 ### Plan Frontmatter Fields
 
