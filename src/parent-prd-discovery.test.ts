@@ -14,7 +14,7 @@ import {
   spyOn,
 } from "bun:test";
 import { setExecImpl } from "./exec.ts";
-import { discoverParentPrd } from "./issues.ts";
+import { discoverParentPrd } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

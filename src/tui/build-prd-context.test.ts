@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { PrdSubIssue } from "../prd-discovery.ts";
+import type { PrdSubIssue } from "../issue-lifecycle.ts";
 import {
   buildPrdPosition,
   buildPrdContextFromCache,

@@ -12,8 +12,8 @@
  * - `fetchPrdContext` — fetches PRD data and builds a PrdContext
  */
 
-import { discoverPrdTarget } from "../prd-discovery.ts";
-import type { PrdSubIssue } from "../prd-discovery.ts";
+import { discoverPrdTarget } from "../issue-lifecycle.ts";
+import type { PrdSubIssue } from "../issue-lifecycle.ts";
 import type { PrdContext } from "./screens/confirm.tsx";
 
 // ---------------------------------------------------------------------------

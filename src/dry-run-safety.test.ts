@@ -12,21 +12,14 @@
  * Plan reference: scenarios 27–31 from parent PRD #245.
  */
 import { describe, it, expect, beforeEach, afterEach, test } from "bun:test";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  readFileSync,
-  readdirSync,
-} from "fs";
+import { mkdtempSync, writeFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions } from "./runner.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
-import { buildIssuePlanContent } from "./issues.ts";
+import { buildIssuePlanContent } from "./issue-lifecycle.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
@@ -277,7 +270,7 @@ describe("body-text verification — ## Parent PRD not parsed", () => {
     //
     // We verify this by inspecting the function signature: it takes
     // (repo, issueNumber, cwd, prdLabel?) — no body parameter.
-    const { discoverParentPrd } = require("./issues.ts");
+    const { discoverParentPrd } = require("./issue-lifecycle.ts");
 
     // discoverParentPrd has exactly 4 parameters (repo, issueNumber, cwd, prdLabel?)
     expect(discoverParentPrd.length).toBe(4);
@@ -286,7 +279,7 @@ describe("body-text verification — ## Parent PRD not parsed", () => {
   it("fetchBlockersViaGraphQL uses GraphQL API, not body text", () => {
     // Structural verification: fetchBlockersViaGraphQL() takes
     // (repo, issueNumber, cwd) — no body parameter.
-    const { fetchBlockersViaGraphQL } = require("./issues.ts");
+    const { fetchBlockersViaGraphQL } = require("./issue-lifecycle.ts");
 
     expect(fetchBlockersViaGraphQL.length).toBe(3);
   });

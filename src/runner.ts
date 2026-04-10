@@ -49,15 +49,13 @@ import {
   transitionStuck,
   prdTransitionStuck,
   prdTransitionDone,
-} from "./label-lifecycle.ts";
-import {
   peekGithubIssues,
   peekPrdIssues,
   pullGithubIssues,
   pullPrdSubIssue,
   checkAllPrdSubIssuesDone,
   issueBranchName,
-} from "./issues.ts";
+} from "./issue-lifecycle.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
 import { runReviewPass, getChangedFiles } from "./review-pass.ts";

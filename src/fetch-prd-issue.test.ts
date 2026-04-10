@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { setExecImpl } from "./exec.ts";
-import { fetchPrdIssue, fetchPrdIssueByNumber } from "./issues.ts";
+import { fetchPrdIssue, fetchPrdIssueByNumber } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

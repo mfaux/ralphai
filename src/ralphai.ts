@@ -42,11 +42,37 @@ import {
   detectDockerAvailable,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
-import { IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL } from "./labels.ts";
 import {
+  IN_PROGRESS_LABEL,
+  DONE_LABEL,
+  STUCK_LABEL,
   prdTransitionInProgress,
   prdTransitionDone,
-} from "./label-lifecycle.ts";
+  detectIssueRepo,
+  fetchPrdIssueByNumber,
+  fetchIssueTitleByNumber,
+  fetchIssueWithLabels,
+  discoverParentIssue,
+  pullGithubIssueByNumber,
+  pullGithubIssues,
+  pullPrdSubIssue,
+  classifyIssue,
+  validateStandalone,
+  validateSubissue,
+  restoreIssueLabels,
+  discoverPrdTarget,
+  findHitlBlockers,
+  formatPrdHitlSummary,
+  issueBranchName,
+  commitTypeFromTitle,
+  slugify,
+} from "./issue-lifecycle.ts";
+import type {
+  PrdIssue,
+  PullIssueOptions,
+  PrdDiscoveryResult,
+  BlockedSubIssue,
+} from "./issue-lifecycle.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";
@@ -58,36 +84,9 @@ import { runHitl } from "./hitl.ts";
 
 import { extractIssueFrontmatter, extractDependsOn } from "./frontmatter.ts";
 import {
-  findHitlBlockers,
-  formatPrdHitlSummary,
-  type BlockedSubIssue,
-} from "./prd-hitl.ts";
-import {
   AGENTS_MD_HEADER,
   AGENTS_MD_RALPHAI_SECTION,
 } from "./agents-md-template.ts";
-import {
-  detectIssueRepo,
-  fetchPrdIssueByNumber,
-  fetchIssueTitleByNumber,
-  fetchIssueWithLabels,
-  discoverParentIssue,
-  issueBranchName,
-  commitTypeFromTitle,
-  pullGithubIssueByNumber,
-  pullGithubIssues,
-  pullPrdSubIssue,
-  slugify,
-} from "./issues.ts";
-import type { PrdIssue, PullIssueOptions } from "./issues.ts";
-import { discoverPrdTarget } from "./prd-discovery.ts";
-import type { PrdDiscoveryResult } from "./prd-discovery.ts";
-import {
-  classifyIssue,
-  validateStandalone,
-  validateSubissue,
-} from "./issue-dispatch.ts";
-import { restoreIssueLabels } from "./reset-labels.ts";
 import { createPrdPr } from "./pr-lifecycle.ts";
 import { isInsideGitRepo, detectBaseBranch } from "./git-helpers.ts";
 import { parseRalphaiOptions } from "./parse-options.ts";
@@ -116,7 +115,6 @@ import type {
   GitHubFallbackOptions,
   SetupSandboxConfig,
 } from "./worktree/index.ts";
-import { parseFeedbackCommands } from "./feedback-wrapper.ts";
 import { runConfigWizard } from "./interactive/run-wizard.ts";
 
 // ---------------------------------------------------------------------------
@@ -279,17 +277,15 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     "GitHub Issues",
   );
 
-  const disableIssues = await clack.confirm({
+  const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: true,
   });
 
-  if (clack.isCancel(disableIssues)) {
+  if (clack.isCancel(enableIssues)) {
     clack.cancel("Setup cancelled.");
     return null;
   }
-
-  const enableIssues = disableIssues;
 
   // 7. Update AGENTS.md
   const agentsMdPath = join(cwd, "AGENTS.md");
@@ -1789,7 +1785,6 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
-    feedbackCommands: string[];
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
@@ -1802,7 +1797,6 @@ async function runIssueTarget(
     hasHelp,
     hasShowConfig,
     setupCommand,
-    feedbackCommands,
     standaloneLabel,
     subissueLabel,
     prdLabel,
@@ -1887,7 +1881,7 @@ async function runIssueTarget(
 
   // --- Label-driven dispatch ---
   // Fetch the issue with labels for classification.
-  let issueInfo: import("./issues.ts").IssueWithLabels;
+  let issueInfo: import("./issue-lifecycle.ts").IssueWithLabels;
   try {
     issueInfo = fetchIssueWithLabels(repo, issueNumber, cwd);
   } catch (err: unknown) {
@@ -1933,10 +1927,7 @@ async function runIssueTarget(
 
     return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
       isDryRun,
-      hasHelp,
-      hasShowConfig,
       setupCommand,
-      feedbackCommands,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
@@ -1983,10 +1974,7 @@ async function runIssueTarget(
 
     return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
       isDryRun,
-      hasHelp,
-      hasShowConfig,
       setupCommand,
-      feedbackCommands,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
@@ -2094,10 +2082,7 @@ async function runPrdIssueTarget(
   cwd: string,
   flags: {
     isDryRun: boolean;
-    hasHelp: boolean;
-    hasShowConfig: boolean;
     setupCommand: string;
-    feedbackCommands: string[];
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
   },
@@ -2105,7 +2090,6 @@ async function runPrdIssueTarget(
   const {
     isDryRun,
     setupCommand,
-    feedbackCommands,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
   } = flags;
@@ -2518,7 +2502,6 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
-  let feedbackCommandsList: string[] = [];
   let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
     const cfgResult = resolveConfig({
@@ -2536,9 +2519,6 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfg.issueRepo;
     resolvedIssueCommentProgress = cfg.issueCommentProgress === "true";
     resolvedIssueHitlLabel = cfg.issueHitlLabel;
-
-    // Parse feedback commands for the wrapper script (written to worktree root)
-    feedbackCommandsList = parseFeedbackCommands(cfg.feedbackCommands);
 
     // Build sandbox config for routing setup commands through Docker
     setupSandboxConfig = {
@@ -2614,7 +2594,6 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
-      feedbackCommands: feedbackCommandsList,
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
@@ -2871,10 +2850,7 @@ async function runRalphaiInManagedWorktree(
           // Delegate to the unified PRD flow (single feat/ branch, aggregate PR)
           await runPrdIssueTarget(prdDiscovery, repo, options, runArgs, cwd, {
             isDryRun: false,
-            hasHelp: false,
-            hasShowConfig: false,
             setupCommand,
-            feedbackCommands: feedbackCommandsList,
             baseBranch,
             setupSandboxConfig,
           });

@@ -16,5 +16,5 @@ export interface GitHubFallbackOptions {
   /** Configured issue source — pull is only attempted when this is "github". */
   issueSource: string;
   /** Function that attempts to pull a GitHub issue into the backlog. */
-  pullFn: () => import("../issues.ts").PullIssueResult;
+  pullFn: () => import("../issue-lifecycle.ts").PullIssueResult;
 }
