@@ -170,21 +170,12 @@ export function execOk(cmd: string, cwd: string): boolean {
 export function checkGhAvailable(options?: ExecOptions): boolean {
   const timeoutOpt =
     options?.timeout != null ? { timeout: options.timeout } : {};
-  try {
-    _execSync("gh --version", {
-      stdio: ["pipe", "pipe", "pipe"],
-      ...timeoutOpt,
-    });
-  } catch {
-    return false;
-  }
-  try {
-    _execSync("gh auth status", {
-      stdio: ["pipe", "pipe", "pipe"],
-      ...timeoutOpt,
-    });
-  } catch {
-    return false;
+  for (const cmd of ["gh --version", "gh auth status"]) {
+    try {
+      _execSync(cmd, { stdio: ["pipe", "pipe", "pipe"], ...timeoutOpt });
+    } catch {
+      return false;
+    }
   }
   return true;
 }

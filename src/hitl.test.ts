@@ -137,8 +137,7 @@ const { makeTestResolvedConfig } = await import("./test-utils.ts");
 // ---------------------------------------------------------------------------
 
 function createTmpDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "ralphai-hitl-test-"));
-  return dir;
+  return mkdtempSync(join(tmpdir(), "ralphai-hitl-test-"));
 }
 
 function setupDefaultMocks(tmpDir: string) {
