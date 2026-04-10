@@ -1,7 +1,7 @@
 import { execSync, spawnSync } from "child_process";
 import { existsSync, mkdirSync, rmSync, renameSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { TEXT, RESET } from "../utils.ts";
+import { DIM, TEXT, RESET } from "../utils.ts";
 import { getRepoPipelineDirs } from "../global-state.ts";
 import { planExistsForSlug } from "../plan-detection.ts";
 import { findPlansByBranch } from "../receipt.ts";
@@ -38,6 +38,21 @@ export interface SetupSandboxConfig {
 
 export function isGitWorktree(dir: string): boolean {
   return resolveWorktreeInfo(dir).isWorktree;
+}
+
+/**
+ * If `dir` is inside a git worktree, resolve to the main repository root
+ * and print a dim info line. Otherwise return `dir` unchanged.
+ */
+export function resolveMainRepo(dir: string): string {
+  const info = resolveWorktreeInfo(dir);
+  if (info.isWorktree) {
+    console.error(
+      `${DIM}Detected worktree — using main repo at ${info.mainWorktree}${RESET}`,
+    );
+    return info.mainWorktree;
+  }
+  return dir;
 }
 
 export function resolveWorktreeInfo(dir: string): {

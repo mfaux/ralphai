@@ -21,7 +21,7 @@ ralphai clean --worktrees                 # remove completed worktrees
 
 The lifecycle: `ralphai run` creates or reuses a worktree → runs the plan there → pushes a branch → opens or updates a draft PR → `ralphai clean --worktrees` removes completed worktrees.
 
-Run `ralphai run` from the **main repository**, not from inside a worktree.
+Run `ralphai run` from anywhere — if you're inside a worktree, Ralphai automatically resolves to the main repository.
 
 ## How it works
 
