@@ -524,11 +524,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     };
   }
 
-  if (
-    options.issueSource === "github" &&
-    options.issueNumber &&
-    options.issueCommentProgress
-  ) {
+  if (isGitHub && options.issueNumber && options.issueCommentProgress) {
     const repo = detectIssueRepo(cwd, options.issueRepo);
     if (repo) {
       execQuiet(
