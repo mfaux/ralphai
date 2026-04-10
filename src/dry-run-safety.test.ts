@@ -25,9 +25,9 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions } from "./runner.ts";
-import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { buildIssuePlanContent } from "./issues.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,36 +56,6 @@ function setupGlobalPipeline(cwd: string): {
   process.env.RALPHAI_HOME = ralphaiHome;
   const dirs = getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
   return { ralphaiHome, ...dirs };
-}
-
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "none",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    setupCommand: "",
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
 }
 
 /** Capture console.log output during a callback. */
@@ -123,7 +93,7 @@ describe("dry-run safety — runner auto-drain path", () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -152,7 +122,7 @@ describe("dry-run safety — runner auto-drain path", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -181,7 +151,11 @@ describe("dry-run safety — runner auto-drain path", () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({ issueSource: "none" }),
+      config: makeTestResolvedConfig({
+        agentCommand: "echo",
+        issueSource: "none",
+        review: "false",
+      }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -229,7 +203,7 @@ describe("dry-run safety — informational messages", () => {
     setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",

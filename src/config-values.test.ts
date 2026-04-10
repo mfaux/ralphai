@@ -6,28 +6,8 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import {
-  configValues,
-  DEFAULTS,
-  type ResolvedConfig,
-  type RalphaiConfig,
-} from "./config.ts";
-import { makeTestConfig } from "./test-utils.ts";
-
-// ---------------------------------------------------------------------------
-// Helper: build a ResolvedConfig from plain values
-// ---------------------------------------------------------------------------
-
-function makeResolvedConfig(
-  overrides: Partial<RalphaiConfig> = {},
-): ResolvedConfig {
-  const merged = { ...DEFAULTS, ...overrides };
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(merged)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
-}
+import { configValues, DEFAULTS, type RalphaiConfig } from "./config.ts";
+import { makeTestConfig, makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // configValues()
@@ -35,7 +15,10 @@ function makeResolvedConfig(
 
 describe("configValues()", () => {
   it("strips source metadata and returns plain values", () => {
-    const rc = makeResolvedConfig({ agentCommand: "claude -p", maxStuck: 5 });
+    const rc = makeTestResolvedConfig({
+      agentCommand: "claude -p",
+      maxStuck: 5,
+    });
     const cv = configValues(rc);
 
     expect(cv.agentCommand).toBe("claude -p");
@@ -44,7 +27,7 @@ describe("configValues()", () => {
   });
 
   it("returns all DEFAULTS keys when no overrides are applied", () => {
-    const rc = makeResolvedConfig();
+    const rc = makeTestResolvedConfig();
     const cv = configValues(rc);
 
     for (const key of Object.keys(DEFAULTS) as Array<keyof RalphaiConfig>) {
@@ -53,20 +36,20 @@ describe("configValues()", () => {
   });
 
   it("preserves null values (workspaces default)", () => {
-    const rc = makeResolvedConfig();
+    const rc = makeTestResolvedConfig();
     const cv = configValues(rc);
     expect(cv.workspaces).toBeNull();
   });
 
   it("preserves complex values (workspaces override)", () => {
     const ws = { "packages/a": { feedbackCommands: ["bun test"] } };
-    const rc = makeResolvedConfig({ workspaces: ws });
+    const rc = makeTestResolvedConfig({ workspaces: ws });
     const cv = configValues(rc);
     expect(cv.workspaces).toEqual(ws);
   });
 
   it("does not include source property on returned values", () => {
-    const rc = makeResolvedConfig({ agentCommand: "echo" });
+    const rc = makeTestResolvedConfig({ agentCommand: "echo" });
     const cv = configValues(rc);
 
     // cv.agentCommand should be a plain string, not a ResolvedValue
@@ -80,7 +63,7 @@ describe("configValues()", () => {
 
   it("handles mixed sources correctly", () => {
     // Simulate a ResolvedConfig where values come from different sources
-    const rc = makeResolvedConfig();
+    const rc = makeTestResolvedConfig();
     rc.agentCommand = { value: "from-cli", source: "cli" };
     rc.baseBranch = { value: "develop", source: "config" };
     rc.sandbox = { value: "docker", source: "auto-detected" };

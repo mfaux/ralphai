@@ -6,7 +6,12 @@ import { beforeEach, afterEach } from "bun:test";
 import { stripAnsi } from "./utils.ts";
 import { runRalphai } from "./ralphai.ts";
 import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
-import { DEFAULTS, type ConfigValues } from "./config.ts";
+import {
+  DEFAULTS,
+  type ConfigValues,
+  type RalphaiConfig,
+  type ResolvedConfig,
+} from "./config.ts";
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -276,4 +281,27 @@ export function makeTestConfig(
   overrides?: Partial<ConfigValues>,
 ): ConfigValues {
   return { ...DEFAULTS, ...overrides };
+}
+
+/**
+ * Build a `ResolvedConfig` for tests with sensible defaults.
+ *
+ * Every key starts at its `DEFAULTS` value, then the caller's `overrides`
+ * are spread on top. Each value is wrapped in `{ value, source: "default" }`.
+ * This replaces the duplicated per-file `makeResolvedConfig()` helpers that
+ * runner tests used to define locally.
+ *
+ * @example
+ *   const rc = makeTestResolvedConfig({ agentCommand: "echo hi" });
+ *   // rc.agentCommand === { value: "echo hi", source: "default" }
+ */
+export function makeTestResolvedConfig(
+  overrides?: Partial<RalphaiConfig>,
+): ResolvedConfig {
+  const merged = { ...DEFAULTS, ...overrides };
+  const resolved: Record<string, { value: unknown; source: string }> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    resolved[key] = { value, source: "default" };
+  }
+  return resolved as unknown as ResolvedConfig;
 }

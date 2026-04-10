@@ -10,9 +10,9 @@ import {
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { runRunner, type RunnerOptions } from "./runner.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 function createTmpGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "runner-resume-test-"));
@@ -46,35 +46,6 @@ function setupGlobalPipeline(cwd: string): {
   return getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
 }
 
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "none",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
-}
-
 describe("runRunner — resume", () => {
   let dir: string;
   let savedHome: string | undefined;
@@ -106,8 +77,9 @@ describe("runRunner — resume", () => {
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; if [ ! -f "${progressFile}" ]; then echo "missing progress file" >&2; exit 11; fi; printf "<promise nonce=\\"$N\\">COMPLETE</promise>\n<learnings nonce=\\"$N\\">none</learnings>\n"'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: agentScript,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,

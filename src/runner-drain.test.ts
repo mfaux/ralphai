@@ -14,8 +14,8 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions } from "./runner.ts";
-import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers (shared pattern with runner.test.ts)
@@ -56,35 +56,6 @@ function setupGlobalPipeline(cwd: string) {
   process.env.RALPHAI_HOME = ralphaiHome;
   const dirs = getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
   return { ralphaiHome, ...dirs };
-}
-
-function makeResolvedConfig(
-  overrides: Partial<Record<string, unknown>> = {},
-): ResolvedConfig {
-  const defaults: Record<string, unknown> = {
-    agentCommand: "echo",
-    feedbackCommands: "",
-    baseBranch: "main",
-    maxStuck: 3,
-    issueSource: "none",
-    standaloneLabel: "ralphai-standalone",
-    subissueLabel: "ralphai-subissue",
-    prdLabel: "ralphai-prd",
-    issueRepo: "",
-    issueCommentProgress: "true",
-    issueHitlLabel: "ralphai-subissue-hitl",
-    iterationTimeout: 0,
-    sandbox: "none",
-    review: "false",
-    workspaces: null,
-    ...overrides,
-  };
-
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(defaults)) {
-    resolved[key] = { value, source: "default" };
-  }
-  return resolved as unknown as ResolvedConfig;
 }
 
 /** Capture console.log output during an async function. */
@@ -136,8 +107,9 @@ describe("drain-by-default", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -166,8 +138,9 @@ describe("drain-by-default", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -215,8 +188,9 @@ describe("--once flag", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -266,9 +240,10 @@ describe("exit summary", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: stuckAgent,
         maxStuck: 2,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -307,9 +282,10 @@ describe("exit summary", () => {
     const mixedAgent = `bash -c 'N=$RALPHAI_NONCE; count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; fi'`;
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: mixedAgent,
         maxStuck: 2,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -335,7 +311,7 @@ describe("exit summary", () => {
     const worktreeDir = createManagedWorktree(dir, "empty-run");
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig(),
+      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
       cwd: worktreeDir,
       isWorktree: true,
       mainWorktree: dir,
@@ -394,8 +370,9 @@ describe("priority: in-progress before backlog", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeResolvedConfig({
+      config: makeTestResolvedConfig({
         agentCommand: completeAgent,
+        review: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
