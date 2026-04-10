@@ -20,6 +20,5 @@ export {
   executeSetupCommand,
   ensureRepoHasCommit,
   prepareWorktree,
-  writeFeedbackWrapper,
   type SetupSandboxConfig,
 } from "./management.ts";

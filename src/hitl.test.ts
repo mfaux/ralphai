@@ -81,7 +81,6 @@ mock.module("./worktree/management.ts", () => ({
 
 mock.module("./worktree/index.ts", () => ({
   prepareWorktree: mockPrepareWorktree,
-  writeFeedbackWrapper: () => {},
   parseWorktreeList: () => [],
   isRalphaiManagedBranch: () => false,
   listRalphaiWorktrees: () => [],

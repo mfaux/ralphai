@@ -81,33 +81,33 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 
 ## Supporting modules
 
-| File                       | Role                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------- |
-| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                     |
-| `src/show-config.ts`       | `--show-config` output formatting.                                                       |
-| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery, HITL filtering. |
-| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.                   |
-| `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).                           |
-| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).                           |
-| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                               |
-| `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).    |
-| `src/receipt.ts`           | Completion receipt parsing and source checking.                                          |
-| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                               |
-| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                         |
-| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                                |
-| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                       |
-| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                         |
-| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                              |
-| `src/learnings.ts`         | Learnings formatting for prompts and PR bodies (pure functions).                         |
-| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                         |
-| `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.  |
-| `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree).      |
-| `src/process-utils.ts`     | Child process helpers.                                                                   |
-| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                      |
-| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                |
-| `src/ipc-server.ts`        | IPC server for agent communication.                                                      |
-| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                            |
-| `src/self-update.ts`       | `ralphai update` self-update logic.                                                      |
+| File                       | Role                                                                                           |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                           |
+| `src/show-config.ts`       | `--show-config` output formatting.                                                             |
+| `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery, HITL filtering.       |
+| `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.                         |
+| `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).                                 |
+| `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).                                 |
+| `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                                     |
+| `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).          |
+| `src/receipt.ts`           | Completion receipt parsing and source checking.                                                |
+| `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                                     |
+| `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                               |
+| `src/project-detection.ts` | Auto-detects project type, feedback commands, workspaces.                                      |
+| `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                             |
+| `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                               |
+| `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                                    |
+| `src/learnings.ts`         | Learnings formatting for prompts and PR bodies (pure functions).                               |
+| `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                               |
+| `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.        |
+| `src/feedback-wrapper.ts`  | Generates and writes `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree). |
+| `src/process-utils.ts`     | Child process helpers.                                                                         |
+| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                            |
+| `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                      |
+| `src/ipc-server.ts`        | IPC server for agent communication.                                                            |
+| `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                                  |
+| `src/self-update.ts`       | `ralphai update` self-update logic.                                                            |
 
 ## Dependency direction
 

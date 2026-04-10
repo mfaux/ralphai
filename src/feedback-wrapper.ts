@@ -1,3 +1,6 @@
+import { writeFileSync } from "fs";
+import { join } from "path";
+
 /**
  * Feedback wrapper script generator.
  *
@@ -12,8 +15,8 @@
  * wrapper out of the user's worktree so it doesn't appear as an
  * untracked file in `git status`.
  *
- * This module exports a pure function — no I/O. The caller
- * (`writeFeedbackWrapper` in worktree/management.ts) handles writing.
+ * `writeFeedbackWrapper` handles writing the generated script to disk.
+ * `generateFeedbackWrapper` is a pure function — no I/O.
  */
 
 /** Filename of the generated wrapper script. */
@@ -152,4 +155,27 @@ function generateCommandBlock(
  */
 function escapeForShell(cmd: string): string {
   return `'${cmd.replace(/'/g, "'\\''")}'`;
+}
+
+// ---------------------------------------------------------------------------
+// File I/O
+// ---------------------------------------------------------------------------
+
+/**
+ * Write the feedback wrapper script to the given directory.
+ * Typically called with the WIP slug directory so the script stays
+ * out of the user's worktree (no untracked-file noise in git status).
+ * Skipped on Windows (process.platform === "win32") and when no
+ * feedback commands are configured.
+ */
+export function writeFeedbackWrapper(
+  targetDir: string,
+  feedbackCommands?: string[],
+): void {
+  if (process.platform === "win32") return;
+  if (!feedbackCommands || feedbackCommands.length === 0) return;
+
+  const script = generateFeedbackWrapper(feedbackCommands);
+  const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
+  writeFileSync(wrapperPath, script, { mode: 0o755 });
 }

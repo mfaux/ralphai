@@ -1,11 +1,7 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, rmSync } from "fs";
 import { join, resolve } from "path";
 import { execQuiet, execOk, execRun, execInherit } from "../exec.ts";
 import { DIM, TEXT, RESET } from "../utils.ts";
-import {
-  generateFeedbackWrapper,
-  FEEDBACK_WRAPPER_FILENAME,
-} from "../feedback-wrapper.ts";
 import {
   buildSetupDockerArgs,
   formatDockerCommand,
@@ -259,23 +255,4 @@ export function prepareWorktree(
   }
 
   return resolvedWorktreeDir;
-}
-
-/**
- * Write the feedback wrapper script to the given directory.
- * Typically called with the WIP slug directory so the script stays
- * out of the user's worktree (no untracked-file noise in git status).
- * Skipped on Windows (process.platform === "win32") and when no
- * feedback commands are configured.
- */
-export function writeFeedbackWrapper(
-  targetDir: string,
-  feedbackCommands?: string[],
-): void {
-  if (process.platform === "win32") return;
-  if (!feedbackCommands || feedbackCommands.length === 0) return;
-
-  const script = generateFeedbackWrapper(feedbackCommands);
-  const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
-  writeFileSync(wrapperPath, script, { mode: 0o755 });
 }
