@@ -11,13 +11,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { setExecImpl } from "./exec.ts";
 import { useTempDir } from "./test-utils.ts";
-import {
-  createPr,
-  createContinuousPr,
-  updateContinuousPr,
-  finalizeContinuousPr,
-  createPrdPr,
-} from "./pr-lifecycle.ts";
+import { createPr, createPrdPr } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI
@@ -145,120 +139,6 @@ describe("ANSI stripping in PR creation", () => {
     expect(opts.input).toBeDefined();
     expect(opts.input).not.toMatch(ANSI_RE);
     expect(opts.input).toContain("The following will be cleaned:");
-  });
-
-  it("createContinuousPr strips ANSI from title and body", () => {
-    const repoDir = initRepoWithRemoteAndBranch(
-      ctx.dir,
-      "ralphai/ansi-continuous",
-    );
-
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (typeof cmd === "string" && cmd.includes("gh pr create")) {
-        return "https://github.com/o/r/pull/2";
-      }
-      throw new Error(`Unexpected gh command: ${cmd}`);
-    });
-
-    const backlogDir = join(repoDir, "backlog");
-    mkdirSync(backlogDir, { recursive: true });
-
-    const result = createContinuousPr({
-      branch: "ralphai/ansi-continuous",
-      baseBranch: "main",
-      firstPlanDescription: ANSI_TAINTED,
-      completedPlans: ["plan-a"],
-      backlogDir,
-      cwd: repoDir,
-    });
-
-    expect(result.ok).toBe(true);
-
-    const prCreateCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh pr create"),
-    );
-    expect(prCreateCall).toBeDefined();
-
-    const cmd = prCreateCall![0] as string;
-    const opts = prCreateCall![1] as { input?: string };
-
-    expect(cmd).not.toMatch(ANSI_RE);
-    expect(opts.input).not.toMatch(ANSI_RE);
-  });
-
-  it("updateContinuousPr strips ANSI from body", () => {
-    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "ralphai/ansi-update");
-
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (typeof cmd === "string" && cmd.includes("gh pr edit")) {
-        return "ok";
-      }
-      throw new Error(`Unexpected gh command: ${cmd}`);
-    });
-
-    const backlogDir = join(repoDir, "backlog");
-    mkdirSync(backlogDir, { recursive: true });
-
-    const result = updateContinuousPr({
-      branch: "ralphai/ansi-update",
-      baseBranch: "main",
-      prUrl: "https://github.com/o/r/pull/3",
-      completedPlans: ["plan-a"],
-      backlogDir,
-      cwd: repoDir,
-      summary: ANSI_TERMINAL_OUTPUT,
-    });
-
-    expect(result.ok).toBe(true);
-
-    const prEditCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh pr edit"),
-    );
-    expect(prEditCall).toBeDefined();
-
-    const opts = prEditCall![1] as { input?: string };
-    expect(opts.input).not.toMatch(ANSI_RE);
-    expect(opts.input).toContain("The following will be cleaned:");
-  });
-
-  it("finalizeContinuousPr strips ANSI from body", () => {
-    const repoDir = initRepoWithRemoteAndBranch(
-      ctx.dir,
-      "ralphai/ansi-finalize",
-    );
-
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (typeof cmd === "string" && cmd.includes("gh pr edit")) {
-        return "ok";
-      }
-      throw new Error(`Unexpected gh command: ${cmd}`);
-    });
-
-    const backlogDir = join(repoDir, "backlog");
-    mkdirSync(backlogDir, { recursive: true });
-
-    const result = finalizeContinuousPr({
-      branch: "ralphai/ansi-finalize",
-      baseBranch: "main",
-      prUrl: "https://github.com/o/r/pull/4",
-      completedPlans: ["plan-a"],
-      backlogDir,
-      cwd: repoDir,
-      summary: ANSI_TERMINAL_OUTPUT,
-    });
-
-    expect(result.ok).toBe(true);
-
-    const prEditCall = mockExecSync.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === "string" && call[0].includes("gh pr edit"),
-    );
-    expect(prEditCall).toBeDefined();
-
-    const opts = prEditCall![1] as { input?: string };
-    expect(opts.input).not.toMatch(ANSI_RE);
   });
 
   it("createPrdPr strips ANSI from title and body on create", () => {

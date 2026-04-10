@@ -1,36 +1,9 @@
 /**
- * Learnings parser and formatter: extracts `<learnings>` blocks from agent
- * output and provides pure functions for parsing, prompt formatting, and
- * PR-body formatting.
+ * Learnings parser and formatter: provides pure functions for parsing,
+ * prompt formatting, and PR-body formatting of learnings content.
  *
  * This module has NO filesystem dependencies — all functions are pure.
  */
-import { stripAnsi } from "./utils.ts";
-
-// ---------------------------------------------------------------------------
-// Extraction
-// ---------------------------------------------------------------------------
-
-/**
- * Extract the first `<learnings>...</learnings>` block from agent output.
- * Returns the content between the tags, or null if not found.
- * Strips ANSI escape codes so terminal colors don't leak into PR bodies.
- */
-export function extractLearningsBlock(text: string): string | null {
-  const startTag = "<learnings>";
-  const endTag = "</learnings>";
-
-  const startIdx = text.indexOf(startTag);
-  if (startIdx === -1) return null;
-
-  const endIdx = text.indexOf(endTag, startIdx);
-  if (endIdx === -1) return null;
-
-  const content = stripAnsi(
-    text.slice(startIdx + startTag.length, endIdx),
-  ).trim();
-  return content.length > 0 ? content : null;
-}
 
 // ---------------------------------------------------------------------------
 // Parsing

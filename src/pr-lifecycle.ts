@@ -15,12 +15,10 @@ import {
   detectIssueRepo,
 } from "./issues.ts";
 import { transitionDone } from "./label-lifecycle.ts";
-import { collectBacklogPlans } from "./plan-detection.ts";
 import type { BlockedSubIssue } from "./prd-hitl.ts";
 import { formatLearningsForPr } from "./learnings.ts";
 import {
   buildPrBody,
-  buildContinuousPrBodyStructured,
   buildClosesBlock,
   buildCommitLog,
   categorizeCommits,
@@ -89,22 +87,6 @@ export interface CreatePrOptions {
   learnings?: string[];
   /** Whether the review pass made simplification changes. */
   reviewPassMadeChanges?: boolean;
-}
-
-export interface ContinuousPrOptions {
-  branch: string;
-  baseBranch: string;
-  completedPlans: string[];
-  backlogDir: string;
-  cwd: string;
-  /** PRD issue driving this continuous run. */
-  prd?: { number: number; title: string };
-  /** Repository that owns the issues (e.g. "org/repo"). */
-  issueRepo?: string;
-  /** Agent-generated PR description from `<pr-summary>` block. */
-  summary?: string;
-  /** Accumulated learnings from agent runs to include in PR body. */
-  learnings?: string[];
 }
 
 export interface ArchiveRunOptions {
@@ -246,164 +228,6 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
   }
 
   return { ok: true, prUrl, message: `Draft PR created: ${prUrl}` };
-}
-
-// ---------------------------------------------------------------------------
-// Continuous mode PR
-// ---------------------------------------------------------------------------
-
-/** Build PR body with completed/remaining plans and commit log. */
-export function buildContinuousPrBody(
-  completedPlans: string[],
-  backlogDir: string,
-  baseBranch: string,
-  headBranch: string,
-  cwd: string,
-  options?: {
-    prdNumber?: number;
-    issueRepo?: string;
-    prRepo?: string;
-    summary?: string;
-    learnings?: string[];
-  },
-): string {
-  const remaining = collectBacklogPlans(backlogDir).map((p) => basename(p));
-  return buildContinuousPrBodyStructured(
-    completedPlans,
-    remaining,
-    baseBranch,
-    headBranch,
-    cwd,
-    options,
-  );
-}
-
-/** Create draft PR for continuous mode. Matches `create_continuous_pr()`. */
-export function createContinuousPr(
-  options: ContinuousPrOptions & { firstPlanDescription: string },
-): CreatePrResult {
-  const {
-    branch,
-    baseBranch,
-    firstPlanDescription,
-    completedPlans,
-    backlogDir,
-    cwd,
-    prd,
-    issueRepo,
-  } = options;
-  const push = pushBranch(branch, cwd, true);
-  if (!push.ok) return { ok: false, prUrl: "", message: push.message };
-
-  const prRepo = detectIssueRepo(cwd) ?? undefined;
-  const prBody = buildContinuousPrBody(
-    completedPlans,
-    backlogDir,
-    baseBranch,
-    branch,
-    cwd,
-    { prdNumber: prd?.number, issueRepo, prRepo, learnings: options.learnings },
-  );
-  const prTitle = sanitizePrText(
-    prd ? formatPrTitle(prd.title) : `ralphai: ${firstPlanDescription}`,
-  );
-
-  const prUrl = execWithStdin(
-    `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
-    sanitizePrText(prBody),
-    cwd,
-  );
-  if (!prUrl) {
-    return {
-      ok: false,
-      prUrl: "",
-      message: `Failed to create draft PR. Branch '${branch}' pushed. Create PR manually.`,
-    };
-  }
-  return { ok: true, prUrl, message: `Draft PR created: ${prUrl}` };
-}
-
-/** Push commits and refresh PR body. Matches `update_continuous_pr()`. */
-export function updateContinuousPr(
-  options: ContinuousPrOptions & { prUrl: string },
-): PushResult {
-  const {
-    branch,
-    baseBranch,
-    prUrl,
-    completedPlans,
-    backlogDir,
-    cwd,
-    prd,
-    issueRepo,
-  } = options;
-  const push = pushBranch(branch, cwd, false);
-  if (!push.ok) return push;
-  if (!prUrl) return { ok: false, message: "No PR URL to update" };
-
-  const prRepo = detectIssueRepo(cwd) ?? undefined;
-  const prBody = buildContinuousPrBody(
-    completedPlans,
-    backlogDir,
-    baseBranch,
-    branch,
-    cwd,
-    {
-      prdNumber: prd?.number,
-      issueRepo,
-      prRepo,
-      summary: options.summary,
-      learnings: options.learnings,
-    },
-  );
-  if (
-    execWithStdin(
-      `gh pr edit "${prUrl}" --body-file -`,
-      sanitizePrText(prBody),
-      cwd,
-    ) === null
-  ) {
-    return { ok: false, message: "Failed to update PR body" };
-  }
-  return { ok: true, message: `PR updated: ${prUrl}` };
-}
-
-/** Refresh final draft PR body when continuous mode finishes. */
-export function finalizeContinuousPr(
-  options: ContinuousPrOptions & { prUrl: string },
-): PushResult {
-  const { baseBranch, prUrl, completedPlans, backlogDir, cwd, prd, issueRepo } =
-    options;
-  if (!prUrl) return { ok: false, message: "No continuous PR to finalize" };
-
-  const headBranch =
-    execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "HEAD";
-  const prRepo = detectIssueRepo(cwd) ?? undefined;
-  const prBody = buildContinuousPrBody(
-    completedPlans,
-    backlogDir,
-    baseBranch,
-    headBranch,
-    cwd,
-    {
-      prdNumber: prd?.number,
-      issueRepo,
-      prRepo,
-      summary: options.summary,
-      learnings: options.learnings,
-    },
-  );
-  if (
-    execWithStdin(
-      `gh pr edit "${prUrl}" --body-file -`,
-      sanitizePrText(prBody),
-      cwd,
-    ) === null
-  ) {
-    return { ok: false, message: "Failed to refresh final draft PR body" };
-  }
-  return { ok: true, message: `Draft PR updated: ${prUrl}` };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,56 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import {
-  extractLearningsBlock,
   parseLearningContent,
   formatLearningsForPrompt,
   formatLearningsForPr,
 } from "./learnings.ts";
-
-// ---------------------------------------------------------------------------
-// extractLearningsBlock
-// ---------------------------------------------------------------------------
-
-describe("extractLearningsBlock", () => {
-  it("extracts content between <learnings> tags", () => {
-    const text = [
-      "Some agent output...",
-      "<learnings>",
-      "<entry>",
-      "status: none",
-      "</entry>",
-      "</learnings>",
-    ].join("\n");
-    const block = extractLearningsBlock(text);
-    expect(block).toContain("status: none");
-    expect(block).toContain("<entry>");
-  });
-
-  it("returns null when no <learnings> tag is present", () => {
-    expect(extractLearningsBlock("just regular output")).toBeNull();
-  });
-
-  it("returns null when only opening tag is present", () => {
-    expect(extractLearningsBlock("<learnings>\nsome content")).toBeNull();
-  });
-
-  it("returns null when block is empty", () => {
-    expect(extractLearningsBlock("<learnings>\n\n</learnings>")).toBeNull();
-  });
-
-  it("extracts only the first block when multiple exist", () => {
-    const text = [
-      "<learnings>",
-      "first block content",
-      "</learnings>",
-      "<learnings>",
-      "second block content",
-      "</learnings>",
-    ].join("\n");
-    const block = extractLearningsBlock(text);
-    expect(block).toContain("first block content");
-    expect(block).not.toContain("second block content");
-  });
-});
 
 // ---------------------------------------------------------------------------
 // parseLearningContent

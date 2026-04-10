@@ -3,12 +3,7 @@ import { execSync } from "child_process";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import {
-  pushBranch,
-  archiveRun,
-  buildContinuousPrBody,
-  buildPrdPrBody,
-} from "./pr-lifecycle.ts";
+import { pushBranch, archiveRun, buildPrdPrBody } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -166,126 +161,6 @@ describe("archiveRun", () => {
     });
 
     expect(result.archived).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// buildContinuousPrBody
-// ---------------------------------------------------------------------------
-
-describe("buildContinuousPrBody", () => {
-  const ctx = useTempDir();
-
-  it("includes completed plans as checked items", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      ["plan-a", "plan-b"],
-      join(ctx.dir, "backlog"),
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).toContain("- [x] plan-a");
-    expect(body).toContain("- [x] plan-b");
-  });
-
-  it("shows 'None yet' when no plans completed", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      [],
-      join(ctx.dir, "backlog"),
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).toContain("_None yet._");
-  });
-
-  it("shows remaining backlog plans as unchecked items", () => {
-    initRepo(ctx.dir);
-    const backlogDir = join(ctx.dir, "backlog");
-    mkdirSync(backlogDir, { recursive: true });
-    writeFileSync(join(backlogDir, "remaining-plan.md"), "# Plan");
-
-    const body = buildContinuousPrBody(
-      ["done-plan"],
-      backlogDir,
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).toContain("- [ ] remaining-plan.md");
-  });
-
-  it("shows backlog empty message when no remaining plans", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      ["done"],
-      join(ctx.dir, "empty-backlog"),
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).toContain("_Backlog empty");
-  });
-
-  it("includes changes section", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      [],
-      join(ctx.dir, "backlog"),
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).toContain("## Changes");
-  });
-
-  it("includes commits between base and head branch", () => {
-    initRepo(ctx.dir);
-    execSync("git checkout -b feature", { cwd: ctx.dir, stdio: "ignore" });
-    writeFileSync(join(ctx.dir, "feature.txt"), "feature\n");
-    execSync('git add -A && git commit -m "add feature"', {
-      cwd: ctx.dir,
-      stdio: "ignore",
-    });
-
-    const body = buildContinuousPrBody(
-      [],
-      join(ctx.dir, "backlog"),
-      "main",
-      "feature",
-      ctx.dir,
-    );
-    expect(body).toContain("add feature");
-  });
-
-  it("prepends Closes #N when prdNumber option is provided", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      ["plan-a"],
-      join(ctx.dir, "backlog"),
-      "main",
-      "main",
-      ctx.dir,
-      { prdNumber: 146 },
-    );
-    expect(body).toContain("Closes #146");
-    const closesIdx = body.indexOf("Closes #146");
-    const plansIdx = body.indexOf("## Completed Plans");
-    expect(closesIdx).toBeLessThan(plansIdx);
-  });
-
-  it("omits Closes line when prdNumber is not provided", () => {
-    initRepo(ctx.dir);
-    const body = buildContinuousPrBody(
-      ["plan-a"],
-      join(ctx.dir, "backlog"),
-      "main",
-      "main",
-      ctx.dir,
-    );
-    expect(body).not.toContain("Closes #");
   });
 });
 
