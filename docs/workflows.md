@@ -141,6 +141,16 @@ Or in `config.json`:
 
 Mounts use standard Docker bind-mount syntax (`host:container[:options]`). Env vars use `-e VAR` format — Docker reads the value from the host environment, so values are not exposed in process listings. Vars that are unset or empty on the host are silently skipped.
 
+**Specifying a model:** Inside a Docker container, some agents may not auto-detect which model to use (e.g. when credentials come from a host-side proxy or environment). Pass the model as part of the agent command in your repo config file (`~/.ralphai/repos/<reponame>/config.json`):
+
+```json
+{
+  "agentCommand": "opencode run --agent build --model github-copilot/claude-opus-4.6"
+}
+```
+
+The exact flag depends on which agent you use — check your agent's CLI reference for the correct option.
+
 For details on the Docker execution flow and credential forwarding, see [How Ralphai Works](how-ralphai-works.md#docker-execution-flow).
 
 ## Test a plan without changing anything
