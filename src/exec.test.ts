@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { tmpdir } from "os";
 import { execQuiet, execRun, checkGhAvailable, setExecImpl } from "./exec.ts";
 
 // ---------------------------------------------------------------------------
@@ -72,10 +73,9 @@ describe("execRun", () => {
   });
 
   it("respects cwd", () => {
-    const result = execRun("pwd", "/tmp");
+    const result = execRun("echo cwd-test", tmpdir());
     expect(result.exitCode).toBe(0);
-    // /tmp may resolve to a symlink target, just verify it ran
-    expect(result.stdout.length).toBeGreaterThan(0);
+    expect(result.stdout).toBe("cwd-test");
   });
 });
 
