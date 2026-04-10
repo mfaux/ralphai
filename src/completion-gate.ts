@@ -11,9 +11,9 @@
  * string. The runner uses this to re-invoke the agent instead of
  * archiving the plan.
  */
-import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 
+import { execRun } from "./exec.ts";
 import {
   countCompletedFromProgress,
   type PlanFormat,
@@ -125,34 +125,13 @@ export function runFeedbackCommands(
     .filter(Boolean);
 
   return commands.map((command) => {
-    try {
-      execSync(command, {
-        cwd,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        timeout: 300_000, // 5 minute timeout per command
-      });
-      return { command, exitCode: 0, output: "", tier };
-    } catch (err: unknown) {
-      const exitCode =
-        err && typeof err === "object" && "status" in err
-          ? ((err as { status: number }).status ?? 1)
-          : 1;
-      const stderr =
-        err && typeof err === "object" && "stderr" in err
-          ? String((err as { stderr: unknown }).stderr).trim()
-          : "";
-      const stdout =
-        err && typeof err === "object" && "stdout" in err
-          ? String((err as { stdout: unknown }).stdout).trim()
-          : "";
-      return {
-        command,
-        exitCode,
-        output: stderr || stdout,
-        tier,
-      };
-    }
+    const result = execRun(command, cwd, { timeout: 300_000 });
+    return {
+      command,
+      exitCode: result.exitCode,
+      output: result.exitCode !== 0 ? result.stderr || result.stdout : "",
+      tier,
+    };
   });
 }
 

@@ -44,6 +44,50 @@ export interface ExecOptions {
   timeout?: number;
 }
 
+/** Result of running a command with full exit/output details. */
+export interface ExecRunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * Run a command and return structured result with exit code and output.
+ *
+ * Unlike `execQuiet` (which swallows errors) and `execOk` (which returns
+ * a boolean), this function always returns a result object — callers that
+ * need to inspect exit codes and output (e.g. feedback commands) use this.
+ */
+export function execRun(
+  cmd: string,
+  cwd: string,
+  options?: ExecOptions,
+): ExecRunResult {
+  try {
+    const stdout = _execSync(cmd, {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(options?.timeout != null ? { timeout: options.timeout } : {}),
+    });
+    return { exitCode: 0, stdout: String(stdout).trim(), stderr: "" };
+  } catch (err: unknown) {
+    const exitCode =
+      err && typeof err === "object" && "status" in err
+        ? ((err as { status: number }).status ?? 1)
+        : 1;
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr: unknown }).stderr).trim()
+        : "";
+    const stdout =
+      err && typeof err === "object" && "stdout" in err
+        ? String((err as { stdout: unknown }).stdout).trim()
+        : "";
+    return { exitCode, stdout, stderr };
+  }
+}
+
 /** Run a command and return trimmed stdout, or null on any error. */
 export function execQuiet(
   cmd: string,
