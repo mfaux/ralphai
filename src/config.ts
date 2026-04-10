@@ -37,6 +37,7 @@ export interface RalphaiConfig {
   dockerMounts: string;
   dockerEnvVars: string;
   review: string; // "true" | "false"
+  terse: string; // "true" | "false"
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -171,6 +172,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   dockerMounts: "",
   dockerEnvVars: "",
   review: "true",
+  terse: "false",
   workspaces: null,
 };
 
@@ -281,6 +283,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "dockerMounts",
   "dockerEnvVars",
   "review",
+  "terse",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -506,6 +509,14 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.review = String(v);
   }
 
+  // terse (boolean)
+  if ("terse" in obj) {
+    const v = obj.terse;
+    if (typeof v !== "boolean")
+      err(`'terse' must be 'true' or 'false', got '${v}'`);
+    values.terse = String(v);
+  }
+
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -711,6 +722,13 @@ export function applyEnvOverrides(
     overrides.review = review;
   }
 
+  // terse (boolean)
+  const terse = get("RALPHAI_TERSE");
+  if (terse !== undefined) {
+    validateBoolean(terse, "RALPHAI_TERSE");
+    overrides.terse = terse;
+  }
+
   return overrides;
 }
 
@@ -787,6 +805,12 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-review") {
       overrides.review = "false";
       rawFlags.review = "--no-review";
+    } else if (arg === "--terse") {
+      overrides.terse = "true";
+      rawFlags.terse = "--terse";
+    } else if (arg === "--no-terse") {
+      overrides.terse = "false";
+      rawFlags.terse = "--no-terse";
     } else if (arg.startsWith("--issue-hitl-label=")) {
       const v = arg.slice("--issue-hitl-label=".length);
       if (v === "") {

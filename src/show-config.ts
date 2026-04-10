@@ -66,6 +66,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
   dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
   review: "RALPHAI_REVIEW",
+  terse: "RALPHAI_TERSE",
 };
 
 // ---------------------------------------------------------------------------
@@ -236,6 +237,10 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   const reviewSrc = sourceLabel("review", config.review.source, input);
   lines.push(`  review             = ${config.review.value}  (${reviewSrc})`);
 
+  // terse: CLI label is "--terse" or "--no-terse"
+  const terseSrc = sourceLabel("terse", config.terse.source, input);
+  lines.push(`  terse              = ${config.terse.value}  (${terseSrc})`);
+
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(
     `  maxStuck           = ${config.maxStuck.value}  (${maxStuckSrc})`,
@@ -338,27 +343,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     if (workspaces && Object.keys(workspaces).length > 0) {
       lines.push("");
       lines.push("Workspaces (per-package overrides):");
+      const fmtList = (v: unknown): string =>
+        v == null ? "none" : Array.isArray(v) ? v.join(", ") : String(v);
       for (const [pkg, overrides] of Object.entries(workspaces)) {
-        const fc = overrides.feedbackCommands;
-        let fcDisplay: string;
-        if (fc == null) {
-          fcDisplay = "none";
-        } else if (Array.isArray(fc)) {
-          fcDisplay = fc.join(", ");
-        } else {
-          fcDisplay = String(fc);
-        }
-        const pfc = overrides.prFeedbackCommands;
-        let pfcDisplay: string;
-        if (pfc == null) {
-          pfcDisplay = "none";
-        } else if (Array.isArray(pfc)) {
-          pfcDisplay = pfc.join(", ");
-        } else {
-          pfcDisplay = String(pfc);
-        }
-        lines.push(`  ${pkg}: feedbackCommands=${fcDisplay}`);
-        lines.push(`  ${pkg}: prFeedbackCommands=${pfcDisplay}`);
+        lines.push(
+          `  ${pkg}: feedbackCommands=${fmtList(overrides.feedbackCommands)}`,
+        );
+        lines.push(
+          `  ${pkg}: prFeedbackCommands=${fmtList(overrides.prFeedbackCommands)}`,
+        );
       }
     }
   } else {

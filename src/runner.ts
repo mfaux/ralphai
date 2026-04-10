@@ -679,6 +679,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueRepo = cfg.issueRepo;
   const issueCommentProgress = cfg.issueCommentProgress === "true";
   const review = cfg.review === "true";
+  const terse = cfg.terse === "true";
 
   // --- Fail-early Docker availability check ---
   // computeEffectiveSandbox re-probes Docker at runner start. When sandbox
@@ -1072,6 +1073,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         gateRejection: gateState.lastGateRejection,
         nonce,
         wrapperPath,
+        terse,
       });
 
       // --- Spawn agent (with output log persistence) ---
