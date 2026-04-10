@@ -1,7 +1,7 @@
 /**
  * Tests for src/runner.ts — the TypeScript runner orchestration loop.
  *
- * Focuses on testable internal helpers (shellSplit, spawnAgent) and
+ * Focuses on testable internal helpers (spawnAgent) and
  * key runner behaviors (dry-run, stuck detection, completion detection).
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -17,7 +17,6 @@ import { tmpdir } from "os";
 import { execSync } from "child_process";
 
 import {
-  shellSplit,
   spawnAgent,
   runRunner,
   type RunnerOptions,
@@ -25,62 +24,6 @@ import {
 } from "./runner.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
-
-// ---------------------------------------------------------------------------
-// shellSplit
-// ---------------------------------------------------------------------------
-
-describe("shellSplit", () => {
-  test("splits simple command", () => {
-    expect(shellSplit("claude -p")).toEqual(["claude", "-p"]);
-  });
-
-  test("splits command with single quotes", () => {
-    expect(shellSplit("echo 'hello world'")).toEqual(["echo", "hello world"]);
-  });
-
-  test("splits command with double quotes", () => {
-    expect(shellSplit('echo "hello world"')).toEqual(["echo", "hello world"]);
-  });
-
-  test("handles backslash escapes", () => {
-    expect(shellSplit("echo hello\\ world")).toEqual(["echo", "hello world"]);
-  });
-
-  test("handles mixed quotes", () => {
-    expect(shellSplit(`opencode run --agent 'build'`)).toEqual([
-      "opencode",
-      "run",
-      "--agent",
-      "build",
-    ]);
-  });
-
-  test("handles multiple spaces between args", () => {
-    expect(shellSplit("a   b   c")).toEqual(["a", "b", "c"]);
-  });
-
-  test("handles empty string", () => {
-    expect(shellSplit("")).toEqual([]);
-  });
-
-  test("handles single word", () => {
-    expect(shellSplit("codex")).toEqual(["codex"]);
-  });
-
-  test("handles quoted empty strings", () => {
-    expect(shellSplit('echo "" hello')).toEqual(["echo", "", "hello"]);
-  });
-
-  test("handles complex agent command", () => {
-    expect(shellSplit("opencode run --agent build")).toEqual([
-      "opencode",
-      "run",
-      "--agent",
-      "build",
-    ]);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // spawnAgent

@@ -21,7 +21,7 @@ import type {
  *
  * Re-exported from runner.ts for shared use.
  */
-import { shellSplit } from "../runner.ts";
+import { shellSplit } from "../shell-split.ts";
 
 // ---------------------------------------------------------------------------
 // LocalExecutor

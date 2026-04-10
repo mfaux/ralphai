@@ -24,7 +24,7 @@ import type {
   ExecutorSpawnResult,
 } from "./types.ts";
 
-import { shellSplit } from "../runner.ts";
+import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
 import { resolveMainGitDir } from "../worktree/management.ts";
 

@@ -105,6 +105,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.  |
 | `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree).      |
 | `src/process-utils.ts`     | Child process helpers.                                                                   |
+| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                      |
 | `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                |
 | `src/ipc-server.ts`        | IPC server for agent communication.                                                      |
 | `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                            |
