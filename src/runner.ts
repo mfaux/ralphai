@@ -33,7 +33,6 @@ import {
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import { getSocketPath, type IpcMessage } from "./ipc-protocol.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
-import { parseLearningContent } from "./learnings.ts";
 import { assemblePrompt } from "./prompt.ts";
 import {
   FEEDBACK_WRAPPER_FILENAME,
@@ -93,6 +92,23 @@ import {
   configValues,
   computeEffectiveSandbox,
 } from "./config.ts";
+
+// ---------------------------------------------------------------------------
+// Learnings parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse the content of a `<learnings>` block into either a prose string or
+ * null. Returns null if the content is the literal string "none"
+ * (case-insensitive), only whitespace, or empty. Otherwise returns the
+ * trimmed prose text.
+ */
+export function parseLearningContent(block: string): string | null {
+  const trimmed = block.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.toLowerCase() === "none") return null;
+  return trimmed;
+}
 
 // ---------------------------------------------------------------------------
 // Types

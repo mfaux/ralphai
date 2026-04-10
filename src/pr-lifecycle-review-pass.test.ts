@@ -1,40 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { useTempDir } from "./test-utils.ts";
-import { buildPrBody } from "./pr-description.ts";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function initRepo(dir: string): void {
-  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
-  execSync('git config user.email "test@test.com"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-  execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
-  writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync('git add -A && git commit -m "init"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-}
-
-function commitFile(
-  dir: string,
-  filename: string,
-  content: string,
-  message: string,
-): void {
-  writeFileSync(join(dir, filename), content);
-  execSync(`git add -A && git commit -m "${message}"`, {
-    cwd: dir,
-    stdio: "ignore",
-  });
-}
+import { useTempDir, initRepo, commitFile } from "./test-utils.ts";
+import { buildPrBody } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // buildPrBody — review pass annotation

@@ -1,9 +1,6 @@
 /**
  * Progress extraction: extracts `<progress>` blocks from agent output
  * and appends them to the global progress file.
- *
- * Follows the same extraction pattern as `extractLearningsBlock()` in
- * `src/learnings.ts`.
  */
 import { existsSync, readFileSync, writeFileSync } from "fs";
 

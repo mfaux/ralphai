@@ -86,10 +86,6 @@ export interface PeekIssueResult {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Core functions
 // ---------------------------------------------------------------------------
 
@@ -145,7 +141,7 @@ export function slugify(text: string): string {
 
 /**
  * Conventional commit types recognised in issue/PRD titles.
- * Same set used by `CC_PATTERN` in `pr-description.ts`.
+ * Same set used by `CC_PATTERN` in `pr-lifecycle.ts`.
  */
 const CC_TITLE_PATTERN =
   /^(feat|fix|refactor|test|docs|chore|ci|build|perf|style|revert)(?:\([^)]*\))?!?:\s+(.+)$/i;
@@ -651,8 +647,6 @@ interface FetchAndWriteOptions {
   cwd: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
-  /** Optional subissue family label (e.g. "ralphai-subissue"). */
-  subissueLabel?: string;
 }
 
 /**
@@ -934,7 +928,6 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
-    subissueLabel: options.subissueLabel,
   });
 }
 
@@ -1172,7 +1165,6 @@ export function pullGithubIssueByNumber(
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
-    subissueLabel: options.subissueLabel,
   });
 }
 
