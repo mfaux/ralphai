@@ -11,7 +11,7 @@ import {
   buildGithubPickList,
   type GithubIssueListItem,
 } from "./github-issues.ts";
-import type { PrdSubIssue } from "../prd-discovery.ts";
+import type { PrdSubIssue } from "../issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

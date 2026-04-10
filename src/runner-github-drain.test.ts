@@ -18,17 +18,17 @@ import type { PullIssueOptions, PullIssueResult } from "./issue-lifecycle.ts";
 import type { RunnerOptions } from "./runner.ts";
 
 // ---------------------------------------------------------------------------
-// Mock pullGithubIssues and pullPrdSubIssue from ./issues.ts
+// Mock pullGithubIssues and pullPrdSubIssue from ./issue-lifecycle.ts
 // ---------------------------------------------------------------------------
 
-const realIssues = await import("./issues.ts");
+const realIssues = await import("./issue-lifecycle.ts");
 
 const mockPullGithubIssues =
   mock<(options: PullIssueOptions) => PullIssueResult>();
 const mockPullPrdSubIssue =
   mock<(options: PullIssueOptions) => PullIssueResult>();
 
-mock.module("./issues.ts", () => ({
+mock.module("./issue-lifecycle.ts", () => ({
   ...realIssues,
   pullGithubIssues: mockPullGithubIssues,
   pullPrdSubIssue: mockPullPrdSubIssue,

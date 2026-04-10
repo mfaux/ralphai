@@ -7,16 +7,12 @@
  *
  * Sub-issues for PRDs are fetched via the REST API
  * (`repos/{owner}/{repo}/issues/{N}/sub_issues`) rather than body parsing.
- *
- * This module is intentionally separate from `src/issues.ts` (which handles
- * pull/peek operations for the runner) to keep both files under the 300-line
- * size limit.
  */
 
 import { execQuiet, checkGhAvailable } from "../exec.ts";
-import { detectIssueRepo } from "../issues.ts";
+import { detectIssueRepo } from "../issue-lifecycle.ts";
 import { DEFAULTS } from "../config.ts";
-import type { PrdSubIssue } from "../prd-discovery.ts";
+import type { PrdSubIssue } from "../issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

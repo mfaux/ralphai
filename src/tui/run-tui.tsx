@@ -29,7 +29,7 @@ import {
 import { applyNoColorOverride } from "./color-support.ts";
 import { gatherPipelineState } from "../pipeline-state.ts";
 import { listRalphaiWorktrees } from "../worktree/parsing.ts";
-import { peekGithubIssues, peekPrdIssues } from "../issues.ts";
+import { peekGithubIssues, peekPrdIssues } from "../issue-lifecycle.ts";
 import { TUI_SUBPROCESS_TIMEOUT_MS } from "./hooks/use-pipeline-state.ts";
 
 // ---------------------------------------------------------------------------

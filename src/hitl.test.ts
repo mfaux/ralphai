@@ -35,7 +35,7 @@ mock.module("./exec.ts", () => ({
   execWithStdin: () => null,
 }));
 
-// Mock issues.ts — controls parent discovery, issue fetching, repo detection
+// Mock issues (now in issue-lifecycle.ts) — controls parent discovery, issue fetching, repo detection
 const mockDiscoverParentIssue =
   mock<
     (
@@ -50,8 +50,8 @@ const mockFetchIssueWithLabels =
 const mockDetectIssueRepo =
   mock<(cwd: string, configRepo?: string) => string | null>();
 
-const realIssues = await import("./issues.ts");
-mock.module("./issues.ts", () => ({
+const realIssues = await import("./issue-lifecycle.ts");
+mock.module("./issue-lifecycle.ts", () => ({
   ...realIssues,
   discoverParentIssue: mockDiscoverParentIssue,
   fetchIssueWithLabels: mockFetchIssueWithLabels,

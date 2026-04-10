@@ -17,7 +17,10 @@
 
 import { useState, useEffect, useRef } from "react";
 
-import type { PeekIssueOptions, PeekIssueResult } from "../../issues.ts";
+import type {
+  PeekIssueOptions,
+  PeekIssueResult,
+} from "../../issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

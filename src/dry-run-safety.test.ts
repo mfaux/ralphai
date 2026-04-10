@@ -270,7 +270,7 @@ describe("body-text verification — ## Parent PRD not parsed", () => {
     //
     // We verify this by inspecting the function signature: it takes
     // (repo, issueNumber, cwd, prdLabel?) — no body parameter.
-    const { discoverParentPrd } = require("./issues.ts");
+    const { discoverParentPrd } = require("./issue-lifecycle.ts");
 
     // discoverParentPrd has exactly 4 parameters (repo, issueNumber, cwd, prdLabel?)
     expect(discoverParentPrd.length).toBe(4);
@@ -279,7 +279,7 @@ describe("body-text verification — ## Parent PRD not parsed", () => {
   it("fetchBlockersViaGraphQL uses GraphQL API, not body text", () => {
     // Structural verification: fetchBlockersViaGraphQL() takes
     // (repo, issueNumber, cwd) — no body parameter.
-    const { fetchBlockersViaGraphQL } = require("./issues.ts");
+    const { fetchBlockersViaGraphQL } = require("./issue-lifecycle.ts");
 
     expect(fetchBlockersViaGraphQL.length).toBe(3);
   });
