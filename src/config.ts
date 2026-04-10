@@ -37,7 +37,7 @@ export interface RalphaiConfig {
   dockerMounts: string;
   dockerEnvVars: string;
   review: string; // "true" | "false"
-  terse: string; // "true" | "false"
+  verbose: string; // "true" | "false"
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -172,7 +172,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   dockerMounts: "",
   dockerEnvVars: "",
   review: "true",
-  terse: "false",
+  verbose: "false",
   workspaces: null,
 };
 
@@ -283,7 +283,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "dockerMounts",
   "dockerEnvVars",
   "review",
-  "terse",
+  "verbose",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -509,12 +509,12 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.review = String(v);
   }
 
-  // terse (boolean)
-  if ("terse" in obj) {
-    const v = obj.terse;
+  // verbose (boolean)
+  if ("verbose" in obj) {
+    const v = obj.verbose;
     if (typeof v !== "boolean")
-      err(`'terse' must be 'true' or 'false', got '${v}'`);
-    values.terse = String(v);
+      err(`'verbose' must be 'true' or 'false', got '${v}'`);
+    values.verbose = String(v);
   }
 
   // workspaces (object of per-package overrides)
@@ -722,11 +722,11 @@ export function applyEnvOverrides(
     overrides.review = review;
   }
 
-  // terse (boolean)
-  const terse = get("RALPHAI_TERSE");
-  if (terse !== undefined) {
-    validateBoolean(terse, "RALPHAI_TERSE");
-    overrides.terse = terse;
+  // verbose (boolean)
+  const verbose = get("RALPHAI_VERBOSE");
+  if (verbose !== undefined) {
+    validateBoolean(verbose, "RALPHAI_VERBOSE");
+    overrides.verbose = verbose;
   }
 
   return overrides;
@@ -805,12 +805,9 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-review") {
       overrides.review = "false";
       rawFlags.review = "--no-review";
-    } else if (arg === "--terse") {
-      overrides.terse = "true";
-      rawFlags.terse = "--terse";
-    } else if (arg === "--no-terse") {
-      overrides.terse = "false";
-      rawFlags.terse = "--no-terse";
+    } else if (arg === "--verbose") {
+      overrides.verbose = "true";
+      rawFlags.verbose = "--verbose";
     } else if (arg.startsWith("--issue-hitl-label=")) {
       const v = arg.slice("--issue-hitl-label=".length);
       if (v === "") {

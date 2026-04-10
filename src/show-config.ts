@@ -66,7 +66,7 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
   dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
   review: "RALPHAI_REVIEW",
-  terse: "RALPHAI_TERSE",
+  verbose: "RALPHAI_VERBOSE",
 };
 
 // ---------------------------------------------------------------------------
@@ -237,9 +237,9 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   const reviewSrc = sourceLabel("review", config.review.source, input);
   lines.push(`  review             = ${config.review.value}  (${reviewSrc})`);
 
-  // terse: CLI label is "--terse" or "--no-terse"
-  const terseSrc = sourceLabel("terse", config.terse.source, input);
-  lines.push(`  terse              = ${config.terse.value}  (${terseSrc})`);
+  // verbose: CLI label is "--verbose"
+  const verboseSrc = sourceLabel("verbose", config.verbose.source, input);
+  lines.push(`  verbose            = ${config.verbose.value}  (${verboseSrc})`);
 
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(
