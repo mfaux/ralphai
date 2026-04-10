@@ -128,6 +128,7 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  review             = true  (default)");
+    expect(output).toContain("  terse              = false  (default)");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
@@ -227,6 +228,40 @@ describe("formatShowConfig", () => {
     const output = formatShowConfig(input);
     expect(output).toContain(
       "  review             = false  (env (RALPHAI_REVIEW=false))",
+    );
+  });
+
+  it("shows cli source for terse --terse", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      terse: { value: "true", source: "cli" },
+    });
+    input.rawFlags = { terse: "--terse" };
+    const output = formatShowConfig(input);
+    expect(output).toContain("  terse              = true  (cli (--terse))");
+  });
+
+  it("shows cli source for terse --no-terse", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      terse: { value: "false", source: "cli" },
+    });
+    input.rawFlags = { terse: "--no-terse" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  terse              = false  (cli (--no-terse))",
+    );
+  });
+
+  it("shows env source for terse", () => {
+    const input = defaultInput();
+    input.config = makeResolved({
+      terse: { value: "true", source: "env" },
+    });
+    input.envVars = { RALPHAI_TERSE: "true" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  terse              = true  (env (RALPHAI_TERSE=true))",
     );
   });
 
