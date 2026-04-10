@@ -1,10 +1,17 @@
 /**
- * Learnings formatting: pure functions that turn accumulated learnings
- * (string arrays) into Markdown for agent prompts and PR bodies.
+ * Learnings formatter: pure functions for prompt and PR-body formatting
+ * of accumulated learnings.
+ *
+ * Extraction and parsing logic lives in `src/runner.ts` (which owns the
+ * agent output processing pipeline).
  *
  * This module is intentionally formatting-only — parsing and extraction
  * live in the runner (src/runner.ts) where the agent output is processed.
  */
+
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
 
 /**
  * Format accumulated learnings for injection into the agent prompt.

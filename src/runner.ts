@@ -6,8 +6,14 @@
  * stuck detection, learnings processing, and completion/PR
  * lifecycle.
  *
+ * Also owns private helpers that were previously in standalone modules:
+ * - Nonce-aware sentinel detection (was `sentinel.ts`)
+ * - Progress file appending (was `progress.ts`)
+ * - Learning content parsing (was `learnings.ts`)
+ *
  * Exported entry point: `runRunner(options)`.
  */
+import { randomUUID } from "crypto";
 import {
   existsSync,
   mkdirSync,
@@ -37,12 +43,7 @@ import {
   parseFeedbackCommands,
 } from "./feedback-wrapper.ts";
 import { writeFeedbackWrapper } from "./worktree/index.ts";
-import { appendProgressBlock } from "./progress.ts";
-import {
-  generateNonce,
-  detectCompletion,
-  extractNoncedBlock,
-} from "./sentinel.ts";
+import { stripAnsi } from "./utils.ts";
 
 import {
   transitionStuck,
@@ -92,7 +93,90 @@ import {
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
-// Learnings parsing
+// Sentinel detection (absorbed from sentinel.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a unique nonce for a single runner iteration.
+ * Uses a cryptographic UUID to ensure unguessability.
+ */
+export function generateNonce(): string {
+  return randomUUID();
+}
+
+/**
+ * Detect whether the agent output contains a genuine nonce-stamped
+ * completion signal: `<promise nonce="NONCE">COMPLETE</promise>`.
+ *
+ * Returns `false` for bare `<promise>COMPLETE</promise>` tags (which may
+ * originate from test output, source files, or other tool noise) and for
+ * tags with a mismatched nonce.
+ */
+export function detectCompletion(output: string, nonce: string): boolean {
+  const sentinel = `<promise nonce="${nonce}">COMPLETE</promise>`;
+  return output.includes(sentinel);
+}
+
+/**
+ * Extract the content of a nonce-stamped XML block from agent output.
+ *
+ * Looks for `<tagName nonce="NONCE">...content...</tagName>` and returns
+ * the trimmed content between the tags, or `null` if no matching block
+ * is found.
+ *
+ * ANSI escape codes are stripped from the extracted content so terminal
+ * colors don't leak into PR descriptions or persisted files.
+ */
+export function extractNoncedBlock(
+  output: string,
+  tagName: string,
+  nonce: string,
+): string | null {
+  const startTag = `<${tagName} nonce="${nonce}">`;
+  const endTag = `</${tagName}>`;
+
+  const startIdx = output.indexOf(startTag);
+  if (startIdx === -1) return null;
+
+  const contentStart = startIdx + startTag.length;
+  const endIdx = output.indexOf(endTag, contentStart);
+  if (endIdx === -1) return null;
+
+  const content = stripAnsi(output.slice(contentStart, endIdx)).trim();
+  return content.length > 0 ? content : null;
+}
+
+// ---------------------------------------------------------------------------
+// Progress file management (absorbed from progress.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Append extracted progress content to the global progress file with an
+ * iteration header. No-op if content is null.
+ *
+ * Format appended:
+ * ```
+ * ### Iteration N
+ * <content>
+ * ```
+ */
+export function appendProgressBlock(
+  progressFile: string,
+  iterationNumber: number,
+  content: string,
+): void {
+  const block = `\n### Iteration ${iterationNumber}\n${content}\n`;
+
+  if (existsSync(progressFile)) {
+    const existing = readFileSync(progressFile, "utf-8");
+    writeFileSync(progressFile, existing + block, "utf-8");
+  } else {
+    writeFileSync(progressFile, `## Progress Log\n${block}`, "utf-8");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Learning content parsing (absorbed from learnings.ts)
 // ---------------------------------------------------------------------------
 
 /**

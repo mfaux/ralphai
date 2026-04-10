@@ -1,69 +1,17 @@
+/**
+ * Tests for progress and sentinel helpers absorbed into src/runner.ts.
+ */
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import { extractProgressBlock, appendProgressBlock } from "./progress.ts";
-
-// ---------------------------------------------------------------------------
-// extractProgressBlock
-// ---------------------------------------------------------------------------
-
-describe("extractProgressBlock", () => {
-  it("extracts content between <progress> tags", () => {
-    const text = "Some output\n<progress>\n### Task 1: Done\n</progress>\nMore";
-    expect(extractProgressBlock(text)).toBe("### Task 1: Done");
-  });
-
-  it("returns null when no <progress> block present", () => {
-    expect(extractProgressBlock("just some agent output")).toBeNull();
-  });
-
-  it("returns null for empty block", () => {
-    expect(extractProgressBlock("<progress>\n\n</progress>")).toBeNull();
-  });
-
-  it("returns null for whitespace-only block", () => {
-    expect(extractProgressBlock("<progress>   \n  \n</progress>")).toBeNull();
-  });
-
-  it("returns null when opening tag exists but no closing tag", () => {
-    expect(extractProgressBlock("<progress>\nsome content")).toBeNull();
-  });
-
-  it("returns null when only closing tag exists", () => {
-    expect(extractProgressBlock("some content</progress>")).toBeNull();
-  });
-
-  it("extracts multi-line content", () => {
-    const text = [
-      "output before",
-      "<progress>",
-      "### Task 1: Add feature",
-      "**Status:** Complete",
-      "Added the new module.",
-      "</progress>",
-      "output after",
-    ].join("\n");
-    const result = extractProgressBlock(text);
-    expect(result).toContain("### Task 1: Add feature");
-    expect(result).toContain("**Status:** Complete");
-    expect(result).toContain("Added the new module.");
-  });
-
-  it("extracts only the first block when multiple exist", () => {
-    const text = [
-      "<progress>first block</progress>",
-      "<progress>second block</progress>",
-    ].join("\n");
-    expect(extractProgressBlock(text)).toBe("first block");
-  });
-
-  it("handles nested-looking tags gracefully", () => {
-    // The inner </progress> ends the extraction
-    const text = "<progress>outer <progress>inner</progress> rest</progress>";
-    expect(extractProgressBlock(text)).toBe("outer <progress>inner");
-  });
-});
+import {
+  appendProgressBlock,
+  generateNonce,
+  detectCompletion,
+  extractNoncedBlock,
+  parseLearningContent,
+} from "./runner.ts";
 
 // ---------------------------------------------------------------------------
 // appendProgressBlock
@@ -108,5 +56,238 @@ describe("appendProgressBlock", () => {
     expect(content).toContain("First task work");
     expect(content).toContain("### Iteration 2");
     expect(content).toContain("Second task work");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateNonce
+// ---------------------------------------------------------------------------
+
+describe("generateNonce", () => {
+  it("returns a non-empty string", () => {
+    const nonce = generateNonce();
+    expect(nonce.length).toBeGreaterThan(0);
+  });
+
+  it("returns unique values on successive calls", () => {
+    const a = generateNonce();
+    const b = generateNonce();
+    expect(a).not.toBe(b);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectCompletion
+// ---------------------------------------------------------------------------
+
+describe("detectCompletion", () => {
+  const nonce = "test-nonce-abc123";
+
+  it("does NOT detect bare <promise>COMPLETE</promise> without nonce", () => {
+    const output = [
+      "Running tests...",
+      "  ✓ echoes <promise>COMPLETE</promise> when done",
+      "  ✓ other test",
+      "All tests passed.",
+    ].join("\n");
+    expect(detectCompletion(output, nonce)).toBe(false);
+  });
+
+  it("does NOT detect bare sentinel embedded in test runner output", () => {
+    const output = [
+      "bun test v1.0.0",
+      "",
+      "src/runner.test.ts:",
+      "  ✓ archives plan when agent outputs <promise>COMPLETE</promise> [5ms]",
+      "",
+      "  3 pass | 0 fail",
+    ].join("\n");
+    expect(detectCompletion(output, nonce)).toBe(false);
+  });
+
+  it('detects nonce-stamped <promise nonce="...">COMPLETE</promise>', () => {
+    const output = [
+      "I have finished all the work.",
+      `<promise nonce="${nonce}">COMPLETE</promise>`,
+      "<learnings>none</learnings>",
+    ].join("\n");
+    expect(detectCompletion(output, nonce)).toBe(true);
+  });
+
+  it("detects nonce-stamped sentinel with surrounding whitespace", () => {
+    const output = `  \n  <promise nonce="${nonce}">COMPLETE</promise>  \n  `;
+    expect(detectCompletion(output, nonce)).toBe(true);
+  });
+
+  it("does NOT detect sentinel with wrong nonce", () => {
+    const output = `<promise nonce="wrong-nonce-xyz">COMPLETE</promise>`;
+    expect(detectCompletion(output, nonce)).toBe(false);
+  });
+
+  it("does NOT detect sentinel with partial nonce match", () => {
+    const output = `<promise nonce="test-nonce-abc">COMPLETE</promise>`;
+    expect(detectCompletion(output, nonce)).toBe(false);
+  });
+
+  it("does NOT detect sentinel with nonce embedded as substring of longer value", () => {
+    const output = `<promise nonce="${nonce}-extra">COMPLETE</promise>`;
+    expect(detectCompletion(output, nonce)).toBe(false);
+  });
+
+  it("returns false for empty output", () => {
+    expect(detectCompletion("", nonce)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractNoncedBlock
+// ---------------------------------------------------------------------------
+
+describe("extractNoncedBlock", () => {
+  const nonce = "extract-nonce-456";
+
+  it("extracts content from nonce-stamped <learnings> block", () => {
+    const output = [
+      "some output",
+      `<learnings nonce="${nonce}">`,
+      "Always run tests before committing.",
+      "</learnings>",
+    ].join("\n");
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBe(
+      "Always run tests before committing.",
+    );
+  });
+
+  it("ignores bare <learnings> block (no nonce)", () => {
+    const output = [
+      "<learnings>",
+      "This is from test output, not the agent.",
+      "</learnings>",
+    ].join("\n");
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBeNull();
+  });
+
+  it("ignores <learnings> block with wrong nonce", () => {
+    const output = [
+      '<learnings nonce="wrong-nonce">',
+      "Content with wrong nonce.",
+      "</learnings>",
+    ].join("\n");
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBeNull();
+  });
+
+  it("extracts content from nonce-stamped <progress> block", () => {
+    const output = [
+      `<progress nonce="${nonce}">`,
+      "- [x] Added validation",
+      "</progress>",
+    ].join("\n");
+    expect(extractNoncedBlock(output, "progress", nonce)).toBe(
+      "- [x] Added validation",
+    );
+  });
+
+  it("extracts content from nonce-stamped <pr-summary> block", () => {
+    const output = `<pr-summary nonce="${nonce}">Implemented auth flow.</pr-summary>`;
+    expect(extractNoncedBlock(output, "pr-summary", nonce)).toBe(
+      "Implemented auth flow.",
+    );
+  });
+
+  it("returns null when block is empty", () => {
+    const output = `<learnings nonce="${nonce}"></learnings>`;
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBeNull();
+  });
+
+  it("returns null when block contains only whitespace", () => {
+    const output = `<learnings nonce="${nonce}">   \n  </learnings>`;
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBeNull();
+  });
+
+  it("returns null when no matching block exists", () => {
+    expect(
+      extractNoncedBlock("just regular output", "learnings", nonce),
+    ).toBeNull();
+  });
+
+  it("returns null when only opening tag exists", () => {
+    const output = `<learnings nonce="${nonce}">content without closing tag`;
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBeNull();
+  });
+
+  it("extracts multi-line content", () => {
+    const output = [
+      `<pr-summary nonce="${nonce}">`,
+      "Add JWT-based authentication with login/logout endpoints,",
+      "replacing the previous cookie-based session system.",
+      "</pr-summary>",
+    ].join("\n");
+    expect(extractNoncedBlock(output, "pr-summary", nonce)).toBe(
+      "Add JWT-based authentication with login/logout endpoints,\nreplacing the previous cookie-based session system.",
+    );
+  });
+
+  it("extracts only the first matching nonce-stamped block", () => {
+    const output = [
+      `<learnings nonce="${nonce}">first block</learnings>`,
+      `<learnings nonce="${nonce}">second block</learnings>`,
+    ].join("\n");
+    expect(extractNoncedBlock(output, "learnings", nonce)).toBe("first block");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseLearningContent
+// ---------------------------------------------------------------------------
+
+describe("parseLearningContent", () => {
+  it('returns null for "none" (lowercase)', () => {
+    expect(parseLearningContent("none")).toBeNull();
+  });
+
+  it('returns null for "None" (mixed case)', () => {
+    expect(parseLearningContent("None")).toBeNull();
+  });
+
+  it('returns null for "NONE" (uppercase)', () => {
+    expect(parseLearningContent("NONE")).toBeNull();
+  });
+
+  it('returns null for "none" with surrounding whitespace', () => {
+    expect(parseLearningContent("  none  ")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseLearningContent("")).toBeNull();
+  });
+
+  it("returns null for whitespace-only string", () => {
+    expect(parseLearningContent("   \n\t  ")).toBeNull();
+  });
+
+  it("returns trimmed prose for non-none content", () => {
+    const result = parseLearningContent(
+      "  The build fails when running on Windows due to path separators.  ",
+    );
+    expect(result).toBe(
+      "The build fails when running on Windows due to path separators.",
+    );
+  });
+
+  it("returns multiline prose as trimmed text", () => {
+    const block = [
+      "",
+      "  First line of learning.",
+      "  Second line of learning.",
+      "",
+    ].join("\n");
+    const result = parseLearningContent(block);
+    expect(result).toBe("First line of learning.\n  Second line of learning.");
+  });
+
+  it("preserves internal structure of prose", () => {
+    const block =
+      "Always use path.join() for cross-platform paths.\nNever hardcode / separators.";
+    expect(parseLearningContent(block)).toBe(block);
   });
 });
