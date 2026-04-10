@@ -97,6 +97,7 @@ Internal-only symbols (e.g. `parseWorktreeList`, `isRalphaiManagedBranch`, `Sele
 | `src/issue-lifecycle.ts`   | All issue operations: label constants, label transitions, GitHub issue pulling, dispatch classification, PRD discovery, HITL helpers, and reset logic. |
 | `src/issue-naming.ts`      | Pure naming utilities: slugs, branch names, commit-type extraction, dependency slugs.                                                                  |
 | `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).                                                                  |
+| `src/plan-lifecycle.ts`    | Unified facade for all plan operations. Re-exports from `plan-detection`, `frontmatter`, `receipt`, `global-state`, `pipeline-state`.                  |
 | `src/receipt.ts`           | Completion receipt parsing and source checking.                                                                                                        |
 | `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                                                                                             |
 | `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                                                                                       |
@@ -141,6 +142,7 @@ Modules import from leaf utilities and supporting modules. `ralphai.ts` is the r
 - **New worktree behavior:** Add to the appropriate `src/worktree/` sub-module, or create a new one and re-export through `index.ts`.
 - **New feedback or iteration logic:** Modify `src/runner.ts`.
 - **New plan selection or dependency logic:** Modify `src/plan-detection.ts`.
+- **New plan-related operations:** Add to the appropriate underlying module and re-export through `src/plan-lifecycle.ts`. Use `src/plan-lifecycle.fixtures.ts` for shared test builders.
 - **New config key:** Add to `src/config.ts` and update `docs/cli-reference.md`.
 
 ## Config access pattern
