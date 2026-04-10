@@ -280,17 +280,15 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     "GitHub Issues",
   );
 
-  const disableIssues = await clack.confirm({
+  const enableIssues = await clack.confirm({
     message: "Enable GitHub Issues integration?",
     initialValue: true,
   });
 
-  if (clack.isCancel(disableIssues)) {
+  if (clack.isCancel(enableIssues)) {
     clack.cancel("Setup cancelled.");
     return null;
   }
-
-  const enableIssues = disableIssues;
 
   // 7. Update AGENTS.md
   const agentsMdPath = join(cwd, "AGENTS.md");
@@ -1790,7 +1788,6 @@ async function runIssueTarget(
     hasHelp: boolean;
     hasShowConfig: boolean;
     setupCommand: string;
-    feedbackCommands: string[];
     standaloneLabel: string;
     subissueLabel: string;
     prdLabel: string;
@@ -1803,7 +1800,6 @@ async function runIssueTarget(
     hasHelp,
     hasShowConfig,
     setupCommand,
-    feedbackCommands,
     standaloneLabel,
     subissueLabel,
     prdLabel,
@@ -1934,10 +1930,7 @@ async function runIssueTarget(
 
     return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
       isDryRun,
-      hasHelp,
-      hasShowConfig,
       setupCommand,
-      feedbackCommands,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
@@ -1984,10 +1977,7 @@ async function runIssueTarget(
 
     return runPrdIssueTarget(discovery, repo, options, runArgs, cwd, {
       isDryRun,
-      hasHelp,
-      hasShowConfig,
       setupCommand,
-      feedbackCommands,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
     });
@@ -2095,10 +2085,7 @@ async function runPrdIssueTarget(
   cwd: string,
   flags: {
     isDryRun: boolean;
-    hasHelp: boolean;
-    hasShowConfig: boolean;
     setupCommand: string;
-    feedbackCommands: string[];
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
   },
@@ -2106,7 +2093,6 @@ async function runPrdIssueTarget(
   const {
     isDryRun,
     setupCommand,
-    feedbackCommands,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
   } = flags;
@@ -2615,7 +2601,6 @@ async function runRalphaiInManagedWorktree(
       hasHelp,
       hasShowConfig,
       setupCommand,
-      feedbackCommands: feedbackCommandsList,
       standaloneLabel: resolvedIssueLabel,
       subissueLabel: resolvedSubissueLabel,
       prdLabel: resolvedIssuePrdLabel,
@@ -2872,10 +2857,7 @@ async function runRalphaiInManagedWorktree(
           // Delegate to the unified PRD flow (single feat/ branch, aggregate PR)
           await runPrdIssueTarget(prdDiscovery, repo, options, runArgs, cwd, {
             isDryRun: false,
-            hasHelp: false,
-            hasShowConfig: false,
             setupCommand,
-            feedbackCommands: feedbackCommandsList,
             baseBranch,
             setupSandboxConfig,
           });
