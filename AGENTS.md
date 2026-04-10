@@ -33,6 +33,16 @@ Ralphai is a CLI tool that takes plans (markdown files) from a backlog and drive
 - **New test files per feature.** When adding tests for a new feature, create a new `<feature>.test.ts` file rather than appending to an existing one. If an existing test file covers multiple unrelated features, split it by domain before adding more tests.
 - **Check before appending.** Before adding substantial new code to a file, review whether it still has a single focus. If your changes would introduce a second responsibility, extract first.
 
+## Completeness
+
+Don't treat a task as done until you've traced how your changes affect the rest of the codebase. A change that works in isolation but breaks adjacent code is not complete — and neither is a fix applied to one module when analogous modules have the same problem.
+
+- **Update callers.** When you change a function signature, type, or module export, find and update every consumer.
+- **Update tests.** If you change behavior, the corresponding tests must reflect the new behavior in the same change — not as a follow-up.
+- **Verify the build.** Run the build and tests before declaring a task done. A green diff is not the same as a green build.
+- **Check for stale references.** Renaming or removing something? Search for string references (config keys, CLI flags, error messages, docs) that still point to the old name.
+- **Check analogous modules.** When applying a fix or pattern to one module, look for other modules that would benefit from the same treatment and include them unless the task was explicitly scoped to a single module.
+
 ## Dry-Run Safety
 
 The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the runner loop starts (in `src/runner.ts` or the CLI layer in `src/ralphai.ts`), verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
