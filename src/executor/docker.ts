@@ -185,18 +185,9 @@ export function buildMountFlags(
 ): string[] {
   const flags: string[] = [];
 
-  // Agent-specific file mounts
+  // Agent-specific + common file mounts (read-only)
   const agentMounts = AGENT_FILE_MOUNTS[agentType] ?? [];
-  for (const relPath of agentMounts) {
-    const hostPath = join(home, relPath);
-    if (existsSync(hostPath)) {
-      const containerPath = join(CONTAINER_HOME, relPath);
-      flags.push("-v", `${hostPath}:${containerPath}:ro`);
-    }
-  }
-
-  // Common file mounts
-  for (const relPath of COMMON_FILE_MOUNTS) {
+  for (const relPath of [...agentMounts, ...COMMON_FILE_MOUNTS]) {
     const hostPath = join(home, relPath);
     if (existsSync(hostPath)) {
       const containerPath = join(CONTAINER_HOME, relPath);
