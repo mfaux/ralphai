@@ -12,7 +12,6 @@ import {
   type ConfigValues,
   type RalphaiConfig,
   type ResolvedConfig,
-  type ResolvedValue,
 } from "./config.ts";
 
 function sleepMs(ms: number): void {
