@@ -10,7 +10,7 @@ import { join } from "path";
 import { execSync } from "child_process";
 import { useTempDir } from "./test-utils.ts";
 import { selectPlanForWorktree } from "./worktree/index.ts";
-import type { WorktreeEntry } from "./worktree/types.ts";
+import type { WorktreeEntry } from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

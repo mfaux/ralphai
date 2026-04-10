@@ -13,7 +13,7 @@ import { setExecImpl } from "./exec.ts";
 import {
   executeSetupCommand,
   type SetupSandboxConfig,
-} from "./worktree/management.ts";
+} from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

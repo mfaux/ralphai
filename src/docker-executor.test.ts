@@ -22,7 +22,7 @@ import {
   CONTAINER_HOME,
   getUserFlag,
 } from "./executor/docker.ts";
-import { resolveMainGitDir } from "./worktree/management.ts";
+import { resolveMainGitDir } from "./worktree/index.ts";
 import { createExecutor } from "./executor/index.ts";
 import { LocalExecutor } from "./executor/local.ts";
 import {

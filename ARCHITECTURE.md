@@ -70,7 +70,16 @@ Pure data helpers and the `@clack/prompts`-based config wizard, shared between t
 
 ## Worktree subsystem (`src/worktree/`)
 
-Worktree logic is split into focused sub-modules, re-exported through a barrel (`index.ts`).
+Worktree logic is split into focused sub-modules, re-exported through a curated barrel (`index.ts`). External callers must import from the barrel — never from internal files like `management.ts` or `parsing.ts` directly.
+
+**Public API** (exported from `worktree/index.ts`):
+
+- Types: `WorktreeEntry`, `GitHubFallbackOptions`, `SetupSandboxConfig`
+- Parsing: `listRalphaiWorktrees`
+- Selection: `selectPlanForWorktree`
+- Management: `isGitWorktree`, `resolveWorktreeInfo`, `resolveMainGitDir`, `resolveMainRepo`, `executeSetupCommand`, `ensureRepoHasCommit`, `prepareWorktree`
+
+Internal-only symbols (e.g. `parseWorktreeList`, `isRalphaiManagedBranch`, `SelectedWorktreePlan`) are not re-exported and should only be used within the worktree module or its own tests.
 
 | File                         | Role                                                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- |

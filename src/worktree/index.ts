@@ -1,14 +1,6 @@
-export type {
-  WorktreeEntry,
-  SelectedWorktreePlan,
-  GitHubFallbackOptions,
-} from "./types.ts";
+export type { WorktreeEntry, GitHubFallbackOptions } from "./types.ts";
 
-export {
-  parseWorktreeList,
-  isRalphaiManagedBranch,
-  listRalphaiWorktrees,
-} from "./parsing.ts";
+export { listRalphaiWorktrees } from "./parsing.ts";
 
 export { selectPlanForWorktree } from "./selection.ts";
 
