@@ -28,7 +28,7 @@ import {
   getPlanDescription,
   collectBacklogPlans,
   checkDependencyStatus,
-} from "./plan-detection.ts";
+} from "./plan-lifecycle.ts";
 
 const args = process.argv.slice(2);
 const command = args[0];

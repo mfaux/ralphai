@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from "bun:test";
 import { stripAnsi } from "../utils.ts";
-import type { PipelineState } from "../pipeline-state.ts";
+import type { PipelineState } from "../plan-lifecycle.ts";
 import {
   buildHeaderLine,
   buildMenuItems,

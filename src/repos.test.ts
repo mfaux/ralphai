@@ -7,7 +7,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-import { removeStaleRepos, listAllRepos } from "./global-state.ts";
+import { removeStaleRepos, listAllRepos } from "./plan-lifecycle.ts";
 
 describe("repos command", () => {
   const ctx = useTempGitDir();

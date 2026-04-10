@@ -35,7 +35,7 @@ function setupPipeline(cwd: string): {
   backlogDir: string;
   wipDir: string;
 } {
-  const { getRepoPipelineDirs } = require("./global-state.ts");
+  const { getRepoPipelineDirs } = require("./plan-lifecycle.ts");
   const { mkdtempSync } = require("fs");
   const { tmpdir } = require("os");
 

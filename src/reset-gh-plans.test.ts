@@ -6,7 +6,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 import { resetPlanBySlug } from "./ralphai.ts";
 
 const GH_FRONTMATTER = `---

@@ -9,7 +9,7 @@
  * progress file.
  */
 import { existsSync, readFileSync } from "fs";
-import type { PlanFormat } from "./plan-detection.ts";
+import type { PlanFormat } from "./plan-lifecycle.ts";
 import { formatLearningsForPrompt } from "./learnings.ts";
 
 // ---------------------------------------------------------------------------

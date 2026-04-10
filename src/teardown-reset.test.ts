@@ -8,7 +8,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 describe("reset command", () => {
   const ctx = useTempGitDir();

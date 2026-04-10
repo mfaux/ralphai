@@ -26,7 +26,7 @@
 
 import { Box, Text } from "ink";
 
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import type { Screen } from "../types.ts";
 import { stalledPlans } from "../../interactive/pipeline-actions.ts";
 import { useTerminalSize } from "../hooks/use-terminal-size.ts";

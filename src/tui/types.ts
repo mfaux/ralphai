@@ -14,7 +14,7 @@
  */
 
 import type { ConfirmData } from "./screens/confirm.tsx";
-import type { PipelineState } from "../pipeline-state.ts";
+import type { PipelineState } from "../plan-lifecycle.ts";
 import { findNextPlanName } from "../interactive/run-actions.ts";
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ import { execRun } from "./exec.ts";
 import {
   countCompletedFromProgress,
   type PlanFormat,
-} from "./plan-detection.ts";
+} from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Types

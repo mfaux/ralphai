@@ -17,7 +17,7 @@ import {
   extractScope,
   extractDependsOn,
   extractIssueFrontmatter,
-} from "./frontmatter.ts";
+} from "./plan-lifecycle.ts";
 
 const [command, file] = process.argv.slice(2);
 

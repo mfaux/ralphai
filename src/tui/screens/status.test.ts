@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { BacklogPlan, InProgressPlan } from "../../pipeline-state.ts";
+import type { BacklogPlan, InProgressPlan } from "../../plan-lifecycle.ts";
 import {
   livenessTag,
   buildBacklogLine,

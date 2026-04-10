@@ -12,7 +12,7 @@
  * - Each item carries an optional `hotkey` for single-key activation
  */
 
-import type { PipelineState } from "../pipeline-state.ts";
+import type { PipelineState } from "../plan-lifecycle.ts";
 import { DIM, RESET, TEXT } from "../utils.ts";
 import {
   runNextMenuItem,

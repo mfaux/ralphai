@@ -41,7 +41,7 @@ function setupPipeline(cwd: string): {
   wipDir: string;
 } {
   // Import getRepoPipelineDirs dynamically since we need to set RALPHAI_HOME first
-  const { getRepoPipelineDirs } = require("./global-state.ts");
+  const { getRepoPipelineDirs } = require("./plan-lifecycle.ts");
   const { mkdtempSync } = require("fs");
   const { tmpdir } = require("os");
 

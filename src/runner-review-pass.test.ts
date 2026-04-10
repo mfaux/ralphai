@@ -236,7 +236,7 @@ describe("runRunner — review pass", () => {
     const slug = "review-logheader";
     const logPath = join(wipDir, slug, "agent-output.log");
     // The WIP dir may have been archived; check the archive dir too
-    const { getRepoPipelineDirs } = await import("./global-state.ts");
+    const { getRepoPipelineDirs } = await import("./plan-lifecycle.ts");
     const dirs = getRepoPipelineDirs(worktreeDir, {
       RALPHAI_HOME: process.env.RALPHAI_HOME,
     });

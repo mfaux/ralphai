@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { detectPlan, type PipelineDirs } from "./plan-detection.ts";
+import { detectPlan, type PipelineDirs } from "./plan-lifecycle.ts";
 
 function makeDirs(base: string): PipelineDirs {
   const wipDir = join(base, "in-progress");

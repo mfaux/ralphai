@@ -19,7 +19,7 @@ import {
   formatDependency,
 } from "./detail-pane.tsx";
 import type { DetailContent } from "./detail-pane.tsx";
-import type { PipelineState, InProgressPlan } from "../../pipeline-state.ts";
+import type { PipelineState, InProgressPlan } from "../../plan-lifecycle.ts";
 import type { MenuContext } from "../menu-items.ts";
 import { makeTestResolvedConfig } from "../../test-utils.ts";
 

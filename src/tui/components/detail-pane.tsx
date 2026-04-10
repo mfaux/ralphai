@@ -11,7 +11,7 @@
 
 import { Box, Text } from "ink";
 
-import type { PipelineState, InProgressPlan } from "../../pipeline-state.ts";
+import type { PipelineState, InProgressPlan } from "../../plan-lifecycle.ts";
 import type { MenuContext } from "../menu-items.ts";
 import type { ResolvedConfig } from "../../config.ts";
 import {

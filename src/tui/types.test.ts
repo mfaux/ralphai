@@ -18,7 +18,7 @@ import {
 } from "./types.ts";
 import type { ActionType, DispatchResult, Screen, RunConfig } from "./types.ts";
 import type { ConfirmData } from "./screens/confirm.tsx";
-import type { PipelineState } from "../pipeline-state.ts";
+import type { PipelineState } from "../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // isActionType

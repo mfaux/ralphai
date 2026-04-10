@@ -23,7 +23,7 @@ import type {
 } from "../components/selectable-list.tsx";
 import { SelectableList } from "../components/selectable-list.tsx";
 import type { DispatchResult } from "../types.ts";
-import type { BacklogPlan } from "../../pipeline-state.ts";
+import type { BacklogPlan } from "../../plan-lifecycle.ts";
 import { unmetDependencies } from "../../interactive/run-actions.ts";
 
 // ---------------------------------------------------------------------------

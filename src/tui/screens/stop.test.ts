@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { InProgressPlan } from "../../pipeline-state.ts";
+import type { InProgressPlan } from "../../plan-lifecycle.ts";
 import {
   buildStopItems,
   stopSelect,

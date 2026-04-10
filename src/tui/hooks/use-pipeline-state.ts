@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import type { WorktreeEntry } from "../../worktree/index.ts";
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ import { execSync } from "child_process";
 
 import { runCli } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

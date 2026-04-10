@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import type { MenuItem, MenuContext } from "../menu-items.ts";
 import { buildMenuItems } from "../menu-items.ts";
 import {

@@ -10,9 +10,9 @@
  *   - global-state.ts    — pipeline directory resolution, repo registry
  *   - pipeline-state.ts  — aggregated pipeline state gathering
  *
- * Callers that need plan operations should eventually import from this
- * module instead of the individual files. Existing callers are unchanged
- * for now; migration will happen in a follow-up slice.
+ * All callers that need plan operations import from this module instead
+ * of the individual files. The underlying modules still cross-import
+ * each other internally, but no external caller should bypass this facade.
  */
 
 // -- plan-detection.ts -------------------------------------------------------

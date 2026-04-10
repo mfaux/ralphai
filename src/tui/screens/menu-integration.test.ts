@@ -16,16 +16,13 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { PipelineState } from "../../pipeline-state.ts";
+import type { PipelineState } from "../../plan-lifecycle.ts";
 import type { MenuContext } from "../menu-items.ts";
 import { buildMenuItems } from "../menu-items.ts";
 import { buildListItems, isGroupHeader } from "./menu.tsx";
 import { detailForItem } from "../components/detail-pane.tsx";
 import type { DetailContent } from "../components/detail-pane.tsx";
-import {
-  shouldSplit,
-  SPLIT_THRESHOLD,
-} from "../components/split-layout.tsx";
+import { shouldSplit, SPLIT_THRESHOLD } from "../components/split-layout.tsx";
 
 // ---------------------------------------------------------------------------
 // Test helpers

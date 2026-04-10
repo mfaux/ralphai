@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import type { BacklogPlan } from "../../pipeline-state.ts";
+import type { BacklogPlan } from "../../plan-lifecycle.ts";
 import {
   buildBacklogPickerItems,
   backlogPickerSelect,
