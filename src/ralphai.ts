@@ -200,12 +200,15 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   const project = detectProject(cwd);
   const detectedFeedback = project ? project.feedbackCommands.join(",") : "";
   const feedbackPlaceholder = project
-    ? project.feedbackCommands.join(", ") || "<build command>, <test command>"
-    : "<build command>, <test command>";
+    ? project.feedbackCommands.join(", ") || "e.g. npm run build, npm test"
+    : "e.g. npm run build, npm test";
+  clack.log.info(
+    "Feedback commands run after every agent iteration to guide corrections. Keep them fast — slow tests belong in PR feedback commands.",
+  );
   const feedbackCommands = await clack.text({
     message: detectedFeedback
       ? `Feedback commands (auto-detected for ${project!.label}):`
-      : "Feedback commands (comma-separated, or leave empty):",
+      : "Fast feedback commands (comma-separated, or leave empty):",
     initialValue: detectedFeedback || undefined,
     placeholder: detectedFeedback ? undefined : feedbackPlaceholder,
     defaultValue: detectedFeedback || "",
@@ -222,7 +225,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     : "";
   const prFeedbackCommands = await clack.text({
     message:
-      "Slow commands to run only before creating a PR (e.g. E2E or integration tests):",
+      "Slow commands to run only before creating a PR, comma-separated (e.g. E2E or integration tests):",
     initialValue: detectedPrFeedback || undefined,
     placeholder: detectedPrFeedback
       ? undefined
@@ -1487,6 +1490,9 @@ async function runRalphaiInit(
       `  ${DIM}Branch:${RESET}    ${TEXT}${answers.baseBranch}${RESET}`,
     );
     console.log(`  ${DIM}Feedback:${RESET}  ${TEXT}${feedbackDisplay}${RESET}`);
+    console.log(
+      `  ${DIM}           (runs after every iteration — keep these fast)${RESET}`,
+    );
     console.log(
       `  ${DIM}PR feedback:${RESET} ${TEXT}${prFeedbackDisplay}${RESET}`,
     );
