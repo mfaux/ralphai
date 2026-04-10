@@ -1,5 +1,12 @@
 import { execFileSync, execSync } from "child_process";
-import { existsSync, mkdtempSync, renameSync, rmSync } from "fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "bun:test";
@@ -241,6 +248,42 @@ export function useTempDir() {
       return testDir;
     },
   };
+}
+
+/**
+ * Set up a repo with a bare remote + clone, an initial commit pushed to the
+ * remote, plus a feature branch with one commit. Returns the path to the
+ * clone (repoDir).
+ *
+ * Shared by pr-lifecycle-ansi.test.ts and pr-lifecycle-stdin.test.ts.
+ */
+export function initRepoWithRemoteAndBranch(
+  dir: string,
+  branch: string,
+): string {
+  const remoteDir = join(dir, "remote.git");
+  const repoDir = join(dir, "repo");
+  mkdirSync(remoteDir, { recursive: true });
+  execSync("git init --bare", { cwd: remoteDir, stdio: "ignore" });
+  execSync(`git clone "${remoteDir}" repo`, { cwd: dir, stdio: "ignore" });
+  execSync('git config user.email "test@test.com"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  execSync('git config user.name "Test"', { cwd: repoDir, stdio: "ignore" });
+  writeFileSync(join(repoDir, "init.txt"), "init\n");
+  execSync('git add -A && git commit -m "init"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  execSync("git push", { cwd: repoDir, stdio: "ignore" });
+  execSync(`git checkout -b "${branch}"`, { cwd: repoDir, stdio: "ignore" });
+  writeFileSync(join(repoDir, "feature.txt"), "feature\n");
+  execSync('git add -A && git commit -m "feat: add feature"', {
+    cwd: repoDir,
+    stdio: "ignore",
+  });
+  return repoDir;
 }
 
 export function useTempGitDir() {

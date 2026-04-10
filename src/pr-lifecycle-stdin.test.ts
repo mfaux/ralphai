@@ -12,10 +12,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { execSync as realExecSync } from "child_process";
-import { mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
 import { setExecImpl } from "./exec.ts";
-import { useTempDir } from "./test-utils.ts";
+import { initRepoWithRemoteAndBranch, useTempDir } from "./test-utils.ts";
 import { createPr, createPrdPr } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
@@ -30,42 +28,6 @@ let restoreExec: () => void;
 // ---------------------------------------------------------------------------
 
 const ctx = useTempDir();
-
-/** Set up a repo with a remote so push succeeds, plus a feature branch. */
-function initRepoWithRemoteAndBranch(dir: string, branch: string): string {
-  const remoteDir = join(dir, "remote.git");
-  const repoDir = join(dir, "repo");
-  mkdirSync(remoteDir, { recursive: true });
-  realExecSync("git init --bare", { cwd: remoteDir, stdio: "ignore" });
-  realExecSync(`git clone "${remoteDir}" repo`, {
-    cwd: dir,
-    stdio: "ignore",
-  });
-  realExecSync('git config user.email "test@test.com"', {
-    cwd: repoDir,
-    stdio: "ignore",
-  });
-  realExecSync('git config user.name "Test"', {
-    cwd: repoDir,
-    stdio: "ignore",
-  });
-  writeFileSync(join(repoDir, "init.txt"), "init\n");
-  realExecSync('git add -A && git commit -m "init"', {
-    cwd: repoDir,
-    stdio: "ignore",
-  });
-  realExecSync("git push", { cwd: repoDir, stdio: "ignore" });
-  realExecSync(`git checkout -b "${branch}"`, {
-    cwd: repoDir,
-    stdio: "ignore",
-  });
-  writeFileSync(join(repoDir, "feature.txt"), "feature\n");
-  realExecSync('git add -A && git commit -m "feat: add feature"', {
-    cwd: repoDir,
-    stdio: "ignore",
-  });
-  return repoDir;
-}
 
 /** Body containing shell metacharacters that would break interpolation. */
 const DANGEROUS_BODY =
