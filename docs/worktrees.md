@@ -26,7 +26,8 @@ Run `ralphai run` from the **main repository**, not from inside a worktree.
 ## How it works
 
 1. `ralphai run` creates a git worktree with a conventional-commit-style branch
-   (e.g. `feat/add-dark-mode`, `fix/broken-login`).
+   (e.g. `feat/add-dark-mode`, `fix/broken-login`), branching from the
+   configured `baseBranch` (default: `main`).
    It reuses existing worktrees for in-progress plans.
 2. If a `setupCommand` is configured, it runs in the worktree directory
    immediately after creation (e.g. `bun install`). This ensures
@@ -121,3 +122,36 @@ file is a pointer back to the main repo's `.git/worktrees/<name>` directory
 
 The mount is read-write so agents can create commits. No manual
 `dockerMounts` configuration is needed for worktree git operations.
+
+## Base branch
+
+By default, worktrees branch from `main` (or whatever `baseBranch` is set
+to in your config). You can override this per-run:
+
+```bash
+ralphai run --base-branch=develop
+```
+
+Resolution order (highest priority first):
+
+1. `--base-branch=<branch>` CLI flag
+2. `RALPHAI_BASE_BRANCH` env var
+3. `baseBranch` in config file (`~/.ralphai/repos/<id>/config.json`)
+4. Default: `main` (auto-detected during `ralphai init`)
+
+### Stacking work across PRDs
+
+If you have an in-progress PRD on a feature branch and want a second PRD
+to build on top of it, set `--base-branch` to the first PRD's branch:
+
+```bash
+# First PRD is in progress on feat/user-auth
+ralphai run 200 --base-branch=feat/user-auth
+```
+
+This creates the new worktree forked from `feat/user-auth` instead of
+`main`, so all the first PRD's commits are included. The resulting PR
+will target `feat/user-auth` as its base.
+
+When the first PRD merges to `main`, you can rebase or merge `main` into
+the second PRD's branch to update its base.
