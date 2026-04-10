@@ -26,7 +26,7 @@ import { execSync } from "child_process";
 
 import { runRunner, type RunnerOptions } from "./runner.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
-import { buildIssuePlanContent } from "./issues.ts";
+import { buildIssuePlanContent } from "./issue-lifecycle.ts";
 import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------

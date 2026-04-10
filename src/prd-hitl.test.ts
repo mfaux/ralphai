@@ -11,7 +11,7 @@ import {
   formatPrdHitlSummary,
   type BlockedSubIssue,
   type PrdHitlSummaryInput,
-} from "./prd-hitl.ts";
+} from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // findHitlBlockers

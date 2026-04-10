@@ -4,7 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { checkDependencyStatus, planReadiness } from "./plan-detection.ts";
 import type { PipelineDirs } from "./plan-detection.ts";
-import { buildIssuePlanContent } from "./issues.ts";
+import { buildIssuePlanContent } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

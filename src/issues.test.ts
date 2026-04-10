@@ -12,8 +12,8 @@ import {
   peekGithubIssues,
   pullGithubIssues,
   fetchPrdIssueByNumber,
-} from "./issues.ts";
-import type { PullIssueOptions, PeekIssueOptions } from "./issues.ts";
+} from "./issue-lifecycle.ts";
+import type { PullIssueOptions, PeekIssueOptions } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -17,9 +17,9 @@ import {
   checkGhAvailable,
   commitTypeFromTitle,
   detectIssueRepo,
-} from "./issues.ts";
-import { transitionDone } from "./label-lifecycle.ts";
-import type { BlockedSubIssue } from "./prd-hitl.ts";
+  transitionDone,
+  type BlockedSubIssue,
+} from "./issue-lifecycle.ts";
 import { formatLearningsForPr } from "./learnings.ts";
 import { stripAnsi } from "./utils.ts";
 

@@ -14,7 +14,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { EventEmitter } from "events";
 
-import type { ParentIssueResult, IssueWithLabels } from "./issues.ts";
+import type { ParentIssueResult, IssueWithLabels } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mocks

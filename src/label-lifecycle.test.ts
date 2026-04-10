@@ -17,7 +17,7 @@ import {
   prdTransitionInProgress,
   prdTransitionDone,
   prdTransitionStuck,
-} from "./label-lifecycle.ts";
+} from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

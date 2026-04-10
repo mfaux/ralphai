@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { setExecImpl } from "./exec.ts";
-import { discoverPrdTarget } from "./prd-discovery.ts";
+import { discoverPrdTarget } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

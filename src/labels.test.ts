@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { STATE_LABELS } from "./labels.ts";
+import { STATE_LABELS } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Shared state label constants

@@ -13,7 +13,7 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 import { setExecImpl } from "./exec.ts";
-import { restoreIssueLabels } from "./reset-labels.ts";
+import { restoreIssueLabels } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

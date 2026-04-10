@@ -4,7 +4,7 @@ import {
   issueDepSlug,
   buildIssuePlanContent,
   fetchBlockersViaGraphQL,
-} from "./issues.ts";
+} from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // fetchBlockersViaGraphQL — queries GitHub GraphQL API for blocking issues

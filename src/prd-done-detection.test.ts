@@ -10,7 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { setExecImpl } from "./exec.ts";
-import { checkAllPrdSubIssuesDone } from "./issues.ts";
+import { checkAllPrdSubIssuesDone } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

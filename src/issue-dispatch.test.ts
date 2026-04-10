@@ -11,7 +11,7 @@ import {
   validateStandalone,
   validateSubissue,
   type LabelConfig,
-} from "./issue-dispatch.ts";
+} from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

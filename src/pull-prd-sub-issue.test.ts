@@ -11,9 +11,9 @@ import { existsSync, mkdtempSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-import type { PullIssueOptions } from "./issues.ts";
+import type { PullIssueOptions } from "./issue-lifecycle.ts";
 import { setExecImpl } from "./exec.ts";
-import { pullPrdSubIssue } from "./issues.ts";
+import { pullPrdSubIssue } from "./issue-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Mock setup — swap execSync via DI

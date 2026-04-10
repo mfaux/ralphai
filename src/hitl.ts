@@ -27,9 +27,11 @@ import {
   issueBranchName,
   slugify,
   commitTypeFromTitle,
-} from "./issues.ts";
+  DONE_LABEL,
+  IN_PROGRESS_LABEL,
+  STUCK_LABEL,
+} from "./issue-lifecycle.ts";
 import { execQuiet } from "./exec.ts";
-import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
 import {
   prepareWorktree,
   resolveMainRepo,
