@@ -115,7 +115,6 @@ import type {
   GitHubFallbackOptions,
   SetupSandboxConfig,
 } from "./worktree/index.ts";
-import { parseFeedbackCommands } from "./feedback-wrapper.ts";
 import { runConfigWizard } from "./interactive/run-wizard.ts";
 
 // ---------------------------------------------------------------------------
@@ -2503,7 +2502,6 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
-  let feedbackCommandsList: string[] = [];
   let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
     const cfgResult = resolveConfig({
@@ -2521,9 +2519,6 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfg.issueRepo;
     resolvedIssueCommentProgress = cfg.issueCommentProgress === "true";
     resolvedIssueHitlLabel = cfg.issueHitlLabel;
-
-    // Parse feedback commands for the wrapper script (written to worktree root)
-    feedbackCommandsList = parseFeedbackCommands(cfg.feedbackCommands);
 
     // Build sandbox config for routing setup commands through Docker
     setupSandboxConfig = {

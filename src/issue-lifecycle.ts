@@ -731,6 +731,103 @@ export function buildIssuePlanContent(
   return `---\n${frontmatter}\n---\n\n# ${title}\n\n${body}\n`;
 }
 
+// ---------------------------------------------------------------------------
+// Shared peek helper — used by peekGithubIssues() and peekPrdIssues()
+// ---------------------------------------------------------------------------
+
+interface PeekParams {
+  cwd: string;
+  issueSource: string;
+  issueRepo: string;
+  label: string;
+  limit: number;
+  /**
+   * Message fragments that differ between standalone and PRD peeks.
+   * Keeps all human-readable strings identical to the originals.
+   */
+  msg: {
+    skipPeek: string; // e.g. "issue peek" or "PRD peek"
+    listFailed: string; // e.g. "issues" or "PRD issues"
+    parseFailed: string; // e.g. "issue list" or "PRD issue list"
+    emptyLabel: string; // e.g. "issues" or "PRD issues"
+    countLabel: string; // e.g. "GitHub issue(s)" or "PRD issue(s)"
+  };
+  timeoutOpt: ExecOptions;
+}
+
+function peekIssuesByLabel(p: PeekParams): PeekIssueResult {
+  if (p.issueSource !== "github") {
+    return { found: false, count: 0, message: "Issue source is not 'github'" };
+  }
+
+  if (!checkGhAvailable(p.timeoutOpt)) {
+    return {
+      found: false,
+      count: 0,
+      message: `gh CLI not available or not authenticated — skipping ${p.msg.skipPeek}`,
+    };
+  }
+
+  const repo = detectIssueRepo(p.cwd, p.issueRepo, p.timeoutOpt);
+  if (!repo) {
+    return {
+      found: false,
+      count: 0,
+      message: `Could not detect GitHub repo — skipping ${p.msg.skipPeek}`,
+    };
+  }
+
+  const raw = execQuiet(
+    `gh issue list --repo "${repo}" --label "${p.label}" --state open ` +
+      `--limit ${p.limit} --json number,title`,
+    p.cwd,
+    p.timeoutOpt,
+  );
+
+  if (!raw) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Could not list ${p.msg.listFailed} in ${repo}`,
+    };
+  }
+
+  let issues: Array<{ number: number; title: string }>;
+  try {
+    issues = JSON.parse(raw);
+  } catch {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `Failed to parse ${p.msg.parseFailed} from ${repo}`,
+    };
+  }
+
+  if (issues.length === 0) {
+    return {
+      found: false,
+      count: 0,
+      repo,
+      message: `No open ${p.msg.emptyLabel} with label '${p.label}' in ${repo}`,
+    };
+  }
+
+  // gh issue list returns newest first; last element is the oldest.
+  const oldest = issues[issues.length - 1]!;
+
+  return {
+    found: true,
+    count: issues.length,
+    oldest,
+    repo,
+    message:
+      `${issues.length} ${p.msg.countLabel} with label '${p.label}' in ${repo}` +
+      ` (oldest: #${oldest.number} — ${oldest.title})`,
+  };
+}
+
 /**
  * Read-only check for open GitHub issues matching the configured label.
  *
@@ -738,83 +835,21 @@ export function buildIssuePlanContent(
  * files, edits labels, or posts comments.
  */
 export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
-  const { cwd, issueSource, standaloneLabel: issueLabel, issueRepo } = options;
-  const timeoutOpt =
-    options.timeout != null ? { timeout: options.timeout } : {};
-
-  if (issueSource !== "github") {
-    return { found: false, count: 0, message: "Issue source is not 'github'" };
-  }
-
-  if (!checkGhAvailable(timeoutOpt)) {
-    return {
-      found: false,
-      count: 0,
-      message:
-        "gh CLI not available or not authenticated — skipping issue peek",
-    };
-  }
-
-  const repo = detectIssueRepo(cwd, issueRepo, timeoutOpt);
-  if (!repo) {
-    return {
-      found: false,
-      count: 0,
-      message: "Could not detect GitHub repo — skipping issue peek",
-    };
-  }
-
-  // Fetch up to 100 matching issues (number + title) — read-only.
-  const raw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${issueLabel}" --state open ` +
-      `--limit 100 --json number,title`,
-    cwd,
-    timeoutOpt,
-  );
-
-  if (!raw) {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `Could not list issues in ${repo}`,
-    };
-  }
-
-  let issues: Array<{ number: number; title: string }>;
-  try {
-    issues = JSON.parse(raw);
-  } catch {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `Failed to parse issue list from ${repo}`,
-    };
-  }
-
-  if (issues.length === 0) {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `No open issues with label '${issueLabel}' in ${repo}`,
-    };
-  }
-
-  // gh issue list returns newest first; last element is the oldest.
-  // Length is guaranteed > 0 by the guard above.
-  const oldest = issues[issues.length - 1]!;
-
-  return {
-    found: true,
-    count: issues.length,
-    oldest,
-    repo,
-    message:
-      `${issues.length} GitHub issue(s) with label '${issueLabel}' in ${repo}` +
-      ` (oldest: #${oldest.number} — ${oldest.title})`,
-  };
+  return peekIssuesByLabel({
+    cwd: options.cwd,
+    issueSource: options.issueSource,
+    issueRepo: options.issueRepo,
+    label: options.standaloneLabel,
+    limit: 100,
+    msg: {
+      skipPeek: "issue peek",
+      listFailed: "issues",
+      parseFailed: "issue list",
+      emptyLabel: "issues",
+      countLabel: "GitHub issue(s)",
+    },
+    timeoutOpt: options.timeout != null ? { timeout: options.timeout } : {},
+  });
 }
 
 /**
@@ -822,79 +857,21 @@ export function peekGithubIssues(options: PeekIssueOptions): PeekIssueResult {
  * Safe for dry-run mode.
  */
 export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
-  const { cwd, issueSource, issueRepo } = options;
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
-  const timeoutOpt =
-    options.timeout != null ? { timeout: options.timeout } : {};
-
-  if (issueSource !== "github") {
-    return { found: false, count: 0, message: "Issue source is not 'github'" };
-  }
-
-  if (!checkGhAvailable(timeoutOpt)) {
-    return {
-      found: false,
-      count: 0,
-      message: "gh CLI not available or not authenticated — skipping PRD peek",
-    };
-  }
-
-  const repo = detectIssueRepo(cwd, issueRepo, timeoutOpt);
-  if (!repo) {
-    return {
-      found: false,
-      count: 0,
-      message: "Could not detect GitHub repo — skipping PRD peek",
-    };
-  }
-
-  const raw = execQuiet(
-    `gh issue list --repo "${repo}" --label "${prdLabel}" --state open ` +
-      `--limit 10 --json number,title`,
-    cwd,
-    timeoutOpt,
-  );
-
-  if (!raw) {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `Could not list PRD issues in ${repo}`,
-    };
-  }
-
-  let issues: Array<{ number: number; title: string }>;
-  try {
-    issues = JSON.parse(raw);
-  } catch {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `Failed to parse PRD issue list from ${repo}`,
-    };
-  }
-
-  if (issues.length === 0) {
-    return {
-      found: false,
-      count: 0,
-      repo,
-      message: `No open PRD issues with label '${prdLabel}' in ${repo}`,
-    };
-  }
-
-  const oldest = issues[issues.length - 1]!;
-  return {
-    found: true,
-    count: issues.length,
-    oldest,
-    repo,
-    message:
-      `${issues.length} PRD issue(s) with label '${prdLabel}' in ${repo}` +
-      ` (oldest: #${oldest.number} — ${oldest.title})`,
-  };
+  return peekIssuesByLabel({
+    cwd: options.cwd,
+    issueSource: options.issueSource,
+    issueRepo: options.issueRepo,
+    label: options.issuePrdLabel ?? DEFAULTS.prdLabel,
+    limit: 10,
+    msg: {
+      skipPeek: "PRD peek",
+      listFailed: "PRD issues",
+      parseFailed: "PRD issue list",
+      emptyLabel: "PRD issues",
+      countLabel: "PRD issue(s)",
+    },
+    timeoutOpt: options.timeout != null ? { timeout: options.timeout } : {},
+  });
 }
 
 // ---------------------------------------------------------------------------
