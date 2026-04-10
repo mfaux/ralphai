@@ -2042,17 +2042,21 @@ async function runIssueTarget(
   console.log(pullResult.message);
   console.log("Running ralphai in worktree...");
 
-  // Build runner options: single-target, no drain
+  // Build runner options: single-target, no drain.
+  // --once ensures the runner exits after completing this single issue
+  // instead of draining the backlog or pulling more GitHub issues.
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
   const shouldResume = activeWorktree !== undefined;
   const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
+  const hasOnceFlag = runArgs.includes("--once");
   const worktreeRunOptions: RalphaiOptions = {
     ...options,
     subcommand: "run",
     runTarget: undefined, // already handled
     runArgs: [
       ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+      ...(!hasOnceFlag ? ["--once"] : []),
       ...runArgs,
     ],
   };
