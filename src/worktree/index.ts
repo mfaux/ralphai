@@ -21,7 +21,5 @@ export {
   ensureRepoHasCommit,
   prepareWorktree,
   writeFeedbackWrapper,
-  listWorktrees,
-  cleanWorktrees,
   type SetupSandboxConfig,
 } from "./management.ts";

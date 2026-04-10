@@ -92,8 +92,6 @@ mock.module("./worktree/index.ts", () => ({
   resolveMainGitDir: () => undefined,
   ensureRepoHasCommit: mockEnsureRepoHasCommit,
   executeSetupCommand: () => {},
-  listWorktrees: () => [],
-  cleanWorktrees: () => {},
 }));
 
 // Mock git-helpers

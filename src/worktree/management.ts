@@ -1,10 +1,7 @@
-import { existsSync, mkdirSync, rmSync, renameSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { execQuiet, execOk, execRun, execInherit } from "../exec.ts";
 import { DIM, TEXT, RESET } from "../utils.ts";
-import { getRepoPipelineDirs } from "../global-state.ts";
-import { planExistsForSlug } from "../plan-detection.ts";
-import { findPlansByBranch } from "../receipt.ts";
 import {
   generateFeedbackWrapper,
   FEEDBACK_WRAPPER_FILENAME,
@@ -61,16 +58,12 @@ export function resolveWorktreeInfo(dir: string): {
   isWorktree: boolean;
   mainWorktree: string;
 } {
-  try {
-    const commonDir = execQuiet("git rev-parse --git-common-dir", dir);
-    const gitDir = execQuiet("git rev-parse --git-dir", dir);
-    if (commonDir != null && gitDir != null && commonDir !== gitDir) {
-      // In a worktree: --git-common-dir points to the main .git
-      const mainRoot = resolve(dir, commonDir, "..");
-      return { isWorktree: true, mainWorktree: mainRoot };
-    }
-  } catch {
-    // Not in a git repo or git not available
+  const commonDir = execQuiet("git rev-parse --git-common-dir", dir);
+  const gitDir = execQuiet("git rev-parse --git-dir", dir);
+  if (commonDir != null && gitDir != null && commonDir !== gitDir) {
+    // In a worktree: --git-common-dir points to the main .git
+    const mainRoot = resolve(dir, commonDir, "..");
+    return { isWorktree: true, mainWorktree: mainRoot };
   }
   return { isWorktree: false, mainWorktree: "" };
 }
@@ -285,95 +278,4 @@ export function writeFeedbackWrapper(
   const script = generateFeedbackWrapper(feedbackCommands);
   const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
   writeFileSync(wrapperPath, script, { mode: 0o755 });
-}
-
-export function listWorktrees(cwd: string): void {
-  const worktrees = listRalphaiWorktrees(cwd);
-
-  if (worktrees.length === 0) {
-    console.log("No active ralphai worktrees.");
-    return;
-  }
-
-  console.log("Active ralphai worktrees:\n");
-  const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
-  for (const wt of worktrees) {
-    let hasActivePlan: boolean;
-    if (wt.branch.startsWith("ralphai/")) {
-      const slug = wt.branch.replace("ralphai/", "");
-      hasActivePlan = planExistsForSlug(inProgressDir, slug);
-    } else {
-      // feat/ or other managed branches: use receipt-based lookup
-      hasActivePlan = findPlansByBranch(inProgressDir, wt.branch).length > 0;
-    }
-    const status = hasActivePlan ? "in-progress" : "idle";
-    console.log(`  ${wt.branch}  ${wt.path}  [${status}]`);
-  }
-}
-
-export function cleanWorktrees(cwd: string): void {
-  // Prune stale worktree entries first
-  execInherit("git worktree prune", cwd);
-
-  const worktrees = listRalphaiWorktrees(cwd);
-
-  if (worktrees.length === 0) {
-    console.log("No ralphai worktrees to clean.");
-    return;
-  }
-
-  const { wipDir: inProgressDir, archiveDir } = getRepoPipelineDirs(cwd);
-  let cleaned = 0;
-
-  for (const wt of worktrees) {
-    let hasActivePlan: boolean;
-    let matchedSlugs: string[];
-
-    if (wt.branch.startsWith("ralphai/")) {
-      const slug = wt.branch.replace("ralphai/", "");
-      hasActivePlan = planExistsForSlug(inProgressDir, slug);
-      matchedSlugs = [slug];
-    } else {
-      // feat/ or other managed branches: use receipt-based lookup
-      matchedSlugs = findPlansByBranch(inProgressDir, wt.branch);
-      hasActivePlan = matchedSlugs.length > 0;
-    }
-
-    if (!hasActivePlan) {
-      console.log(`Removing: ${wt.path} (${wt.branch})`);
-      try {
-        // Use --force because the worktree may have uncommitted changes
-        // from interrupted agent work.
-        execInherit(`git worktree remove --force "${wt.path}"`, cwd);
-        // Force-delete branch (-D) because ralphai/* branches are typically
-        // not merged to main yet. Non-force -d would silently fail, leaving
-        // stale branches that cause dirty-state errors on the next run.
-        execOk(`git branch -D "${wt.branch}"`, cwd);
-
-        // Archive receipts for matched slugs (ralphai/ has one slug,
-        // feat/ may have multiple from receipt scan)
-        for (const slug of matchedSlugs) {
-          const planDir = join(inProgressDir, slug);
-          const receiptFile = join(planDir, "receipt.txt");
-          if (existsSync(receiptFile)) {
-            const destDir = join(archiveDir, slug);
-            mkdirSync(destDir, { recursive: true });
-            const dest = join(destDir, "receipt.txt");
-            renameSync(receiptFile, dest);
-            console.log(`  Archived receipt: ${slug}/receipt.txt`);
-          }
-        }
-
-        cleaned++;
-      } catch {
-        console.log(`  Warning: Could not remove ${wt.path}. Remove manually.`);
-      }
-    } else {
-      console.log(
-        `Keeping: ${wt.path} (${wt.branch}) — plan still in progress`,
-      );
-    }
-  }
-
-  console.log(`\nCleaned ${cleaned} worktree(s).`);
 }
