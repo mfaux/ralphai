@@ -168,11 +168,11 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
       message: "Enter the agent CLI command prefix:",
       placeholder: "e.g. my-agent run --prompt",
       validate: (value) => {
-        if (!value.trim()) return "Command cannot be empty";
+        if (!value?.trim()) return "Command cannot be empty";
       },
     });
 
-    if (clack.isCancel(customCommand)) {
+    if (clack.isCancel(customCommand) || !customCommand) {
       clack.cancel("Setup cancelled.");
       return null;
     }
@@ -187,7 +187,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     message: "Base branch for PRs:",
     initialValue: detectedBranch,
     validate: (value) => {
-      if (!value.trim()) return "Branch name cannot be empty";
+      if (!value?.trim()) return "Branch name cannot be empty";
     },
   });
 

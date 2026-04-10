@@ -17,7 +17,10 @@ import { configValues } from "../config.ts";
 
 /** Prompt type metadata for each wizard option. */
 export type PromptType =
-  | { kind: "text"; validate?: (value: string) => string | undefined }
+  | {
+      kind: "text";
+      validate?: (value: string | undefined) => string | undefined;
+    }
   | { kind: "select"; choices: readonly string[] };
 
 /** A single wizard option descriptor. */
@@ -91,16 +94,16 @@ const LABELS: Record<WizardConfigKey, string> = {
 // ---------------------------------------------------------------------------
 
 /** Validate that a string is a positive integer (>= 1). */
-function validatePositiveInt(value: string): string | undefined {
-  if (!/^\d+$/.test(value) || parseInt(value, 10) < 1) {
+function validatePositiveInt(value: string | undefined): string | undefined {
+  if (!value || !/^\d+$/.test(value) || parseInt(value, 10) < 1) {
     return "Must be a positive integer (>= 1)";
   }
   return undefined;
 }
 
 /** Validate that a string is a non-negative integer (>= 0). */
-function validateNonNegInt(value: string): string | undefined {
-  if (!/^\d+$/.test(value) || parseInt(value, 10) < 0) {
+function validateNonNegInt(value: string | undefined): string | undefined {
+  if (!value || !/^\d+$/.test(value) || parseInt(value, 10) < 0) {
     return "Must be a non-negative integer (>= 0)";
   }
   return undefined;
