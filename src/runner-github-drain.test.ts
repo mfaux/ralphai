@@ -14,7 +14,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
 
-import type { PullIssueOptions, PullIssueResult } from "./issues.ts";
+import type { PullIssueOptions, PullIssueResult } from "./issue-lifecycle.ts";
 import type { RunnerOptions } from "./runner.ts";
 
 // ---------------------------------------------------------------------------
