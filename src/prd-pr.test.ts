@@ -71,7 +71,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -132,7 +131,6 @@ describe("skipPrCreation flag", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -165,7 +163,6 @@ describe("skipPrCreation flag", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -199,7 +196,6 @@ describe("skipPrCreation flag", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentWithLearning,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -257,7 +253,6 @@ describe("runner result learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgentWithLearning,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -293,7 +288,6 @@ describe("runner result learnings", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

@@ -13,7 +13,7 @@ Ralphai aborts when it detects 3 consecutive iterations with no new commits (con
 3. Edit the plan file in `pipeline/in-progress/<slug>/<slug>.md` — simplify the current step, add hints, or break it into smaller subtasks.
 4. Resume: `ralphai run --resume`
 
-The `--resume` flag auto-commits any dirty working tree state and continues from where the agent left off, preserving the existing progress file.
+The `--resume` flag commits any dirty working tree state and continues from where the agent left off, preserving the existing progress file.
 
 ### "Plan stuck with zero tasks completed"
 

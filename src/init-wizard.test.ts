@@ -10,7 +10,6 @@ const ralphaiSrc = readFileSync(join(__dirname, "ralphai.ts"), "utf-8");
 describe("init wizard", () => {
   it("does not prompt for removed workflow options", () => {
     expect(ralphaiSrc).not.toContain('message: "Workflow mode:"');
-    expect(ralphaiSrc).not.toContain('message: "Auto-commit between tasks?"');
   });
 
   // ---------------------------------------------------------------------------

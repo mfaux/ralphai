@@ -27,10 +27,7 @@ import { execSync } from "child_process";
 import { runRunner, type RunnerOptions } from "./runner.ts";
 import { type ResolvedConfig } from "./config.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
-import {
-  buildIssuePlanContent,
-  type BuildIssuePlanContentOptions,
-} from "./issues.ts";
+import { buildIssuePlanContent } from "./issues.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,7 +74,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,

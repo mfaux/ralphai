@@ -55,9 +55,9 @@ function findOption(
 // ---------------------------------------------------------------------------
 
 describe("buildWizardOptions", () => {
-  it("returns exactly 9 options in the expected order", () => {
+  it("returns exactly 8 options in the expected order", () => {
     const options = buildWizardOptions(makeConfig());
-    expect(options).toHaveLength(9);
+    expect(options).toHaveLength(8);
     expect(options.map((o) => o.key)).toEqual([...WIZARD_KEYS]);
   });
 
@@ -73,13 +73,11 @@ describe("buildWizardOptions", () => {
     const config = makeConfig({
       maxStuck: { value: 5, source: "config" },
       iterationTimeout: { value: 120, source: "env" },
-      autoCommit: { value: "true", source: "cli" },
     });
     const options = buildWizardOptions(config);
 
     expect(findOption(options, "maxStuck").currentValue).toBe("5");
     expect(findOption(options, "iterationTimeout").currentValue).toBe("120");
-    expect(findOption(options, "autoCommit").currentValue).toBe("true");
   });
 
   // ---- Source hint mapping ----
@@ -118,7 +116,7 @@ describe("buildWizardOptions", () => {
       expect(findOption(options, "maxStuck").sourceHint).toBe("CLI flag");
     });
 
-    it("assigns correct source hints for all 7 keys with mixed sources", () => {
+    it("assigns correct source hints for all 6 keys with mixed sources", () => {
       const config = makeConfig({
         agentCommand: { value: "opencode", source: "config" },
         setupCommand: { value: "npm ci", source: "env" },
@@ -126,7 +124,6 @@ describe("buildWizardOptions", () => {
         baseBranch: { value: "main", source: "default" },
         maxStuck: { value: 5, source: "config" },
         iterationTimeout: { value: 300, source: "env" },
-        autoCommit: { value: "true", source: "cli" },
       });
       const options = buildWizardOptions(config);
 
@@ -142,7 +139,6 @@ describe("buildWizardOptions", () => {
       expect(findOption(options, "iterationTimeout").sourceHint).toBe(
         "env var",
       );
-      expect(findOption(options, "autoCommit").sourceHint).toBe("CLI flag");
     });
   });
 
@@ -185,15 +181,6 @@ describe("buildWizardOptions", () => {
         expect(prompt.validate!("120")).toBeUndefined();
         expect(prompt.validate!("-1")).toBeString();
         expect(prompt.validate!("abc")).toBeString();
-      }
-    });
-
-    it("assigns select prompt to autoCommit with true/false choices", () => {
-      const options = buildWizardOptions(makeConfig());
-      const prompt = findOption(options, "autoCommit").prompt;
-      expect(prompt.kind).toBe("select");
-      if (prompt.kind === "select") {
-        expect(prompt.choices).toEqual(["true", "false"]);
       }
     });
   });
@@ -276,33 +263,19 @@ describe("selectionsToFlags", () => {
     ]);
   });
 
-  // ---- autoCommit special case ----
-
-  it('produces --auto-commit for autoCommit "true"', () => {
-    expect(selectionsToFlags({ autoCommit: "true" })).toEqual([
-      "--auto-commit",
-    ]);
-  });
-
-  it('produces --no-auto-commit for autoCommit "false"', () => {
-    expect(selectionsToFlags({ autoCommit: "false" })).toEqual([
-      "--no-auto-commit",
-    ]);
-  });
-
   // ---- Multiple selections ----
 
   it("produces flags in WIZARD_KEYS order for multiple selections", () => {
     const flags = selectionsToFlags({
-      autoCommit: "true",
+      sandbox: "docker",
       agentCommand: "claude -p",
       maxStuck: "10",
     });
-    // Should follow WIZARD_KEYS order: agentCommand, ..., maxStuck, ..., autoCommit
+    // Should follow WIZARD_KEYS order: agentCommand, ..., maxStuck, ..., sandbox
     expect(flags).toEqual([
       "--agent-command=claude -p",
       "--max-stuck=10",
-      "--auto-commit",
+      "--sandbox=docker",
     ]);
   });
 
@@ -315,7 +288,7 @@ describe("selectionsToFlags", () => {
       baseBranch: "develop",
       maxStuck: "5",
       iterationTimeout: "300",
-      autoCommit: "false",
+      sandbox: "docker",
     });
     expect(flags).toEqual([
       "--agent-command=opencode",
@@ -325,7 +298,7 @@ describe("selectionsToFlags", () => {
       "--base-branch=develop",
       "--max-stuck=5",
       "--iteration-timeout=300",
-      "--no-auto-commit",
+      "--sandbox=docker",
     ]);
   });
 });
@@ -381,18 +354,6 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.iterationTimeout).toBe(120);
   });
 
-  it("round-trips autoCommit true", () => {
-    const flags = selectionsToFlags({ autoCommit: "true" });
-    const { overrides } = parseCLIArgs(flags);
-    expect(overrides.autoCommit).toBe("true");
-  });
-
-  it("round-trips autoCommit false", () => {
-    const flags = selectionsToFlags({ autoCommit: "false" });
-    const { overrides } = parseCLIArgs(flags);
-    expect(overrides.autoCommit).toBe("false");
-  });
-
   it("round-trips all 8 keys at once", () => {
     const selections = {
       agentCommand: "opencode",
@@ -402,7 +363,7 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
       baseBranch: "develop",
       maxStuck: "5",
       iterationTimeout: "300",
-      autoCommit: "true",
+      sandbox: "docker",
     } as const;
 
     const flags = selectionsToFlags(selections);
@@ -415,6 +376,6 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.baseBranch).toBe("develop");
     expect(overrides.maxStuck).toBe(5);
     expect(overrides.iterationTimeout).toBe(300);
-    expect(overrides.autoCommit).toBe("true");
+    expect(overrides.sandbox).toBe("docker");
   });
 });

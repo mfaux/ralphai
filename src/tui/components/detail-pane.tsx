@@ -492,7 +492,6 @@ function settingsDetail(resolvedConfig?: ResolvedConfig): DetailContent {
     "issueSource",
     "feedbackCommands",
     "maxStuck",
-    "autoCommit",
   ];
 
   const lines: DetailLine[] = [];

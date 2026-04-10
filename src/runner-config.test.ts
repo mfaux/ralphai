@@ -26,12 +26,11 @@ describe("runner config", () => {
   // Init defaults
   // -------------------------------------------------------------------------
 
-  it("init --yes sets autoCommit=false by default", async () => {
+  it("init --yes does not include deprecated keys in config", async () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     expect(config.mode).toBeUndefined();
-    expect(config.autoCommit).toBe(false);
   });
 
   // -------------------------------------------------------------------------

@@ -5,13 +5,7 @@
  * points in the completion lifecycle based on the `review` config value.
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  readFileSync,
-} from "fs";
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
@@ -74,7 +68,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     dockerImage: "",
     dockerMounts: "",
@@ -138,7 +131,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "false",
       }),
       cwd: worktreeDir,
@@ -181,7 +173,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,
@@ -219,7 +210,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,
@@ -261,7 +251,6 @@ describe("runRunner — review pass", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
         review: "true",
       }),
       cwd: worktreeDir,

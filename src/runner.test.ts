@@ -235,7 +235,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -374,7 +373,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -406,7 +404,6 @@ describe("runRunner — completion", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -443,7 +440,6 @@ describe("runRunner — completion", () => {
       config: makeResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -509,7 +505,6 @@ describe("runRunner — RunnerResult", () => {
       config: makeResolvedConfig({
         agentCommand: agentScript,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -547,7 +542,6 @@ describe("runRunner — RunnerResult", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -578,7 +572,6 @@ describe("runRunner — RunnerResult", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: agentScript,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -657,66 +650,5 @@ describe("runRunner — no work", () => {
 
     // Should not throw — just prints "nothing to do" and returns
     await runRunner(opts);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// runRunner — auto-commit recovery
-// ---------------------------------------------------------------------------
-
-describe("runRunner — auto-commit", () => {
-  let savedHome: string | undefined;
-
-  beforeEach(() => {
-    savedHome = process.env.RALPHAI_HOME;
-  });
-
-  afterEach(() => {
-    if (savedHome === undefined) delete process.env.RALPHAI_HOME;
-    else process.env.RALPHAI_HOME = savedHome;
-  });
-
-  test("auto-commits dirty state when autoCommit is true", async () => {
-    const dir = createTmpGitRepo();
-    const { backlogDir } = setupGlobalPipeline(dir);
-    const worktreeDir = createManagedWorktree(dir, "auto");
-
-    // Create a tracked file for the agent to modify
-    writeFileSync(join(worktreeDir, "target.txt"), "original\n");
-    execSync('git add -A && git commit -m "add target"', {
-      cwd: worktreeDir,
-      stdio: "pipe",
-    });
-
-    writeFileSync(
-      join(backlogDir, "auto.md"),
-      "# Plan: Auto Commit Test\n\n### Task 1: Test\n",
-    );
-
-    // Agent that modifies an existing tracked file, then outputs COMPLETE
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo modified >> target.txt; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
-
-    const opts: RunnerOptions = {
-      config: makeResolvedConfig({
-        agentCommand: agentScript,
-        autoCommit: "true",
-      }),
-      cwd: worktreeDir,
-      isWorktree: true,
-      mainWorktree: dir,
-      dryRun: false,
-      resume: false,
-      allowDirty: false,
-      once: false,
-    };
-
-    await runRunner(opts);
-
-    // Check that an auto-commit was created
-    const log = execSync("git log --oneline", {
-      cwd: worktreeDir,
-      encoding: "utf-8",
-    });
-    expect(log).toContain("auto-commit");
   });
 });

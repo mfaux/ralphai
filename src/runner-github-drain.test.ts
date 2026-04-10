@@ -95,7 +95,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -212,7 +211,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -256,7 +254,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -283,7 +280,7 @@ describe("runner GitHub drain behavior", () => {
   // --- Scenario 38: Drain mode queries both standalone and PRD intake labels ---
 
   test("drain calls both pullPrdSubIssue and pullGithubIssues (both intake labels queried)", async () => {
-    const { backlogDir } = setupGlobalPipeline(dir);
+    setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "both-labels");
 
     // Both return nothing — we just need to verify both are called
@@ -299,7 +296,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -318,7 +314,7 @@ describe("runner GitHub drain behavior", () => {
   });
 
   test("drain passes ralphai-standalone label to pullGithubIssues (not old ralphai label)", async () => {
-    const { backlogDir } = setupGlobalPipeline(dir);
+    setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "label-check-standalone");
 
     mockPullPrdSubIssue.mockImplementation(() => ({
@@ -333,7 +329,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -355,7 +350,7 @@ describe("runner GitHub drain behavior", () => {
   });
 
   test("drain passes ralphai-prd label to pullPrdSubIssue (not old ralphai label)", async () => {
-    const { backlogDir } = setupGlobalPipeline(dir);
+    setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "label-check-prd");
 
     mockPullPrdSubIssue.mockImplementation(() => ({
@@ -370,7 +365,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -392,7 +386,7 @@ describe("runner GitHub drain behavior", () => {
   });
 
   test("drain does not directly query ralphai-subissue label as an intake candidate", async () => {
-    const { backlogDir } = setupGlobalPipeline(dir);
+    setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "no-subissue-direct");
 
     mockPullPrdSubIssue.mockImplementation(() => ({
@@ -407,7 +401,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -463,7 +456,6 @@ describe("runner GitHub drain behavior", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

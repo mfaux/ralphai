@@ -94,7 +94,7 @@ Each run creates or reuses an isolated worktree, works on a `<type>/<slug>` bran
 ralphai run              # drain the backlog: one branch/PR per plan
 ralphai run 42           # run GitHub issue #42 (PRD or standalone)
 ralphai run --once       # process a single plan then exit
-ralphai run --resume     # auto-commit dirty state and continue
+ralphai run --resume     # commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
 
@@ -119,7 +119,7 @@ Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The
 
 **Stop a runner:** Use `ralphai stop` to send SIGTERM to running plan runners. Pass a plan slug to stop a specific runner, or use `--all` to stop all runners. Use `--dry-run` to preview which processes would be stopped.
 
-**Resuming:** Reopen `ralphai` or run `ralphai run` to pick up where the agent left off. Ralphai auto-detects in-progress work. Use `--resume` to auto-commit any dirty working tree state before continuing.
+**Resuming:** Reopen `ralphai` or run `ralphai run` to pick up where the agent left off. Ralphai auto-detects in-progress work. Use `--resume` to commit any dirty working tree state before continuing.
 
 ```bash
 ralphai status           # see what's queued, in progress, and any problems

@@ -287,12 +287,10 @@ describe("parseConfigFile", () => {
     writeFileSync(
       file,
       JSON.stringify({
-        autoCommit: true,
         issueCommentProgress: false,
       }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.autoCommit).toBe("true");
     expect(result.values.issueCommentProgress).toBe("false");
   });
 
@@ -396,12 +394,6 @@ describe("applyEnvOverrides", () => {
     expect(result.maxStuck).toBe(5);
   });
 
-  it("validates boolean fields", () => {
-    expect(() => applyEnvOverrides({ RALPHAI_AUTO_COMMIT: "yes" })).toThrow(
-      "must be 'true' or 'false'",
-    );
-  });
-
   it("extracts review from RALPHAI_REVIEW", () => {
     const result = applyEnvOverrides({ RALPHAI_REVIEW: "false" });
     expect(result.review).toBe("false");
@@ -460,18 +452,6 @@ describe("parseCLIArgs", () => {
     expect(result.overrides.baseBranch).toBe("develop");
   });
 
-  it("parses --auto-commit", () => {
-    const result = parseCLIArgs(["--auto-commit"]);
-    expect(result.overrides.autoCommit).toBe("true");
-    expect(result.rawFlags.autoCommit).toBe("--auto-commit");
-  });
-
-  it("parses --no-auto-commit", () => {
-    const result = parseCLIArgs(["--no-auto-commit"]);
-    expect(result.overrides.autoCommit).toBe("false");
-    expect(result.rawFlags.autoCommit).toBe("--no-auto-commit");
-  });
-
   it("parses --review", () => {
     const result = parseCLIArgs(["--review"]);
     expect(result.overrides.review).toBe("true");
@@ -496,9 +476,9 @@ describe("parseCLIArgs", () => {
   });
 
   it("parses multiple flags together", () => {
-    const result = parseCLIArgs(["--agent-command=claude -p", "--auto-commit"]);
+    const result = parseCLIArgs(["--agent-command=claude -p", "--review"]);
     expect(result.overrides.agentCommand).toBe("claude -p");
-    expect(result.overrides.autoCommit).toBe("true");
+    expect(result.overrides.review).toBe("true");
   });
 });
 

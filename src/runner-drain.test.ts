@@ -74,7 +74,6 @@ function makeResolvedConfig(
     issueCommentProgress: "true",
     issueHitlLabel: "ralphai-subissue-hitl",
     iterationTimeout: 0,
-    autoCommit: "false",
     sandbox: "none",
     review: "false",
     workspaces: null,
@@ -139,7 +138,6 @@ describe("drain-by-default", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -170,7 +168,6 @@ describe("drain-by-default", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -220,7 +217,6 @@ describe("--once flag", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -273,7 +269,6 @@ describe("exit summary", () => {
       config: makeResolvedConfig({
         agentCommand: stuckAgent,
         maxStuck: 2,
-        autoCommit: "false",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -303,26 +298,9 @@ describe("exit summary", () => {
       "# Plan: Stuck Plan\n\n### Task 1: Fail\n",
     );
 
-    // Agent that completes on "aaa-good" but gets stuck on "bbb-stuck"
-    // Use a script that checks the plan file being processed
-    const scriptContent = `#!/bin/bash
-N=$RALPHAI_NONCE
-if grep -q "Good Plan" "$1" 2>/dev/null; then
-  echo "<promise nonce=\\"$N\\">COMPLETE</promise>"
-  echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"
-else
-  echo "doing nothing"
-  echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"
-fi
-`;
-    // Simpler: agent that always completes — the stuck one will use a different
-    // agent. But we can't switch agents per plan. Instead, use an agent that
-    // checks environment. Actually, the simplest approach: use an agent that
-    // completes always, but for bbb-stuck.md, ensure it gets stuck by using
-    // maxStuck=2 with a no-commit agent.
-    //
-    // Actually, the plan order is alphabetical: aaa-good first, bbb-stuck second.
-    // We can use a script that tracks how many times it's been called.
+    // Agent that completes on first call (aaa-good), then does nothing
+    // on subsequent calls (bbb-stuck). Plan order is alphabetical, so
+    // aaa-good runs first. We track calls via a counter file.
     const counterFile = join(dir, ".agent-counter");
     writeFileSync(counterFile, "0");
     // Agent that completes on first call, then does nothing on subsequent calls
@@ -332,7 +310,6 @@ fi
       config: makeResolvedConfig({
         agentCommand: mixedAgent,
         maxStuck: 2,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -419,7 +396,6 @@ describe("priority: in-progress before backlog", () => {
     const opts: RunnerOptions = {
       config: makeResolvedConfig({
         agentCommand: completeAgent,
-        autoCommit: "true",
       }),
       cwd: worktreeDir,
       isWorktree: true,

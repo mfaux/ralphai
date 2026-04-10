@@ -267,14 +267,14 @@ describe("buildCheckboxItems", () => {
     const options: WizardOption[] = [
       makeWizardOption({ key: "maxStuck" }),
       makeWizardOption({ key: "iterationTimeout" }),
-      makeWizardOption({ key: "autoCommit" }),
+      makeWizardOption({ key: "sandbox" }),
     ];
 
     const items = buildCheckboxItems(options);
     expect(items.map((i) => i.value)).toEqual([
       "maxStuck",
       "iterationTimeout",
-      "autoCommit",
+      "sandbox",
     ]);
   });
 });
@@ -317,8 +317,8 @@ describe("mergeWizardFlags", () => {
   });
 
   it("handles issue number args", () => {
-    const result = mergeWizardFlags(["run", "42"], ["--auto-commit"]);
-    expect(result).toEqual(["run", "--auto-commit", "42"]);
+    const result = mergeWizardFlags(["run", "42"], ["--review"]);
+    expect(result).toEqual(["run", "--review", "42"]);
   });
 
   it("does not modify the original runArgs array", () => {
@@ -349,17 +349,11 @@ describe("resolveWizardResult", () => {
     const values: Partial<Record<WizardConfigKey, string>> = {
       agentCommand: "aider",
       baseBranch: "dev",
-      autoCommit: "false",
     };
     const result = resolveWizardResult(values, ["run"]);
     expect(result).toEqual({
       type: "exit-to-runner",
-      args: [
-        "run",
-        "--agent-command=aider",
-        "--base-branch=dev",
-        "--no-auto-commit",
-      ],
+      args: ["run", "--agent-command=aider", "--base-branch=dev"],
     });
   });
 
@@ -368,28 +362,6 @@ describe("resolveWizardResult", () => {
     expect(result).toEqual({
       type: "exit-to-runner",
       args: ["run", "42"],
-    });
-  });
-
-  it("handles autoCommit true → --auto-commit flag", () => {
-    const values: Partial<Record<WizardConfigKey, string>> = {
-      autoCommit: "true",
-    };
-    const result = resolveWizardResult(values, ["run"]);
-    expect(result).toEqual({
-      type: "exit-to-runner",
-      args: ["run", "--auto-commit"],
-    });
-  });
-
-  it("handles autoCommit false → --no-auto-commit flag", () => {
-    const values: Partial<Record<WizardConfigKey, string>> = {
-      autoCommit: "false",
-    };
-    const result = resolveWizardResult(values, ["run"]);
-    expect(result).toEqual({
-      type: "exit-to-runner",
-      args: ["run", "--no-auto-commit"],
     });
   });
 });
@@ -415,8 +387,8 @@ describe("buildEditingLabel", () => {
   });
 
   it("handles single option", () => {
-    const opt = makeWizardOption({ label: "Auto-commit" });
-    expect(buildEditingLabel(opt, 0, 1)).toBe("Auto-commit (1/1)");
+    const opt = makeWizardOption({ label: "Sandbox mode" });
+    expect(buildEditingLabel(opt, 0, 1)).toBe("Sandbox mode (1/1)");
   });
 });
 
@@ -495,10 +467,10 @@ describe("buildSelectItems", () => {
 
 describe("wizard flow: pure logic end-to-end", () => {
   it("checkbox selection → edit values → merged flags result", () => {
-    // Simulate: user selects maxStuck and autoCommit, enters values, gets result
+    // Simulate: user selects maxStuck and sandbox, enters values, gets result
     const values: Partial<Record<WizardConfigKey, string>> = {
       maxStuck: "10",
-      autoCommit: "false",
+      sandbox: "docker",
     };
     const runArgs = ["run", "--plan", "my-feature.md"];
 
@@ -507,7 +479,7 @@ describe("wizard flow: pure logic end-to-end", () => {
     expect(result.type).toBe("exit-to-runner");
     if (result.type === "exit-to-runner") {
       expect(result.args).toContain("--max-stuck=10");
-      expect(result.args).toContain("--no-auto-commit");
+      expect(result.args).toContain("--sandbox=docker");
       expect(result.args).toContain("--plan");
       expect(result.args).toContain("my-feature.md");
       // Wizard flags should appear before --plan
@@ -534,7 +506,7 @@ describe("wizard flow: pure logic end-to-end", () => {
       baseBranch: "develop",
       maxStuck: "3",
       iterationTimeout: "600",
-      autoCommit: "true",
+      sandbox: "docker",
     };
 
     const result = resolveWizardResult(values, ["run"]);
@@ -546,7 +518,7 @@ describe("wizard flow: pure logic end-to-end", () => {
       expect(result.args).toContain("--base-branch=develop");
       expect(result.args).toContain("--max-stuck=3");
       expect(result.args).toContain("--iteration-timeout=600");
-      expect(result.args).toContain("--auto-commit");
+      expect(result.args).toContain("--sandbox=docker");
       expect(result.args).toHaveLength(9); // "run" + 8 flags
     }
   });
@@ -560,37 +532,37 @@ describe("wizard flow: pure logic end-to-end", () => {
         sourceHint: "config file",
       }),
       makeWizardOption({
-        key: "autoCommit",
-        label: "Auto-commit",
-        currentValue: "true",
+        key: "sandbox",
+        label: "Sandbox mode",
+        currentValue: "none",
         sourceHint: "default",
-        prompt: { kind: "select", choices: ["true", "false"] },
+        prompt: { kind: "select", choices: ["none", "docker"] },
       }),
     ];
 
     const items = buildCheckboxItems(options);
     expect(items[0]!.hint).toBe("claude-code (config file)");
-    expect(items[1]!.hint).toBe("true (default)");
+    expect(items[1]!.hint).toBe("none (default)");
   });
 
   it("editing labels show correct step counting", () => {
     const options: WizardOption[] = [
       makeWizardOption({ key: "agentCommand", label: "Agent command" }),
       makeWizardOption({ key: "maxStuck", label: "Max stuck iterations" }),
-      makeWizardOption({ key: "autoCommit", label: "Auto-commit" }),
+      makeWizardOption({ key: "sandbox", label: "Sandbox mode" }),
     ];
 
     expect(buildEditingLabel(options[0]!, 0, 3)).toBe("Agent command (1/3)");
     expect(buildEditingLabel(options[1]!, 1, 3)).toBe(
       "Max stuck iterations (2/3)",
     );
-    expect(buildEditingLabel(options[2]!, 2, 3)).toBe("Auto-commit (3/3)");
+    expect(buildEditingLabel(options[2]!, 2, 3)).toBe("Sandbox mode (3/3)");
   });
 
-  it("select items built from autoCommit choices", () => {
-    const items = buildSelectItems(["true", "false"]);
+  it("select items built from sandbox choices", () => {
+    const items = buildSelectItems(["none", "docker"]);
     expect(items).toHaveLength(2);
-    expect(items[0]!.value).toBe("true");
-    expect(items[1]!.value).toBe("false");
+    expect(items[0]!.value).toBe("none");
+    expect(items[1]!.value).toBe("docker");
   });
 });

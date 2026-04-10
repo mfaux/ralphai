@@ -170,7 +170,7 @@ describe("runConfigWizard", () => {
 
   it("returns null when user cancels at select prompt", async () => {
     const cancelSymbol = Symbol("cancel");
-    mockMultiselect.mockResolvedValue(["autoCommit"]);
+    mockMultiselect.mockResolvedValue(["sandbox"]);
     mockSelect.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
 
@@ -189,22 +189,6 @@ describe("runConfigWizard", () => {
       "--agent-command=claude -p",
       "--base-branch=develop",
     ]);
-  });
-
-  it("returns synthetic flags for autoCommit select", async () => {
-    mockMultiselect.mockResolvedValue(["autoCommit"]);
-    mockSelect.mockResolvedValue("true");
-
-    const result = await runConfigWizard(makeConfig());
-    expect(result).toEqual(["--auto-commit"]);
-  });
-
-  it("returns --no-auto-commit for autoCommit false", async () => {
-    mockMultiselect.mockResolvedValue(["autoCommit"]);
-    mockSelect.mockResolvedValue("false");
-
-    const result = await runConfigWizard(makeConfig());
-    expect(result).toEqual(["--no-auto-commit"]);
   });
 
   it("returns flags for numeric options", async () => {
@@ -244,7 +228,7 @@ describe("runConfigWizard", () => {
     const call = mockMultiselect.mock.calls[0]![0] as {
       options: { value: string }[];
     };
-    expect(call.options).toHaveLength(9);
+    expect(call.options).toHaveLength(8);
     const keys = call.options.map((o) => o.value);
     expect(keys).toContain("agentCommand");
     expect(keys).toContain("setupCommand");
@@ -253,7 +237,6 @@ describe("runConfigWizard", () => {
     expect(keys).toContain("baseBranch");
     expect(keys).toContain("maxStuck");
     expect(keys).toContain("iterationTimeout");
-    expect(keys).toContain("autoCommit");
     expect(keys).toContain("sandbox");
   });
 
@@ -272,17 +255,17 @@ describe("runConfigWizard", () => {
 
   it("select prompt receives current value as initialValue", async () => {
     const config = makeConfig({
-      autoCommit: { value: "true", source: "config" },
+      sandbox: { value: "docker", source: "config" },
     });
-    mockMultiselect.mockResolvedValue(["autoCommit"]);
-    mockSelect.mockResolvedValue("false");
+    mockMultiselect.mockResolvedValue(["sandbox"]);
+    mockSelect.mockResolvedValue("none");
 
     await runConfigWizard(config);
 
     const selectCall = mockSelect.mock.calls[0]![0] as {
       initialValue: string;
     };
-    expect(selectCall.initialValue).toBe("true");
+    expect(selectCall.initialValue).toBe("docker");
   });
 
   it("handles all 7 options selected at once", async () => {
@@ -293,7 +276,7 @@ describe("runConfigWizard", () => {
       "baseBranch",
       "maxStuck",
       "iterationTimeout",
-      "autoCommit",
+      "sandbox",
     ]);
     // First 6 are text, last is select
     mockText
@@ -303,7 +286,7 @@ describe("runConfigWizard", () => {
       .mockResolvedValueOnce("develop")
       .mockResolvedValueOnce("5")
       .mockResolvedValueOnce("300");
-    mockSelect.mockResolvedValue("true");
+    mockSelect.mockResolvedValue("docker");
 
     const result = await runConfigWizard(makeConfig());
     expect(result).toEqual([
@@ -313,7 +296,7 @@ describe("runConfigWizard", () => {
       "--base-branch=develop",
       "--max-stuck=5",
       "--iteration-timeout=300",
-      "--auto-commit",
+      "--sandbox=docker",
     ]);
   });
 });

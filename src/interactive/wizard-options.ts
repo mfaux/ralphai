@@ -49,7 +49,6 @@ export const WIZARD_KEYS = [
   "baseBranch",
   "maxStuck",
   "iterationTimeout",
-  "autoCommit",
   "sandbox",
 ] as const;
 
@@ -71,7 +70,6 @@ const FLAG_NAMES: Record<WizardConfigKey, string> = {
   baseBranch: "base-branch",
   maxStuck: "max-stuck",
   iterationTimeout: "iteration-timeout",
-  autoCommit: "auto-commit",
   sandbox: "sandbox",
 };
 
@@ -84,7 +82,6 @@ const LABELS: Record<WizardConfigKey, string> = {
   baseBranch: "Base branch",
   maxStuck: "Max stuck iterations",
   iterationTimeout: "Iteration timeout (seconds)",
-  autoCommit: "Auto-commit",
   sandbox: "Sandbox mode",
 };
 
@@ -119,8 +116,6 @@ function buildPrompt(key: WizardConfigKey): PromptType {
       return { kind: "text", validate: validatePositiveInt };
     case "iterationTimeout":
       return { kind: "text", validate: validateNonNegInt };
-    case "autoCommit":
-      return { kind: "select", choices: ["true", "false"] };
     case "sandbox":
       return { kind: "select", choices: ["none", "docker"] };
     default:
@@ -155,9 +150,7 @@ export function buildWizardOptions(config: ResolvedConfig): WizardOption[] {
  * Convert a map of config key → new value into an array of synthetic CLI flag
  * strings that parseCLIArgs() would accept.
  *
- * Special cases:
- *   - autoCommit: "true" → "--auto-commit", "false" → "--no-auto-commit"
- *   - All other keys: "--<flag-name>=<value>"
+ * Each key produces "--<flag-name>=<value>".
  */
 export function selectionsToFlags(
   selections: Partial<Record<WizardConfigKey, string>>,
@@ -168,11 +161,7 @@ export function selectionsToFlags(
     const value = selections[key];
     if (value === undefined) continue;
 
-    if (key === "autoCommit") {
-      flags.push(value === "true" ? "--auto-commit" : "--no-auto-commit");
-    } else {
-      flags.push(`--${FLAG_NAMES[key]}=${value}`);
-    }
+    flags.push(`--${FLAG_NAMES[key]}=${value}`);
   }
 
   return flags;
