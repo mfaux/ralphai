@@ -7,7 +7,7 @@ import {
   extractIssueNumbersFromPlans,
   buildClosesBlock,
   buildContinuousPrBodyStructured,
-} from "./pr-description.ts";
+} from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

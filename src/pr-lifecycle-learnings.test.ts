@@ -6,7 +6,7 @@ import { useTempDir } from "./test-utils.ts";
 import {
   buildPrBody,
   buildContinuousPrBodyStructured,
-} from "./pr-description.ts";
+} from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

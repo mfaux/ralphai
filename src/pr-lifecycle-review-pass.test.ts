@@ -3,7 +3,7 @@ import { execSync } from "child_process";
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import { buildPrBody } from "./pr-description.ts";
+import { buildPrBody } from "./pr-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

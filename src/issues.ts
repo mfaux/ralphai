@@ -145,7 +145,7 @@ export function slugify(text: string): string {
 
 /**
  * Conventional commit types recognised in issue/PRD titles.
- * Same set used by `CC_PATTERN` in `pr-description.ts`.
+ * Same set used by `CC_PATTERN` in `pr-lifecycle.ts`.
  */
 const CC_TITLE_PATTERN =
   /^(feat|fix|refactor|test|docs|chore|ci|build|perf|style|revert)(?:\([^)]*\))?!?:\s+(.+)$/i;

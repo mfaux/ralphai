@@ -91,8 +91,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).                           |
 | `src/label-lifecycle.ts`   | Centralized label transitions (pull, done, stuck, reset, PRD).                           |
 | `src/prd-discovery.ts`     | PRD issue discovery and sub-issue routing.                                               |
-| `src/pr-lifecycle.ts`      | PR creation after plan completion.                                                       |
-| `src/pr-description.ts`    | PR body generation (summary, learnings).                                                 |
+| `src/pr-lifecycle.ts`      | PR lifecycle: creation, updates, archiving, and body generation (summary, learnings).    |
 | `src/receipt.ts`           | Completion receipt parsing and source checking.                                          |
 | `src/frontmatter.ts`       | YAML frontmatter extraction (`scope`, `depends-on`, etc.).                               |
 | `src/pipeline-state.ts`    | Gathers backlog/in-progress/completed counts for status display.                         |
