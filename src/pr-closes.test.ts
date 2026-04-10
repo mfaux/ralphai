@@ -1,31 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { execSync } from "child_process";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { useTempDir, initRepo } from "./test-utils.ts";
 import {
   extractIssueNumbersFromPlans,
   buildClosesBlock,
   buildContinuousPrBodyStructured,
 } from "./pr-lifecycle.ts";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function initRepo(dir: string): void {
-  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
-  execSync('git config user.email "test@test.com"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-  execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
-  writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync('git add -A && git commit -m "init"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-}
 
 // ---------------------------------------------------------------------------
 // extractIssueNumbersFromPlans

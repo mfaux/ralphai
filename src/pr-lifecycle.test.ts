@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { useTempDir, initRepo, commitFile } from "./test-utils.ts";
 import {
   pushBranch,
   archiveRun,
@@ -47,34 +47,6 @@ function initRepoWithRemote(dir: string): {
   execSync("git push", { cwd: repoDir, stdio: "ignore" });
 
   return { repoDir, remoteDir };
-}
-
-/** Initialize a git repo with one commit (no remote). */
-function initRepo(dir: string): void {
-  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
-  execSync('git config user.email "test@test.com"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-  execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
-  writeFileSync(join(dir, "init.txt"), "init\n");
-  execSync('git add -A && git commit -m "init"', {
-    cwd: dir,
-    stdio: "ignore",
-  });
-}
-
-function commitFile(
-  dir: string,
-  filename: string,
-  content: string,
-  message: string,
-): void {
-  writeFileSync(join(dir, filename), content);
-  execSync(`git add -A && git commit -m "${message}"`, {
-    cwd: dir,
-    stdio: "ignore",
-  });
 }
 
 // ---------------------------------------------------------------------------

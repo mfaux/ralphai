@@ -250,6 +250,35 @@ export function useTempDir() {
   };
 }
 
+/** Initialize a git repo with one commit (no remote). */
+export function initRepo(dir: string): void {
+  execSync("git init -b main", { cwd: dir, stdio: "ignore" });
+  execSync('git config user.email "test@test.com"', {
+    cwd: dir,
+    stdio: "ignore",
+  });
+  execSync('git config user.name "Test"', { cwd: dir, stdio: "ignore" });
+  writeFileSync(join(dir, "init.txt"), "init\n");
+  execSync('git add -A && git commit -m "init"', {
+    cwd: dir,
+    stdio: "ignore",
+  });
+}
+
+/** Commit a single file with a given message. */
+export function commitFile(
+  dir: string,
+  filename: string,
+  content: string,
+  message: string,
+): void {
+  writeFileSync(join(dir, filename), content);
+  execSync(`git add -A && git commit -m "${message}"`, {
+    cwd: dir,
+    stdio: "ignore",
+  });
+}
+
 /**
  * Set up a repo with a bare remote + clone, an initial commit pushed to the
  * remote, plus a feature branch with one commit. Returns the path to the
