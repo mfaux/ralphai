@@ -99,7 +99,7 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                       |
 | `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                         |
 | `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                              |
-| `src/learnings.ts`         | Learnings extraction and persistence across iterations.                                  |
+| `src/learnings.ts`         | Learnings formatting for agent prompts and PR bodies (formatting-only).                  |
 | `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction).                |
 | `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                         |
 | `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.  |

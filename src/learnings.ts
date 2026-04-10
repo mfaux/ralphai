@@ -1,30 +1,10 @@
 /**
- * Learnings parser and formatter: provides pure functions for parsing,
- * prompt formatting, and PR-body formatting of learnings content.
+ * Learnings formatting: pure functions that turn accumulated learnings
+ * (string arrays) into Markdown for agent prompts and PR bodies.
  *
- * This module has NO filesystem dependencies — all functions are pure.
+ * This module is intentionally formatting-only — parsing and extraction
+ * live in the runner (src/runner.ts) where the agent output is processed.
  */
-
-// ---------------------------------------------------------------------------
-// Parsing
-// ---------------------------------------------------------------------------
-
-/**
- * Parse the content of a `<learnings>` block into either a prose string or
- * null. Returns null if the content is the literal string "none"
- * (case-insensitive), only whitespace, or empty. Otherwise returns the
- * trimmed prose text.
- */
-export function parseLearningContent(block: string): string | null {
-  const trimmed = block.trim();
-  if (trimmed.length === 0) return null;
-  if (trimmed.toLowerCase() === "none") return null;
-  return trimmed;
-}
-
-// ---------------------------------------------------------------------------
-// Formatting
-// ---------------------------------------------------------------------------
 
 /**
  * Format accumulated learnings for injection into the agent prompt.

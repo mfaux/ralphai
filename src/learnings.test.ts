@@ -1,9 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import {
-  parseLearningContent,
-  formatLearningsForPrompt,
-  formatLearningsForPr,
-} from "./learnings.ts";
+import { formatLearningsForPrompt, formatLearningsForPr } from "./learnings.ts";
+import { parseLearningContent } from "./runner.ts";
 
 // ---------------------------------------------------------------------------
 // parseLearningContent
