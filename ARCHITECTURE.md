@@ -11,12 +11,11 @@ Ralphai is a CLI tool that picks plan files from a backlog and drives an AI codi
 
 ## Core loop
 
-| File                    | Role                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/runner.ts`         | The agent feedback loop. Iterates: invoke agent, check for commits, run feedback commands, detect stuck, handle completion and PR creation. |
-| `src/plan-detection.ts` | Plan file discovery, frontmatter parsing, dependency resolution, and next-plan selection.                                                   |
-| `src/prompt.ts`         | Builds the prompt passed to the agent each iteration.                                                                                       |
-| `src/progress.ts`       | Tracks iteration progress and task completion.                                                                                              |
+| File                    | Role                                                                                                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/runner.ts`         | The agent feedback loop. Iterates: invoke agent, check for commits, run feedback commands, detect stuck, handle completion and PR creation. Also owns sentinel detection, progress appending, and learning content parsing. |
+| `src/plan-detection.ts` | Plan file discovery, frontmatter parsing, dependency resolution, and next-plan selection.                                                                                                                                   |
+| `src/prompt.ts`         | Builds the prompt passed to the agent each iteration.                                                                                                                                                                       |
 
 ## Executor subsystem (`src/executor/`)
 
@@ -99,12 +98,12 @@ Worktree logic is split into focused sub-modules, re-exported through a barrel (
 | `src/target-detection.ts`  | Resolves run targets from CLI args (plan slug, issue number, PRD).                       |
 | `src/global-state.ts`      | Pipeline directory resolution and repo registry.                                         |
 | `src/git-ops.ts`           | Higher-level git operations: commit hashing, branch checks.                              |
-| `src/learnings.ts`         | Learnings formatting for agent prompts and PR bodies (formatting-only).                  |
-| `src/sentinel.ts`          | Nonce-aware sentinel detection for agent output (completion, extraction).                |
+| `src/learnings.ts`         | Learnings formatting for prompts and PR bodies (pure functions).                         |
 | `src/completion-gate.ts`   | Verifies agent COMPLETE claims before accepting plan completion.                         |
 | `src/review-pass.ts`       | Post-completion review pass: changed file detection and simplification prompt assembly.  |
 | `src/feedback-wrapper.ts`  | Generates `_ralphai_feedback.sh` wrapper script (written to WIP dir, not worktree).      |
 | `src/process-utils.ts`     | Child process helpers.                                                                   |
+| `src/shell-split.ts`       | Minimal shell-like argument splitting (handles quotes and escapes).                      |
 | `src/utils.ts`             | Terminal color constants and shared formatting utilities.                                |
 | `src/ipc-server.ts`        | IPC server for agent communication.                                                      |
 | `src/ipc-protocol.ts`      | IPC message types and socket path resolution.                                            |
@@ -118,7 +117,7 @@ cli.ts
        -> parse-options.ts, git-helpers.ts, seed.ts       (leaf utilities)
        -> doctor.ts, status.ts, hitl.ts                   (subcommand handlers)
        -> worktree/index.ts -> parsing, selection, management
-       -> runner.ts -> plan-detection.ts, prompt.ts, progress.ts, sentinel.ts
+       -> runner.ts -> plan-detection.ts, prompt.ts
        -> config.ts, issues.ts, receipt.ts, ...           (supporting modules)
   -> tui/run-tui.tsx  (Ink TUI, launched when no subcommand + TTY)
        -> tui/app.tsx -> screens/, components/, hooks/
@@ -169,4 +168,4 @@ The runner communicates with AI agents through structured XML sentinel tags embe
 - **Progress:** `<progress nonce="UUID">...</progress>`
 - **PR summary:** `<pr-summary nonce="UUID">...</pr-summary>`
 
-Bare tags without the correct nonce are ignored. This prevents false positives from tool output (test runners, grep, cat) that happens to contain sentinel strings. The nonce generation and detection logic lives in `src/sentinel.ts`.
+Bare tags without the correct nonce are ignored. This prevents false positives from tool output (test runners, grep, cat) that happens to contain sentinel strings. The nonce generation and detection logic lives in `src/runner.ts`.

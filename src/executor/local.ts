@@ -15,13 +15,7 @@ import type {
   ExecutorSpawnResult,
 } from "./types.ts";
 
-/**
- * Minimal shell-like argument splitting.
- * Handles single/double quotes and backslash escapes.
- *
- * Re-exported from runner.ts for shared use.
- */
-import { shellSplit } from "../runner.ts";
+import { shellSplit } from "../shell-split.ts";
 
 // ---------------------------------------------------------------------------
 // LocalExecutor

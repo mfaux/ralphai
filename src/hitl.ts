@@ -32,7 +32,7 @@ import { execQuiet } from "./exec.ts";
 import { DONE_LABEL, IN_PROGRESS_LABEL, STUCK_LABEL } from "./labels.ts";
 import { prepareWorktree, type SetupSandboxConfig } from "./worktree/index.ts";
 import { resolveMainRepo, ensureRepoHasCommit } from "./worktree/management.ts";
-import { shellSplit } from "./runner.ts";
+import { shellSplit } from "./shell-split.ts";
 import { formatFileRef } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
@@ -187,9 +187,6 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   ensureRepoHasCommit(cwd);
   const baseBranch = cfg.baseBranch;
   const setupCommand = cfg.setupCommand;
-  const feedbackCommands = cfg.feedbackCommands
-    ? cfg.feedbackCommands.split(",").map((s: string) => s.trim())
-    : [];
 
   // Build sandbox config for routing setup commands through Docker
   const setupSandboxConfig: SetupSandboxConfig = {

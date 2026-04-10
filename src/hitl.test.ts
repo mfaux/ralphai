@@ -24,6 +24,11 @@ import type { ParentIssueResult, IssueWithLabels } from "./issues.ts";
 const mockExecQuiet = mock<(cmd: string, cwd: string) => string | null>();
 mock.module("./exec.ts", () => ({
   execQuiet: mockExecQuiet,
+  execRun: (cmd: string, cwd: string) => ({
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+  }),
   checkGhAvailable: () => true,
   setExecImpl: () => () => {},
   execOk: () => true,

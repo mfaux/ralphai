@@ -14,7 +14,7 @@ import { existsSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { execQuiet } from "./exec.ts";
-import { spawnAgent } from "./runner.ts";
+import type { AgentExecutor } from "./executor/index.ts";
 import type { IpcMessage } from "./ipc-protocol.ts";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,8 @@ export interface RunReviewPassOptions {
   iterationTimeout: number;
   /** Working directory (worktree root). */
   cwd: string;
+  /** Executor to spawn the agent process. */
+  executor: AgentExecutor;
   /** Optional path to write agent output logs. */
   outputLogPath?: string;
   /** Optional IPC broadcast callback. */
@@ -172,6 +174,7 @@ export async function runReviewPass(
     feedbackStep,
     iterationTimeout,
     cwd,
+    executor,
     outputLogPath,
     ipcBroadcast,
   } = options;
@@ -198,14 +201,14 @@ export async function runReviewPass(
   }
 
   // 5. Invoke the agent
-  const { output } = await spawnAgent(
+  const { output } = await executor.spawn({
     agentCommand,
     prompt,
     iterationTimeout,
     cwd,
     outputLogPath,
     ipcBroadcast,
-  );
+  });
 
   // 6. Compare HEAD after agent invocation
   const headAfter = execQuiet("git rev-parse HEAD", cwd);

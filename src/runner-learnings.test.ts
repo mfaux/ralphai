@@ -242,7 +242,7 @@ describe("runRunner — in-memory learnings", () => {
       "# Plan: Empty Block\n\nImplement the empty-block test feature.\n",
     );
 
-    // Agent outputs <learnings> with only whitespace (extractLearningsBlock
+    // Agent outputs <learnings> with only whitespace (extractNoncedBlock
     // returns null for empty content)
     const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">   </learnings>"'`;
 
@@ -274,7 +274,7 @@ describe("runRunner — in-memory learnings", () => {
     }
 
     const output = logs.join("\n");
-    // Empty block is treated the same as no block by extractLearningsBlock
+    // Empty block is treated the same as no block by extractNoncedBlock
     // (returns null when content is only whitespace)
     expect(output).toContain("WARNING: No <learnings> block found");
   });

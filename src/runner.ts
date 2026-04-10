@@ -6,11 +6,15 @@
  * stuck detection, learnings processing, and completion/PR
  * lifecycle.
  *
+ * Also owns private helpers that were previously in standalone modules:
+ * - Nonce-aware sentinel detection (was `sentinel.ts`)
+ * - Progress file appending (was `progress.ts`)
+ * - Learning content parsing (was `learnings.ts`)
+ *
  * Exported entry point: `runRunner(options)`.
  */
-import { spawn, type ChildProcess } from "child_process";
+import { randomUUID } from "crypto";
 import {
-  createWriteStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -31,7 +35,7 @@ import {
   formatDockerCommand,
 } from "./executor/docker.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
-import { getSocketPath, type IpcMessage } from "./ipc-protocol.ts";
+import { getSocketPath } from "./ipc-protocol.ts";
 import { getRepoPipelineDirs } from "./global-state.ts";
 import { assemblePrompt } from "./prompt.ts";
 import {
@@ -39,12 +43,7 @@ import {
   parseFeedbackCommands,
 } from "./feedback-wrapper.ts";
 import { writeFeedbackWrapper } from "./worktree/index.ts";
-import { appendProgressBlock } from "./progress.ts";
-import {
-  generateNonce,
-  detectCompletion,
-  extractNoncedBlock,
-} from "./sentinel.ts";
+import { stripAnsi } from "./utils.ts";
 
 import {
   transitionStuck,
@@ -94,7 +93,90 @@ import {
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
-// Learnings parsing
+// Sentinel detection (absorbed from sentinel.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a unique nonce for a single runner iteration.
+ * Uses a cryptographic UUID to ensure unguessability.
+ */
+export function generateNonce(): string {
+  return randomUUID();
+}
+
+/**
+ * Detect whether the agent output contains a genuine nonce-stamped
+ * completion signal: `<promise nonce="NONCE">COMPLETE</promise>`.
+ *
+ * Returns `false` for bare `<promise>COMPLETE</promise>` tags (which may
+ * originate from test output, source files, or other tool noise) and for
+ * tags with a mismatched nonce.
+ */
+export function detectCompletion(output: string, nonce: string): boolean {
+  const sentinel = `<promise nonce="${nonce}">COMPLETE</promise>`;
+  return output.includes(sentinel);
+}
+
+/**
+ * Extract the content of a nonce-stamped XML block from agent output.
+ *
+ * Looks for `<tagName nonce="NONCE">...content...</tagName>` and returns
+ * the trimmed content between the tags, or `null` if no matching block
+ * is found.
+ *
+ * ANSI escape codes are stripped from the extracted content so terminal
+ * colors don't leak into PR descriptions or persisted files.
+ */
+export function extractNoncedBlock(
+  output: string,
+  tagName: string,
+  nonce: string,
+): string | null {
+  const startTag = `<${tagName} nonce="${nonce}">`;
+  const endTag = `</${tagName}>`;
+
+  const startIdx = output.indexOf(startTag);
+  if (startIdx === -1) return null;
+
+  const contentStart = startIdx + startTag.length;
+  const endIdx = output.indexOf(endTag, contentStart);
+  if (endIdx === -1) return null;
+
+  const content = stripAnsi(output.slice(contentStart, endIdx)).trim();
+  return content.length > 0 ? content : null;
+}
+
+// ---------------------------------------------------------------------------
+// Progress file management (absorbed from progress.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Append extracted progress content to the global progress file with an
+ * iteration header. No-op if content is null.
+ *
+ * Format appended:
+ * ```
+ * ### Iteration N
+ * <content>
+ * ```
+ */
+export function appendProgressBlock(
+  progressFile: string,
+  iterationNumber: number,
+  content: string,
+): void {
+  const block = `\n### Iteration ${iterationNumber}\n${content}\n`;
+
+  if (existsSync(progressFile)) {
+    const existing = readFileSync(progressFile, "utf-8");
+    writeFileSync(progressFile, existing + block, "utf-8");
+  } else {
+    writeFileSync(progressFile, `## Progress Log\n${block}`, "utf-8");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Learning content parsing (absorbed from learnings.ts)
 // ---------------------------------------------------------------------------
 
 /**
@@ -249,180 +331,6 @@ function ensureProgressFile(progressFile: string): void {
   mkdirSync(dirname(progressFile), { recursive: true });
   writeFileSync(progressFile, "## Progress Log\n\n");
   console.log(`Initialized ${progressFile}`);
-}
-
-/**
- * Spawn the agent command, capture its output, and apply a timeout.
- *
- * Returns { output, exitCode, timedOut }.
- *
- * When `nonce` is provided, it is set as the `RALPHAI_NONCE` environment
- * variable in the agent subprocess so mock agents in tests can easily
- * echo nonce-stamped sentinel tags.
- *
- * Exported for testing.
- */
-export function spawnAgent(
-  agentCommand: string,
-  prompt: string,
-  iterationTimeout: number,
-  cwd: string,
-  outputLogPath?: string,
-  ipcBroadcast?: (msg: IpcMessage) => void,
-  nonce?: string,
-): Promise<{ output: string; exitCode: number; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    // Split the agent command respecting quotes
-    const parts = shellSplit(agentCommand);
-    const cmd = parts[0]!;
-    const args = [...parts.slice(1), prompt];
-
-    // Open a write stream for the agent output log (append mode).
-    // Errors are swallowed so logging never breaks the run.
-    let logStream: ReturnType<typeof createWriteStream> | undefined;
-    if (outputLogPath) {
-      try {
-        logStream = createWriteStream(outputLogPath, { flags: "a" });
-      } catch {
-        // Best-effort: if we can't open the log, continue without it
-      }
-    }
-
-    let ac: AbortController | undefined;
-    let timedOut = false;
-    const spawnOpts: {
-      cwd: string;
-      stdio: ["pipe", "pipe", "pipe"];
-      signal?: AbortSignal;
-      env?: Record<string, string | undefined>;
-    } = {
-      cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: nonce ? { ...process.env, RALPHAI_NONCE: nonce } : undefined,
-    };
-
-    if (iterationTimeout > 0) {
-      ac = new AbortController();
-      spawnOpts.signal = ac.signal;
-      setTimeout(() => {
-        timedOut = true;
-        ac!.abort();
-      }, iterationTimeout * 1000);
-    }
-
-    let child: ChildProcess;
-    try {
-      child = spawn(cmd, args, spawnOpts);
-    } catch (err) {
-      console.error(
-        `Failed to spawn agent: ${err instanceof Error ? err.message : err}`,
-      );
-      logStream?.end();
-      resolve({ output: "", exitCode: 1, timedOut: false });
-      return;
-    }
-
-    // Close stdin so the agent knows no input is coming.
-    // Without this, agents that read or wait for stdin EOF will hang.
-    child.stdin?.end();
-
-    const chunks: Buffer[] = [];
-
-    child.stdout?.on("data", (data: Buffer) => {
-      process.stdout.write(data);
-      logStream?.write(data);
-      chunks.push(data);
-      ipcBroadcast?.({
-        type: "output",
-        data: data.toString(),
-        stream: "stdout",
-      });
-    });
-
-    child.stderr?.on("data", (data: Buffer) => {
-      process.stderr.write(data);
-      logStream?.write(data);
-      chunks.push(data);
-      ipcBroadcast?.({
-        type: "output",
-        data: data.toString(),
-        stream: "stderr",
-      });
-    });
-
-    child.on("close", (code) => {
-      const output = Buffer.concat(chunks).toString("utf-8");
-      if (logStream) {
-        logStream.end(() => {
-          resolve({ output, exitCode: code ?? 1, timedOut });
-        });
-      } else {
-        resolve({ output, exitCode: code ?? 1, timedOut });
-      }
-    });
-
-    child.on("error", (err) => {
-      logStream?.end();
-      if (timedOut) {
-        const output = Buffer.concat(chunks).toString("utf-8");
-        resolve({ output, exitCode: 124, timedOut: true });
-      } else {
-        console.error(`Agent error: ${err.message}`);
-        const output = Buffer.concat(chunks).toString("utf-8");
-        resolve({ output, exitCode: 1, timedOut: false });
-      }
-    });
-  });
-}
-
-/**
- * Minimal shell-like argument splitting.
- * Handles single/double quotes and backslash escapes.
- *
- * Exported for testing.
- */
-export function shellSplit(cmd: string): string[] {
-  const parts: string[] = [];
-  let current = "";
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  let hasQuote = false; // Track if current token started with a quote
-
-  for (const ch of cmd) {
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      continue;
-    }
-    if (ch === "\\" && !inSingle) {
-      escaped = true;
-      continue;
-    }
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-      hasQuote = true;
-      continue;
-    }
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-      hasQuote = true;
-      continue;
-    }
-    if ((ch === " " || ch === "\t") && !inSingle && !inDouble) {
-      if (current.length > 0 || hasQuote) {
-        parts.push(current);
-        current = "";
-        hasQuote = false;
-      }
-      continue;
-    }
-    current += ch;
-  }
-  if (current.length > 0 || hasQuote) {
-    parts.push(current);
-  }
-  return parts;
 }
 
 /**
@@ -1253,6 +1161,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 feedbackStep,
                 iterationTimeout,
                 cwd,
+                executor,
                 outputLogPath,
                 ipcBroadcast: ipcServer
                   ? (msg) => ipcServer!.broadcast(msg)
