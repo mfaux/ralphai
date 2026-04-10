@@ -2518,6 +2518,8 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
+  let feedbackCommandsList: string[] = [];
+  let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
     const cfgResult = resolveConfig({
       cwd,
@@ -2534,48 +2536,41 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfg.issueRepo;
     resolvedIssueCommentProgress = cfg.issueCommentProgress === "true";
     resolvedIssueHitlLabel = cfg.issueHitlLabel;
+
+    // Parse feedback commands for the wrapper script (written to worktree root)
+    feedbackCommandsList = parseFeedbackCommands(cfg.feedbackCommands);
+
+    // Build sandbox config for routing setup commands through Docker
+    setupSandboxConfig = {
+      sandbox: cfg.sandbox as "none" | "docker",
+      agentCommand: cfg.agentCommand,
+      dockerConfig:
+        cfg.sandbox === "docker"
+          ? {
+              dockerImage: cfg.dockerImage || undefined,
+              dockerEnvVars: cfg.dockerEnvVars
+                ? cfg.dockerEnvVars
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : undefined,
+              dockerMounts: cfg.dockerMounts
+                ? cfg.dockerMounts
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : undefined,
+            }
+          : undefined,
+      // Mount the main repo's .git directory for worktree support.
+      // In managed worktree mode, cwd is always the main repo root,
+      // so worktrees created from it need this path mounted in Docker
+      // for git operations to work inside the container.
+      mainGitDir: cfg.sandbox === "docker" ? join(cwd, ".git") : undefined,
+    };
   } catch {
     // Config resolution may fail if not yet initialised; setup will be skipped
   }
-
-  // Parse feedback commands for the wrapper script (written to worktree root)
-  const feedbackCommandsList = resolvedConfig
-    ? parseFeedbackCommands(configValues(resolvedConfig).feedbackCommands)
-    : [];
-
-  // Build sandbox config for routing setup commands through Docker
-  const setupSandboxConfig: SetupSandboxConfig | undefined = resolvedConfig
-    ? (() => {
-        const cfg = configValues(resolvedConfig!);
-        return {
-          sandbox: cfg.sandbox as "none" | "docker",
-          agentCommand: cfg.agentCommand,
-          dockerConfig:
-            cfg.sandbox === "docker"
-              ? {
-                  dockerImage: cfg.dockerImage || undefined,
-                  dockerEnvVars: cfg.dockerEnvVars
-                    ? cfg.dockerEnvVars
-                        .split(",")
-                        .map((s: string) => s.trim())
-                        .filter(Boolean)
-                    : undefined,
-                  dockerMounts: cfg.dockerMounts
-                    ? cfg.dockerMounts
-                        .split(",")
-                        .map((s: string) => s.trim())
-                        .filter(Boolean)
-                    : undefined,
-                }
-              : undefined,
-          // Mount the main repo's .git directory for worktree support.
-          // In managed worktree mode, cwd is always the main repo root,
-          // so worktrees created from it need this path mounted in Docker
-          // for git operations to work inside the container.
-          mainGitDir: cfg.sandbox === "docker" ? join(cwd, ".git") : undefined,
-        };
-      })()
-    : undefined;
 
   // --- Interactive wizard: `--wizard` / `-w` ---
   if (hasWizard && !hasHelp) {

@@ -19,12 +19,7 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
 import { RESET, TEXT, DIM } from "./utils.ts";
-import {
-  resolveConfig,
-  configValues,
-  getConfigFilePath,
-  DEFAULTS,
-} from "./config.ts";
+import { resolveConfig, configValues, getConfigFilePath } from "./config.ts";
 import {
   detectIssueRepo,
   discoverParentIssue,
@@ -120,7 +115,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   }
 
   // --- Discover parent PRD ---
-  const prdLabel = cfg.prdLabel || DEFAULTS.prdLabel;
+  const prdLabel = cfg.prdLabel;
   const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
 
   if (!parentResult.hasParent) {
@@ -165,7 +160,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   const parentTitle = parentResult.parentTitle!;
   const prdSlug = slugify(commitTypeFromTitle(parentTitle).description);
   const branch = issueBranchName(parentTitle);
-  const hitlLabel = cfg.issueHitlLabel || DEFAULTS.issueHitlLabel;
+  const hitlLabel = cfg.issueHitlLabel;
 
   // --- Dry-run ---
   if (dryRun) {
@@ -196,7 +191,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   // --- Prepare worktree ---
   ensureRepoHasCommit(cwd);
   const baseBranch = cfg.baseBranch;
-  const setupCommand = cfg.setupCommand ?? "";
+  const setupCommand = cfg.setupCommand;
   const feedbackCommands = cfg.feedbackCommands
     ? cfg.feedbackCommands.split(",").map((s: string) => s.trim())
     : [];
