@@ -32,6 +32,13 @@ export function setExecImpl(impl: ExecSyncFn): () => void {
   };
 }
 
+/** Extract exit code from an execSync error, defaulting to 1. */
+function exitCodeFrom(err: unknown): number {
+  return err && typeof err === "object" && "status" in err
+    ? ((err as { status: number }).status ?? 1)
+    : 1;
+}
+
 /** Options for exec utilities that support timeout. */
 export interface ExecOptions {
   /**
@@ -72,10 +79,6 @@ export function execRun(
     });
     return { exitCode: 0, stdout: String(stdout).trim(), stderr: "" };
   } catch (err: unknown) {
-    const exitCode =
-      err && typeof err === "object" && "status" in err
-        ? ((err as { status: number }).status ?? 1)
-        : 1;
     const stderr =
       err && typeof err === "object" && "stderr" in err
         ? String((err as { stderr: unknown }).stderr).trim()
@@ -84,7 +87,7 @@ export function execRun(
       err && typeof err === "object" && "stdout" in err
         ? String((err as { stdout: unknown }).stdout).trim()
         : "";
-    return { exitCode, stdout, stderr };
+    return { exitCode: exitCodeFrom(err), stdout, stderr };
   }
 }
 
@@ -142,11 +145,7 @@ export function execInherit(cmd: string, cwd: string): ExecRunResult {
     _execSync(cmd, { cwd, stdio: "inherit" });
     return { exitCode: 0, stdout: "", stderr: "" };
   } catch (err: unknown) {
-    const exitCode =
-      err && typeof err === "object" && "status" in err
-        ? ((err as { status: number }).status ?? 1)
-        : 1;
-    return { exitCode, stdout: "", stderr: "" };
+    return { exitCode: exitCodeFrom(err), stdout: "", stderr: "" };
   }
 }
 
