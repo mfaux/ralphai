@@ -64,17 +64,21 @@ export type GateOutcome =
  */
 export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
   const details: string[] = [];
+  const reasons: string[] = [];
 
   // --- Task count check ---
   if (input.totalTasks > 0 && input.completedTasks < input.totalTasks) {
+    reasons.push("incomplete tasks");
     details.push(
       `Task count: ${input.completedTasks}/${input.totalTasks} tasks completed in progress file.`,
     );
   }
 
   // --- Feedback command check ---
+  let hasFailedCmds = false;
   for (const result of input.feedbackResults) {
     if (result.exitCode !== 0) {
+      hasFailedCmds = true;
       const snippet = result.output ? `: ${result.output.slice(0, 200)}` : "";
       const tierLabel = result.tier === "pr" ? " [PR-tier]" : "";
       details.push(
@@ -82,16 +86,11 @@ export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
       );
     }
   }
+  if (hasFailedCmds) {
+    reasons.push("failing feedback commands");
+  }
 
-  if (details.length > 0) {
-    const reasons: string[] = [];
-    if (input.totalTasks > 0 && input.completedTasks < input.totalTasks) {
-      reasons.push("incomplete tasks");
-    }
-    const failedCmds = input.feedbackResults.filter((r) => r.exitCode !== 0);
-    if (failedCmds.length > 0) {
-      reasons.push("failing feedback commands");
-    }
+  if (reasons.length > 0) {
     return {
       passed: false,
       reason: `Completion gate rejected: ${reasons.join(" and ")}.`,
