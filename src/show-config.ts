@@ -343,27 +343,15 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     if (workspaces && Object.keys(workspaces).length > 0) {
       lines.push("");
       lines.push("Workspaces (per-package overrides):");
+      const fmtList = (v: unknown): string =>
+        v == null ? "none" : Array.isArray(v) ? v.join(", ") : String(v);
       for (const [pkg, overrides] of Object.entries(workspaces)) {
-        const fc = overrides.feedbackCommands;
-        let fcDisplay: string;
-        if (fc == null) {
-          fcDisplay = "none";
-        } else if (Array.isArray(fc)) {
-          fcDisplay = fc.join(", ");
-        } else {
-          fcDisplay = String(fc);
-        }
-        const pfc = overrides.prFeedbackCommands;
-        let pfcDisplay: string;
-        if (pfc == null) {
-          pfcDisplay = "none";
-        } else if (Array.isArray(pfc)) {
-          pfcDisplay = pfc.join(", ");
-        } else {
-          pfcDisplay = String(pfc);
-        }
-        lines.push(`  ${pkg}: feedbackCommands=${fcDisplay}`);
-        lines.push(`  ${pkg}: prFeedbackCommands=${pfcDisplay}`);
+        lines.push(
+          `  ${pkg}: feedbackCommands=${fmtList(overrides.feedbackCommands)}`,
+        );
+        lines.push(
+          `  ${pkg}: prFeedbackCommands=${fmtList(overrides.prFeedbackCommands)}`,
+        );
       }
     }
   } else {
