@@ -12,14 +12,7 @@
  * Plan reference: scenarios 27–31 from parent PRD #245.
  */
 import { describe, it, expect, beforeEach, afterEach, test } from "bun:test";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  readFileSync,
-  readdirSync,
-} from "fs";
+import { mkdtempSync, writeFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";

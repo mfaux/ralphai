@@ -63,6 +63,9 @@ import {
   discoverPrdTarget,
   findHitlBlockers,
   formatPrdHitlSummary,
+  issueBranchName,
+  commitTypeFromTitle,
+  slugify,
 } from "./issue-lifecycle.ts";
 import type {
   PrdIssue,
@@ -70,11 +73,6 @@ import type {
   PrdDiscoveryResult,
   BlockedSubIssue,
 } from "./issue-lifecycle.ts";
-import {
-  issueBranchName,
-  commitTypeFromTitle,
-  slugify,
-} from "./issue-naming.ts";
 import { runUninstall, showUninstallHelp } from "./uninstall.ts";
 import { runRepos, showReposHelp } from "./repos.ts";
 import { runConfigCommand, showConfigCommandHelp } from "./config-cmd.ts";

@@ -1,8 +1,6 @@
 /**
- * Boundary tests for src/issue-naming.ts — verifies every re-exported
- * naming utility is accessible and produces correct results.
- *
- * All functions here are pure (no I/O), so no mocking is needed.
+ * Tests for issue naming utilities — branch names, slugs, commit-type
+ * extraction. All functions here are pure (no I/O), so no mocking is needed.
  */
 import { describe, expect, it } from "bun:test";
 import {
@@ -11,9 +9,9 @@ import {
   issueBranchName,
   prdBranchName,
   issueDepSlug,
-} from "./issue-naming.ts";
+} from "./issue-lifecycle.ts";
 
-describe("issue-naming facade", () => {
+describe("issue naming", () => {
   describe("slugify", () => {
     it("lowercases and replaces non-alphanumeric chars", () => {
       expect(slugify("Hello World!")).toBe("hello-world");

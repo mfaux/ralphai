@@ -9,7 +9,7 @@
  * process — must be listed in ISOLATED array in scripts/test.ts.
  */
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { mkdtempSync, writeFileSync, existsSync } from "fs";
+import { mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { EventEmitter } from "events";

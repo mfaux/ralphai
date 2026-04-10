@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { execSync } from "child_process";
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
+import { writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
 import {

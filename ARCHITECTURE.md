@@ -95,7 +95,6 @@ Internal-only symbols (e.g. `parseWorktreeList`, `isRalphaiManagedBranch`, `Sele
 | `src/config.ts`            | Config file resolution, CLI arg merging, validation.                                           |
 | `src/show-config.ts`       | `--show-config` output formatting.                                                             |
 | `src/issue-lifecycle.ts`   | Facade re-exporting all issue operations from the 7 issue modules below.                       |
-| `src/issue-naming.ts`      | Facade for branch/slug naming utilities (`slugify`, `issueBranchName`, etc.).                  |
 | `src/issues.ts`            | GitHub issue pulling, slug generation, label fetching, parent discovery, HITL filtering.       |
 | `src/issue-dispatch.ts`    | Label-driven dispatch classification and validation for issue targets.                         |
 | `src/labels.ts`            | Shared state label constants (`in-progress`, `done`, `stuck`).                                 |

@@ -7,7 +7,7 @@
  * without requiring a real GitHub repo or gh CLI.
  */
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "fs";
+import { mkdtempSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
