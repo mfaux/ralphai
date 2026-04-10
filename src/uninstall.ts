@@ -6,10 +6,10 @@ import {
   getRalphaiHome,
   getRepoPipelineDirs,
   resolveRepoStateDir,
-} from "./global-state.ts";
+  listPlanSlugs,
+} from "./plan-lifecycle.ts";
 import { getConfigFilePath } from "./config.ts";
 import { detectInstallerPM } from "./self-update.ts";
-import { listPlanSlugs } from "./plan-detection.ts";
 
 // ---------------------------------------------------------------------------
 // Types

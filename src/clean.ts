@@ -15,9 +15,12 @@ import { join } from "path";
 import * as clack from "@clack/prompts";
 import { RESET, DIM, TEXT } from "./utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
-import { planPathForSlug, planExistsForSlug } from "./plan-detection.ts";
-import { findPlansByBranch } from "./receipt.ts";
+import {
+  getRepoPipelineDirs,
+  planPathForSlug,
+  planExistsForSlug,
+  findPlansByBranch,
+} from "./plan-lifecycle.ts";
 import { listRalphaiWorktrees } from "./worktree/index.ts";
 
 // ---------------------------------------------------------------------------

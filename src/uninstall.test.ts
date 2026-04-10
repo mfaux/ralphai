@@ -10,7 +10,7 @@ import {
   useTempGitDir,
 } from "./test-utils.ts";
 import { getConfigFilePath } from "./config.ts";
-import { getRepoPipelineDirs, resolveRepoStateDir } from "./global-state.ts";
+import { getRepoPipelineDirs, resolveRepoStateDir } from "./plan-lifecycle.ts";
 
 describe("uninstall command (repo-scoped default)", () => {
   const ctx = useTempGitDir();

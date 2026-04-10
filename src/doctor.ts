@@ -8,8 +8,11 @@ import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { RESET, DIM, TEXT } from "./utils.ts";
-import { listPlanSlugs, listPlanFolders } from "./plan-detection.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import {
+  listPlanSlugs,
+  listPlanFolders,
+  getRepoPipelineDirs,
+} from "./plan-lifecycle.ts";
 import { getConfigFilePath } from "./config.ts";
 import { detectBaseBranch } from "./git-helpers.ts";
 

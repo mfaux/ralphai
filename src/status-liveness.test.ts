@@ -10,7 +10,7 @@ import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { runCliInProcess, useTempGitDir } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 describe("status runner liveness", () => {
   const ctx = useTempGitDir();

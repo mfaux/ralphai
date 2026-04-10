@@ -7,7 +7,7 @@ import {
   stripLogo,
   useTempGitDir,
 } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 describe("seed command", () => {
   const ctx = useTempGitDir();

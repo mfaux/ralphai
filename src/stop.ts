@@ -11,9 +11,8 @@
 import { existsSync, unlinkSync } from "fs";
 import { join } from "path";
 import { RESET, BOLD, DIM, TEXT } from "./utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs, listPlanFolders } from "./plan-lifecycle.ts";
 import { getConfigFilePath } from "./config.ts";
-import { listPlanFolders } from "./plan-detection.ts";
 import { isPidAlive, readRunnerPid, stopRunner } from "./process-utils.ts";
 
 // ---------------------------------------------------------------------------

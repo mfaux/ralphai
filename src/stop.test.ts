@@ -9,7 +9,7 @@ import { describe, it, expect } from "bun:test";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { runCli, useTempGitDir } from "./test-utils.ts";
-import { getRepoPipelineDirs } from "./global-state.ts";
+import { getRepoPipelineDirs } from "./plan-lifecycle.ts";
 
 describe("ralphai stop", () => {
   const ctx = useTempGitDir();
