@@ -13,13 +13,10 @@ import { useTempDir } from "./test-utils.ts";
 
 // Import everything from the facade
 import {
-  // issues.ts
+  // issues.ts (naming functions tested in issue-naming.test.ts)
   checkGhAvailable,
   detectIssueRepo,
-  slugify,
-  commitTypeFromTitle,
   fetchBlockersViaGraphQL,
-  issueDepSlug,
   buildIssuePlanContent,
   peekGithubIssues,
   peekPrdIssues,
@@ -30,8 +27,6 @@ import {
   pullPrdSubIssue,
   fetchPrdIssueByNumber,
   fetchPrdIssue,
-  issueBranchName,
-  prdBranchName,
   fetchIssueTitleByNumber,
   pullGithubIssueByNumber,
   checkAllPrdSubIssuesDone,
@@ -127,37 +122,10 @@ function mockGhUnavailable(): void {
 }
 
 // ---------------------------------------------------------------------------
-// issues.ts re-exports — pure functions
+// issues.ts re-exports — pure functions (naming tests in issue-naming.test.ts)
 // ---------------------------------------------------------------------------
 
-describe("issue-lifecycle facade: pure naming functions", () => {
-  it("slugify converts text to slug", () => {
-    expect(slugify("Hello World!")).toBe("hello-world");
-  });
-
-  it("commitTypeFromTitle extracts type", () => {
-    const r = commitTypeFromTitle("fix: broken login");
-    expect(r.type).toBe("fix");
-    expect(r.description).toBe("broken login");
-  });
-
-  it("commitTypeFromTitle defaults to feat", () => {
-    const r = commitTypeFromTitle("Add dark mode");
-    expect(r.type).toBe("feat");
-  });
-
-  it("issueBranchName produces type/slug", () => {
-    expect(issueBranchName("fix: broken login")).toBe("fix/broken-login");
-  });
-
-  it("prdBranchName is an alias for issueBranchName", () => {
-    expect(prdBranchName).toBe(issueBranchName);
-  });
-
-  it("issueDepSlug generates gh-N", () => {
-    expect(issueDepSlug(42)).toBe("gh-42");
-  });
-
+describe("issue-lifecycle facade: buildIssuePlanContent", () => {
   it("buildIssuePlanContent produces frontmatter + body", () => {
     const content = buildIssuePlanContent({
       issueNumber: "7",

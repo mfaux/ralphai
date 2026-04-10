@@ -7,8 +7,6 @@
  *   issues.ts, label-lifecycle.ts, labels.ts, issue-dispatch.ts,
  *   prd-discovery.ts, prd-hitl.ts, reset-labels.ts
  *
- * Plus the naming utilities from issue-naming.ts.
- *
  * Callers still import from the old modules — this facade exists so that
  * future slices can migrate callers one at a time to the unified path.
  */
