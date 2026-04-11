@@ -6,90 +6,37 @@ Back to the [README](../README.md) for setup and quickstart. See the [CLI Refere
 
 ## Lifecycle Overview
 
-The diagrams below show every hook, gate check, and prompt injection point in firing order. Workspace overrides are resolved once per plan before the iteration loop begins.
+Every hook, gate check, and prompt injection point listed in firing order. Workspace overrides are resolved once per plan before the iteration loop begins.
 
-### High-Level Flow
+### Hook Timing
 
-```mermaid
-flowchart TD
-    Start([Plan selected]) --> Scope[resolveScope]
-    Scope --> BeforeRun{"hooks.beforeRun"}
-    BeforeRun -- "exit 0" --> IterLoop["Iteration loop\n(agent works on tasks,\nruns hooks.feedback each cycle)"]
-    BeforeRun -- "non-zero" --> Stuck([Mark stuck])
+| Hook / Check       | When                                                                     | Visible to agent?                                 | Can block PR?                                        |
+| ------------------ | ------------------------------------------------------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
+| `hooks.beforeRun`  | Once, before the iteration loop                                          | No                                                | Yes — non-zero exit marks the plan stuck             |
+| `hooks.feedback`   | Every iteration (in the agent prompt), and re-run at the completion gate | Yes — included in the prompt and feedback wrapper | Yes                                                  |
+| `hooks.prFeedback` | Completion gate only, after `hooks.feedback`                             | No — never in the prompt                          | Yes                                                  |
+| `gate.validators`  | Completion gate only, after all feedback passes                          | No — never in the prompt                          | Yes                                                  |
+| `hooks.afterRun`   | Once, after the plan finishes (completion or stuck)                      | No                                                | No — runs in a `finally` block; failure is a warning |
 
-    IterLoop -- "COMPLETE" --> Gate["Completion gate\n(tasks + hooks.feedback\n+ hooks.prFeedback\n+ validators)"]
-    IterLoop -- "stuck" --> Stuck
+> **Key distinction:** `hooks.feedback` has a dual role. During iterations the agent runs it directly (via the feedback wrapper or raw commands in the prompt). At the completion gate the runner re-runs it independently as verification. `hooks.prFeedback` only runs at the gate — the agent never sees it.
 
-    Gate -- passed --> Review{"Review pass?"}
-    Gate -- rejected --> IterLoop
-    Gate -- "budget exhausted" --> ForceOrStuck{Progress?}
-    ForceOrStuck -- "partial" --> PR
-    ForceOrStuck -- "zero" --> Stuck
+### Lifecycle Walkthrough
 
-    Review -- "no / skipped" --> PR([Create/update PR])
-    Review -- "changes" --> Gate
-
-    PR --> AfterRun["hooks.afterRun\n(always runs)"]
-    Stuck --> AfterRun
-    AfterRun --> Done([Next plan or exit])
-```
-
-### Iteration Loop Detail
-
-Each iteration starts a fresh agent session. `hooks.feedback` commands are included in the prompt so the agent runs them during its work — this is the fast, every-cycle feedback tier.
-
-```mermaid
-flowchart TD
-    Prompt["assemblePrompt()\n— preamble · agent instructions\n— file refs · scope hint\n— gate rejection context\n— learnings\n— hooks.feedback commands\n— COMPLETE sentinel"]
-    Prompt --> Agent["Agent runs\n(executor.spawn)"]
-    Agent --> AgentFB["Agent runs hooks.feedback\n(via wrapper script or raw commands)"]
-    AgentFB --> Extract["Extract learnings\nExtract progress"]
-    Extract --> StuckCheck{"No commits for\ngate.maxStuck\niterations?"}
-    StuckCheck -- yes --> StuckOut([Mark stuck])
-    StuckCheck -- no --> IterCap{"gate.maxIterations\nexceeded?"}
-    IterCap -- yes --> StuckOut
-    IterCap -- no --> Complete{"Agent signaled\nCOMPLETE?"}
-    Complete -- no --> Prompt
-    Complete -- yes --> Gate([To completion gate])
-```
-
-### Completion Gate Detail
-
-When the agent signals COMPLETE, the runner independently re-runs `hooks.feedback`, then runs `hooks.prFeedback` (the slow, gate-only tier), then validators. The agent does not see `hooks.prFeedback` or validators in its prompt — they only run here.
-
-```mermaid
-flowchart TD
-    TaskCheck["Task count check\n(progress.md vs plan)"]
-    TaskCheck --> LoopFB["Re-run hooks.feedback\n(loop-tier — independent verification)"]
-    LoopFB --> PrFB["Run hooks.prFeedback\n(PR-tier — gate only, not in prompt)"]
-    PrFB --> FBPass{"All feedback\npassed?"}
-    FBPass -- yes --> Validators["Run gate.validators\n(agent-invisible)"]
-    FBPass -- no --> GateFail([Gate rejected])
-    Validators --> ValPass{"Validators\npassed?"}
-    ValPass -- yes --> GatePass([Gate passed])
-    ValPass -- no --> GateFail
-
-    GateFail --> Budget{"Rejections <\ngate.maxRejections?"}
-    Budget -- yes --> Reinvoke([Re-invoke agent\nwith rejection details])
-    Budget -- "no, 0 tasks done" --> Stuck([Mark stuck])
-    Budget -- "no, partial progress" --> ForceAccept([Force-accept])
-```
-
-### Review Pass Detail
-
-After the gate passes, an optional one-shot review pass performs behavior-preserving simplifications. Runs at most once per plan.
-
-```mermaid
-flowchart TD
-    GatePass([Gate passed]) --> ReviewEnabled{"gate.review enabled\nand not yet run?"}
-    ReviewEnabled -- no --> PR([Create/update PR])
-    ReviewEnabled -- yes --> Diff["git diff: changed files\nvs base branch"]
-    Diff -- "no files" --> PR
-    Diff -- "files found" --> ReviewAgent["One-shot review agent\n(simplify, run feedback, commit)"]
-    ReviewAgent --> Changes{"Review made\ncommits?"}
-    Changes -- no --> PR
-    Changes -- yes --> ReGate([Re-run completion gate])
-```
+1. **Plan selected** — a plan is picked from the backlog or resumed from in-progress.
+2. **Resolve scope** — workspace overrides for feedback, prFeedback, validators, beforeRun, and preamble are resolved once.
+3. **`hooks.beforeRun`** — runs once. Non-zero exit marks the plan stuck; the iteration loop never starts.
+4. **Iteration loop** — each iteration starts a fresh agent session containing the plan, progress log, learnings, and `hooks.feedback` commands. The agent works on the next task, runs `hooks.feedback` to verify, commits, and either signals COMPLETE or loops back.
+   - **Stuck detection:** if no new commits appear for `gate.maxStuck` consecutive iterations, the plan is marked stuck.
+   - **Iteration cap:** if `gate.maxIterations` is set and exceeded, the plan is marked stuck.
+5. **Completion gate** — triggered when the agent signals COMPLETE. Runs these checks in order:
+   1. Task count — progress.md must show all plan tasks completed.
+   2. `hooks.feedback` — re-run independently by the runner (not the agent).
+   3. `hooks.prFeedback` — the slow, gate-only tier (E2E, integration tests).
+   4. `gate.validators` — agent-invisible checks (e.g. secret scanning). Only run when all feedback passes.
+   - **On failure:** if rejections are within the `gate.maxRejections` budget, the agent is re-invoked with rejection details. If the budget is exhausted: zero completed tasks marks stuck; partial progress force-accepts.
+6. **Review pass** _(optional)_ — after the gate passes, a one-shot agent invocation performs behavior-preserving simplifications on changed files. Runs at most once per plan. If the review makes commits, the completion gate re-runs. Review failure is best-effort — it never blocks PR creation.
+7. **Create/update PR** — the branch is pushed and a draft PR is created or updated.
+8. **`hooks.afterRun`** — always runs (completion, stuck, or interruption). Failure produces a warning only.
 
 ## Config Reference
 
