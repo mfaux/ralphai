@@ -91,7 +91,7 @@ When the agent signals that all tasks are complete, Ralphai runs a **completion 
 
 If any check fails, the gate **rejects** and Ralphai re-invokes the agent with a fresh session that includes the rejection details. PR-tier failures are labeled `[PR-tier]` in the rejection message so the agent knows which commands failed and can fix them.
 
-The gate allows up to 2 consecutive rejections before force-accepting to prevent infinite loops. However, if the plan has **zero tasks completed** out of a non-zero total when the rejection budget is exhausted, the plan is marked **stuck** instead of force-accepted — zero progress indicates the agent failed entirely and should not produce a PR.
+The gate allows up to `gate.maxRejections` (default 2) consecutive rejections before force-accepting to prevent infinite loops. Set to `0` to never force-accept (mark stuck instead). However, if the plan has **zero tasks completed** out of a non-zero total when the rejection budget is exhausted, the plan is marked **stuck** instead of force-accepted — zero progress indicates the agent failed entirely and should not produce a PR.
 
 ```
     Agent signals COMPLETE
@@ -129,7 +129,7 @@ After the completion gate passes, Ralphai optionally runs a **review pass** — 
 The review pass:
 
 1. **Detects changed files** — runs `git diff --name-only <baseBranch>...HEAD` and filters out deleted files
-2. **Assembles a focused prompt** — lists the changed files (capped at 25) and instructs the agent to perform behavior-preserving simplifications: dead code removal, redundant logic elimination, unused imports cleanup, and control flow simplification
+2. **Assembles a focused prompt** — lists the changed files (capped at `gate.reviewMaxFiles`, default 25) and instructs the agent to perform behavior-preserving simplifications: dead code removal, redundant logic elimination, unused imports cleanup, and control flow simplification
 3. **Invokes the agent** — runs a single agent session with the review prompt; the agent runs feedback commands to verify its changes and commits with a `refactor:` prefix if it makes any changes
 4. **Re-runs the gate if changes were made** — if the agent committed simplifications, the completion gate runs again to verify nothing was broken; gate failures follow the normal rejection flow
 
@@ -188,6 +188,8 @@ Use `ralphai run` directly when you want automation, scripting, or a non-interac
 ## Stuck Detection
 
 If **N consecutive iterations** produce no new commits, Ralphai aborts. The default threshold is 3. Configure it with `maxStuck` in `config.json`, `RALPHAI_MAX_STUCK`, or `--max-stuck`.
+
+Separately, `gate.maxIterations` sets an absolute cap on total runner iterations regardless of progress. When exceeded, the plan is marked stuck. Default is `0` (unlimited). This is independent of `maxStuck`, which only counts zero-progress iterations.
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume it.
 

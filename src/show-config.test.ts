@@ -106,6 +106,9 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  gate.review        = true  (default)");
     expect(output).toContain("  prompt.verbose     = false  (default)");
     expect(output).toContain("  gate.maxStuck      = 3  (default)");
+    expect(output).toContain("  gate.maxRejections = 2  (default)");
+    expect(output).toContain("  gate.maxIterations = unlimited  (default)");
+    expect(output).toContain("  gate.reviewMaxFiles = 25  (default)");
     expect(output).toContain("  gate.iterationTimeout = off  (default)");
     expect(output).toContain("  issue.source       = none  (default)");
   });
@@ -205,6 +208,61 @@ describe("formatShowConfig", () => {
     expect(output).toContain(
       "  gate.review        = false  (env (RALPHAI_GATE_REVIEW=false))",
     );
+  });
+
+  // --- gate.maxRejections display ---
+
+  it("shows gate.maxRejections default value", () => {
+    const output = formatShowConfig(defaultInput());
+    expect(output).toContain("  gate.maxRejections = 2  (default)");
+  });
+
+  it("shows gate.maxRejections with cli source", () => {
+    const input = defaultInput();
+    const rc = makeTestResolvedConfig();
+    rc.gate.maxRejections = { value: 5, source: "cli" };
+    input.config = rc;
+    input.rawFlags = { "gate.maxRejections": "--gate-max-rejections=5" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  gate.maxRejections = 5  (cli (--gate-max-rejections=5))",
+    );
+  });
+
+  // --- gate.maxIterations display ---
+
+  it("shows gate.maxIterations default as unlimited", () => {
+    const output = formatShowConfig(defaultInput());
+    expect(output).toContain("  gate.maxIterations = unlimited  (default)");
+  });
+
+  it("shows gate.maxIterations numeric value when non-zero", () => {
+    const input = defaultInput();
+    const rc = makeTestResolvedConfig();
+    rc.gate.maxIterations = { value: 8, source: "env" };
+    input.config = rc;
+    input.envVars = { RALPHAI_GATE_MAX_ITERATIONS: "8" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  gate.maxIterations = 8  (env (RALPHAI_GATE_MAX_ITERATIONS=8))",
+    );
+  });
+
+  // --- gate.reviewMaxFiles display ---
+
+  it("shows gate.reviewMaxFiles default value", () => {
+    const output = formatShowConfig(defaultInput());
+    expect(output).toContain("  gate.reviewMaxFiles = 25  (default)");
+  });
+
+  it("shows gate.reviewMaxFiles with config source", () => {
+    const input = defaultInput();
+    const rc = makeTestResolvedConfig();
+    rc.gate.reviewMaxFiles = { value: 50, source: "config" };
+    input.config = rc;
+    input.configFileExists = true;
+    const output = formatShowConfig(input);
+    expect(output).toContain("  gate.reviewMaxFiles = 50  (config (");
   });
 
   it("shows cli source for prompt.verbose --prompt-verbose", () => {

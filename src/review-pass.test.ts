@@ -302,6 +302,45 @@ describe("assembleReviewPrompt", () => {
     expect(result).not.toContain("</progress>");
     expect(result).not.toContain("</promise>");
   });
+
+  // --- maxFiles parameter tests ---
+
+  test("maxFiles=50 includes all 40 files without overflow", () => {
+    const files = Array.from({ length: 40 }, (_, i) => `src/file-${i}.ts`);
+    const result = assembleReviewPrompt({ files, feedbackStep, maxFiles: 50 });
+    for (const file of files) {
+      expect(result).toContain(`- ${file}`);
+    }
+    expect(result).not.toContain("more files not listed");
+  });
+
+  test("maxFiles=10 caps at 10 files with overflow note", () => {
+    const files = Array.from({ length: 20 }, (_, i) => `src/file-${i}.ts`);
+    const result = assembleReviewPrompt({ files, feedbackStep, maxFiles: 10 });
+
+    // First 10 included
+    for (let i = 0; i < 10; i++) {
+      expect(result).toContain(`- src/file-${i}.ts`);
+    }
+    // Files 10-19 excluded
+    for (let i = 10; i < 20; i++) {
+      expect(result).not.toContain(`- src/file-${i}.ts`);
+    }
+    expect(result).toContain("10 more files not listed");
+  });
+
+  test("maxFiles defaults to MAX_FILES_IN_PROMPT (25) when omitted", () => {
+    const files = Array.from({ length: 30 }, (_, i) => `src/file-${i}.ts`);
+    const result = assembleReviewPrompt({ files, feedbackStep });
+    // First 25 included, rest excluded (default behavior)
+    for (let i = 0; i < 25; i++) {
+      expect(result).toContain(`- src/file-${i}.ts`);
+    }
+    for (let i = 25; i < 30; i++) {
+      expect(result).not.toContain(`- src/file-${i}.ts`);
+    }
+    expect(result).toContain("5 more files not listed");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -644,5 +683,42 @@ describe("runReviewPass executor boundary", () => {
 
     expect(capturedOpts).toBeDefined();
     expect(capturedOpts!.feedbackWrapperPath).toBeUndefined();
+  });
+
+  test("passes maxFiles through to assembleReviewPrompt", async () => {
+    // Set up feature branch with 40 files
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    for (let i = 0; i < 40; i++) {
+      writeFileSync(join(dir, `file-${i}.ts`), `export const x${i} = ${i};\n`);
+    }
+    execSync('git add -A && git commit -m "add 40 files"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    let capturedPrompt = "";
+    const mockExecutor: AgentExecutor = {
+      async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
+        capturedPrompt = opts.prompt;
+        return { output: "", exitCode: 0, timedOut: false };
+      },
+    };
+
+    // With maxFiles=50, all 40 files should appear
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "true",
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+      maxFiles: 50,
+    });
+
+    // All 40 files should be included (no overflow note)
+    expect(capturedPrompt).not.toContain("more files not listed");
+    for (let i = 0; i < 40; i++) {
+      expect(capturedPrompt).toContain(`file-${i}.ts`);
+    }
   });
 });

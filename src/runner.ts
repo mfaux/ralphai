@@ -586,7 +586,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   // Unpack config values
   const baseBranch = cfg.baseBranch;
   const maxStuck = cfg.gate.maxStuck;
+  const maxIterations = cfg.gate.maxIterations;
   const iterationTimeout = cfg.gate.iterationTimeout;
+  const reviewMaxFiles = cfg.gate.reviewMaxFiles;
   const agentCommand = cfg.agent.command;
   const issueSource = cfg.issue.source;
   const standaloneLabel = cfg.issue.standaloneLabel;
@@ -901,7 +903,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       gateRejectionCount: 0,
       lastGateRejection: undefined as string | undefined,
     };
-    const maxGateRejections = 2;
+    const maxGateRejections = cfg.gate.maxRejections;
 
     // Review pass: runs at most once per plan after the gate passes.
     let reviewDone = false;
@@ -1102,6 +1104,16 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         });
       }
 
+      // --- Iteration cap check ---
+      // Independent of maxStuck (which counts zero-progress iterations).
+      // maxIterations=0 means unlimited.
+      if (maxIterations > 0 && iterationNumber >= maxIterations) {
+        markStuck(
+          `Stuck: iteration limit reached (${iterationNumber}/${maxIterations}) on '${planSlug}'.`,
+        );
+        break;
+      }
+
       // --- Check for completion ---
       if (detectCompletion(output, nonce)) {
         // --- Completion gate: verify before accepting ---
@@ -1162,6 +1174,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                   ? (msg) => ipcServer!.broadcast(msg)
                   : undefined,
                 feedbackWrapperPath: wrapperPath,
+                maxFiles: reviewMaxFiles,
               });
               reviewDone = true;
 

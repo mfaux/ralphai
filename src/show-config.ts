@@ -271,6 +271,36 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     `  gate.maxStuck      = ${config.gate.maxStuck.value}  (${maxStuckSrc})`,
   );
 
+  // gate.maxRejections
+  const maxRejectionsSrc = sourceLabel(
+    "gate.maxRejections",
+    config.gate.maxRejections.source,
+    input,
+  );
+  lines.push(
+    `  gate.maxRejections = ${config.gate.maxRejections.value}  (${maxRejectionsSrc})`,
+  );
+
+  // gate.maxIterations: 0 displays as "unlimited", otherwise the number
+  const maxIterVal = config.gate.maxIterations.value;
+  const maxIterDisplay = maxIterVal > 0 ? `${maxIterVal}` : "unlimited";
+  const maxIterSrc = sourceLabel(
+    "gate.maxIterations",
+    config.gate.maxIterations.source,
+    input,
+  );
+  lines.push(`  gate.maxIterations = ${maxIterDisplay}  (${maxIterSrc})`);
+
+  // gate.reviewMaxFiles
+  const reviewMaxFilesSrc = sourceLabel(
+    "gate.reviewMaxFiles",
+    config.gate.reviewMaxFiles.source,
+    input,
+  );
+  lines.push(
+    `  gate.reviewMaxFiles = ${config.gate.reviewMaxFiles.value}  (${reviewMaxFilesSrc})`,
+  );
+
   // gate.iterationTimeout: 0 displays as "off", otherwise "<N>s"
   const timeoutVal = config.gate.iterationTimeout.value;
   const timeoutDisplay = timeoutVal > 0 ? `${timeoutVal}s` : "off";

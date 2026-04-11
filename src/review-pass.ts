@@ -21,7 +21,7 @@ import type { IpcMessage } from "./ipc-protocol.ts";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Maximum number of files to include in the review prompt. */
+/** Default maximum number of files to include in the review prompt. */
 export const MAX_FILES_IN_PROMPT = 25;
 
 // ---------------------------------------------------------------------------
@@ -34,6 +34,8 @@ export interface AssembleReviewPromptOptions {
   files: string[];
   /** The feedback step for the agent to verify changes (wrapper path or raw commands). */
   feedbackStep: string;
+  /** Maximum number of files to include in the prompt (defaults to MAX_FILES_IN_PROMPT). */
+  maxFiles?: number;
 }
 
 /** Options for running the full review pass (side-effecting). */
@@ -61,6 +63,8 @@ export interface RunReviewPassOptions {
    * embedded in the prompt is unreachable from inside the sandbox.
    */
   feedbackWrapperPath?: string;
+  /** Maximum number of files to include in the prompt (defaults to MAX_FILES_IN_PROMPT). */
+  maxFiles?: number;
 }
 
 /** Result of a review pass. */
@@ -114,13 +118,13 @@ export function getChangedFiles(baseBranch: string, cwd: string): string[] {
 export function assembleReviewPrompt(
   options: AssembleReviewPromptOptions,
 ): string {
-  const { files, feedbackStep } = options;
+  const { files, feedbackStep, maxFiles = MAX_FILES_IN_PROMPT } = options;
 
-  const displayFiles = files.slice(0, MAX_FILES_IN_PROMPT);
+  const displayFiles = files.slice(0, maxFiles);
   const fileList = displayFiles.map((f) => `- ${f}`).join("\n");
   const overflowNote =
-    files.length > MAX_FILES_IN_PROMPT
-      ? `\n(... and ${files.length - MAX_FILES_IN_PROMPT} more files not listed — focus on the files above.)\n`
+    files.length > maxFiles
+      ? `\n(... and ${files.length - maxFiles} more files not listed — focus on the files above.)\n`
       : "";
 
   const lines = [
@@ -185,6 +189,7 @@ export async function runReviewPass(
     outputLogPath,
     ipcBroadcast,
     feedbackWrapperPath,
+    maxFiles,
   } = options;
 
   // 1. Detect changed files
@@ -194,7 +199,7 @@ export async function runReviewPass(
   }
 
   // 2. Assemble the prompt
-  const prompt = assembleReviewPrompt({ files, feedbackStep });
+  const prompt = assembleReviewPrompt({ files, feedbackStep, maxFiles });
 
   // 3. Record HEAD before agent invocation
   const headBefore = execQuiet("git rev-parse HEAD", cwd);
