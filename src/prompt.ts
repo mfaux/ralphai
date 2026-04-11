@@ -316,8 +316,8 @@ Ralphai extracts this block and appends it to the progress file automatically. D
     : "";
 
   // --- Terse communication instruction ---
-  // Included by default (concise mode). Omitted when terse is false.
-  const terseInstruction = terse
+  // Included by default (concise mode). Omitted when verbose is true.
+  const terseInstruction = !verbose
     ? `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`
     : "";
 

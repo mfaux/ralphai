@@ -152,7 +152,7 @@ export function transitionPull(
   dryRun = false,
   stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
-  const { inProgressLabel } = stateLabels;
+  const { inProgressLabel, doneLabel } = stateLabels;
   if (dryRun) {
     return dryRunSkip(`Issue #${issue.number}: add ${inProgressLabel}`);
   }
@@ -169,12 +169,12 @@ export function transitionPull(
     try {
       const data: { labels?: Array<{ name: string }> } = JSON.parse(labelsRaw);
       const labels = (data.labels ?? []).map((l) => l.name);
-      if (labels.includes(DONE_LABEL)) {
+      if (labels.includes(doneLabel)) {
         return {
           ok: false,
           message:
-            `Refused to add ${IN_PROGRESS_LABEL} to issue #${issue.number}: ` +
-            `already has ${DONE_LABEL} label`,
+            `Refused to add ${inProgressLabel} to issue #${issue.number}: ` +
+            `already has ${doneLabel} label`,
         };
       }
     } catch {

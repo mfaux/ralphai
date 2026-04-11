@@ -1134,6 +1134,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               : undefined,
             nonce,
             feedbackWrapperPath: wrapperPath,
+            verbose: agentVerbose,
           });
 
           if (timedOut) {

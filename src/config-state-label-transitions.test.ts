@@ -58,6 +58,13 @@ function captureCmd(): string | null {
   return calls[0]![0] as string;
 }
 
+/** Capture the last command string passed to execSync. */
+function captureLastCmd(): string | null {
+  const calls = mockExecSync.mock.calls;
+  if (calls.length === 0) return null;
+  return calls[calls.length - 1]![0] as string;
+}
+
 // ---------------------------------------------------------------------------
 // transitionPull
 // ---------------------------------------------------------------------------
@@ -66,13 +73,13 @@ describe("transitionPull — custom state labels", () => {
   it("uses default in-progress label when stateLabels omitted", () => {
     mockExecSync.mockReturnValue("");
     transitionPull(ISSUE, "/tmp");
-    expect(captureCmd()).toContain(`--add-label "${IN_PROGRESS_LABEL}"`);
+    expect(captureLastCmd()).toContain(`--add-label "${IN_PROGRESS_LABEL}"`);
   });
 
   it("uses custom in-progress label when stateLabels provided", () => {
     mockExecSync.mockReturnValue("");
     transitionPull(ISSUE, "/tmp", false, CUSTOM);
-    expect(captureCmd()).toContain(`--add-label "wip"`);
+    expect(captureLastCmd()).toContain(`--add-label "wip"`);
   });
 
   it("includes custom label in dry-run message", () => {
