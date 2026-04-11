@@ -243,3 +243,19 @@ If you still see permission denied errors, check these common causes:
   ```
 - **Rootless Docker** — UID/GID mapping may prevent the container user from accessing host files. Ensure the container user has read/write access to the worktree directory.
 - **Read-only credential mounts** — Credential files (e.g., `.gitconfig`, API key files) are intentionally mounted read-only (`:ro`). If the agent attempts to write to these paths, it will fail. This is by design — credential files should not be modified by the agent.
+
+## "Completed issue still has `in-progress` label"
+
+In earlier versions, a race condition could leave both `in-progress` and `done` labels on a completed issue. This happened when a duplicate pull re-added `in-progress` after the done transition had already removed it. This is now fixed — the pull transition checks for the `done` label and refuses to add `in-progress` if it is present.
+
+If you find an issue with stale labels from before the fix, remove the label manually:
+
+```bash
+gh issue edit <NUMBER> --remove-label in-progress
+```
+
+To audit all issues for inconsistent labels:
+
+```bash
+gh issue list --label done --label in-progress --state all
+```

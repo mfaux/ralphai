@@ -136,6 +136,32 @@ export function transitionPull(
   if (dryRun) {
     return dryRunSkip(`Issue #${issue.number}: add ${IN_PROGRESS_LABEL}`);
   }
+
+  // Guard: refuse to add in-progress if the issue already has the done label.
+  // This prevents a duplicate/retry pull from corrupting the label state of
+  // a completed issue.  Fail-open: if the label fetch fails we proceed — the
+  // worst case is the same as the previous (unguarded) behavior.
+  const labelsRaw = execQuiet(
+    `gh issue view ${issue.number} --repo "${issue.repo}" --json labels`,
+    cwd,
+  );
+  if (labelsRaw) {
+    try {
+      const data: { labels?: Array<{ name: string }> } = JSON.parse(labelsRaw);
+      const labels = (data.labels ?? []).map((l) => l.name);
+      if (labels.includes(DONE_LABEL)) {
+        return {
+          ok: false,
+          message:
+            `Refused to add ${IN_PROGRESS_LABEL} to issue #${issue.number}: ` +
+            `already has ${DONE_LABEL} label`,
+        };
+      }
+    } catch {
+      // JSON parse failure — proceed with the edit (fail-open)
+    }
+  }
+
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
       `--add-label "${IN_PROGRESS_LABEL}"`,

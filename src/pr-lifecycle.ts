@@ -462,7 +462,23 @@ export function archiveRun(options: ArchiveRunOptions): {
   }
 
   const dest = join(archiveDir, planSlug);
-  renameSync(planDir, dest);
+  try {
+    renameSync(planDir, dest);
+  } catch (err: unknown) {
+    // If the source directory no longer exists (ENOENT), another runner
+    // already archived it — this is expected in the concurrent/retry scenario.
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return {
+        archived: false,
+        message: `Plan ${planSlug} was already archived by another runner`,
+      };
+    }
+    throw err;
+  }
 
   // Post-completion hooks for linked GitHub issues
   if (issueSource === "github" && issueNumber && checkGhAvailable()) {

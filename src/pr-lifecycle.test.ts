@@ -156,6 +156,25 @@ describe("archiveRun", () => {
 
     expect(result.archived).toBe(true);
   });
+
+  it("handles ENOENT gracefully when plan folder was already archived", () => {
+    // Simulate a concurrent runner that already moved the slug-folder.
+    // The wipFiles reference a directory that does not exist on disk.
+    const wipDir = join(ctx.dir, "in-progress", "already-gone");
+    const archiveDir = join(ctx.dir, "out");
+
+    // Do NOT create wipDir — it's already been archived by another runner.
+    // But archiveRun reads frontmatter first, so provide a valid wipFiles
+    // path that points to a non-existent directory.
+    const result = archiveRun({
+      wipFiles: [join(wipDir, "plan.md")],
+      archiveDir,
+      cwd: ctx.dir,
+    });
+
+    expect(result.archived).toBe(false);
+    expect(result.message).toContain("already archived");
+  });
 });
 
 // ---------------------------------------------------------------------------
