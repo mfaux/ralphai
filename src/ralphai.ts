@@ -1673,15 +1673,6 @@ const CONFIG_FLAG_PATTERNS = [
   /^--docker-image=/,
   /^--docker-mounts=/,
   /^--docker-env-vars=/,
-  // Legacy aliases (backward compat during migration)
-  /^--setup-command=/,
-  /^--feedback-commands=/,
-  /^--pr-feedback-commands=/,
-  /^--max-stuck=/,
-  /^--iteration-timeout=/,
-  /^--review$/,
-  /^--no-review$/,
-  /^--verbose$/,
 ];
 
 function isRecognizedRunFlag(arg: string): boolean {
@@ -2573,7 +2564,7 @@ async function runRalphaiInManagedWorktree(
         `${DIM}Run without --wizard, or use explicit flags instead:${RESET}`,
       );
       console.error(
-        `  ${TEXT}ralphai run --agent-command='claude -p' --max-stuck=5${RESET}`,
+        `  ${TEXT}ralphai run --agent-command='claude -p' --gate-max-stuck=5${RESET}`,
       );
       process.exit(1);
     }

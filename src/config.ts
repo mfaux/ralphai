@@ -1364,42 +1364,6 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       rawFlags["dockerEnvVars"] = arg;
     }
 
-    // Legacy flag aliases for backward compatibility during migration
-    else if (arg.startsWith("--setup-command=")) {
-      const v = arg.slice("--setup-command=".length);
-      ensureAgent().setupCommand = v;
-      rawFlags["agent.setupCommand"] = arg;
-    } else if (arg.startsWith("--feedback-commands=")) {
-      const v = arg.slice("--feedback-commands=".length);
-      if (v !== "") validateCommaList(v, "--feedback-commands");
-      ensureHooks().feedback = v;
-      rawFlags["hooks.feedback"] = arg;
-    } else if (arg.startsWith("--pr-feedback-commands=")) {
-      const v = arg.slice("--pr-feedback-commands=".length);
-      if (v !== "") validateCommaList(v, "--pr-feedback-commands");
-      ensureHooks().prFeedback = v;
-      rawFlags["hooks.prFeedback"] = arg;
-    } else if (arg.startsWith("--max-stuck=")) {
-      const v = arg.slice("--max-stuck=".length);
-      validatePositiveInt(v, "--max-stuck");
-      ensureGate().maxStuck = parseInt(v, 10);
-      rawFlags["gate.maxStuck"] = arg;
-    } else if (arg.startsWith("--iteration-timeout=")) {
-      const v = arg.slice("--iteration-timeout=".length);
-      validateNonNegInt(v, "--iteration-timeout", "seconds");
-      ensureGate().iterationTimeout = parseInt(v, 10);
-      rawFlags["gate.iterationTimeout"] = arg;
-    } else if (arg === "--review") {
-      ensureGate().review = true;
-      rawFlags["gate.review"] = "--review";
-    } else if (arg === "--no-review") {
-      ensureGate().review = false;
-      rawFlags["gate.review"] = "--no-review";
-    } else if (arg === "--verbose") {
-      ensurePrompt().verbose = true;
-      rawFlags["prompt.verbose"] = "--verbose";
-    }
-
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.
   }

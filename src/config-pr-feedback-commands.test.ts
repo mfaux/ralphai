@@ -201,37 +201,6 @@ describe("parseCLIArgs — hooks.prFeedback", () => {
 });
 
 // ---------------------------------------------------------------------------
-// prFeedback — legacy CLI flag --pr-feedback-commands
-// ---------------------------------------------------------------------------
-
-describe("parseCLIArgs — legacy --pr-feedback-commands", () => {
-  it("parses --pr-feedback-commands=value", () => {
-    const result = parseCLIArgs(["--pr-feedback-commands=cmd1,cmd2"]);
-    expect(result.overrides.hooks!.prFeedback).toBe("cmd1,cmd2");
-    expect(result.rawFlags["hooks.prFeedback"]).toBe(
-      "--pr-feedback-commands=cmd1,cmd2",
-    );
-  });
-
-  it("allows empty --pr-feedback-commands= to clear", () => {
-    const result = parseCLIArgs(["--pr-feedback-commands="]);
-    expect(result.overrides.hooks!.prFeedback).toBe("");
-  });
-
-  it("rejects comma list with empty entry", () => {
-    expect(() => parseCLIArgs(["--pr-feedback-commands=cmd1,,cmd2"])).toThrow(
-      "--pr-feedback-commands contains an empty entry",
-    );
-  });
-
-  it("rejects trailing comma", () => {
-    expect(() => parseCLIArgs(["--pr-feedback-commands=cmd1,"])).toThrow(
-      "--pr-feedback-commands contains an empty entry",
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
 // prFeedback — resolveConfig precedence chain
 // ---------------------------------------------------------------------------
 

@@ -472,16 +472,6 @@ describe("parseCLIArgs", () => {
     expect(result.rawFlags["gate.review"]).toBe("--gate-no-review");
   });
 
-  it("parses legacy --review / --no-review", () => {
-    const r1 = parseCLIArgs(["--review"]);
-    expect(r1.overrides.gate?.review).toBe(true);
-    expect(r1.rawFlags["gate.review"]).toBe("--review");
-
-    const r2 = parseCLIArgs(["--no-review"]);
-    expect(r2.overrides.gate?.review).toBe(false);
-    expect(r2.rawFlags["gate.review"]).toBe("--no-review");
-  });
-
   it("ignores non-config flags", () => {
     const result = parseCLIArgs([
       "--dry-run",
