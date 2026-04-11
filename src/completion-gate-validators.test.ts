@@ -6,7 +6,7 @@
  * and backward compatibility (empty validators).
  */
 import { describe, test, expect } from "bun:test";
-import { mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -247,7 +247,6 @@ describe("runCompletionGate — validators", () => {
       expect(result.details[0]).not.toContain("[Validator]");
     }
     // Marker file should not exist since validators were skipped
-    const { existsSync } = require("fs");
     expect(existsSync(markerFile)).toBe(false);
   });
 

@@ -6,12 +6,7 @@
  */
 
 import { existsSync } from "fs";
-import {
-  getConfigFilePath,
-  parseConfigFile,
-  ConfigError,
-  DEFAULTS,
-} from "./config.ts";
+import { getConfigFilePath, parseConfigFile, DEFAULTS } from "./config.ts";
 import type { RalphaiConfig } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -71,12 +66,8 @@ export function runCheck(cwd: string, capabilities: string[] = []): void {
     values = parsed.values;
   } catch (err) {
     // Case 3: malformed JSON or invalid values
-    if (err instanceof ConfigError) {
-      console.log(`invalid config — ${err.message}`);
-    } else {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`invalid config — ${msg}`);
-    }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`invalid config — ${msg}`);
     process.exit(1);
     return; // unreachable but helps TypeScript narrow
   }
