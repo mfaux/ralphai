@@ -28,6 +28,8 @@ export interface ResolveScopeInput {
   workspacesConfig?: string;
   /** Root-level beforeRun hook command. */
   rootBeforeRun?: string;
+  /** Root-level preamble (already resolved from config). */
+  rootPreamble?: string;
 }
 
 export interface ResolveScopeResult {
@@ -39,6 +41,8 @@ export interface ResolveScopeResult {
   scopeHint: string;
   /** Per-workspace beforeRun override (undefined = use root value). */
   beforeRun?: string;
+  /** Per-workspace preamble override (undefined = use root value). */
+  preamble?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +65,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     rootValidators = "",
     workspacesConfig,
     rootBeforeRun,
+    rootPreamble,
   } = input;
 
   // No scope means pass everything through unchanged.
@@ -79,8 +84,9 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
   const project = detectProject(cwd);
   const ecosystem = project?.ecosystem ?? "unknown";
 
-  // Extract workspace-level beforeRun override (if any).
+  // Extract workspace-level beforeRun and preamble overrides (if any).
   let wsBeforeRun: string | undefined;
+  let wsPreamble: string | undefined;
 
   // Check for workspace-specific overrides
   if (workspacesConfig) {
@@ -91,6 +97,11 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       // Capture beforeRun override from workspace config.
       if (wsEntry && typeof wsEntry.beforeRun === "string") {
         wsBeforeRun = wsEntry.beforeRun;
+      }
+
+      // Capture preamble override from workspace config.
+      if (wsEntry && typeof wsEntry.preamble === "string") {
+        wsPreamble = wsEntry.preamble;
       }
 
       if (wsEntry?.feedbackCommands) {
@@ -118,6 +129,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
           prFeedbackCommands: pfc,
           validators: val,
           beforeRun: wsBeforeRun ?? rootBeforeRun,
+          preamble: wsPreamble ?? rootPreamble,
           scopeHint: buildScopeHint(planScope),
         };
       }
@@ -135,6 +147,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       prFeedbackCommands: rootPrFeedbackCommands,
       validators: rootValidators,
       beforeRun: wsBeforeRun ?? rootBeforeRun,
+      preamble: wsPreamble ?? rootPreamble,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -148,6 +161,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       prFeedbackCommands: "",
       validators: rootValidators,
       beforeRun: wsBeforeRun ?? rootBeforeRun,
+      preamble: wsPreamble ?? rootPreamble,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -196,6 +210,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     prFeedbackCommands: rewrite(rootPrFeedbackCommands),
     validators: rootValidators,
     beforeRun: wsBeforeRun ?? rootBeforeRun,
+    preamble: wsPreamble ?? rootPreamble,
     scopeHint: buildScopeHint(planScope),
   };
 }

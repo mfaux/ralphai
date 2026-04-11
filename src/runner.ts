@@ -816,6 +816,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       rootPrFeedbackCommands: cfg.hooks.prFeedback ?? "",
       rootValidators: cfg.gate.validators ?? "",
       rootBeforeRun: beforeRunHook || undefined,
+      rootPreamble: resolvedPreamble || undefined,
       workspacesConfig: cfg.workspaces
         ? JSON.stringify(cfg.workspaces)
         : undefined,
@@ -825,6 +826,26 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const scopeHint = scopeResult.scopeHint;
     // Resolve beforeRun: workspace override takes precedence over root config.
     const effectiveBeforeRun = scopeResult.beforeRun ?? beforeRunHook;
+    // Resolve preamble: workspace override takes precedence over root config.
+    // Workspace preamble may also use @path syntax.
+    let effectivePreamble = scopeResult.preamble ?? resolvedPreamble;
+    if (
+      scopeResult.preamble &&
+      scopeResult.preamble.startsWith("@") &&
+      scopeResult.preamble !== resolvedPreamble
+    ) {
+      const wsPreamblePath = join(cwd, scopeResult.preamble.slice(1));
+      if (!existsSync(wsPreamblePath)) {
+        console.error(
+          `ERROR: Workspace preamble file not found: ${wsPreamblePath} (from workspaces["${extractScope(planFile)}"].preamble="${scopeResult.preamble}")`,
+        );
+        console.error(
+          "Ensure the file exists relative to the repository root, or remove the @path prefix.",
+        );
+        process.exit(1);
+      }
+      effectivePreamble = readFileSync(wsPreamblePath, "utf-8");
+    }
 
     // PR-tier feedback commands: passed to the completion gate only (not the
     // agent prompt). Scope-resolved for monorepos via resolveScope above.
@@ -1061,7 +1082,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             nonce,
             wrapperPath,
             verbose,
-            preamble: resolvedPreamble,
+            preamble: effectivePreamble,
             agentInstructions,
             enableLearnings: promptLearnings,
             commitStyle: promptCommitStyle,

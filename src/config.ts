@@ -83,6 +83,7 @@ export interface WorkspaceOverrides {
   prFeedbackCommands?: string[] | string;
   validators?: string[] | string;
   beforeRun?: string;
+  preamble?: string;
   [key: string]: unknown;
 }
 
