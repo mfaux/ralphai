@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { join } from "path";
+import { useTempDir, makeConfigTestHelpers } from "./test-utils.ts";
 import {
   validateEnum,
   validateBoolean,
@@ -14,7 +14,6 @@ import {
   resolveConfig,
   getConfigFilePath,
   writeConfigFile,
-  ConfigError,
   DEFAULTS,
 } from "./config.ts";
 
@@ -542,23 +541,7 @@ describe("parseCLIArgs", () => {
 
 describe("resolveConfig", () => {
   const ctx = useTempDir();
-
-  /** Build envVars that route global state into the temp dir. */
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  /** Write a config file to the global state path for the given cwd. */
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   it("returns defaults when no config file, env, or CLI args", () => {
     const cwd = join(ctx.dir, "repo-defaults");

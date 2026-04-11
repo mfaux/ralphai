@@ -1,13 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { join } from "path";
+import { useTempDir, makeConfigTestHelpers } from "./test-utils.ts";
 import {
   parseConfigFile,
   applyEnvOverrides,
   parseCLIArgs,
   resolveConfig,
-  getConfigFilePath,
   DEFAULTS,
 } from "./config.ts";
 
@@ -100,21 +99,7 @@ describe("parseCLIArgs — issueHitlLabel", () => {
 
 describe("resolveConfig — issueHitlLabel precedence", () => {
   const ctx = useTempDir();
-
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   it("returns default when no overrides", () => {
     const cwd = join(ctx.dir, "repo-hitl-default");

@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "bun:test";
 import { stripAnsi } from "./utils.ts";
@@ -15,6 +15,7 @@ import { runRalphai } from "./ralphai.ts";
 import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
 import {
   DEFAULTS,
+  getConfigFilePath,
   type AgentConfig,
   type ConfigSource,
   type ConfigValues,
@@ -469,4 +470,34 @@ export function makeTestResolvedConfig(
     dockerEnvVars: { value: merged.dockerEnvVars, source: "default" },
     workspaces: { value: merged.workspaces, source: "default" },
   };
+}
+
+/**
+ * Create `env()` and `writeGlobalConfig()` helpers scoped to a
+ * `useTempDir()` context.
+ *
+ * Eliminates the identical helper pair that was copy-pasted across
+ * every `resolveConfig` test file.
+ *
+ * @example
+ *   const ctx = useTempDir();
+ *   const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
+ */
+export function makeConfigTestHelpers(ctx: { dir: string }) {
+  function env(
+    extra?: Record<string, string>,
+  ): Record<string, string | undefined> {
+    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
+  }
+
+  function writeGlobalConfig(
+    cwd: string,
+    config: Record<string, unknown>,
+  ): void {
+    const filePath = getConfigFilePath(cwd, env());
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, JSON.stringify(config));
+  }
+
+  return { env, writeGlobalConfig };
 }
