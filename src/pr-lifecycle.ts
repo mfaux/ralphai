@@ -19,6 +19,7 @@ import {
   detectIssueRepo,
   transitionDone,
   type BlockedSubIssue,
+  type StateLabelConfig,
 } from "./issue-lifecycle.ts";
 import { formatLearningsForPr } from "./learnings.ts";
 import { stripAnsi } from "./utils.ts";
@@ -415,6 +416,7 @@ export interface ArchiveRunOptions {
   wipFiles: string[];
   archiveDir: string;
   cwd: string;
+  stateLabels?: StateLabelConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -506,7 +508,12 @@ export function archiveRun(options: ArchiveRunOptions): {
           `--body "Ralphai completed this task and is preparing to merge."`,
         cwd,
       );
-      transitionDone({ number: issueNumber, repo }, cwd);
+      transitionDone(
+        { number: issueNumber, repo },
+        cwd,
+        false,
+        options.stateLabels,
+      );
     }
   }
 

@@ -54,6 +54,7 @@ import {
   pullPrdSubIssue,
   checkAllPrdSubIssuesDone,
   issueBranchName,
+  type StateLabelConfig,
 } from "./issue-lifecycle.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
@@ -599,6 +600,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issuePrdLabel = cfg.issue.prdLabel;
   const issueRepo = cfg.issue.repo;
   const issueCommentProgress = cfg.issue.commentProgress;
+  const stateLabels: StateLabelConfig = {
+    inProgressLabel: cfg.issue.inProgressLabel,
+    doneLabel: cfg.issue.doneLabel,
+    stuckLabel: cfg.issue.stuckLabel,
+  };
   const review = cfg.gate.review;
   const verbose = cfg.prompt.verbose;
   const promptPreamble = cfg.prompt.preamble;
@@ -754,6 +760,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           issueCommentProgress,
           issuePrdLabel,
           issueHitlLabel,
+          stateLabels,
         };
 
         // Priority chain: try PRD sub-issues first, then regular issues
@@ -996,9 +1003,19 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       if (issueFm.source === "github" && issueFm.issue) {
         const repo = resolveIssueRepoSlug(issueRepo, issueFm.issueUrl);
         if (repo) {
-          transitionStuck({ number: issueFm.issue, repo }, cwd);
+          transitionStuck(
+            { number: issueFm.issue, repo },
+            cwd,
+            false,
+            stateLabels,
+          );
           if (issueFm.prd) {
-            prdTransitionStuck({ number: issueFm.prd, repo }, cwd);
+            prdTransitionStuck(
+              { number: issueFm.prd, repo },
+              cwd,
+              false,
+              stateLabels,
+            );
           }
         }
       }
@@ -1384,6 +1401,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               wipFiles: [planFile],
               archiveDir: dirs.archiveDir,
               cwd,
+              stateLabels,
             });
 
             // --- PRD done detection ---
@@ -1397,6 +1415,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                   prdRepo,
                   issueFm.prd,
                   cwd,
+                  stateLabels,
                 );
                 if (allDone) {
                   console.log(
@@ -1405,6 +1424,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                   prdTransitionDone(
                     { number: issueFm.prd, repo: prdRepo },
                     cwd,
+                    false,
+                    stateLabels,
                   );
                 }
               }

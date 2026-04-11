@@ -41,9 +41,6 @@ import {
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import {
-  IN_PROGRESS_LABEL,
-  DONE_LABEL,
-  STUCK_LABEL,
   prdTransitionInProgress,
   prdTransitionDone,
   detectIssueRepo,
@@ -349,6 +346,9 @@ interface LabelNames {
   standalone: string;
   subissue: string;
   prd: string;
+  inProgress: string;
+  done: string;
+  stuck: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -399,17 +399,17 @@ function labelDefs(names: LabelNames) {
     },
     // Shared state labels
     {
-      name: IN_PROGRESS_LABEL,
+      name: names.inProgress,
       description: "Ralphai is working on this issue",
       color: IN_PROGRESS_COLOR,
     },
     {
-      name: DONE_LABEL,
+      name: names.done,
       description: "Ralphai finished this issue",
       color: DONE_COLOR,
     },
     {
-      name: STUCK_LABEL,
+      name: names.stuck,
       description: "Ralphai is stuck on this issue",
       color: STUCK_COLOR,
     },
@@ -547,6 +547,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
     standalone: issueConfig.standaloneLabel as string,
     subissue: issueConfig.subissueLabel as string,
     prd: issueConfig.prdLabel as string,
+    inProgress: DEFAULTS.issue.inProgressLabel,
+    done: DEFAULTS.issue.doneLabel,
+    stuck: DEFAULTS.issue.stuckLabel,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -750,13 +753,22 @@ async function runRalphaiReset(
   // Load config to get issue repo for GitHub issue restoration.
   // Best-effort: if config resolution fails we skip label restoration.
   let issueRepo = "";
+  let resetStateLabels:
+    | { inProgressLabel: string; doneLabel: string; stuckLabel: string }
+    | undefined;
   try {
     const cfgResult = resolveConfig({
       cwd,
       envVars: process.env,
       cliArgs: [],
     });
-    issueRepo = configValues(cfgResult.config).issue.repo;
+    const cfgVals = configValues(cfgResult.config);
+    issueRepo = cfgVals.issue.repo;
+    resetStateLabels = {
+      inProgressLabel: cfgVals.issue.inProgressLabel,
+      doneLabel: cfgVals.issue.doneLabel,
+      stuckLabel: cfgVals.issue.stuckLabel,
+    };
   } catch {
     // Config resolution failure is not critical — skip label restoration.
   }
@@ -776,6 +788,7 @@ async function runRalphaiReset(
         planPath: planFile,
         issueRepo,
         cwd,
+        stateLabels: resetStateLabels,
       });
       if (labelResult.restored) {
         console.log(`  ${DIM}${labelResult.message}${RESET}`);
@@ -913,11 +926,17 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
         envVars: process.env,
         cliArgs: [],
       });
-      const issueRepo = configValues(cfgResult.config).issue.repo;
+      const cfgVals = configValues(cfgResult.config);
+      const issueRepo = cfgVals.issue.repo;
       const labelResult = restoreIssueLabels({
         planPath: planFile,
         issueRepo,
         cwd,
+        stateLabels: {
+          inProgressLabel: cfgVals.issue.inProgressLabel,
+          doneLabel: cfgVals.issue.doneLabel,
+          stuckLabel: cfgVals.issue.stuckLabel,
+        },
       });
       if (labelResult.restored) {
         console.log(`  ${DIM}${labelResult.message}${RESET}`);
@@ -2067,6 +2086,11 @@ async function runIssueTarget(
     issueRepo: worktreeConfig.issue.repo || repo,
     issueCommentProgress: worktreeConfig.issue.commentProgress,
     issueNumber,
+    stateLabels: {
+      inProgressLabel: worktreeConfig.issue.inProgressLabel,
+      doneLabel: worktreeConfig.issue.doneLabel,
+      stuckLabel: worktreeConfig.issue.stuckLabel,
+    },
   });
 
   if (!pullResult.pulled) {
@@ -2213,7 +2237,11 @@ async function runPrdIssueTarget(
   // --- PRD with unchecked sub-issues: work through sequentially ---
 
   // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
-  prdTransitionInProgress({ number: prd.number, repo }, cwd);
+  prdTransitionInProgress({ number: prd.number, repo }, cwd, false, {
+    inProgressLabel: worktreeConfig.issue.inProgressLabel,
+    doneLabel: worktreeConfig.issue.doneLabel,
+    stuckLabel: worktreeConfig.issue.stuckLabel,
+  });
 
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
@@ -2283,6 +2311,11 @@ async function runPrdIssueTarget(
       issueRepo: worktreeConfig.issue.repo || repo,
       issueCommentProgress: worktreeConfig.issue.commentProgress,
       issueNumber: subIssueNumber,
+      stateLabels: {
+        inProgressLabel: worktreeConfig.issue.inProgressLabel,
+        doneLabel: worktreeConfig.issue.doneLabel,
+        stuckLabel: worktreeConfig.issue.stuckLabel,
+      },
     });
 
     if (!pullResult.pulled) {
@@ -2407,7 +2440,11 @@ async function runPrdIssueTarget(
     console.log(
       `All sub-issues of PRD #${prd.number} are done — transitioning PRD to done.`,
     );
-    prdTransitionDone({ number: prd.number, repo }, cwd);
+    prdTransitionDone({ number: prd.number, repo }, cwd, false, {
+      inProgressLabel: worktreeConfig.issue.inProgressLabel,
+      doneLabel: worktreeConfig.issue.doneLabel,
+      stuckLabel: worktreeConfig.issue.stuckLabel,
+    });
   }
 
   // --- Create aggregate PRD pull request ---
@@ -2557,6 +2594,15 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issue.hitlLabel;
+  let resolvedStateLabels: {
+    inProgressLabel: string;
+    doneLabel: string;
+    stuckLabel: string;
+  } = {
+    inProgressLabel: DEFAULTS.issue.inProgressLabel,
+    doneLabel: DEFAULTS.issue.doneLabel,
+    stuckLabel: DEFAULTS.issue.stuckLabel,
+  };
   let resolvedGitBranchPrefix = DEFAULTS.git.branchPrefix;
   let resolvedPromptCommitStyle = DEFAULTS.prompt.commitStyle;
   let resolvedPrDraft = DEFAULTS.pr.draft;
@@ -2578,6 +2624,11 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfg.issue.repo;
     resolvedIssueCommentProgress = cfg.issue.commentProgress;
     resolvedIssueHitlLabel = cfg.issue.hitlLabel;
+    resolvedStateLabels = {
+      inProgressLabel: cfg.issue.inProgressLabel,
+      doneLabel: cfg.issue.doneLabel,
+      stuckLabel: cfg.issue.stuckLabel,
+    };
     resolvedGitBranchPrefix = cfg.git.branchPrefix;
     resolvedPromptCommitStyle = cfg.prompt.commitStyle;
     resolvedPrDraft = cfg.pr.draft;
@@ -2841,6 +2892,7 @@ async function runRalphaiInManagedWorktree(
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
               issueHitlLabel: resolvedIssueHitlLabel,
+              stateLabels: resolvedStateLabels,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -3094,6 +3146,9 @@ async function runRalphaiRunner(
         standalone: cfg.issue.standaloneLabel,
         subissue: cfg.issue.subissueLabel,
         prd: cfg.issue.prdLabel,
+        inProgress: cfg.issue.inProgressLabel,
+        done: cfg.issue.doneLabel,
+        stuck: cfg.issue.stuckLabel,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.

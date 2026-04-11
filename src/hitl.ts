@@ -27,9 +27,6 @@ import {
   issueBranchName,
   slugify,
   commitTypeFromTitle,
-  DONE_LABEL,
-  IN_PROGRESS_LABEL,
-  STUCK_LABEL,
 } from "./issue-lifecycle.ts";
 import { execQuiet } from "./exec.ts";
 import {
@@ -165,6 +162,9 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
     commitStyle: cfg.prompt.commitStyle,
   });
   const hitlLabel = cfg.issue.hitlLabel;
+  const doneLabel = cfg.issue.doneLabel;
+  const inProgressLabel = cfg.issue.inProgressLabel;
+  const stuckLabel = cfg.issue.stuckLabel;
 
   // --- Dry-run ---
   if (dryRun) {
@@ -183,7 +183,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
       `[dry-run] Would spawn agent interactively with stdio: "inherit"`,
     );
     console.log(
-      `[dry-run] On clean exit: remove "${hitlLabel}" label, add "${DONE_LABEL}" label`,
+      `[dry-run] On clean exit: remove "${hitlLabel}" label, add "${doneLabel}" label`,
     );
     console.log("[dry-run] On abnormal exit: labels unchanged");
     console.log(
@@ -274,10 +274,10 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   if (exitCode === 0) {
     // Clean exit: remove HITL label, add done
     execQuiet(
-      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}" --add-label "${DONE_LABEL}"`,
+      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}" --add-label "${doneLabel}"`,
       cwd,
     );
-    const message = `Sub-issue #${issueNumber} completed. Removed "${hitlLabel}" label, added "${DONE_LABEL}".`;
+    const message = `Sub-issue #${issueNumber} completed. Removed "${hitlLabel}" label, added "${doneLabel}".`;
     console.log();
     console.log(message);
     return { exitCode: 0, message };

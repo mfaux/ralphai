@@ -31,6 +31,7 @@ import type {
   PrdIssue,
   IssueMeta,
   LabelTransitionResult,
+  StateLabelConfig,
   DispatchFamily,
   DispatchClassified,
   DispatchUnrecognized,
