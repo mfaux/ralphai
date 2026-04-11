@@ -368,9 +368,6 @@ describe("workspace override for validators", () => {
     //
     // Here we verify the resolveScope integration for validators.
     const { resolveScope } = require("./scope.ts");
-    const { mkdtempSync, writeFileSync } = require("fs");
-    const { join } = require("path");
-    const { tmpdir } = require("os");
 
     const dir = mkdtempSync(join(tmpdir(), "scope-val-"));
     writeFileSync(
@@ -400,9 +397,6 @@ describe("workspace override for validators", () => {
 
   test("falls through to root validators when workspace has no validators override", () => {
     const { resolveScope } = require("./scope.ts");
-    const { mkdtempSync, writeFileSync } = require("fs");
-    const { join } = require("path");
-    const { tmpdir } = require("os");
 
     const dir = mkdtempSync(join(tmpdir(), "scope-val-"));
     writeFileSync(
@@ -431,9 +425,6 @@ describe("workspace override for validators", () => {
 
   test("validators pass through unchanged when no scope", () => {
     const { resolveScope } = require("./scope.ts");
-    const { mkdtempSync, writeFileSync } = require("fs");
-    const { join } = require("path");
-    const { tmpdir } = require("os");
 
     const dir = mkdtempSync(join(tmpdir(), "scope-val-"));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "root" }));

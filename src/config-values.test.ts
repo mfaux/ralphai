@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
-import { configValues, DEFAULTS, type RalphaiConfig } from "./config.ts";
+import { configValues, DEFAULTS } from "./config.ts";
 import { makeTestConfig, makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------

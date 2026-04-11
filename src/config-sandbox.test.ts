@@ -15,7 +15,6 @@ import {
   getConfigFilePath,
   detectDockerAvailable,
   DEFAULTS,
-  ConfigError,
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -119,26 +118,36 @@ describe("parseCLIArgs — --sandbox flag", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Shared helpers for resolveConfig test blocks
+// ---------------------------------------------------------------------------
+
+function envForCtx(
+  ctx: { dir: string },
+  extra?: Record<string, string>,
+): Record<string, string | undefined> {
+  return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
+}
+
+function writeGlobalConfigForCtx(
+  ctx: { dir: string },
+  cwd: string,
+  config: Record<string, unknown>,
+): void {
+  const filePath = getConfigFilePath(cwd, envForCtx(ctx));
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify(config));
+}
+
+// ---------------------------------------------------------------------------
 // resolveConfig — sandbox 4-layer resolution
 // ---------------------------------------------------------------------------
 
 describe("resolveConfig — sandbox 4-layer resolution", () => {
   const ctx = useTempDir();
 
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const env = (extra?: Record<string, string>) => envForCtx(ctx, extra);
+  const writeGlobalConfig = (cwd: string, config: Record<string, unknown>) =>
+    writeGlobalConfigForCtx(ctx, cwd, config);
 
   // Use detectDocker override to keep existing layer tests deterministic —
   // they test precedence, not auto-detection.
@@ -272,20 +281,9 @@ describe("detectDockerAvailable", () => {
 describe("resolveConfig — sandbox auto-detection", () => {
   const ctx = useTempDir();
 
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const env = (extra?: Record<string, string>) => envForCtx(ctx, extra);
+  const writeGlobalConfig = (cwd: string, config: Record<string, unknown>) =>
+    writeGlobalConfigForCtx(ctx, cwd, config);
 
   it("auto-detects 'docker' when Docker is available and sandbox unset", () => {
     const cwd = join(ctx.dir, "repo-autodetect-docker");
