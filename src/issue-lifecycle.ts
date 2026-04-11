@@ -1122,6 +1122,40 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Iterate an ordered list of candidate issue numbers, fetch the labels for
+ * each via `gh issue view`, and return the first one whose labels do not
+ * include any of the `skipLabels`. Returns `undefined` when all candidates
+ * should be skipped.
+ *
+ * Used by both `pullGithubIssues()` (standalone) and `pullPrdSubIssue()`
+ * (PRD sub-issues) to avoid re-pulling issues that are already in-progress,
+ * done, stuck, or awaiting human review.
+ */
+function findFirstEligibleIssue(
+  candidates: Array<{ number: number }>,
+  skipLabels: string[],
+  repo: string,
+  cwd: string,
+): number | undefined {
+  for (const candidate of candidates) {
+    const labelsRaw = execQuiet(
+      `gh issue view ${candidate.number} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
+      cwd,
+    );
+    const labels = labelsRaw ? labelsRaw.split(",") : [];
+    if (skipLabels.some((skip) => labels.includes(skip))) {
+      continue;
+    }
+    return candidate.number;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Public pull functions
 // ---------------------------------------------------------------------------
 
@@ -1161,24 +1195,53 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     };
   }
 
-  // Get the oldest open issue with the configured label.
-  // gh issue list returns newest first; use jq 'last' to pick the oldest.
-  const number = execQuiet(
+  // Get all open issues with the configured label (newest first from gh).
+  const raw = execQuiet(
     `gh issue list --repo "${repo}" --label "${issueLabel}" --state open ` +
-      `--limit 100 --json number --jq 'if length == 0 then empty else last.number end'`,
+      `--limit 100 --json number`,
     cwd,
   );
 
-  if (!number) {
+  if (!raw) {
     return {
       pulled: false,
       message: `No open issues found with label '${issueLabel}' in ${repo}`,
     };
   }
 
+  let candidates: Array<{ number: number }>;
+  try {
+    candidates = JSON.parse(raw);
+  } catch {
+    return {
+      pulled: false,
+      message: `No open issues found with label '${issueLabel}' in ${repo}`,
+    };
+  }
+
+  if (candidates.length === 0) {
+    return {
+      pulled: false,
+      message: `No open issues found with label '${issueLabel}' in ${repo}`,
+    };
+  }
+
+  // Iterate oldest-first (gh returns newest first, so reverse).
+  // Skip any candidate that already has a state label.
+  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];
+  const reversed = [...candidates].reverse();
+  const issueNumber = findFirstEligibleIssue(reversed, skipLabels, repo, cwd);
+
+  if (issueNumber === undefined) {
+    return {
+      pulled: false,
+      message: `All open '${issueLabel}' issues in ${repo} already in-progress, done, or stuck`,
+    };
+  }
+
   return fetchAndWriteIssuePlan({
     repo,
-    issueNumber: number,
+    issueNumber: String(issueNumber),
     backlogDir,
     cwd,
     issueCommentProgress,
@@ -1295,19 +1358,12 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // already processed by a prior drain iteration).
   const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issueHitlLabel;
   const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL, hitlLabel];
-  let subIssueNumber: number | undefined;
-  for (const candidate of openSubIssues) {
-    const labelsRaw = execQuiet(
-      `gh issue view ${candidate.number} --repo "${repo}" --json labels --jq '[.labels[].name] | join(",")'`,
-      cwd,
-    );
-    const labels = labelsRaw ? labelsRaw.split(",") : [];
-    if (skipLabels.some((skip) => labels.includes(skip))) {
-      continue;
-    }
-    subIssueNumber = candidate.number;
-    break;
-  }
+  const subIssueNumber = findFirstEligibleIssue(
+    openSubIssues,
+    skipLabels,
+    repo,
+    cwd,
+  );
 
   if (subIssueNumber === undefined) {
     return {
