@@ -134,6 +134,7 @@ export function runFeedbackCommands(
   feedbackCommands: string,
   cwd: string,
   tier: FeedbackTier = "loop",
+  timeoutMs: number = 300_000,
 ): FeedbackResult[] {
   if (!feedbackCommands.trim()) return [];
 
@@ -143,7 +144,7 @@ export function runFeedbackCommands(
     .filter(Boolean);
 
   return commands.map((command) => {
-    const result = execRun(command, cwd, { timeout: 300_000 });
+    const result = execRun(command, cwd, { timeout: timeoutMs });
     return {
       command,
       exitCode: result.exitCode,
@@ -187,6 +188,8 @@ export interface RunCompletionGateOptions {
   validators?: string;
   /** Working directory for running feedback commands. */
   cwd: string;
+  /** Per-command timeout in milliseconds. Defaults to 300_000 (5 minutes). */
+  feedbackTimeoutMs?: number;
 }
 
 /**
@@ -205,14 +208,22 @@ export function runCompletionGate(
     options.planFormat,
   );
 
+  const timeoutMs = options.feedbackTimeoutMs ?? 300_000;
+
   const loopResults = runFeedbackCommands(
     options.feedbackCommands,
     options.cwd,
     "loop",
+    timeoutMs,
   );
 
   const prResults = options.prFeedbackCommands
-    ? runFeedbackCommands(options.prFeedbackCommands, options.cwd, "pr")
+    ? runFeedbackCommands(
+        options.prFeedbackCommands,
+        options.cwd,
+        "pr",
+        timeoutMs,
+      )
     : [];
 
   const feedbackResults = [...loopResults, ...prResults];
@@ -221,7 +232,7 @@ export function runCompletionGate(
   const feedbackPassed = feedbackResults.every((r) => r.exitCode === 0);
   const validatorResults =
     feedbackPassed && options.validators
-      ? runFeedbackCommands(options.validators, options.cwd, "loop")
+      ? runFeedbackCommands(options.validators, options.cwd, "loop", timeoutMs)
       : [];
 
   return checkCompletionGate({

@@ -82,6 +82,7 @@ export interface WorkspaceOverrides {
   feedbackCommands?: string[] | string;
   prFeedbackCommands?: string[] | string;
   validators?: string[] | string;
+  beforeRun?: string;
   [key: string]: unknown;
 }
 

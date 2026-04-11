@@ -191,6 +191,36 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   );
   lines.push(`  hooks.prFeedback   = ${prFeedbackDisplay}  (${prFeedbackSrc})`);
 
+  const beforeRunCmd = config.hooks.beforeRun.value;
+  const beforeRunDisplay = beforeRunCmd || "<none>";
+  const beforeRunSrc = sourceLabel(
+    "hooks.beforeRun",
+    config.hooks.beforeRun.source,
+    input,
+    "none",
+  );
+  lines.push(`  hooks.beforeRun    = ${beforeRunDisplay}  (${beforeRunSrc})`);
+
+  const afterRunCmd = config.hooks.afterRun.value;
+  const afterRunDisplay = afterRunCmd || "<none>";
+  const afterRunSrc = sourceLabel(
+    "hooks.afterRun",
+    config.hooks.afterRun.source,
+    input,
+    "none",
+  );
+  lines.push(`  hooks.afterRun     = ${afterRunDisplay}  (${afterRunSrc})`);
+
+  const feedbackTimeout = config.hooks.feedbackTimeout.value;
+  const feedbackTimeoutSrc = sourceLabel(
+    "hooks.feedbackTimeout",
+    config.hooks.feedbackTimeout.source,
+    input,
+  );
+  lines.push(
+    `  hooks.feedbackTimeout = ${feedbackTimeout}s  (${feedbackTimeoutSrc})`,
+  );
+
   const baseBranchSrc = sourceLabel(
     "baseBranch",
     config.baseBranch.source,

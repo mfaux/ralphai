@@ -26,7 +26,7 @@ import {
 import { basename, dirname, join } from "path";
 
 import { branchHasOpenWork, getCurrentCommitHash } from "./git-ops.ts";
-import { execQuiet } from "./exec.ts";
+import { execQuiet, execInherit } from "./exec.ts";
 import { createExecutor, type AgentExecutor } from "./executor/index.ts";
 import {
   checkDockerAvailability,
@@ -598,6 +598,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueCommentProgress = cfg.issue.commentProgress;
   const review = cfg.gate.review;
   const verbose = cfg.prompt.verbose;
+  const beforeRunHook = cfg.hooks.beforeRun;
+  const afterRunHook = cfg.hooks.afterRun;
+  const feedbackTimeoutSeconds = cfg.hooks.feedbackTimeout;
 
   // --- Fail-early Docker availability check ---
   // computeEffectiveSandbox re-probes Docker at runner start. When sandbox
@@ -790,6 +793,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       rootFeedbackCommands: cfg.hooks.feedback,
       rootPrFeedbackCommands: cfg.hooks.prFeedback ?? "",
       rootValidators: cfg.gate.validators ?? "",
+      rootBeforeRun: beforeRunHook || undefined,
       workspacesConfig: cfg.workspaces
         ? JSON.stringify(cfg.workspaces)
         : undefined,
@@ -797,6 +801,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     const feedbackCommands = scopeResult.feedbackCommands;
     const scopeHint = scopeResult.scopeHint;
+    // Resolve beforeRun: workspace override takes precedence over root config.
+    const effectiveBeforeRun = scopeResult.beforeRun ?? beforeRunHook;
 
     // PR-tier feedback commands: passed to the completion gate only (not the
     // agent prompt). Scope-resolved for monorepos via resolveScope above.
@@ -881,7 +887,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     // Written here (not in prepareWorktree) so it lives in pipeline state
     // instead of the user's worktree, avoiding untracked-file noise.
     // Regenerated every run so config changes are picked up.
-    writeFeedbackWrapper(wipDir, parseFeedbackCommands(feedbackCommands));
+    writeFeedbackWrapper(
+      wipDir,
+      parseFeedbackCommands(feedbackCommands),
+      feedbackTimeoutSeconds,
+    );
 
     // --- Start IPC server for real-time output streaming ---
     let ipcServer: IpcServer | null = null;
@@ -963,364 +973,408 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     // positives from tool output that contains bare sentinel strings.
     const nonce = generateNonce();
 
-    while (!interrupted) {
-      iterationNumber++;
-      const completedTasks = countCompletedTasks(progressFile, planFormat);
-      const currentTask = Math.min(completedTasks + 1, totalTasks);
-
-      console.log();
-      if (totalTasks > 0) {
+    // --- hooks.beforeRun: runs once per plan, before first iteration ---
+    if (effectiveBeforeRun) {
+      console.log(`Running beforeRun hook: ${effectiveBeforeRun}`);
+      const hookResult = execInherit(effectiveBeforeRun, cwd);
+      if (hookResult.exitCode !== 0) {
         console.log(
-          `=== Ralphai iteration ${iterationNumber} — task ${currentTask} of ${totalTasks} (plan: ${basename(planFile)}) ===`,
+          `beforeRun hook failed (exit ${hookResult.exitCode}) — marking plan stuck.`,
         );
-      } else {
-        console.log(
-          `=== Ralphai iteration ${iterationNumber} (plan: ${basename(planFile)}) ===`,
-        );
-      }
 
-      // --- Assemble prompt ---
-      // Check for the feedback wrapper script in the WIP slug directory
-      // (pipeline state). When it exists the prompt references the
-      // absolute path so the agent can invoke it from the worktree.
-      const wrapperFile = join(wipDir, FEEDBACK_WRAPPER_FILENAME);
-      const wrapperPath = existsSync(wrapperFile) ? wrapperFile : undefined;
-
-      const prompt = assemblePrompt({
-        planFile,
-        progressFile,
-        feedbackCommands,
-        scopeHint,
-        feedbackScope: resolvedFeedbackScope,
-        learnings: accumulatedLearnings,
-        planFormat,
-        gateRejection: gateState.lastGateRejection,
-        nonce,
-        wrapperPath,
-        terse,
-      });
-
-      // --- Spawn agent (with output log persistence) ---
-      const outputLogPath = join(wipDir, "agent-output.log");
-      try {
-        const header = `\n--- Iteration ${iterationNumber} ---\n`;
-        writeFileSync(outputLogPath, header, { flag: "a" });
-      } catch {
-        // Best-effort; non-fatal if we can't write the header
-      }
-      const { output, exitCode, timedOut } = await executor.spawn({
-        agentCommand,
-        prompt,
-        iterationTimeout,
-        cwd,
-        outputLogPath,
-        ipcBroadcast: ipcServer
-          ? (msg) => ipcServer!.broadcast(msg)
-          : undefined,
-        nonce,
-        feedbackWrapperPath: wrapperPath,
-        verbose: agentVerbose,
-        agentVerboseFlags: cfg.agentVerboseFlags || undefined,
-      });
-
-      if (timedOut) {
-        console.log();
-        console.log(
-          `WARNING: Agent command timed out after ${iterationTimeout}s.`,
-        );
-      }
-
-      // --- Process learnings block (before completion check) ---
-      // Only recognize nonce-stamped tags to prevent false positives from
-      // tool output that happens to contain bare sentinel strings.
-      const learningsBlock = extractNoncedBlock(output, "learnings", nonce);
-      if (learningsBlock === null) {
-        console.log("WARNING: No <learnings> block found in agent output.");
-      } else {
-        const learningContent = parseLearningContent(learningsBlock);
-        if (learningContent !== null) {
-          if (!accumulatedLearnings.includes(learningContent)) {
-            accumulatedLearnings.push(learningContent);
-          }
-          console.log(
-            `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
-          );
-        } else {
-          console.log("No learning logged this iteration.");
-        }
-      }
-
-      // --- Extract and append progress block ---
-      // Only recognize nonce-stamped tags to prevent false positives.
-      const progressContent = extractNoncedBlock(output, "progress", nonce);
-      if (progressContent) {
-        appendProgressBlock(progressFile, iterationNumber, progressContent);
-        console.log(
-          `Appended progress block from iteration ${iterationNumber}.`,
-        );
-        // Broadcast progress to connected IPC clients
-        if (ipcServer) {
-          ipcServer.broadcast({
-            type: "progress",
-            iteration: iterationNumber,
-            content: progressContent,
-          });
-        }
-      }
-
-      if (exitCode !== 0 && !timedOut) {
-        console.log();
-        console.log(`WARNING: Agent command exited with status ${exitCode}.`);
-      }
-
-      // --- Stuck detection ---
-      const currentHash = getCurrentCommitHash(cwd) ?? "";
-      if (currentHash === lastHash) {
-        stuckCount++;
-        console.log(
-          `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
-        );
-        if (stuckCount >= maxStuck) {
-          markStuck(
-            `Stuck: ${maxStuck} consecutive iterations with no progress on '${planSlug}'.`,
-          );
-          console.log(`Branch: ${branch}`);
-          console.log(
-            `Plan files remain in ${wipDir}/ — resume with another run.`,
-          );
-          break;
-        }
-      } else {
-        stuckCount = 0;
-        lastHash = currentHash;
-      }
-
-      // --- Update receipt tasks_completed from progress.md ---
-      updateReceiptTasks(receiptFile, progressFile, planFormat);
-      // Broadcast updated tasks-completed count to connected IPC clients
-      if (ipcServer) {
-        const updatedTasksCompleted = countCompletedTasks(
-          progressFile,
-          planFormat,
-        );
-        ipcServer.broadcast({
-          type: "receipt",
-          tasksCompleted: updatedTasksCompleted,
-        });
-      }
-
-      // --- Iteration cap check ---
-      // Independent of maxStuck (which counts zero-progress iterations).
-      // maxIterations=0 means unlimited.
-      if (maxIterations > 0 && iterationNumber >= maxIterations) {
         markStuck(
-          `Stuck: iteration limit reached (${iterationNumber}/${maxIterations}) on '${planSlug}'.`,
+          `Stuck: beforeRun hook failed (exit ${hookResult.exitCode}) on '${planSlug}'.`,
         );
-        break;
       }
+    }
 
-      // --- Check for completion ---
-      if (detectCompletion(output, nonce)) {
-        // --- Completion gate: verify before accepting ---
-        const gateResult = runCompletionGate({
-          progressFile,
-          planFormat,
-          totalTasks,
-          feedbackCommands,
-          prFeedbackCommands,
-          validators,
-          cwd,
-        });
+    try {
+      // --- Begin afterRun-guarded block ---
 
-        const gateFailureOpts = {
-          maxGateRejections,
-          nonce,
-          totalTasks,
-          progressFile,
-          planFormat,
-          markStuckFn: markStuck,
-          state: gateState,
-        };
+      // Skip iteration loop if beforeRun already marked the plan stuck.
+      if (!stuck) {
+        while (!interrupted) {
+          iterationNumber++;
+          const completedTasks = countCompletedTasks(progressFile, planFormat);
+          const currentTask = Math.min(completedTasks + 1, totalTasks);
 
-        if (!gateResult.passed) {
-          const disposition = handleGateFailure(
-            gateResult,
-            "",
-            gateFailureOpts,
-          );
-          if (disposition === "rejected") continue;
-          if (disposition === "stuck") break;
-        }
-
-        // Clear gate state on acceptance
-        gateState.lastGateRejection = undefined;
-
-        // --- Review pass: behavior-preserving simplification ---
-        // Runs at most once per plan, after the gate passes. If the review
-        // makes changes, re-run the gate; on failure follow normal rejection.
-        if (review && !reviewDone) {
-          const changedFiles = getChangedFiles(baseBranch, cwd);
-          if (changedFiles.length === 0) {
-            console.log("Review pass: no changed files — skipping.");
+          console.log();
+          if (totalTasks > 0) {
+            console.log(
+              `=== Ralphai iteration ${iterationNumber} — task ${currentTask} of ${totalTasks} (plan: ${basename(planFile)}) ===`,
+            );
           } else {
             console.log(
-              `Running review pass on ${changedFiles.length} changed files...`,
+              `=== Ralphai iteration ${iterationNumber} (plan: ${basename(planFile)}) ===`,
             );
-            const feedbackStep = wrapperPath ?? feedbackCommands;
-            try {
-              const reviewResult = await runReviewPass({
-                baseBranch,
-                agentCommand,
-                feedbackStep,
-                iterationTimeout,
-                cwd,
-                executor,
-                outputLogPath,
-                ipcBroadcast: ipcServer
-                  ? (msg) => ipcServer!.broadcast(msg)
-                  : undefined,
-                feedbackWrapperPath: wrapperPath,
-                maxFiles: reviewMaxFiles,
-              });
-              reviewDone = true;
-
-              if (reviewResult.madeChanges) {
-                console.log("Review pass: simplifications committed.");
-                reviewPassMadeChanges = true;
-                // Re-run the completion gate after review changes
-                const reGateResult = runCompletionGate({
-                  progressFile,
-                  planFormat,
-                  totalTasks,
-                  feedbackCommands,
-                  prFeedbackCommands,
-                  validators,
-                  cwd,
-                });
-
-                if (!reGateResult.passed) {
-                  const disposition = handleGateFailure(
-                    reGateResult,
-                    " after review pass",
-                    gateFailureOpts,
-                  );
-                  if (disposition === "rejected") continue;
-                  if (disposition === "stuck") break;
-                }
-              } else {
-                console.log("Review pass: no simplifications needed.");
-              }
-            } catch (err) {
-              // Best-effort: agent failure or timeout during review should
-              // not block PR creation.
-              reviewDone = true;
-              console.log(
-                `WARNING: Review pass failed: ${err instanceof Error ? err.message : err}`,
-              );
-              console.log("Proceeding to PR creation.");
-            }
           }
-        }
 
-        console.log();
-        console.log(
-          `Plan complete after ${iterationNumber} iterations: ${planDesc}`,
-        );
+          // --- Assemble prompt ---
+          // Check for the feedback wrapper script in the WIP slug directory
+          // (pipeline state). When it exists the prompt references the
+          // absolute path so the agent can invoke it from the worktree.
+          const wrapperFile = join(wipDir, FEEDBACK_WRAPPER_FILENAME);
+          const wrapperPath = existsSync(wrapperFile) ? wrapperFile : undefined;
 
-        // Extract agent-generated PR description
-        // Only recognize nonce-stamped tags to prevent false positives.
-        const prSummary =
-          extractNoncedBlock(output, "pr-summary", nonce) ?? undefined;
-        if (prSummary) lastPrSummary = prSummary;
-
-        // Remove PID file and close IPC server before archiving so they
-        // don't end up in out/
-        if (ipcServer) {
-          // Broadcast completion before closing so IPC clients
-          // know the plan finished
-          ipcServer.broadcast({ type: "complete", planSlug });
-          ipcServer.close();
-          ipcServer = null;
-          activeIpcServer = null;
-        }
-        try {
-          rmSync(pidFile, { force: true });
-        } catch {
-          // Best-effort cleanup
-        }
-        activePidFile = null;
-
-        if (!skipPrCreation) {
-          const prResult = createPr({
-            branch,
-            baseBranch,
-            planDescription: planDesc,
-            cwd,
-            issueSource: issueFm.source || issueSource,
-            issueNumber: issueFm.issue,
-            issueRepo,
-            issueCommentProgress,
-            prd: issueFm.prd,
-            summary: prSummary,
+          const prompt = assemblePrompt({
+            planFile,
+            progressFile,
+            feedbackCommands,
+            scopeHint,
+            feedbackScope: resolvedFeedbackScope,
             learnings: accumulatedLearnings,
-            reviewPassMadeChanges,
+            planFormat,
+            gateRejection: gateState.lastGateRejection,
+            nonce,
+            wrapperPath,
+            verbose,
           });
-          console.log(prResult.message);
 
-          // Persist PR URL to receipt before archiving (so it survives the move)
-          if (prResult.ok && prResult.prUrl) {
-            updateReceiptPrUrl(receiptFile, prResult.prUrl);
+          // --- Spawn agent (with output log persistence) ---
+          const outputLogPath = join(wipDir, "agent-output.log");
+          try {
+            const header = `\n--- Iteration ${iterationNumber} ---\n`;
+            writeFileSync(outputLogPath, header, { flag: "a" });
+          } catch {
+            // Best-effort; non-fatal if we can't write the header
           }
-        }
+          const { output, exitCode, timedOut } = await executor.spawn({
+            agentCommand,
+            prompt,
+            iterationTimeout,
+            cwd,
+            outputLogPath,
+            ipcBroadcast: ipcServer
+              ? (msg) => ipcServer!.broadcast(msg)
+              : undefined,
+            nonce,
+            feedbackWrapperPath: wrapperPath,
+          });
 
-        archiveRun({
-          wipFiles: [planFile],
-          archiveDir: dirs.archiveDir,
-          cwd,
-        });
+          if (timedOut) {
+            console.log();
+            console.log(
+              `WARNING: Agent command timed out after ${iterationTimeout}s.`,
+            );
+          }
 
-        // --- PRD done detection ---
-        // When a sub-issue completes, check whether ALL sibling sub-issues
-        // under the same PRD parent are now done. If so, transition the
-        // PRD parent to done.
-        if (issueFm.prd && issueFm.source === "github") {
-          const prdRepo = resolveIssueRepoSlug(issueRepo, issueFm.issueUrl);
-          if (prdRepo) {
-            const allDone = checkAllPrdSubIssuesDone(prdRepo, issueFm.prd, cwd);
-            if (allDone) {
+          // --- Process learnings block (before completion check) ---
+          // Only recognize nonce-stamped tags to prevent false positives from
+          // tool output that happens to contain bare sentinel strings.
+          const learningsBlock = extractNoncedBlock(output, "learnings", nonce);
+          if (learningsBlock === null) {
+            console.log("WARNING: No <learnings> block found in agent output.");
+          } else {
+            const learningContent = parseLearningContent(learningsBlock);
+            if (learningContent !== null) {
+              if (!accumulatedLearnings.includes(learningContent)) {
+                accumulatedLearnings.push(learningContent);
+              }
               console.log(
-                `All sub-issues of PRD #${issueFm.prd} are done — transitioning PRD to done.`,
+                `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
               );
-              prdTransitionDone({ number: issueFm.prd, repo: prdRepo }, cwd);
+            } else {
+              console.log("No learning logged this iteration.");
             }
           }
-        }
 
-        plansCompleted++;
-        completed = true;
+          // --- Extract and append progress block ---
+          // Only recognize nonce-stamped tags to prevent false positives.
+          const progressContent = extractNoncedBlock(output, "progress", nonce);
+          if (progressContent) {
+            appendProgressBlock(progressFile, iterationNumber, progressContent);
+            console.log(
+              `Appended progress block from iteration ${iterationNumber}.`,
+            );
+            // Broadcast progress to connected IPC clients
+            if (ipcServer) {
+              ipcServer.broadcast({
+                type: "progress",
+                iteration: iterationNumber,
+                content: progressContent,
+              });
+            }
+          }
+
+          if (exitCode !== 0 && !timedOut) {
+            console.log();
+            console.log(
+              `WARNING: Agent command exited with status ${exitCode}.`,
+            );
+          }
+
+          // --- Stuck detection ---
+          const currentHash = getCurrentCommitHash(cwd) ?? "";
+          if (currentHash === lastHash) {
+            stuckCount++;
+            console.log(
+              `WARNING: No new commits this iteration (${stuckCount}/${maxStuck}).`,
+            );
+            if (stuckCount >= maxStuck) {
+              markStuck(
+                `Stuck: ${maxStuck} consecutive iterations with no progress on '${planSlug}'.`,
+              );
+              console.log(`Branch: ${branch}`);
+              console.log(
+                `Plan files remain in ${wipDir}/ — resume with another run.`,
+              );
+              break;
+            }
+          } else {
+            stuckCount = 0;
+            lastHash = currentHash;
+          }
+
+          // --- Update receipt tasks_completed from progress.md ---
+          updateReceiptTasks(receiptFile, progressFile, planFormat);
+          // Broadcast updated tasks-completed count to connected IPC clients
+          if (ipcServer) {
+            const updatedTasksCompleted = countCompletedTasks(
+              progressFile,
+              planFormat,
+            );
+            ipcServer.broadcast({
+              type: "receipt",
+              tasksCompleted: updatedTasksCompleted,
+            });
+          }
+
+          // --- Iteration cap check ---
+          // Independent of maxStuck (which counts zero-progress iterations).
+          // maxIterations=0 means unlimited.
+          if (maxIterations > 0 && iterationNumber >= maxIterations) {
+            markStuck(
+              `Stuck: iteration limit reached (${iterationNumber}/${maxIterations}) on '${planSlug}'.`,
+            );
+            break;
+          }
+
+          // --- Check for completion ---
+          if (detectCompletion(output, nonce)) {
+            // --- Completion gate: verify before accepting ---
+            const gateResult = runCompletionGate({
+              progressFile,
+              planFormat,
+              totalTasks,
+              feedbackCommands,
+              prFeedbackCommands,
+              validators,
+              cwd,
+              feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+            });
+
+            const gateFailureOpts = {
+              maxGateRejections,
+              nonce,
+              totalTasks,
+              progressFile,
+              planFormat,
+              markStuckFn: markStuck,
+              state: gateState,
+            };
+
+            if (!gateResult.passed) {
+              const disposition = handleGateFailure(
+                gateResult,
+                "",
+                gateFailureOpts,
+              );
+              if (disposition === "rejected") continue;
+              if (disposition === "stuck") break;
+            }
+
+            // Clear gate state on acceptance
+            gateState.lastGateRejection = undefined;
+
+            // --- Review pass: behavior-preserving simplification ---
+            // Runs at most once per plan, after the gate passes. If the review
+            // makes changes, re-run the gate; on failure follow normal rejection.
+            if (review && !reviewDone) {
+              const changedFiles = getChangedFiles(baseBranch, cwd);
+              if (changedFiles.length === 0) {
+                console.log("Review pass: no changed files — skipping.");
+              } else {
+                console.log(
+                  `Running review pass on ${changedFiles.length} changed files...`,
+                );
+                const feedbackStep = wrapperPath ?? feedbackCommands;
+                try {
+                  const reviewResult = await runReviewPass({
+                    baseBranch,
+                    agentCommand,
+                    feedbackStep,
+                    iterationTimeout,
+                    cwd,
+                    executor,
+                    outputLogPath,
+                    ipcBroadcast: ipcServer
+                      ? (msg) => ipcServer!.broadcast(msg)
+                      : undefined,
+                    feedbackWrapperPath: wrapperPath,
+                    maxFiles: reviewMaxFiles,
+                  });
+                  reviewDone = true;
+
+                  if (reviewResult.madeChanges) {
+                    console.log("Review pass: simplifications committed.");
+                    reviewPassMadeChanges = true;
+                    // Re-run the completion gate after review changes
+                    const reGateResult = runCompletionGate({
+                      progressFile,
+                      planFormat,
+                      totalTasks,
+                      feedbackCommands,
+                      prFeedbackCommands,
+                      validators,
+                      cwd,
+                      feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+                    });
+
+                    if (!reGateResult.passed) {
+                      const disposition = handleGateFailure(
+                        reGateResult,
+                        " after review pass",
+                        gateFailureOpts,
+                      );
+                      if (disposition === "rejected") continue;
+                      if (disposition === "stuck") break;
+                    }
+                  } else {
+                    console.log("Review pass: no simplifications needed.");
+                  }
+                } catch (err) {
+                  // Best-effort: agent failure or timeout during review should
+                  // not block PR creation.
+                  reviewDone = true;
+                  console.log(
+                    `WARNING: Review pass failed: ${err instanceof Error ? err.message : err}`,
+                  );
+                  console.log("Proceeding to PR creation.");
+                }
+              }
+            }
+
+            console.log();
+            console.log(
+              `Plan complete after ${iterationNumber} iterations: ${planDesc}`,
+            );
+
+            // Extract agent-generated PR description
+            // Only recognize nonce-stamped tags to prevent false positives.
+            const prSummary =
+              extractNoncedBlock(output, "pr-summary", nonce) ?? undefined;
+            if (prSummary) lastPrSummary = prSummary;
+
+            // Remove PID file and close IPC server before archiving so they
+            // don't end up in out/
+            if (ipcServer) {
+              // Broadcast completion before closing so IPC clients
+              // know the plan finished
+              ipcServer.broadcast({ type: "complete", planSlug });
+              ipcServer.close();
+              ipcServer = null;
+              activeIpcServer = null;
+            }
+            try {
+              rmSync(pidFile, { force: true });
+            } catch {
+              // Best-effort cleanup
+            }
+            activePidFile = null;
+
+            if (!skipPrCreation) {
+              const prResult = createPr({
+                branch,
+                baseBranch,
+                planDescription: planDesc,
+                cwd,
+                issueSource: issueFm.source || issueSource,
+                issueNumber: issueFm.issue,
+                issueRepo,
+                issueCommentProgress,
+                prd: issueFm.prd,
+                summary: prSummary,
+                learnings: accumulatedLearnings,
+                reviewPassMadeChanges,
+              });
+              console.log(prResult.message);
+
+              // Persist PR URL to receipt before archiving (so it survives the move)
+              if (prResult.ok && prResult.prUrl) {
+                updateReceiptPrUrl(receiptFile, prResult.prUrl);
+              }
+            }
+
+            archiveRun({
+              wipFiles: [planFile],
+              archiveDir: dirs.archiveDir,
+              cwd,
+            });
+
+            // --- PRD done detection ---
+            // When a sub-issue completes, check whether ALL sibling sub-issues
+            // under the same PRD parent are now done. If so, transition the
+            // PRD parent to done.
+            if (issueFm.prd && issueFm.source === "github") {
+              const prdRepo = resolveIssueRepoSlug(issueRepo, issueFm.issueUrl);
+              if (prdRepo) {
+                const allDone = checkAllPrdSubIssuesDone(
+                  prdRepo,
+                  issueFm.prd,
+                  cwd,
+                );
+                if (allDone) {
+                  console.log(
+                    `All sub-issues of PRD #${issueFm.prd} are done — transitioning PRD to done.`,
+                  );
+                  prdTransitionDone(
+                    { number: issueFm.prd, repo: prdRepo },
+                    cwd,
+                  );
+                }
+              }
+            }
+
+            plansCompleted++;
+            completed = true;
+            break;
+          }
+        }
+      } // end if (!stuck) — beforeRun failure skips iteration loop
+
+      if (!completed && !stuck && interrupted) {
+        console.log();
+        console.log(`Interrupted during plan: ${planDesc}`);
+        console.log(
+          `Plan files remain in ${wipDir}/ — resume with another run.`,
+        );
+        console.log(`Branch: ${branch}`);
         break;
       }
-    }
 
-    if (!completed && !stuck && interrupted) {
-      console.log();
-      console.log(`Interrupted during plan: ${planDesc}`);
-      console.log(`Plan files remain in ${wipDir}/ — resume with another run.`);
-      console.log(`Branch: ${branch}`);
-      break;
-    }
+      // --- --once: stop after a single completed (or stuck) plan ---
+      if (once) {
+        break;
+      }
 
-    // --- --once: stop after a single completed (or stuck) plan ---
-    if (once) {
-      break;
-    }
+      // --- Stop after a pulled regular GitHub issue (not PRD sub-issues) ---
+      if (pulledRegularGithubIssue) {
+        break;
+      }
 
-    // --- Stop after a pulled regular GitHub issue (not PRD sub-issues) ---
-    if (pulledRegularGithubIssue) {
-      break;
-    }
-
-    // Loop back to pick the next plan (drain-by-default)
+      // Loop back to pick the next plan (drain-by-default)
+    } finally {
+      // --- hooks.afterRun: runs once per plan on all exit paths ---
+      if (afterRunHook) {
+        console.log(`Running afterRun hook: ${afterRunHook}`);
+        const hookResult = execInherit(afterRunHook, cwd);
+        if (hookResult.exitCode !== 0) {
+          console.log(
+            `WARNING: afterRun hook exited with status ${hookResult.exitCode} (does not affect outcome).`,
+          );
+        }
+      }
+    } // end try/finally (afterRun-guarded block)
   }
 
   // --- Exit summary ---

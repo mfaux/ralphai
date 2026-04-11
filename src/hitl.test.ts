@@ -29,6 +29,11 @@ mock.module("./exec.ts", () => ({
     stdout: "",
     stderr: "",
   }),
+  execInherit: (cmd: string, cwd: string) => ({
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+  }),
   checkGhAvailable: () => true,
   setExecImpl: () => () => {},
   execOk: () => true,

@@ -26,6 +26,8 @@ export interface ResolveScopeInput {
   rootValidators?: string;
   /** Workspace config JSON (stringified object keyed by scope path). */
   workspacesConfig?: string;
+  /** Root-level beforeRun hook command. */
+  rootBeforeRun?: string;
 }
 
 export interface ResolveScopeResult {
@@ -35,6 +37,8 @@ export interface ResolveScopeResult {
   prFeedbackCommands: string;
   validators: string;
   scopeHint: string;
+  /** Per-workspace beforeRun override (undefined = use root value). */
+  beforeRun?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +60,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     rootPrFeedbackCommands,
     rootValidators = "",
     workspacesConfig,
+    rootBeforeRun,
   } = input;
 
   // No scope means pass everything through unchanged.
@@ -74,11 +79,20 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
   const project = detectProject(cwd);
   const ecosystem = project?.ecosystem ?? "unknown";
 
-  // Check for workspace-specific feedbackCommands override
+  // Extract workspace-level beforeRun override (if any).
+  let wsBeforeRun: string | undefined;
+
+  // Check for workspace-specific overrides
   if (workspacesConfig) {
     try {
       const config = JSON.parse(workspacesConfig);
       const wsEntry = config[planScope];
+
+      // Capture beforeRun override from workspace config.
+      if (wsEntry && typeof wsEntry.beforeRun === "string") {
+        wsBeforeRun = wsEntry.beforeRun;
+      }
+
       if (wsEntry?.feedbackCommands) {
         const fc = Array.isArray(wsEntry.feedbackCommands)
           ? wsEntry.feedbackCommands.join(",")
@@ -103,6 +117,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
           feedbackCommands: fc,
           prFeedbackCommands: pfc,
           validators: val,
+          beforeRun: wsBeforeRun ?? rootBeforeRun,
           scopeHint: buildScopeHint(planScope),
         };
       }
@@ -119,6 +134,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       feedbackCommands: rootFeedbackCommands,
       prFeedbackCommands: rootPrFeedbackCommands,
       validators: rootValidators,
+      beforeRun: wsBeforeRun ?? rootBeforeRun,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -131,6 +147,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       feedbackCommands: "",
       prFeedbackCommands: "",
       validators: rootValidators,
+      beforeRun: wsBeforeRun ?? rootBeforeRun,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -178,6 +195,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     feedbackCommands: rewrite(rootFeedbackCommands),
     prFeedbackCommands: rewrite(rootPrFeedbackCommands),
     validators: rootValidators,
+    beforeRun: wsBeforeRun ?? rootBeforeRun,
     scopeHint: buildScopeHint(planScope),
   };
 }

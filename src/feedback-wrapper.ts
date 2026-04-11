@@ -160,11 +160,12 @@ function escapeForShell(cmd: string): string {
 export function writeFeedbackWrapper(
   targetDir: string,
   feedbackCommands?: string[],
+  timeoutSeconds?: number,
 ): void {
   if (process.platform === "win32") return;
   if (!feedbackCommands || feedbackCommands.length === 0) return;
 
-  const script = generateFeedbackWrapper(feedbackCommands);
+  const script = generateFeedbackWrapper(feedbackCommands, timeoutSeconds);
   const wrapperPath = join(targetDir, FEEDBACK_WRAPPER_FILENAME);
   writeFileSync(wrapperPath, script, { mode: 0o755 });
 }
