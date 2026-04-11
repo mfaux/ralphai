@@ -583,4 +583,66 @@ describe("runReviewPass executor boundary", () => {
 
     expect(result.output).toBe("review suggestions applied");
   });
+
+  test("forwards feedbackWrapperPath to executor.spawn for Docker bind-mount", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "file.ts"), "x\n");
+    execSync('git add -A && git commit -m "add"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    let capturedOpts: ExecutorSpawnOptions | undefined;
+    const mockExecutor: AgentExecutor = {
+      async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
+        capturedOpts = opts;
+        return { output: "", exitCode: 0, timedOut: false };
+      },
+    };
+
+    const wrapperPath =
+      "/home/user/.ralphai/repos/abc/pipeline/in-progress/my-plan/_ralphai_feedback.sh";
+
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: wrapperPath,
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+      feedbackWrapperPath: wrapperPath,
+    });
+
+    expect(capturedOpts).toBeDefined();
+    expect(capturedOpts!.feedbackWrapperPath).toBe(wrapperPath);
+  });
+
+  test("feedbackWrapperPath defaults to undefined when not provided", async () => {
+    execSync("git checkout -b feature", { cwd: dir, stdio: "pipe" });
+    writeFileSync(join(dir, "file.ts"), "x\n");
+    execSync('git add -A && git commit -m "add"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+
+    let capturedOpts: ExecutorSpawnOptions | undefined;
+    const mockExecutor: AgentExecutor = {
+      async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
+        capturedOpts = opts;
+        return { output: "", exitCode: 0, timedOut: false };
+      },
+    };
+
+    await runReviewPass({
+      baseBranch: "main",
+      agentCommand: "echo",
+      feedbackStep: "bun test",
+      iterationTimeout: 0,
+      cwd: dir,
+      executor: mockExecutor,
+    });
+
+    expect(capturedOpts).toBeDefined();
+    expect(capturedOpts!.feedbackWrapperPath).toBeUndefined();
+  });
 });

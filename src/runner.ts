@@ -1155,6 +1155,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 ipcBroadcast: ipcServer
                   ? (msg) => ipcServer!.broadcast(msg)
                   : undefined,
+                feedbackWrapperPath: wrapperPath,
               });
               reviewDone = true;
 

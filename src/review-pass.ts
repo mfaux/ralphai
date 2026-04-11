@@ -54,6 +54,13 @@ export interface RunReviewPassOptions {
   outputLogPath?: string;
   /** Optional IPC broadcast callback. */
   ipcBroadcast?: (msg: IpcMessage) => void;
+  /**
+   * Optional absolute path to the feedback wrapper script.
+   * When provided, the Docker executor bind-mounts this file into the
+   * container so the agent can execute it. Without this, the script path
+   * embedded in the prompt is unreachable from inside the sandbox.
+   */
+  feedbackWrapperPath?: string;
 }
 
 /** Result of a review pass. */
@@ -177,6 +184,7 @@ export async function runReviewPass(
     executor,
     outputLogPath,
     ipcBroadcast,
+    feedbackWrapperPath,
   } = options;
 
   // 1. Detect changed files
@@ -208,6 +216,7 @@ export async function runReviewPass(
     cwd,
     outputLogPath,
     ipcBroadcast,
+    feedbackWrapperPath,
   });
 
   // 6. Compare HEAD after agent invocation
