@@ -1321,6 +1321,12 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       const v = arg.slice("--prompt-preamble=".length);
       ensurePrompt().preamble = v;
       rawFlags["prompt.preamble"] = arg;
+    } else if (arg === "--prompt-learnings") {
+      ensurePrompt().learnings = true;
+      rawFlags["prompt.learnings"] = "--prompt-learnings";
+    } else if (arg === "--no-prompt-learnings") {
+      ensurePrompt().learnings = false;
+      rawFlags["prompt.learnings"] = "--no-prompt-learnings";
     } else if (arg.startsWith("--prompt-commit-style=")) {
       const v = arg.slice("--prompt-commit-style=".length);
       ensurePrompt().commitStyle = v;

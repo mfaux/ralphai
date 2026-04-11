@@ -2,7 +2,12 @@ import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { useTempDir } from "./test-utils.ts";
-import { formatFileRef, assemblePrompt } from "./prompt.ts";
+import {
+  formatFileRef,
+  assemblePrompt,
+  extractAgentInstructions,
+  DEFAULT_PREAMBLE,
+} from "./prompt.ts";
 import type { AssemblePromptOptions } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
@@ -264,16 +269,14 @@ describe("assemblePrompt", () => {
     expect(prompt).not.toContain('"file_paths"');
   });
 
-  it("commit step is always step 6 regardless of learnings", () => {
+  it("commit step is always step 5 regardless of learnings", () => {
     const withoutLearnings = assemblePrompt(baseOptions({ learnings: [] }));
-    expect(withoutLearnings).toContain("6. Stage and commit ALL changes");
-    expect(withoutLearnings).not.toContain("10. Stage and commit ALL changes");
+    expect(withoutLearnings).toContain("5. Stage and commit ALL changes");
 
     const withLearnings = assemblePrompt(
       baseOptions({ learnings: ["some lesson"] }),
     );
-    expect(withLearnings).toContain("6. Stage and commit ALL changes");
-    expect(withLearnings).not.toContain("10. Stage and commit ALL changes");
+    expect(withLearnings).toContain("5. Stage and commit ALL changes");
   });
 
   // --- Inline file references ---
@@ -300,18 +303,17 @@ describe("assemblePrompt", () => {
     expect(prompt).not.toContain(`<file path="${progressPath}">`);
   });
 
-  // --- Documentation step ---
+  // --- Documentation mandate (now part of default preamble) ---
 
-  it("includes documentation review instructions", () => {
+  it("includes documentation mandate in default preamble", () => {
     const prompt = assemblePrompt(baseOptions());
-    expect(prompt).toContain("5. Documentation:");
-    expect(prompt).toContain("README.md");
+    expect(prompt).toContain("Documentation mandate");
     expect(prompt).toContain("AGENTS.md");
   });
 
-  // --- Testing strategy ---
+  // --- Testing strategy (now part of default preamble) ---
 
-  it("includes testing strategy for different task types", () => {
+  it("includes testing strategy in default preamble", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Bug fix: Write a failing test FIRST");
     expect(prompt).toContain("New feature: Implement the feature");
@@ -539,7 +541,7 @@ describe("assemblePrompt", () => {
     // The scope hint should appear between step 4 and step 5
     const step4Idx = prompt.indexOf("4. ");
     const scopeIdx = prompt.indexOf("Scope hint:");
-    const step5Idx = prompt.indexOf("5. Documentation:");
+    const step5Idx = prompt.indexOf("5. Stage and commit");
     expect(step4Idx).toBeLessThan(scopeIdx);
     expect(scopeIdx).toBeLessThan(step5Idx);
   });
@@ -604,5 +606,256 @@ describe("assemblePrompt", () => {
     // Both should still contain the core instruction steps
     expect(promptDefault).toContain("1. Review the plan");
     expect(promptNoTerse).toContain("1. Review the plan");
+  });
+
+  // --- Preamble ---
+
+  it("uses DEFAULT_PREAMBLE when preamble option is empty (default)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("Testing strategy");
+    expect(prompt).toContain("Documentation mandate");
+  });
+
+  it("uses DEFAULT_PREAMBLE when preamble option is explicitly empty string", () => {
+    const prompt = assemblePrompt(baseOptions({ preamble: "" }));
+    expect(prompt).toContain("Testing strategy");
+    expect(prompt).toContain("Documentation mandate");
+  });
+
+  it("replaces default preamble entirely when non-empty preamble is set", () => {
+    const customPreamble =
+      "Always write comprehensive integration tests before any code changes.";
+    const prompt = assemblePrompt(baseOptions({ preamble: customPreamble }));
+    expect(prompt).toContain(customPreamble);
+    // Default preamble content should NOT be present
+    expect(prompt).not.toContain("Testing strategy");
+    expect(prompt).not.toContain("Documentation mandate");
+  });
+
+  it("places preamble before file references", () => {
+    const customPreamble = "CUSTOM_PREAMBLE_MARKER";
+    const prompt = assemblePrompt(baseOptions({ preamble: customPreamble }));
+    const preambleIdx = prompt.indexOf("CUSTOM_PREAMBLE_MARKER");
+    const fileRefIdx = prompt.indexOf('<file path="plan.md">');
+    expect(preambleIdx).toBeGreaterThanOrEqual(0);
+    expect(fileRefIdx).toBeGreaterThan(preambleIdx);
+  });
+
+  it("DEFAULT_PREAMBLE constant contains both testing strategy and docs mandate", () => {
+    expect(DEFAULT_PREAMBLE).toContain("Testing strategy");
+    expect(DEFAULT_PREAMBLE).toContain("Bug fix:");
+    expect(DEFAULT_PREAMBLE).toContain("Documentation mandate");
+  });
+
+  // --- Agent Instructions ---
+
+  it("includes agent instructions between preamble and file references when provided", () => {
+    const instructions =
+      "Focus on performance. Avoid allocations in hot paths.";
+    const prompt = assemblePrompt(
+      baseOptions({ agentInstructions: instructions }),
+    );
+    expect(prompt).toContain(instructions);
+    const instrIdx = prompt.indexOf(instructions);
+    const fileRefIdx = prompt.indexOf('<file path="plan.md">');
+    expect(instrIdx).toBeGreaterThanOrEqual(0);
+    expect(fileRefIdx).toBeGreaterThan(instrIdx);
+  });
+
+  it("omits agent instructions section when empty", () => {
+    const prompt = assemblePrompt(baseOptions({ agentInstructions: "" }));
+    // Should not have a dangling empty section between preamble and file refs
+    expect(prompt).not.toMatch(/\n\n\n\n/);
+  });
+
+  // --- enableLearnings ---
+
+  it("includes learnings mandate when enableLearnings is true (default)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("<learnings>");
+    expect(prompt).toContain("block is mandatory in every response");
+  });
+
+  it("includes learnings mandate when enableLearnings is explicitly true", () => {
+    const prompt = assemblePrompt(baseOptions({ enableLearnings: true }));
+    expect(prompt).toContain("<learnings>");
+    expect(prompt).toContain("block is mandatory in every response");
+  });
+
+  it("omits learnings mandate when enableLearnings is false", () => {
+    const prompt = assemblePrompt(baseOptions({ enableLearnings: false }));
+    expect(prompt).not.toContain("block is mandatory in every response");
+    expect(prompt).not.toContain("freeform prose lesson");
+    // Should still have progress block
+    expect(prompt).toContain("<progress>");
+  });
+
+  it("omits learnings template blocks when enableLearnings is false", () => {
+    const prompt = assemblePrompt(baseOptions({ enableLearnings: false }));
+    expect(prompt).not.toContain("<learnings>none</learnings>");
+    expect(prompt).not.toContain("Your freeform prose lesson here.");
+  });
+
+  // --- commitStyle ---
+
+  it("uses conventional commit instruction when commitStyle is 'conventional' (default)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("conventional commit message");
+    expect(prompt).toContain("feat: ..., fix: ..., refactor: ...");
+  });
+
+  it("uses conventional commit instruction when commitStyle is explicitly 'conventional'", () => {
+    const prompt = assemblePrompt(baseOptions({ commitStyle: "conventional" }));
+    expect(prompt).toContain("conventional commit message");
+  });
+
+  it("uses generic commit instruction when commitStyle is 'none'", () => {
+    const prompt = assemblePrompt(baseOptions({ commitStyle: "none" }));
+    expect(prompt).toContain("clear, descriptive commit message");
+    expect(prompt).not.toContain("conventional commit message");
+    expect(prompt).not.toContain("feat: ..., fix: ...");
+  });
+
+  // --- feedbackHint (scope hint test command) ---
+
+  it("uses feedbackHint for scope hint test command when provided", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackScope: "src/foo",
+        feedbackHint: "npm test",
+      }),
+    );
+    expect(prompt).toContain("`npm test src/foo/`");
+    expect(prompt).not.toContain("`bun test src/foo/`");
+  });
+
+  it("falls back to 'bun test' in scope hint when feedbackHint is empty", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        feedbackScope: "src/foo",
+        feedbackHint: "",
+      }),
+    );
+    expect(prompt).toContain("`bun test src/foo/`");
+  });
+
+  it("falls back to 'bun test' in scope hint when feedbackHint is omitted", () => {
+    const prompt = assemblePrompt(baseOptions({ feedbackScope: "src/bar" }));
+    expect(prompt).toContain("`bun test src/bar/`");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractAgentInstructions
+// ---------------------------------------------------------------------------
+
+describe("extractAgentInstructions", () => {
+  it("returns empty instructions and unchanged content when no section exists", () => {
+    const content = "# Plan\n\n## Tasks\n\n- [ ] Do stuff\n";
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toBe("");
+    expect(result.strippedContent).toBe(content);
+  });
+
+  it("extracts text under ## Agent Instructions heading", () => {
+    const content = [
+      "# Plan",
+      "",
+      "## Agent Instructions",
+      "",
+      "Always use TypeScript strict mode.",
+      "Prefer const over let.",
+      "",
+      "## Tasks",
+      "",
+      "- [ ] Implement feature",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toContain("Always use TypeScript strict mode.");
+    expect(result.instructions).toContain("Prefer const over let.");
+  });
+
+  it("strips the Agent Instructions section from content", () => {
+    const content = [
+      "# Plan",
+      "",
+      "## Agent Instructions",
+      "",
+      "Focus on performance.",
+      "",
+      "## Tasks",
+      "",
+      "- [ ] Optimize queries",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.strippedContent).not.toContain("## Agent Instructions");
+    expect(result.strippedContent).not.toContain("Focus on performance.");
+    expect(result.strippedContent).toContain("## Tasks");
+    expect(result.strippedContent).toContain("Optimize queries");
+  });
+
+  it("handles Agent Instructions at end of file", () => {
+    const content = [
+      "# Plan",
+      "",
+      "## Tasks",
+      "",
+      "- [ ] Do stuff",
+      "",
+      "## Agent Instructions",
+      "",
+      "Use TDD approach.",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toBe("Use TDD approach.");
+    expect(result.strippedContent).not.toContain("Agent Instructions");
+    expect(result.strippedContent).toContain("## Tasks");
+  });
+
+  it("does not match ### Agent Instructions (level-3 heading)", () => {
+    const content = [
+      "# Plan",
+      "",
+      "### Agent Instructions",
+      "",
+      "Not extracted.",
+      "",
+      "## Tasks",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toBe("");
+    expect(result.strippedContent).toBe(content);
+  });
+
+  it("stops at next level-2 heading", () => {
+    const content = [
+      "## Agent Instructions",
+      "",
+      "Line 1.",
+      "Line 2.",
+      "",
+      "## Acceptance Criteria",
+      "",
+      "- [ ] Pass tests",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toBe("Line 1.\nLine 2.");
+    expect(result.strippedContent).toContain("## Acceptance Criteria");
+    expect(result.strippedContent).toContain("Pass tests");
+  });
+
+  it("stops at level-1 heading", () => {
+    const content = [
+      "## Agent Instructions",
+      "",
+      "Be careful.",
+      "",
+      "# New Section",
+      "",
+      "Content here.",
+    ].join("\n");
+    const result = extractAgentInstructions(content);
+    expect(result.instructions).toBe("Be careful.");
+    expect(result.strippedContent).toContain("# New Section");
   });
 });

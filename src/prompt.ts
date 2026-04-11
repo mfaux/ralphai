@@ -13,6 +13,22 @@ import type { PlanFormat } from "./plan-lifecycle.ts";
 import { formatLearningsForPrompt } from "./learnings.ts";
 
 // ---------------------------------------------------------------------------
+// Default preamble
+// ---------------------------------------------------------------------------
+
+/**
+ * Default preamble injected at the top of the prompt when `prompt.preamble`
+ * is empty. Contains TDD strategy and documentation mandate. Replaced
+ * entirely when the user sets a non-empty `prompt.preamble`.
+ */
+export const DEFAULT_PREAMBLE = `**Testing strategy:** Choose your testing approach based on task type:
+- Bug fix: Write a failing test FIRST that reproduces the bug, then fix the code to make it pass.
+- New feature: Implement the feature, then add tests that cover the new code.
+- Refactor: Verify existing tests pass before and after. Only add tests if you discover coverage gaps.
+
+**Documentation mandate:** Review whether your changes affect any documentation. Update relevant docs (README, AGENTS.md, architecture docs) only when they are actually affected — do not rewrite unnecessarily.`;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -64,7 +80,80 @@ export interface AssemblePromptOptions {
    * When false, the terse instruction is omitted, allowing the agent
    * to use full, unabridged prose.
    */
-  terse?: boolean;
+  verbose?: boolean;
+  /**
+   * User-provided preamble text (already resolved — `@path` references
+   * expanded by the runner before passing here). When non-empty, replaces
+   * `DEFAULT_PREAMBLE` entirely. When empty or omitted, uses the default.
+   */
+  preamble?: string;
+  /**
+   * Agent-specific instructions extracted from the plan's
+   * `## Agent Instructions` section. Injected after the preamble and
+   * before the file references. May be empty when no section exists.
+   */
+  agentInstructions?: string;
+  /**
+   * Whether learnings extraction is enabled. When false, the prompt omits
+   * the `<learnings>` block mandate and the warning about missing blocks.
+   * Defaults to true.
+   */
+  enableLearnings?: boolean;
+  /**
+   * Commit style: "conventional" (default) uses CC-prefix commit
+   * instructions; "none" uses a generic commit instruction and plain
+   * PR titles.
+   */
+  commitStyle?: string;
+  /**
+   * Feedback hint command derived from `hooks.feedback` for the scope
+   * hint's targeted test suggestion. When empty, the scope hint falls
+   * back to a generic suggestion.
+   */
+  feedbackHint?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Agent Instructions extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract and strip the `## Agent Instructions` section from plan content.
+ *
+ * Returns `{ instructions, strippedContent }`:
+ * - `instructions`: the text under the heading (empty if not found).
+ * - `strippedContent`: the plan content with the section removed.
+ *
+ * The section is delimited by the `## Agent Instructions` heading and the
+ * next heading of equal or lesser depth (or end of file).
+ */
+export function extractAgentInstructions(planContent: string): {
+  instructions: string;
+  strippedContent: string;
+} {
+  // Match "## Agent Instructions" at the start of a line (exactly level-2)
+  const headingPattern = /^## Agent Instructions[ \t]*$/m;
+  const match = headingPattern.exec(planContent);
+  if (!match) {
+    return { instructions: "", strippedContent: planContent };
+  }
+
+  const sectionStart = match.index!;
+  const bodyStart = sectionStart + match[0].length;
+
+  // Find the next heading of depth <= 2 (## or #) after the section body
+  const rest = planContent.slice(bodyStart);
+  const nextHeadingMatch = /^#{1,2}\s/m.exec(rest);
+  const sectionEnd = nextHeadingMatch
+    ? bodyStart + nextHeadingMatch.index!
+    : planContent.length;
+
+  const instructions = planContent.slice(bodyStart, sectionEnd).trim();
+  const strippedContent = (
+    planContent.slice(0, sectionStart) + planContent.slice(sectionEnd)
+  ).replace(/\n{3,}/g, "\n\n");
+
+  return { instructions, strippedContent };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +200,12 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     gateRejection,
     nonce,
     wrapperPath,
-    terse = true,
+    verbose = false,
+    preamble = "",
+    agentInstructions = "",
+    enableLearnings = true,
+    commitStyle = "conventional",
+    feedbackHint = "",
   } = options;
 
   const isCheckboxes = planFormat === "checkboxes";
@@ -149,12 +243,17 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   // --- Feedback scope hint ---
   // When a feedbackScope is provided, inject advisory guidance about
   // the plan's focused directory and suggest targeted test commands.
+  // Derives the test command from feedbackHint (hooks.feedback) when
+  // available, falling back to a generic suggestion.
   const feedbackScopeHint = feedbackScope
-    ? `\n   **Scope hint:** This plan's changes are focused in \`${feedbackScope}/\`. For faster iteration, you can run targeted tests (e.g. \`bun test ${feedbackScope}/\`) while developing. Always run the full feedback suite before signaling COMPLETE to ensure nothing outside the scope is broken.`
+    ? `\n   **Scope hint:** This plan's changes are focused in \`${feedbackScope}/\`. For faster iteration, you can run targeted tests (e.g. \`${feedbackHint || "bun test"} ${feedbackScope}/\`) while developing. Always run the full feedback suite before signaling COMPLETE to ensure nothing outside the scope is broken.`
     : "";
 
+  // --- Commit instruction (depends on commitStyle) ---
   const commitInstruction =
-    "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes.";
+    commitStyle === "conventional"
+      ? "Stage and commit ALL changes using a conventional commit message (e.g. feat: ..., fix: ..., refactor: ..., test: ..., docs: ..., chore: ...). Use a scope when appropriate (e.g. feat(parser): ...). This is MANDATORY — you must never finish an iteration with uncommitted changes."
+      : "Stage and commit ALL changes with a clear, descriptive commit message. This is MANDATORY — you must never finish an iteration with uncommitted changes.";
 
   const completeInstruction =
     "but ONLY after committing. Never output COMPLETE with uncommitted changes.";
@@ -222,28 +321,32 @@ Ralphai extracts this block and appends it to the progress file automatically. D
     ? `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`
     : "";
 
+  // --- Preamble resolution ---
+  // Non-empty user preamble replaces DEFAULT_PREAMBLE entirely.
+  const effectivePreamble = preamble || DEFAULT_PREAMBLE;
+
+  // --- Agent instructions section (from plan's ## Agent Instructions) ---
+  const agentInstructionsSection = agentInstructions
+    ? `\n${agentInstructions}\n`
+    : "";
+
   // --- Assemble the prompt ---
-  return `${terseInstruction}${fileRefs}${scopeHint}${gateSection}${learningsSection}
+  return `${terseInstruction}${effectivePreamble}
+${agentInstructionsSection}${fileRefs}${scopeHint}${gateSection}${learningsSection}
 1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${learningsHint}
 2. ${step2}
-3. Implement it with small, focused changes. Testing strategy depends on task type:
-   - Bug fix: Write a failing test FIRST that reproduces the bug, then fix the code to make it pass.
-   - New feature: Implement the feature, then add tests that cover the new code.
-   - Refactor: Verify existing tests pass before and after. Only add tests if you discover coverage gaps.
+3. Implement it with small, focused changes.
 4. ${feedbackStep}${feedbackScopeHint}
-5. Documentation: Review whether your changes affect any documentation. Update these files if they are outdated or incomplete:
-   - README.md (commands, usage, feature descriptions)
-   - AGENTS.md — only if your work created knowledge that future coding agents need and cannot easily infer from the code (e.g. new CLI commands, non-obvious architectural constraints, changed dev workflows). Routine bug fixes, internal refactors, and new tests do not warrant an AGENTS.md update.
-   - Project documentation files that describe architecture, conventions, agent instructions, or reusable skills — update only if your changes affect them.
-   Only update docs that are actually affected by your changes — do not rewrite docs unnecessarily.
-6. ${commitInstruction}
+5. ${commitInstruction}
 Complete ONLY the task identified in step 2. Finish it fully (including all its subtasks), then end your response. Do not continue to the next task unless it is trivially small — you will be re-invoked with updated progress to continue. Ralphai manages the iteration loop, so do not attempt to complete the entire plan in one pass.
 If ${completionRef}, output ${promiseOpen}COMPLETE${promiseClose} — ${completeInstruction}
 IMPORTANT: Ralphai runs an independent completion gate after you output COMPLETE. It verifies that (1) the progress file shows ${completionRef}, and (2) all feedback commands pass when run externally. If the gate rejects, you will be re-invoked to fix the issues. Only claim COMPLETE when you are confident all work is done and all feedback commands pass.
 When you output COMPLETE, also include a ${prSummaryOpen}...${prSummaryClose} block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 ${prSummaryOpen}
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
-${prSummaryClose}
+${prSummaryClose}${
+    enableLearnings
+      ? `
 REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. When reporting learnings, include specifics that help future iterations hit the ground running:
 - File paths modified or discovered (e.g. "the validation logic lives in src/validators/input.ts")
 - Exported APIs and their signatures (e.g. "parseConfig(path: string): Config is the main entry point")
@@ -255,6 +358,8 @@ Your freeform prose lesson here.
 ${learningsClose}
 If no learnings this iteration, use:
 ${learningsOpen}none${learningsClose}
-The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.
+The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.`
+      : ""
+  }
 ${progressBlock}`;
 }

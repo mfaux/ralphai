@@ -36,7 +36,7 @@ import {
 } from "./executor/docker.ts";
 import { createIpcServer, type IpcServer } from "./ipc-server.ts";
 import { getSocketPath } from "./ipc-protocol.ts";
-import { assemblePrompt } from "./prompt.ts";
+import { assemblePrompt, extractAgentInstructions } from "./prompt.ts";
 import {
   FEEDBACK_WRAPPER_FILENAME,
   parseFeedbackCommands,
@@ -598,6 +598,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueCommentProgress = cfg.issue.commentProgress;
   const review = cfg.gate.review;
   const verbose = cfg.prompt.verbose;
+  const promptPreamble = cfg.prompt.preamble;
+  const promptLearnings = cfg.prompt.learnings;
+  const promptCommitStyle = cfg.prompt.commitStyle;
   const beforeRunHook = cfg.hooks.beforeRun;
   const afterRunHook = cfg.hooks.afterRun;
   const feedbackTimeoutSeconds = cfg.hooks.feedbackTimeout;
@@ -681,6 +684,25 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   };
   process.on("SIGINT", handleSignal);
   process.on("SIGTERM", handleSignal);
+
+  // --- Resolve @path preamble ---
+  // When prompt.preamble starts with "@", treat the rest as a file path
+  // (relative to cwd) and read its contents. Throw a clear error if the
+  // file does not exist.
+  let resolvedPreamble = promptPreamble;
+  if (resolvedPreamble.startsWith("@")) {
+    const preamblePath = join(cwd, resolvedPreamble.slice(1));
+    if (!existsSync(preamblePath)) {
+      console.error(
+        `ERROR: Preamble file not found: ${preamblePath} (from prompt.preamble="${promptPreamble}")`,
+      );
+      console.error(
+        "Ensure the file exists relative to the repository root, or remove the @path prefix.",
+      );
+      process.exit(1);
+    }
+    resolvedPreamble = readFileSync(preamblePath, "utf-8");
+  }
 
   // --- Main plan loop (drain-by-default) ---
   let plansCompleted = 0;
@@ -962,6 +984,17 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const { format: planFormat, totalTasks } = detectPlanFormat(planContent);
     let iterationNumber = 0;
 
+    // Extract agent instructions from the plan's ## Agent Instructions section.
+    // The stripped content is not written back — the plan file stays intact.
+    // Only the instructions text is passed to assemblePrompt.
+    const { instructions: agentInstructions } =
+      extractAgentInstructions(planContent);
+
+    // Derive a feedback hint command from hooks.feedback for scope hint text.
+    // Uses the first configured command (e.g. "bun test" from "bun test,bun run build").
+    const firstFeedbackCmd = feedbackCommands.split(",")[0]?.trim() ?? "";
+    const feedbackHintCmd = firstFeedbackCmd || "";
+
     // Resolve feedback scope: explicit frontmatter overrides auto-detection.
     const fmFeedbackScope = extractFeedbackScope(planFile);
     const resolvedFeedbackScope =
@@ -1028,6 +1061,11 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             nonce,
             wrapperPath,
             verbose,
+            preamble: resolvedPreamble,
+            agentInstructions,
+            enableLearnings: promptLearnings,
+            commitStyle: promptCommitStyle,
+            feedbackHint: feedbackHintCmd,
           });
 
           // --- Spawn agent (with output log persistence) ---
@@ -1061,20 +1099,29 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           // --- Process learnings block (before completion check) ---
           // Only recognize nonce-stamped tags to prevent false positives from
           // tool output that happens to contain bare sentinel strings.
-          const learningsBlock = extractNoncedBlock(output, "learnings", nonce);
-          if (learningsBlock === null) {
-            console.log("WARNING: No <learnings> block found in agent output.");
-          } else {
-            const learningContent = parseLearningContent(learningsBlock);
-            if (learningContent !== null) {
-              if (!accumulatedLearnings.includes(learningContent)) {
-                accumulatedLearnings.push(learningContent);
-              }
+          // Skipped entirely when prompt.learnings is false.
+          if (promptLearnings) {
+            const learningsBlock = extractNoncedBlock(
+              output,
+              "learnings",
+              nonce,
+            );
+            if (learningsBlock === null) {
               console.log(
-                `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
+                "WARNING: No <learnings> block found in agent output.",
               );
             } else {
-              console.log("No learning logged this iteration.");
+              const learningContent = parseLearningContent(learningsBlock);
+              if (learningContent !== null) {
+                if (!accumulatedLearnings.includes(learningContent)) {
+                  accumulatedLearnings.push(learningContent);
+                }
+                console.log(
+                  `Logged learning: ${learningContent.slice(0, 80)}${learningContent.length > 80 ? "…" : ""}`,
+                );
+              } else {
+                console.log("No learning logged this iteration.");
+              }
             }
           }
 
@@ -1294,8 +1341,9 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 issueCommentProgress,
                 prd: issueFm.prd,
                 summary: prSummary,
-                learnings: accumulatedLearnings,
+                learnings: promptLearnings ? accumulatedLearnings : [],
                 reviewPassMadeChanges,
+                commitStyle: promptCommitStyle,
               });
               console.log(prResult.message);
 

@@ -344,10 +344,16 @@ export function buildContinuousPrBodyStructured(
 
 /**
  * Build a PR title from an issue/PRD title, ensuring a conventional-commit
- * prefix.  If the title already starts with one (e.g. `"fix: broken login"`),
+ * prefix when commitStyle is "conventional" (default).  When commitStyle
+ * is "none", the title is returned as-is (trimmed).
+ *
+ * If the title already starts with a CC prefix (e.g. `"fix: broken login"`),
  * it is returned as-is; otherwise `"feat: "` is prepended.
  */
-function formatPrTitle(title: string): string {
+function formatPrTitle(title: string, commitStyle?: string): string {
+  if (commitStyle === "none") {
+    return title.trim();
+  }
   const { type, description } = commitTypeFromTitle(title);
   return `${type}: ${description}`;
 }
@@ -399,6 +405,8 @@ export interface CreatePrOptions {
   learnings?: string[];
   /** Whether the review pass made simplification changes. */
   reviewPassMadeChanges?: boolean;
+  /** Commit style: "conventional" applies CC prefix; "none" uses plain title. */
+  commitStyle?: string;
 }
 
 export interface ArchiveRunOptions {
@@ -524,7 +532,9 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     learnings: options.learnings,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
-  const prTitle = sanitizePrText(formatPrTitle(planDescription));
+  const prTitle = sanitizePrText(
+    formatPrTitle(planDescription, options.commitStyle),
+  );
 
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
