@@ -150,6 +150,14 @@ describe("CLI help and flags", () => {
     expect(result.stdout).not.toContain("--prd");
   });
 
+  it("run --help shows gate tuning flags", async () => {
+    const result = await runCliInProcess(["run", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--gate-max-rejections=");
+    expect(result.stdout).toContain("--gate-max-iterations=");
+    expect(result.stdout).toContain("--gate-review-max-files=");
+  });
+
   it("run --help shows [<target>] usage with examples", async () => {
     const result = await runCliInProcess(["run", "--help"], ctx.dir);
     expect(result.exitCode).toBe(0);
