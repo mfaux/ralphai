@@ -19,7 +19,6 @@ export {
   slugify,
   commitTypeFromTitle,
   issueBranchName,
-  prdBranchName,
   issueDepSlug,
 } from "./issue-naming.ts";
 
@@ -56,9 +55,6 @@ export const DONE_LABEL = "done";
 
 /** Label added when the agent gets stuck on an issue. */
 export const STUCK_LABEL = "stuck";
-
-/** All state labels that can be removed during a reset. */
-export const STATE_LABELS = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];
 
 // ===========================================================================
 // Label lifecycle — centralised label transitions

@@ -9,9 +9,6 @@ import { listRalphaiWorktrees } from "./worktree/index.ts";
 import { gatherPipelineState } from "./plan-lifecycle.ts";
 import type { WorktreeEntry } from "./worktree/index.ts";
 
-// Re-export frontmatter utilities that were historically exported from ralphai.ts
-export { extractScope, extractDependsOn } from "./plan-lifecycle.ts";
-
 // ---------------------------------------------------------------------------
 // Help
 // ---------------------------------------------------------------------------
@@ -72,7 +69,7 @@ export function runRalphaiStatus(opts: { cwd: string; once?: boolean }): void {
   process.on("SIGTERM", cleanup);
 }
 
-export function printStatusOnce(cwd: string): void {
+function printStatusOnce(cwd: string): void {
   let worktrees: WorktreeEntry[] = [];
   try {
     worktrees = listRalphaiWorktrees(cwd);

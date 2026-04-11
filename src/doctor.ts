@@ -37,7 +37,7 @@ export interface DoctorCheckResult {
   message: string;
 }
 
-export function checkConfigExists(cwd: string): DoctorCheckResult {
+function checkConfigExists(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (existsSync(configPath)) {
     return { status: "pass", message: "config initialized (global state)" };
@@ -45,7 +45,7 @@ export function checkConfigExists(cwd: string): DoctorCheckResult {
   return { status: "fail", message: "config not found — run ralphai init" };
 }
 
-export function checkConfigValid(cwd: string): DoctorCheckResult {
+function checkConfigValid(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   if (!existsSync(configPath)) {
     return {
@@ -69,7 +69,7 @@ export function checkConfigValid(cwd: string): DoctorCheckResult {
   }
 }
 
-export function checkGitRepo(cwd: string): DoctorCheckResult {
+function checkGitRepo(cwd: string): DoctorCheckResult {
   try {
     execSync("git rev-parse --git-dir", {
       cwd,
@@ -85,7 +85,7 @@ export function checkGitRepo(cwd: string): DoctorCheckResult {
   }
 }
 
-export function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
+function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
   try {
     execSync("git diff --quiet HEAD", {
       cwd,
@@ -97,7 +97,7 @@ export function checkWorkingTreeClean(cwd: string): DoctorCheckResult {
   }
 }
 
-export function checkBaseBranchExists(cwd: string): DoctorCheckResult {
+function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   // Read baseBranch from config if available, else detect
   let baseBranch: string;
   const configPath = getConfigFilePath(cwd);
@@ -125,7 +125,7 @@ export function checkBaseBranchExists(cwd: string): DoctorCheckResult {
   }
 }
 
-export function checkAgentCommand(cwd: string): DoctorCheckResult {
+function checkAgentCommand(cwd: string): DoctorCheckResult {
   const configPath = getConfigFilePath(cwd);
   let agentCommand: string;
   try {
@@ -160,7 +160,7 @@ export function checkAgentCommand(cwd: string): DoctorCheckResult {
   }
 }
 
-export function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
+function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   const configPath = getConfigFilePath(cwd);
   let feedbackCommands: string[];
   try {
@@ -198,9 +198,7 @@ export function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   });
 }
 
-export function checkWorkspaceFeedbackCommands(
-  cwd: string,
-): DoctorCheckResult[] {
+function checkWorkspaceFeedbackCommands(cwd: string): DoctorCheckResult[] {
   const configPath = getConfigFilePath(cwd);
   let workspaces: Record<string, { feedbackCommands?: string[] }>;
   try {
@@ -242,7 +240,7 @@ export function checkWorkspaceFeedbackCommands(
   return results;
 }
 
-export function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
+function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   const { backlogDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(backlogDir)) {
     return { status: "warn", message: "backlog: directory not found" };
@@ -257,7 +255,7 @@ export function checkBacklogHasPlans(cwd: string): DoctorCheckResult {
   };
 }
 
-export function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
+function checkOrphanedReceipts(cwd: string): DoctorCheckResult {
   const { wipDir: inProgressDir } = getRepoPipelineDirs(cwd);
   if (!existsSync(inProgressDir)) {
     return { status: "pass", message: "no orphaned receipts" };

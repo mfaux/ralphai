@@ -372,13 +372,8 @@ function printBlockedDiagnostics(
 /**
  * Print an exit summary reporting completed and stuck items.
  * Format: "Completed N, skipped M (stuck)" with stuck slugs listed.
- *
- * Exported for testing.
  */
-export function printExitSummary(
-  completed: number,
-  stuckSlugs: string[],
-): void {
+function printExitSummary(completed: number, stuckSlugs: string[]): void {
   if (completed === 0 && stuckSlugs.length === 0) return;
 
   console.log();

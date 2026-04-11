@@ -107,15 +107,6 @@ export function runCli(
   }
 }
 
-export function runCliOutput(
-  args: string[],
-  cwd?: string,
-  env?: Record<string, string>,
-): string {
-  const result = runCli(args, cwd, env);
-  return result.stdout || result.stderr;
-}
-
 /**
  * Run a CLI command in-process by calling `runRalphai(args)` directly,
  * eliminating the ~300ms overhead of spawning a child Node process.

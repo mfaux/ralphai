@@ -899,11 +899,6 @@ export function detectDockerAvailable(
   return _dockerAvailableCache;
 }
 
-/** Reset the Docker availability cache (for testing). */
-export function _resetDockerAvailableCache(): void {
-  _dockerAvailableCache = undefined;
-}
-
 // ---------------------------------------------------------------------------
 // resolveConfig — compose defaults -> file -> env -> CLI with source tracking
 // ---------------------------------------------------------------------------
