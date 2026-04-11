@@ -22,6 +22,8 @@ export interface ResolveScopeInput {
   rootFeedbackCommands: string;
   /** Root-level PR-tier feedback commands (comma-separated string). */
   rootPrFeedbackCommands: string;
+  /** Root-level validator commands (comma-separated string). */
+  rootValidators?: string;
   /** Workspace config JSON (stringified object keyed by scope path). */
   workspacesConfig?: string;
 }
@@ -31,6 +33,7 @@ export interface ResolveScopeResult {
   packageManager: string;
   feedbackCommands: string;
   prFeedbackCommands: string;
+  validators: string;
   scopeHint: string;
 }
 
@@ -51,6 +54,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     planScope,
     rootFeedbackCommands,
     rootPrFeedbackCommands,
+    rootValidators = "",
     workspacesConfig,
   } = input;
 
@@ -61,6 +65,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
       prFeedbackCommands: rootPrFeedbackCommands,
+      validators: rootValidators,
       scopeHint: "",
     };
   }
@@ -85,11 +90,19 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
             ? wsEntry.prFeedbackCommands.join(",")
             : wsEntry.prFeedbackCommands
           : rootPrFeedbackCommands;
+        // Use workspace validators override if present, otherwise
+        // pass through the root value.
+        const val = wsEntry.validators
+          ? Array.isArray(wsEntry.validators)
+            ? wsEntry.validators.join(",")
+            : wsEntry.validators
+          : rootValidators;
         return {
           ecosystem,
           packageManager: "",
           feedbackCommands: fc,
           prFeedbackCommands: pfc,
+          validators: val,
           scopeHint: buildScopeHint(planScope),
         };
       }
@@ -105,6 +118,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
       prFeedbackCommands: rootPrFeedbackCommands,
+      validators: rootValidators,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -116,6 +130,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: "",
       prFeedbackCommands: "",
+      validators: rootValidators,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -162,6 +177,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     packageManager: pm?.manager ?? "",
     feedbackCommands: rewrite(rootFeedbackCommands),
     prFeedbackCommands: rewrite(rootPrFeedbackCommands),
+    validators: rootValidators,
     scopeHint: buildScopeHint(planScope),
   };
 }

@@ -31,6 +31,8 @@ export interface CompletionGateInput {
   totalTasks: number;
   /** Results of running each feedback command. */
   feedbackResults: FeedbackResult[];
+  /** Results of running validator commands (run after feedback passes). */
+  validatorResults?: FeedbackResult[];
 }
 
 /** Feedback tier: loop-tier runs during each iteration; PR-tier runs only at the completion gate. */
@@ -88,6 +90,23 @@ export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
   }
   if (hasFailedCmds) {
     reasons.push("failing feedback commands");
+  }
+
+  // --- Validator check (skipped when feedback fails) ---
+  if (!hasFailedCmds) {
+    let hasFailedValidators = false;
+    for (const result of input.validatorResults ?? []) {
+      if (result.exitCode !== 0) {
+        hasFailedValidators = true;
+        const snippet = result.output ? `: ${result.output.slice(0, 200)}` : "";
+        details.push(
+          `Feedback command failed [Validator] (exit ${result.exitCode}): ${result.command}${snippet}`,
+        );
+      }
+    }
+    if (hasFailedValidators) {
+      reasons.push("failing validators");
+    }
   }
 
   if (reasons.length > 0) {
@@ -164,6 +183,8 @@ export interface RunCompletionGateOptions {
   feedbackCommands: string;
   /** Comma-separated PR-tier feedback commands (run only at the gate, never in agent prompt). */
   prFeedbackCommands?: string;
+  /** Comma-separated validator commands (run after feedback passes; agent-invisible). */
+  validators?: string;
   /** Working directory for running feedback commands. */
   cwd: string;
 }
@@ -194,10 +215,20 @@ export function runCompletionGate(
     ? runFeedbackCommands(options.prFeedbackCommands, options.cwd, "pr")
     : [];
 
+  const feedbackResults = [...loopResults, ...prResults];
+
+  // Run validators only when all feedback commands pass.
+  const feedbackPassed = feedbackResults.every((r) => r.exitCode === 0);
+  const validatorResults =
+    feedbackPassed && options.validators
+      ? runFeedbackCommands(options.validators, options.cwd, "loop")
+      : [];
+
   return checkCompletionGate({
     completedTasks,
     totalTasks: options.totalTasks,
-    feedbackResults: [...loopResults, ...prResults],
+    feedbackResults,
+    validatorResults,
   });
 }
 

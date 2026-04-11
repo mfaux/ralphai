@@ -411,6 +411,7 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
         lines.push(
           `  ${pkg}: prFeedbackCommands=${fmtList(overrides.prFeedbackCommands)}`,
         );
+        lines.push(`  ${pkg}: validators=${fmtList(overrides.validators)}`);
       }
     }
   } else {

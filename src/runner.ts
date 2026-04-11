@@ -789,6 +789,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       planScope,
       rootFeedbackCommands: cfg.hooks.feedback,
       rootPrFeedbackCommands: cfg.hooks.prFeedback ?? "",
+      rootValidators: cfg.gate.validators ?? "",
       workspacesConfig: cfg.workspaces
         ? JSON.stringify(cfg.workspaces)
         : undefined,
@@ -800,6 +801,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     // PR-tier feedback commands: passed to the completion gate only (not the
     // agent prompt). Scope-resolved for monorepos via resolveScope above.
     const prFeedbackCommands = scopeResult.prFeedbackCommands;
+
+    // Validator commands: run at the completion gate after feedback passes.
+    // Not included in the agent prompt. Scope-resolved for workspace overrides.
+    const validators = scopeResult.validators;
 
     // --- Issue frontmatter (for PR creation and issue commenting) ---
     const issueFm = extractIssueFrontmatter(planFile);
@@ -1123,6 +1128,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           totalTasks,
           feedbackCommands,
           prFeedbackCommands,
+          validators,
           cwd,
         });
 
@@ -1188,6 +1194,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                   totalTasks,
                   feedbackCommands,
                   prFeedbackCommands,
+                  validators,
                   cwd,
                 });
 

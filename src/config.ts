@@ -81,6 +81,7 @@ export interface IssueConfig {
 export interface WorkspaceOverrides {
   feedbackCommands?: string[] | string;
   prFeedbackCommands?: string[] | string;
+  validators?: string[] | string;
   [key: string]: unknown;
 }
 
@@ -886,6 +887,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
         if (!Array.isArray(pfc) && typeof pfc !== "string")
           err(
             `workspaces['${k}'].prFeedbackCommands must be an array of strings or a comma-separated string, got ${typeof pfc}`,
+          );
+      }
+      if ("validators" in entryObj) {
+        const v = entryObj.validators;
+        if (!Array.isArray(v) && typeof v !== "string")
+          err(
+            `workspaces['${k}'].validators must be an array of strings or a comma-separated string, got ${typeof v}`,
           );
       }
     }
