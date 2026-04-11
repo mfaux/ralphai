@@ -16,6 +16,7 @@ import type {
 } from "./types.ts";
 
 import { shellSplit } from "../shell-split.ts";
+import { resolveAgentVerboseFlags } from "./agent-flags.ts";
 
 // ---------------------------------------------------------------------------
 // LocalExecutor
@@ -39,13 +40,19 @@ export class LocalExecutor implements AgentExecutor {
       outputLogPath,
       ipcBroadcast,
       nonce,
+      verbose,
+      agentVerboseFlags,
     } = opts;
 
     return new Promise((resolve) => {
       // Split the agent command respecting quotes
       const parts = shellSplit(agentCommand);
       const cmd = parts[0]!;
-      const args = [...parts.slice(1), prompt];
+      // Inject verbose flags between command parts and prompt when --verbose is active
+      const verboseFlags = verbose
+        ? resolveAgentVerboseFlags(agentCommand, agentVerboseFlags)
+        : [];
+      const args = [...parts.slice(1), ...verboseFlags, prompt];
 
       // Open a write stream for the agent output log (append mode).
       // Errors are swallowed so logging never breaks the run.

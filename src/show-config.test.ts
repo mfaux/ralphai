@@ -128,7 +128,8 @@ describe("formatShowConfig", () => {
     expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
     expect(output).toContain("  review             = true  (default)");
-    expect(output).toContain("  verbose            = false  (default)");
+    expect(output).toContain("  terse              = true  (default)");
+    expect(output).toContain("  agentVerboseFlags  = <none>  (default (none))");
     expect(output).toContain("  maxStuck           = 3  (default)");
     expect(output).toContain("  iterationTimeout   = off  (default)");
     expect(output).toContain("  issueSource        = none  (default)");
@@ -231,25 +232,25 @@ describe("formatShowConfig", () => {
     );
   });
 
-  it("shows cli source for verbose --verbose", () => {
+  it("shows cli source for terse --terse", () => {
     const input = defaultInput();
     input.config = makeResolved({
-      verbose: { value: "true", source: "cli" },
+      terse: { value: "true", source: "cli" },
     });
-    input.rawFlags = { verbose: "--verbose" };
+    input.rawFlags = { terse: "--terse" };
     const output = formatShowConfig(input);
-    expect(output).toContain("  verbose            = true  (cli (--verbose))");
+    expect(output).toContain("  terse              = true  (cli (--terse))");
   });
 
-  it("shows env source for verbose", () => {
+  it("shows env source for terse", () => {
     const input = defaultInput();
     input.config = makeResolved({
-      verbose: { value: "true", source: "env" },
+      terse: { value: "false", source: "env" },
     });
-    input.envVars = { RALPHAI_VERBOSE: "true" };
+    input.envVars = { RALPHAI_TERSE: "false" };
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  verbose            = true  (env (RALPHAI_VERBOSE=true))",
+      "  terse              = false  (env (RALPHAI_TERSE=false))",
     );
   });
 

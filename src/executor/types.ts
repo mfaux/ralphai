@@ -30,6 +30,17 @@ export interface ExecutorSpawnOptions {
   nonce?: string;
   /** Optional path to the feedback wrapper script (bind-mounted into Docker). */
   feedbackWrapperPath?: string;
+  /**
+   * When true, agent-specific verbose/debug flags are injected into the
+   * command before the prompt argument. The exact flags depend on the
+   * detected agent type (see `resolveAgentVerboseFlags`).
+   */
+  verbose?: boolean;
+  /**
+   * User-provided override for agent verbose flags (from `agentVerboseFlags`
+   * config key). When set, these flags are used instead of the built-in map.
+   */
+  agentVerboseFlags?: string;
 }
 
 /** Result returned by `AgentExecutor.spawn()`. */

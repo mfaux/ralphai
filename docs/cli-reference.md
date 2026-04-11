@@ -158,7 +158,10 @@ What it does:
 --docker-env-vars=<csv>           Extra env vars to forward into Docker sandbox (comma-separated)
 --review                          Enable review pass after completion (default)
 --no-review                       Disable review pass after completion
---verbose                         Enable verbose mode (full unabridged agent output; default: concise)
+--verbose                         Inject agent-specific debug/verbose flags into the agent command
+--terse                           Enable terse mode (concise agent output; default: on)
+--no-terse                        Disable terse mode (allow full unabridged agent output)
+--agent-verbose-flags=<flags>     Override built-in per-agent verbose flags (shell-quoted string)
 --prompt-mode=<mode>              Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)
 --issue-hitl-label=<label>        Label marking sub-issues as requiring human interaction
 --show-config                     Print resolved settings and exit
@@ -427,7 +430,8 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_PR_FEEDBACK_COMMANDS`      | `prFeedbackCommands`      |
 | `RALPHAI_BASE_BRANCH`               | `baseBranch`              |
 | `RALPHAI_REVIEW`                    | `review`                  |
-| `RALPHAI_VERBOSE`                   | `verbose`                 |
+| `RALPHAI_TERSE`                     | `terse`                   |
+| `RALPHAI_AGENT_VERBOSE_FLAGS`       | `agentVerboseFlags`       |
 | `RALPHAI_MAX_STUCK`                 | `maxStuck`                |
 | `RALPHAI_ITERATION_TIMEOUT`         | `iterationTimeout`        |
 | `RALPHAI_NO_UPDATE_CHECK`           | _(none)_                  |
@@ -454,7 +458,8 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
 | `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
 | `review`                  | `true`                    | `RALPHAI_REVIEW`                    | Enable review pass after completion                                                                                                                                                                                                                                                                                       |
-| `verbose`                 | `false`                   | `RALPHAI_VERBOSE`                   | Enable verbose mode for full unabridged agent output. By default, the iteration prompt instructs the agent to drop filler words, articles, pleasantries, and hedging while preserving technical accuracy. Setting verbose to true disables this concise instruction.                                                      |
+| `terse`                   | `true`                    | `RALPHAI_TERSE`                     | Enable terse mode for concise agent output. By default, the iteration prompt instructs the agent to drop filler words, articles, pleasantries, and hedging while preserving technical accuracy. Setting terse to false disables this concise instruction.                                                                 |
+| `agentVerboseFlags`       | `""`                      | `RALPHAI_AGENT_VERBOSE_FLAGS`       | Override the built-in per-agent verbose flags injected when `--verbose` is passed. By default, each agent type has its own flags (e.g. opencode: `--print-logs --log-level DEBUG`, claude/aider/codex/gemini: `--verbose`). Set this to use custom flags for any agent.                                                   |
 | `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                                                                                                                                                                                                                                             |
 | `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                                                                                                                                                                                                                                                  |
 | `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                                                                                                                                                                                                                                                      |

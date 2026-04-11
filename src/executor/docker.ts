@@ -27,6 +27,7 @@ import type {
 import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
 import { resolveMainGitDir } from "../worktree/index.ts";
+import { resolveAgentVerboseFlags } from "./agent-flags.ts";
 
 // ---------------------------------------------------------------------------
 // Container user and home directory
@@ -352,6 +353,8 @@ export interface DockerCommandOptions {
    * script lives in pipeline state (~/.ralphai/…) which is not mounted.
    */
   feedbackWrapperPath?: string;
+  /** Extra flags to inject between the agent command and the prompt (for verbose mode). */
+  extraAgentFlags?: string[];
 }
 
 /**
@@ -443,6 +446,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
     nonce,
     mainGitDir,
     feedbackWrapperPath,
+    extraAgentFlags = [],
   } = opts;
 
   const args = buildCommonDockerArgs({
@@ -465,7 +469,7 @@ export function buildDockerArgs(opts: DockerCommandOptions): string[] {
 
   // Agent command and prompt
   const parts = shellSplit(agentCommand);
-  args.push(...parts, prompt);
+  args.push(...parts, ...extraAgentFlags, prompt);
 
   return args;
 }
@@ -603,8 +607,14 @@ export class DockerExecutor implements AgentExecutor {
     cwd: string;
     nonce?: string;
     feedbackWrapperPath?: string;
+    verbose?: boolean;
+    agentVerboseFlags?: string;
   }): string[] {
     const mainGitDir = resolveMainGitDir(opts.cwd);
+
+    const extraAgentFlags = opts.verbose
+      ? resolveAgentVerboseFlags(opts.agentCommand, opts.agentVerboseFlags)
+      : [];
 
     return buildDockerArgs({
       agentCommand: opts.agentCommand,
@@ -616,6 +626,7 @@ export class DockerExecutor implements AgentExecutor {
       nonce: opts.nonce,
       mainGitDir,
       feedbackWrapperPath: opts.feedbackWrapperPath,
+      extraAgentFlags,
     });
   }
 
@@ -629,6 +640,8 @@ export class DockerExecutor implements AgentExecutor {
       ipcBroadcast,
       nonce,
       feedbackWrapperPath,
+      verbose,
+      agentVerboseFlags,
     } = opts;
 
     const dockerArgs = this.buildSpawnDockerArgs({
@@ -637,6 +650,8 @@ export class DockerExecutor implements AgentExecutor {
       cwd,
       nonce,
       feedbackWrapperPath,
+      verbose,
+      agentVerboseFlags,
     });
 
     return new Promise((resolve) => {
