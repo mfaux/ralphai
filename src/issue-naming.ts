@@ -81,9 +81,6 @@ export function issueBranchName(title: string): string {
   return `${type}/${slugify(description)}`;
 }
 
-/** @deprecated Use {@link issueBranchName} instead. */
-export const prdBranchName = issueBranchName;
-
 // ---------------------------------------------------------------------------
 // Dependency slugs
 // ---------------------------------------------------------------------------

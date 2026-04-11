@@ -125,29 +125,6 @@ export function branchHasOpenWork(
 }
 
 /**
- * Verify that the `gh` CLI is installed and authenticated.
- * Returns an error message string, or null if everything is OK.
- */
-export function validateGhCli(cwd: string): string | null {
-  if (!ghAvailable()) {
-    return (
-      "Draft PR creation requires the GitHub CLI (gh).\n" +
-      "Install it: https://cli.github.com\n" +
-      "Ralphai will keep the branch and worktree intact if gh is unavailable."
-    );
-  }
-
-  if (!execOk("gh auth status", cwd)) {
-    return (
-      "gh is installed but not authenticated.\n" +
-      "Run 'gh auth login' first, or create the draft PR manually after the run."
-    );
-  }
-
-  return null;
-}
-
-/**
  * Verify that a branch exists locally.
  * Returns an error message string, or null if it exists.
  */

@@ -30,7 +30,7 @@ const SHOW_CURSOR = "\x1b[?25h";
 export const ENTER_ALT_SCREEN = "\x1b[?1049h";
 
 /** Exit alternate screen buffer (rmcup). */
-export const EXIT_ALT_SCREEN = "\x1b[?1049l";
+const EXIT_ALT_SCREEN = "\x1b[?1049l";
 
 // ---------------------------------------------------------------------------
 // restoreTerminal

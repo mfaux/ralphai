@@ -13,7 +13,7 @@ export const HELLO_WORLD_PLAN = loadSamplePlan("hello-world.md");
 
 export const HELLO_WORLD_SLUG = "hello-world";
 
-export function loadSamplePlan(filename: string): string {
+function loadSamplePlan(filename: string): string {
   const candidates = [
     new URL(`./sample-plans/${filename}`, import.meta.url),
     new URL(`../src/sample-plans/${filename}`, import.meta.url),

@@ -61,7 +61,7 @@ export interface WizardAnswers {
 // Options parsing
 // ---------------------------------------------------------------------------
 
-export const SUBCOMMANDS = new Set<RalphaiSubcommand>([
+const SUBCOMMANDS = new Set<RalphaiSubcommand>([
   "init",
   "update",
   "run",

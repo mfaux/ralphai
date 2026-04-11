@@ -7,7 +7,6 @@ import {
   slugify,
   commitTypeFromTitle,
   issueBranchName,
-  prdBranchName,
   issueDepSlug,
 } from "./issue-lifecycle.ts";
 
@@ -56,12 +55,6 @@ describe("issue naming", () => {
 
     it("defaults to feat/ for plain title", () => {
       expect(issueBranchName("Add tests")).toBe("feat/add-tests");
-    });
-  });
-
-  describe("prdBranchName", () => {
-    it("is the same function as issueBranchName", () => {
-      expect(prdBranchName).toBe(issueBranchName);
     });
   });
 

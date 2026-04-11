@@ -95,7 +95,7 @@ export function scanArchive(archiveDir: string): ArchiveSummary | null {
   };
 }
 
-export function deleteArchive(archiveDir: string): void {
+function deleteArchive(archiveDir: string): void {
   const entries = readdirSync(archiveDir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isDirectory()) {
@@ -158,7 +158,7 @@ export function countOrphanedWorktrees(cwd: string): number {
   }
 }
 
-export function cleanOrphanedWorktrees(cwd: string): WorktreeCleanResult {
+function cleanOrphanedWorktrees(cwd: string): WorktreeCleanResult {
   // Prune stale worktree entries first
   execSync("git worktree prune", { cwd, stdio: "inherit" });
 

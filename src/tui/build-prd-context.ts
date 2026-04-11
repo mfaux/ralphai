@@ -1,18 +1,12 @@
 /**
  * PRD context builder for the TUI confirmation screen.
  *
- * Provides a pure helper for computing the sub-issue position string
- * and an I/O function that fetches PRD data via `discoverPrdTarget()`
- * and returns a `PrdContext` ready for the confirmation screen.
+ * Provides a pure helper for computing the sub-issue position string.
  *
  * Pure helpers are exported for unit testing:
  * - `buildPrdPosition` — computes "N of M remaining" from sub-issue data
- *
- * I/O functions:
- * - `fetchPrdContext` — fetches PRD data and builds a PrdContext
  */
 
-import { discoverPrdTarget } from "../issue-lifecycle.ts";
 import type { PrdSubIssue } from "../issue-lifecycle.ts";
 import type { PrdContext } from "./screens/confirm.tsx";
 
@@ -46,64 +40,6 @@ export function buildPrdPosition(
   }
 
   return `${index + 1} of ${total} remaining`;
-}
-
-// ---------------------------------------------------------------------------
-// I/O functions
-// ---------------------------------------------------------------------------
-
-/**
- * Options for `fetchPrdContext`.
- */
-export interface FetchPrdContextOptions {
-  /** GitHub repo in "owner/repo" format. */
-  repo: string;
-  /** PRD issue number (from `prd:` frontmatter). */
-  prdNumber: number;
-  /** Current sub-issue number being confirmed for a run. */
-  currentIssue: number;
-  /** Working directory for `gh` commands. */
-  cwd: string;
-  /** Optional PRD label override (defaults to `ralphai-prd`). */
-  prdLabel?: string;
-}
-
-/**
- * Fetch PRD data and build a `PrdContext` for the confirmation screen.
- *
- * Calls `discoverPrdTarget()` to fetch the PRD issue and its sub-issues,
- * then computes the position of the current sub-issue.
- *
- * Returns `null` when:
- * - The issue is not actually a PRD (label was removed)
- * - The `discoverPrdTarget()` call throws (network/auth failure)
- *
- * Fail-open: callers should proceed without PRD context when this
- * returns `null`.
- */
-export function fetchPrdContext(
-  opts: FetchPrdContextOptions,
-): PrdContext | null {
-  try {
-    const result = discoverPrdTarget(
-      opts.repo,
-      opts.prdNumber,
-      opts.cwd,
-      opts.prdLabel,
-    );
-
-    if (!result.isPrd) return null;
-
-    const position = buildPrdPosition(result.subIssues, opts.currentIssue);
-
-    return {
-      prdTitle: result.prd.title,
-      position,
-    };
-  } catch {
-    // Fail-open: if PRD discovery fails, proceed without context.
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------

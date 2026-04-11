@@ -31,4 +31,8 @@ logs
 # Finder (MacOS) folder config
 .DS_Store
 
+# Editor swap files
+*.swp
+*.swo
+
 package-lock.json

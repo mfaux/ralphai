@@ -162,7 +162,7 @@ export function runSelfUpdate(options: {
  * Get the cache directory for ralphai under the global home.
  * Creates the directory if it doesn't exist.
  */
-export function getCacheDir(): string {
+function getCacheDir(): string {
   const dir = join(getRalphaiHome(), "cache");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
