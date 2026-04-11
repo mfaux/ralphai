@@ -92,9 +92,8 @@ describe("runRunner — zero-completion guard", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        maxStuck: 10,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { maxStuck: 10, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -157,9 +156,8 @@ describe("runRunner — zero-completion guard", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        maxStuck: 10,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { maxStuck: 10, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

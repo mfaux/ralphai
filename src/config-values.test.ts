@@ -16,13 +16,13 @@ import { makeTestConfig, makeTestResolvedConfig } from "./test-utils.ts";
 describe("configValues()", () => {
   it("strips source metadata and returns plain values", () => {
     const rc = makeTestResolvedConfig({
-      agentCommand: "claude -p",
-      maxStuck: 5,
+      agent: { command: "claude -p" },
+      gate: { maxStuck: 5 },
     });
     const cv = configValues(rc);
 
-    expect(cv.agentCommand).toBe("claude -p");
-    expect(cv.maxStuck).toBe(5);
+    expect(cv.agent.command).toBe("claude -p");
+    expect(cv.gate.maxStuck).toBe(5);
     expect(cv.baseBranch).toBe("main");
   });
 
@@ -30,9 +30,22 @@ describe("configValues()", () => {
     const rc = makeTestResolvedConfig();
     const cv = configValues(rc);
 
-    for (const key of Object.keys(DEFAULTS) as Array<keyof RalphaiConfig>) {
-      expect(cv[key]).toEqual(DEFAULTS[key]);
-    }
+    // Check nested groups
+    expect(cv.agent).toEqual(DEFAULTS.agent);
+    expect(cv.hooks).toEqual(DEFAULTS.hooks);
+    expect(cv.gate).toEqual(DEFAULTS.gate);
+    expect(cv.prompt).toEqual(DEFAULTS.prompt);
+    expect(cv.pr).toEqual(DEFAULTS.pr);
+    expect(cv.git).toEqual(DEFAULTS.git);
+    expect(cv.issue).toEqual(DEFAULTS.issue);
+
+    // Check flat top-level keys
+    expect(cv.baseBranch).toEqual(DEFAULTS.baseBranch);
+    expect(cv.sandbox).toEqual(DEFAULTS.sandbox);
+    expect(cv.dockerImage).toEqual(DEFAULTS.dockerImage);
+    expect(cv.dockerMounts).toEqual(DEFAULTS.dockerMounts);
+    expect(cv.dockerEnvVars).toEqual(DEFAULTS.dockerEnvVars);
+    expect(cv.workspaces).toEqual(DEFAULTS.workspaces);
   });
 
   it("preserves null values (workspaces default)", () => {
@@ -49,27 +62,27 @@ describe("configValues()", () => {
   });
 
   it("does not include source property on returned values", () => {
-    const rc = makeTestResolvedConfig({ agentCommand: "echo" });
+    const rc = makeTestResolvedConfig({ agent: { command: "echo" } });
     const cv = configValues(rc);
 
-    // cv.agentCommand should be a plain string, not a ResolvedValue
-    expect(typeof cv.agentCommand).toBe("string");
-    // Verify no 'source' key leaked into the result object's values
-    const raw = cv as unknown as Record<string, unknown>;
-    expect(raw["agentCommand"]).toBe("echo");
+    // cv.agent.command should be a plain string, not a ResolvedValue
+    expect(typeof cv.agent.command).toBe("string");
+    // Verify no 'source' key leaked into the nested group
+    const rawAgent = cv.agent as unknown as Record<string, unknown>;
+    expect(rawAgent["command"]).toBe("echo");
     // The value should not be an object with a source property
-    expect(typeof raw["agentCommand"]).not.toBe("object");
+    expect(typeof rawAgent["command"]).not.toBe("object");
   });
 
   it("handles mixed sources correctly", () => {
     // Simulate a ResolvedConfig where values come from different sources
     const rc = makeTestResolvedConfig();
-    rc.agentCommand = { value: "from-cli", source: "cli" };
+    rc.agent.command = { value: "from-cli", source: "cli" };
     rc.baseBranch = { value: "develop", source: "config" };
     rc.sandbox = { value: "docker", source: "auto-detected" };
 
     const cv = configValues(rc);
-    expect(cv.agentCommand).toBe("from-cli");
+    expect(cv.agent.command).toBe("from-cli");
     expect(cv.baseBranch).toBe("develop");
     expect(cv.sandbox).toBe("docker");
   });
@@ -83,40 +96,47 @@ describe("makeTestConfig()", () => {
   it("returns DEFAULTS when called without arguments", () => {
     const cfg = makeTestConfig();
 
-    for (const key of Object.keys(DEFAULTS) as Array<keyof RalphaiConfig>) {
-      expect(cfg[key]).toEqual(DEFAULTS[key]);
-    }
+    expect(cfg.agent).toEqual(DEFAULTS.agent);
+    expect(cfg.hooks).toEqual(DEFAULTS.hooks);
+    expect(cfg.gate).toEqual(DEFAULTS.gate);
+    expect(cfg.prompt).toEqual(DEFAULTS.prompt);
+    expect(cfg.pr).toEqual(DEFAULTS.pr);
+    expect(cfg.git).toEqual(DEFAULTS.git);
+    expect(cfg.issue).toEqual(DEFAULTS.issue);
+    expect(cfg.baseBranch).toEqual(DEFAULTS.baseBranch);
+    expect(cfg.sandbox).toEqual(DEFAULTS.sandbox);
+    expect(cfg.workspaces).toEqual(DEFAULTS.workspaces);
   });
 
   it("returns DEFAULTS when called with empty overrides", () => {
     const cfg = makeTestConfig({});
 
-    expect(cfg.agentCommand).toBe(DEFAULTS.agentCommand);
+    expect(cfg.agent.command).toBe(DEFAULTS.agent.command);
     expect(cfg.baseBranch).toBe(DEFAULTS.baseBranch);
-    expect(cfg.maxStuck).toBe(DEFAULTS.maxStuck);
+    expect(cfg.gate.maxStuck).toBe(DEFAULTS.gate.maxStuck);
   });
 
   it("overrides specific keys while preserving defaults", () => {
     const cfg = makeTestConfig({
-      agentCommand: "echo hello",
-      maxStuck: 1,
+      agent: { command: "echo hello" },
+      gate: { maxStuck: 1 },
     });
 
-    expect(cfg.agentCommand).toBe("echo hello");
-    expect(cfg.maxStuck).toBe(1);
+    expect(cfg.agent.command).toBe("echo hello");
+    expect(cfg.gate.maxStuck).toBe(1);
     // Other keys remain at defaults
     expect(cfg.baseBranch).toBe("main");
-    expect(cfg.issueSource).toBe("none");
+    expect(cfg.issue.source).toBe("none");
     expect(cfg.sandbox).toBe("none");
   });
 
   it("allows overriding with non-default enum values", () => {
     const cfg = makeTestConfig({
-      issueSource: "github",
+      issue: { source: "github" },
       sandbox: "docker",
     });
 
-    expect(cfg.issueSource).toBe("github");
+    expect(cfg.issue.source).toBe("github");
     expect(cfg.sandbox).toBe("docker");
   });
 
@@ -128,10 +148,10 @@ describe("makeTestConfig()", () => {
   });
 
   it("returns a ConfigValues type (not ResolvedConfig)", () => {
-    const cfg = makeTestConfig({ agentCommand: "test" });
+    const cfg = makeTestConfig({ agent: { command: "test" } });
 
     // Plain string, not wrapped in { value, source }
-    expect(typeof cfg.agentCommand).toBe("string");
-    expect(cfg.agentCommand).toBe("test");
+    expect(typeof cfg.agent.command).toBe("string");
+    expect(cfg.agent.command).toBe("test");
   });
 });

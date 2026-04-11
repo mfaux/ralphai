@@ -113,7 +113,7 @@ describe("parseCLIArgs — --sandbox flag", () => {
       "--agent-command=claude -p",
       "--sandbox=docker",
     ]);
-    expect(result.overrides.agentCommand).toBe("claude -p");
+    expect(result.overrides.agent!.command).toBe("claude -p");
     expect(result.overrides.sandbox).toBe("docker");
   });
 });

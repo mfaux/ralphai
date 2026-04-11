@@ -415,10 +415,10 @@ function runDryRun(
     // Priority chain: PRD issues first, then regular issues.
     const peekOpts = {
       cwd,
-      issueSource: cfg.issueSource,
-      standaloneLabel: cfg.standaloneLabel,
-      issueRepo: cfg.issueRepo,
-      issuePrdLabel: cfg.prdLabel,
+      issueSource: cfg.issue.source,
+      standaloneLabel: cfg.issue.standaloneLabel,
+      issueRepo: cfg.issue.repo,
+      issuePrdLabel: cfg.issue.prdLabel,
     };
     const prdPeek = peekPrdIssues(peekOpts);
     if (prdPeek.found) {
@@ -506,7 +506,7 @@ function runDryRun(
 
   // Docker dry-run: print the full docker run command
   if (effectiveSandbox === "docker") {
-    const agentCmd = cfg.agentCommand;
+    const agentCmd = cfg.agent.command;
     const dockerEnvVars = cfg.dockerEnvVars
       ? cfg.dockerEnvVars
           .split(",")
@@ -585,17 +585,17 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
   // Unpack config values
   const baseBranch = cfg.baseBranch;
-  const maxStuck = cfg.maxStuck;
-  const iterationTimeout = cfg.iterationTimeout;
-  const agentCommand = cfg.agentCommand;
-  const issueSource = cfg.issueSource;
-  const standaloneLabel = cfg.standaloneLabel;
-  const subissueLabel = cfg.subissueLabel;
-  const issuePrdLabel = cfg.prdLabel;
-  const issueRepo = cfg.issueRepo;
-  const issueCommentProgress = cfg.issueCommentProgress === "true";
-  const review = cfg.review === "true";
-  const terse = cfg.terse === "true";
+  const maxStuck = cfg.gate.maxStuck;
+  const iterationTimeout = cfg.gate.iterationTimeout;
+  const agentCommand = cfg.agent.command;
+  const issueSource = cfg.issue.source;
+  const standaloneLabel = cfg.issue.standaloneLabel;
+  const subissueLabel = cfg.issue.subissueLabel;
+  const issuePrdLabel = cfg.issue.prdLabel;
+  const issueRepo = cfg.issue.repo;
+  const issueCommentProgress = cfg.issue.commentProgress;
+  const review = cfg.gate.review;
+  const verbose = cfg.prompt.verbose;
 
   // --- Fail-early Docker availability check ---
   // computeEffectiveSandbox re-probes Docker at runner start. When sandbox
@@ -710,7 +710,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     if (!detectResult.detected) {
       // No plan found — try GitHub issues if backlog is empty
       if (detectResult.reason === "empty-backlog") {
-        const issueHitlLabel = cfg.issueHitlLabel;
+        const issueHitlLabel = cfg.issue.hitlLabel;
         const pullOpts = {
           backlogDir: dirs.backlogDir,
           wipDir: dirs.wipDir,
@@ -785,8 +785,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     const scopeResult = resolveScope({
       cwd,
       planScope,
-      rootFeedbackCommands: cfg.feedbackCommands,
-      rootPrFeedbackCommands: cfg.prFeedbackCommands ?? "",
+      rootFeedbackCommands: cfg.hooks.feedback,
+      rootPrFeedbackCommands: cfg.hooks.prFeedback ?? "",
       workspacesConfig: cfg.workspaces
         ? JSON.stringify(cfg.workspaces)
         : undefined,

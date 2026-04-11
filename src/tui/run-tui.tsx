@@ -61,11 +61,11 @@ export interface RunTuiOptions {
  */
 export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
   let hasGitHubIssues = false;
-  let standaloneLabel = DEFAULTS.standaloneLabel;
-  let issuePrdLabel = DEFAULTS.prdLabel;
+  let standaloneLabel = DEFAULTS.issue.standaloneLabel;
+  let issuePrdLabel = DEFAULTS.issue.prdLabel;
   let issueRepo = "";
-  let agentCommand = DEFAULTS.agentCommand;
-  let feedbackCommands = DEFAULTS.feedbackCommands;
+  let agentCommand = DEFAULTS.agent.command;
+  let feedbackCommands = DEFAULTS.hooks.feedback;
   let sandboxDisplay = `${DEFAULTS.sandbox} (default)`;
   let resolvedConfig: ResolvedConfig | undefined;
 
@@ -76,12 +76,12 @@ export function buildAppProps(cwd: string): Omit<AppProps, "onExitToRunner"> {
       cliArgs: [],
     });
     resolvedConfig = config;
-    hasGitHubIssues = config.issueSource.value === "github";
-    standaloneLabel = config.standaloneLabel.value;
-    issuePrdLabel = config.prdLabel.value;
-    issueRepo = config.issueRepo.value;
-    agentCommand = config.agentCommand.value;
-    feedbackCommands = config.feedbackCommands.value;
+    hasGitHubIssues = config.issue.source.value === "github";
+    standaloneLabel = config.issue.standaloneLabel.value;
+    issuePrdLabel = config.issue.prdLabel.value;
+    issueRepo = config.issue.repo.value;
+    agentCommand = config.agent.command.value;
+    feedbackCommands = config.hooks.feedback.value;
     sandboxDisplay = `${config.sandbox.value} (${config.sandbox.source})`;
   } catch {
     // Config resolution failure — proceed with defaults

@@ -25,15 +25,15 @@ describe("GitHub Issues integration", () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
-    expect(parsed.issueSource).toBe("github");
+    expect(parsed.issue.source).toBe("github");
   });
 
   it("init --yes includes issueSource as github in JSON config", async () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const parsed = JSON.parse(readFileSync(configPath(), "utf-8"));
-    // issueSource should be "github" by default (all 17 keys are explicit)
-    expect(parsed.issueSource).toBe("github");
+    // issue.source should be "github" by default (nested config structure)
+    expect(parsed.issue.source).toBe("github");
   });
 
   it("init --yes output contains GitHub label info", async () => {
@@ -624,10 +624,10 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
       stdio: "ignore",
     });
 
-    // Override agentCommand to something in PATH and feedbackCommands to a passing command
+    // Override agent.command to something in PATH and hooks.feedback to a passing command
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    config.agentCommand = "true";
-    config.feedbackCommands = ["true"];
+    config.agent.command = "true";
+    config.hooks.feedback = ["true"];
     writeConfigFile(ctx.dir, config, testEnv());
 
     const result = await runCliInProcess(["doctor"], ctx.dir, {
@@ -668,7 +668,7 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
 
     // Set an agent command that won't be found in PATH
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    config.agentCommand = "nonexistent-agent-binary-xyz";
+    config.agent.command = "nonexistent-agent-binary-xyz";
     writeConfigFile(ctx.dir, config, testEnv());
 
     const result = await runCliInProcess(["doctor"], ctx.dir, {
@@ -710,11 +710,11 @@ describe.skipIf(process.platform === "win32")("doctor subcommand", () => {
       stdio: "ignore",
     });
 
-    // Override agentCommand to something in PATH
+    // Override agent.command to something in PATH
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    config.agentCommand = "true";
+    config.agent.command = "true";
     // Set feedback commands to something that fails (to produce a warning, not a failure)
-    config.feedbackCommands = ["false"];
+    config.hooks.feedback = ["false"];
     writeConfigFile(ctx.dir, config, testEnv());
 
     // Make the working tree dirty (uncommitted change) — produces a warning

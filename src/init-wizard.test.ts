@@ -39,9 +39,11 @@ describe("init wizard", () => {
   // ---------------------------------------------------------------------------
 
   it("scaffold uses DEFAULTS directly for label values", () => {
-    expect(ralphaiSrc).toContain("standaloneLabel: DEFAULTS.standaloneLabel");
-    expect(ralphaiSrc).toContain("subissueLabel: DEFAULTS.subissueLabel");
-    expect(ralphaiSrc).toContain("prdLabel: DEFAULTS.prdLabel");
+    expect(ralphaiSrc).toContain(
+      "standaloneLabel: DEFAULTS.issue.standaloneLabel",
+    );
+    expect(ralphaiSrc).toContain("subissueLabel: DEFAULTS.issue.subissueLabel");
+    expect(ralphaiSrc).toContain("prdLabel: DEFAULTS.issue.prdLabel");
   });
 
   // ---------------------------------------------------------------------------
@@ -50,7 +52,7 @@ describe("init wizard", () => {
 
   it("post-init GitHub hint uses configObj label value", () => {
     expect(ralphaiSrc).toContain(
-      'configObj.standaloneLabel}" and Ralphai will pick it up automatically',
+      'issueConfig.standaloneLabel}" and Ralphai will pick it up automatically',
     );
   });
 

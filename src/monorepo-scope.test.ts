@@ -23,8 +23,8 @@ describe("workspaces config key", () => {
 
   it("does not warn about unknown keys for workspaces", () => {
     const configContent = {
-      agentCommand: "echo test",
-      feedbackCommands: ["echo build"],
+      agent: { command: "echo test" },
+      hooks: { feedback: ["echo build"] },
       workspaces: {
         "packages/web": {
           feedbackCommands: ["pnpm --filter web build"],
@@ -45,7 +45,7 @@ describe("workspaces config key", () => {
     writeConfigFile(
       ctx.dir,
       {
-        agentCommand: "echo test",
+        agent: { command: "echo test" },
         workspaces: "not-an-object",
       },
       testEnv(),

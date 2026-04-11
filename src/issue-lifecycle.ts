@@ -885,7 +885,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
     cwd: options.cwd,
     issueSource: options.issueSource,
     issueRepo: options.issueRepo,
-    label: options.issuePrdLabel ?? DEFAULTS.prdLabel,
+    label: options.issuePrdLabel ?? DEFAULTS.issue.prdLabel,
     limit: 10,
     msg: {
       skipPeek: "PRD peek",
@@ -922,7 +922,7 @@ export function discoverParentPrd(
   cwd: string,
   prdLabel?: string,
 ): number | undefined {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -1026,7 +1026,7 @@ export function discoverParentIssue(
   cwd: string,
   prdLabel?: string,
 ): ParentIssueResult {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -1333,7 +1333,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   const { backlogDir, cwd, issueSource, issueRepo, issueCommentProgress } =
     options;
 
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issue.prdLabel;
 
   if (issueSource !== "github") {
     return { pulled: false, message: "Issue source is not 'github'" };
@@ -1423,7 +1423,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // Find the first open sub-issue that hasn't already been picked up
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
-  const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issueHitlLabel;
+  const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issue.hitlLabel;
   const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL, hitlLabel];
   const subIssueNumber = findFirstEligibleIssue(
     openSubIssues,
@@ -1476,7 +1476,7 @@ export function fetchPrdIssueByNumber(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot fetch PRD issue",
@@ -1530,7 +1530,7 @@ export function fetchPrdIssue(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue | null {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
@@ -1812,7 +1812,7 @@ export function discoverPrdTarget(
   }
 
   const hasLabel = data.labels.some(
-    (l) => l.name === (prdLabel ?? DEFAULTS.prdLabel),
+    (l) => l.name === (prdLabel ?? DEFAULTS.issue.prdLabel),
   );
 
   if (!hasLabel) {

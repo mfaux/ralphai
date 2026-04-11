@@ -98,8 +98,8 @@ describe("runRunner — review pass", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -140,8 +140,8 @@ describe("runRunner — review pass", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "true",
+        agent: { command: agentScript },
+        gate: { review: true },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -177,8 +177,8 @@ describe("runRunner — review pass", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "true",
+        agent: { command: agentScript },
+        gate: { review: true },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -218,8 +218,8 @@ describe("runRunner — review pass", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "true",
+        agent: { command: agentScript },
+        gate: { review: true },
       }),
       cwd: worktreeDir,
       isWorktree: true,

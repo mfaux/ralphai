@@ -111,7 +111,7 @@ describe("worktree", () => {
       );
       expect(result.exitCode).toBe(0);
       // Config output should include the agent command from the main repo's config
-      expect(result.stdout).toContain("agentCommand");
+      expect(result.stdout).toContain("agent.command");
       // Should detect that we're in a worktree
       expect(result.stdout).toContain("worktree");
     });

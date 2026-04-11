@@ -52,14 +52,15 @@ describe("buildWizardOptions", () => {
   });
 
   it("shows current values as strings", () => {
-    const config = makeTestResolvedConfig(undefined, {
-      maxStuck: { value: 5, source: "config" },
-      iterationTimeout: { value: 120, source: "env" },
-    });
-    const options = buildWizardOptions(config);
+    const rc = makeTestResolvedConfig();
+    rc.gate.maxStuck = { value: 5, source: "config" };
+    rc.gate.iterationTimeout = { value: 120, source: "env" };
+    const options = buildWizardOptions(rc);
 
-    expect(findOption(options, "maxStuck").currentValue).toBe("5");
-    expect(findOption(options, "iterationTimeout").currentValue).toBe("120");
+    expect(findOption(options, "gate.maxStuck").currentValue).toBe("5");
+    expect(findOption(options, "gate.iterationTimeout").currentValue).toBe(
+      "120",
+    );
   });
 
   // ---- Source hint mapping ----
@@ -71,54 +72,53 @@ describe("buildWizardOptions", () => {
     });
 
     it('maps "config" to "config file"', () => {
-      const config = makeTestResolvedConfig(undefined, {
-        agentCommand: { value: "claude -p", source: "config" },
-      });
-      const options = buildWizardOptions(config);
-      expect(findOption(options, "agentCommand").sourceHint).toBe(
+      const rc = makeTestResolvedConfig();
+      rc.agent.command = { value: "claude -p", source: "config" };
+      const options = buildWizardOptions(rc);
+      expect(findOption(options, "agent.command").sourceHint).toBe(
         "config file",
       );
     });
 
     it('maps "env" to "env var"', () => {
-      const config = makeTestResolvedConfig(undefined, {
-        feedbackCommands: { value: "bun test", source: "env" },
-      });
-      const options = buildWizardOptions(config);
-      expect(findOption(options, "feedbackCommands").sourceHint).toBe(
-        "env var",
-      );
+      const rc = makeTestResolvedConfig();
+      rc.hooks.feedback = { value: "bun test", source: "env" };
+      const options = buildWizardOptions(rc);
+      expect(findOption(options, "hooks.feedback").sourceHint).toBe("env var");
     });
 
     it('maps "cli" to "CLI flag"', () => {
-      const config = makeTestResolvedConfig(undefined, {
-        maxStuck: { value: 10, source: "cli" },
-      });
-      const options = buildWizardOptions(config);
-      expect(findOption(options, "maxStuck").sourceHint).toBe("CLI flag");
+      const rc = makeTestResolvedConfig();
+      rc.gate.maxStuck = { value: 10, source: "cli" };
+      const options = buildWizardOptions(rc);
+      expect(findOption(options, "gate.maxStuck").sourceHint).toBe("CLI flag");
     });
 
     it("assigns correct source hints for all 6 keys with mixed sources", () => {
-      const config = makeTestResolvedConfig(undefined, {
-        agentCommand: { value: "opencode", source: "config" },
-        setupCommand: { value: "npm ci", source: "env" },
-        feedbackCommands: { value: "bun test,bun run build", source: "cli" },
-        baseBranch: { value: "main", source: "default" },
-        maxStuck: { value: 5, source: "config" },
-        iterationTimeout: { value: 300, source: "env" },
-      });
-      const options = buildWizardOptions(config);
+      const rc = makeTestResolvedConfig();
+      rc.agent.command = { value: "opencode", source: "config" };
+      rc.agent.setupCommand = { value: "npm ci", source: "env" };
+      rc.hooks.feedback = {
+        value: "bun test,bun run build",
+        source: "cli",
+      };
+      rc.baseBranch = { value: "main", source: "default" };
+      rc.gate.maxStuck = { value: 5, source: "config" };
+      rc.gate.iterationTimeout = { value: 300, source: "env" };
+      const options = buildWizardOptions(rc);
 
-      expect(findOption(options, "agentCommand").sourceHint).toBe(
+      expect(findOption(options, "agent.command").sourceHint).toBe(
         "config file",
       );
-      expect(findOption(options, "setupCommand").sourceHint).toBe("env var");
-      expect(findOption(options, "feedbackCommands").sourceHint).toBe(
-        "CLI flag",
+      expect(findOption(options, "agent.setupCommand").sourceHint).toBe(
+        "env var",
       );
+      expect(findOption(options, "hooks.feedback").sourceHint).toBe("CLI flag");
       expect(findOption(options, "baseBranch").sourceHint).toBe("default");
-      expect(findOption(options, "maxStuck").sourceHint).toBe("config file");
-      expect(findOption(options, "iterationTimeout").sourceHint).toBe(
+      expect(findOption(options, "gate.maxStuck").sourceHint).toBe(
+        "config file",
+      );
+      expect(findOption(options, "gate.iterationTimeout").sourceHint).toBe(
         "env var",
       );
     });
@@ -130,19 +130,19 @@ describe("buildWizardOptions", () => {
     it("assigns text prompt to string keys", () => {
       const options = buildWizardOptions(makeTestResolvedConfig());
       for (const key of [
-        "agentCommand",
-        "setupCommand",
-        "feedbackCommands",
-        "prFeedbackCommands",
+        "agent.command",
+        "agent.setupCommand",
+        "hooks.feedback",
+        "hooks.prFeedback",
         "baseBranch",
       ] as const) {
         expect(findOption(options, key).prompt.kind).toBe("text");
       }
     });
 
-    it("assigns text prompt with validation to maxStuck", () => {
+    it("assigns text prompt with validation to gate.maxStuck", () => {
       const options = buildWizardOptions(makeTestResolvedConfig());
-      const prompt = findOption(options, "maxStuck").prompt;
+      const prompt = findOption(options, "gate.maxStuck").prompt;
       expect(prompt.kind).toBe("text");
       if (prompt.kind === "text") {
         expect(prompt.validate).toBeFunction();
@@ -153,9 +153,9 @@ describe("buildWizardOptions", () => {
       }
     });
 
-    it("assigns text prompt with validation to iterationTimeout", () => {
+    it("assigns text prompt with validation to gate.iterationTimeout", () => {
       const options = buildWizardOptions(makeTestResolvedConfig());
-      const prompt = findOption(options, "iterationTimeout").prompt;
+      const prompt = findOption(options, "gate.iterationTimeout").prompt;
       expect(prompt.kind).toBe("text");
       if (prompt.kind === "text") {
         expect(prompt.validate).toBeFunction();
@@ -180,44 +180,44 @@ describe("selectionsToFlags", () => {
   // ---- String keys ----
 
   it("produces --agent-command=<value>", () => {
-    expect(selectionsToFlags({ agentCommand: "opencode" })).toEqual([
+    expect(selectionsToFlags({ "agent.command": "opencode" })).toEqual([
       "--agent-command=opencode",
     ]);
   });
 
-  it("produces --setup-command=<value>", () => {
-    expect(selectionsToFlags({ setupCommand: "npm ci" })).toEqual([
-      "--setup-command=npm ci",
+  it("produces --agent-setup-command=<value>", () => {
+    expect(selectionsToFlags({ "agent.setupCommand": "npm ci" })).toEqual([
+      "--agent-setup-command=npm ci",
     ]);
   });
 
-  it("produces --setup-command= for empty string (disables setup)", () => {
-    expect(selectionsToFlags({ setupCommand: "" })).toEqual([
-      "--setup-command=",
+  it("produces --agent-setup-command= for empty string (disables setup)", () => {
+    expect(selectionsToFlags({ "agent.setupCommand": "" })).toEqual([
+      "--agent-setup-command=",
     ]);
   });
 
-  it("produces --feedback-commands=<value>", () => {
+  it("produces --hooks-feedback=<value>", () => {
     expect(
-      selectionsToFlags({ feedbackCommands: "bun test,bun run build" }),
-    ).toEqual(["--feedback-commands=bun test,bun run build"]);
+      selectionsToFlags({ "hooks.feedback": "bun test,bun run build" }),
+    ).toEqual(["--hooks-feedback=bun test,bun run build"]);
   });
 
-  it("produces --feedback-commands= for empty string", () => {
-    expect(selectionsToFlags({ feedbackCommands: "" })).toEqual([
-      "--feedback-commands=",
+  it("produces --hooks-feedback= for empty string", () => {
+    expect(selectionsToFlags({ "hooks.feedback": "" })).toEqual([
+      "--hooks-feedback=",
     ]);
   });
 
-  it("produces --pr-feedback-commands=<value>", () => {
+  it("produces --hooks-pr-feedback=<value>", () => {
     expect(
-      selectionsToFlags({ prFeedbackCommands: "bun run test:e2e" }),
-    ).toEqual(["--pr-feedback-commands=bun run test:e2e"]);
+      selectionsToFlags({ "hooks.prFeedback": "bun run test:e2e" }),
+    ).toEqual(["--hooks-pr-feedback=bun run test:e2e"]);
   });
 
-  it("produces --pr-feedback-commands= for empty string", () => {
-    expect(selectionsToFlags({ prFeedbackCommands: "" })).toEqual([
-      "--pr-feedback-commands=",
+  it("produces --hooks-pr-feedback= for empty string", () => {
+    expect(selectionsToFlags({ "hooks.prFeedback": "" })).toEqual([
+      "--hooks-pr-feedback=",
     ]);
   });
 
@@ -229,19 +229,21 @@ describe("selectionsToFlags", () => {
 
   // ---- Numeric keys ----
 
-  it("produces --max-stuck=<n>", () => {
-    expect(selectionsToFlags({ maxStuck: "5" })).toEqual(["--max-stuck=5"]);
-  });
-
-  it("produces --iteration-timeout=<n>", () => {
-    expect(selectionsToFlags({ iterationTimeout: "120" })).toEqual([
-      "--iteration-timeout=120",
+  it("produces --gate-max-stuck=<n>", () => {
+    expect(selectionsToFlags({ "gate.maxStuck": "5" })).toEqual([
+      "--gate-max-stuck=5",
     ]);
   });
 
-  it("produces --iteration-timeout=0 for zero", () => {
-    expect(selectionsToFlags({ iterationTimeout: "0" })).toEqual([
-      "--iteration-timeout=0",
+  it("produces --gate-iteration-timeout=<n>", () => {
+    expect(selectionsToFlags({ "gate.iterationTimeout": "120" })).toEqual([
+      "--gate-iteration-timeout=120",
+    ]);
+  });
+
+  it("produces --gate-iteration-timeout=0 for zero", () => {
+    expect(selectionsToFlags({ "gate.iterationTimeout": "0" })).toEqual([
+      "--gate-iteration-timeout=0",
     ]);
   });
 
@@ -250,36 +252,36 @@ describe("selectionsToFlags", () => {
   it("produces flags in WIZARD_KEYS order for multiple selections", () => {
     const flags = selectionsToFlags({
       sandbox: "docker",
-      agentCommand: "claude -p",
-      maxStuck: "10",
+      "agent.command": "claude -p",
+      "gate.maxStuck": "10",
     });
-    // Should follow WIZARD_KEYS order: agentCommand, ..., maxStuck, ..., sandbox
+    // Should follow WIZARD_KEYS order: agent.command, ..., gate.maxStuck, ..., sandbox
     expect(flags).toEqual([
       "--agent-command=claude -p",
-      "--max-stuck=10",
+      "--gate-max-stuck=10",
       "--sandbox=docker",
     ]);
   });
 
   it("produces flags for all 8 keys", () => {
     const flags = selectionsToFlags({
-      agentCommand: "opencode",
-      setupCommand: "npm ci",
-      feedbackCommands: "bun test",
-      prFeedbackCommands: "bun run test:e2e",
+      "agent.command": "opencode",
+      "agent.setupCommand": "npm ci",
+      "hooks.feedback": "bun test",
+      "hooks.prFeedback": "bun run test:e2e",
       baseBranch: "develop",
-      maxStuck: "5",
-      iterationTimeout: "300",
+      "gate.maxStuck": "5",
+      "gate.iterationTimeout": "300",
       sandbox: "docker",
     });
     expect(flags).toEqual([
       "--agent-command=opencode",
-      "--setup-command=npm ci",
-      "--feedback-commands=bun test",
-      "--pr-feedback-commands=bun run test:e2e",
+      "--agent-setup-command=npm ci",
+      "--hooks-feedback=bun test",
+      "--hooks-pr-feedback=bun run test:e2e",
       "--base-branch=develop",
-      "--max-stuck=5",
-      "--iteration-timeout=300",
+      "--gate-max-stuck=5",
+      "--gate-iteration-timeout=300",
       "--sandbox=docker",
     ]);
   });
@@ -290,32 +292,32 @@ describe("selectionsToFlags", () => {
 // ---------------------------------------------------------------------------
 
 describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
-  it("round-trips agentCommand", () => {
-    const flags = selectionsToFlags({ agentCommand: "claude -p" });
+  it("round-trips agent.command", () => {
+    const flags = selectionsToFlags({ "agent.command": "claude -p" });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.agentCommand).toBe("claude -p");
+    expect(overrides.agent!.command).toBe("claude -p");
   });
 
-  it("round-trips setupCommand (empty string)", () => {
-    const flags = selectionsToFlags({ setupCommand: "" });
+  it("round-trips agent.setupCommand (empty string)", () => {
+    const flags = selectionsToFlags({ "agent.setupCommand": "" });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.setupCommand).toBe("");
+    expect(overrides.agent!.setupCommand).toBe("");
   });
 
-  it("round-trips feedbackCommands", () => {
+  it("round-trips hooks.feedback", () => {
     const flags = selectionsToFlags({
-      feedbackCommands: "bun test,bun run build",
+      "hooks.feedback": "bun test,bun run build",
     });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.feedbackCommands).toBe("bun test,bun run build");
+    expect(overrides.hooks!.feedback).toBe("bun test,bun run build");
   });
 
-  it("round-trips prFeedbackCommands", () => {
+  it("round-trips hooks.prFeedback", () => {
     const flags = selectionsToFlags({
-      prFeedbackCommands: "bun run test:e2e",
+      "hooks.prFeedback": "bun run test:e2e",
     });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.prFeedbackCommands).toBe("bun run test:e2e");
+    expect(overrides.hooks!.prFeedback).toBe("bun run test:e2e");
   });
 
   it("round-trips baseBranch", () => {
@@ -324,40 +326,40 @@ describe("round-trip: selectionsToFlags → parseCLIArgs", () => {
     expect(overrides.baseBranch).toBe("develop");
   });
 
-  it("round-trips maxStuck", () => {
-    const flags = selectionsToFlags({ maxStuck: "5" });
+  it("round-trips gate.maxStuck", () => {
+    const flags = selectionsToFlags({ "gate.maxStuck": "5" });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.maxStuck).toBe(5);
+    expect(overrides.gate!.maxStuck).toBe(5);
   });
 
-  it("round-trips iterationTimeout", () => {
-    const flags = selectionsToFlags({ iterationTimeout: "120" });
+  it("round-trips gate.iterationTimeout", () => {
+    const flags = selectionsToFlags({ "gate.iterationTimeout": "120" });
     const { overrides } = parseCLIArgs(flags);
-    expect(overrides.iterationTimeout).toBe(120);
+    expect(overrides.gate!.iterationTimeout).toBe(120);
   });
 
   it("round-trips all 8 keys at once", () => {
     const selections = {
-      agentCommand: "opencode",
-      setupCommand: "npm ci",
-      feedbackCommands: "bun test",
-      prFeedbackCommands: "bun run test:e2e",
+      "agent.command": "opencode",
+      "agent.setupCommand": "npm ci",
+      "hooks.feedback": "bun test",
+      "hooks.prFeedback": "bun run test:e2e",
       baseBranch: "develop",
-      maxStuck: "5",
-      iterationTimeout: "300",
+      "gate.maxStuck": "5",
+      "gate.iterationTimeout": "300",
       sandbox: "docker",
     } as const;
 
     const flags = selectionsToFlags(selections);
     const { overrides } = parseCLIArgs(flags);
 
-    expect(overrides.agentCommand).toBe("opencode");
-    expect(overrides.setupCommand).toBe("npm ci");
-    expect(overrides.feedbackCommands).toBe("bun test");
-    expect(overrides.prFeedbackCommands).toBe("bun run test:e2e");
+    expect(overrides.agent!.command).toBe("opencode");
+    expect(overrides.agent!.setupCommand).toBe("npm ci");
+    expect(overrides.hooks!.feedback).toBe("bun test");
+    expect(overrides.hooks!.prFeedback).toBe("bun run test:e2e");
     expect(overrides.baseBranch).toBe("develop");
-    expect(overrides.maxStuck).toBe(5);
-    expect(overrides.iterationTimeout).toBe(300);
+    expect(overrides.gate!.maxStuck).toBe(5);
+    expect(overrides.gate!.iterationTimeout).toBe(300);
     expect(overrides.sandbox).toBe("docker");
   });
 });

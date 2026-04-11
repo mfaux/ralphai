@@ -101,8 +101,8 @@ describe("skipPrCreation flag", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -134,8 +134,8 @@ describe("skipPrCreation flag", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -168,8 +168,8 @@ describe("skipPrCreation flag", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentWithLearning,
-        review: "false",
+        agent: { command: agentWithLearning },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -226,8 +226,8 @@ describe("runner result learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgentWithLearning,
-        review: "false",
+        agent: { command: completeAgentWithLearning },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -262,8 +262,8 @@ describe("runner result learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

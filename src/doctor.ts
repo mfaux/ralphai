@@ -130,7 +130,7 @@ function checkAgentCommand(cwd: string): DoctorCheckResult {
   let agentCommand: string;
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    agentCommand = config.agentCommand;
+    agentCommand = config.agent?.command;
   } catch {
     return { status: "fail", message: "agent command: cannot read config" };
   }
@@ -165,7 +165,7 @@ function checkFeedbackCommands(cwd: string): DoctorCheckResult[] {
   let feedbackCommands: string[];
   try {
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    feedbackCommands = config.feedbackCommands;
+    feedbackCommands = config.hooks?.feedback;
   } catch {
     return [];
   }

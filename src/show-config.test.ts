@@ -4,32 +4,8 @@ import {
   detectAgentType,
   type FormatShowConfigInput,
 } from "./show-config.ts";
-import type { ResolvedConfig, RalphaiConfig, ConfigSource } from "./config.ts";
-import { DEFAULTS } from "./config.ts";
-
-// ---------------------------------------------------------------------------
-// Helper: build a ResolvedConfig from defaults with optional overrides
-// ---------------------------------------------------------------------------
-
-type FieldOverride<K extends keyof RalphaiConfig> = {
-  value: RalphaiConfig[K];
-  source: ConfigSource;
-};
-
-function makeResolved(
-  overrides: Partial<{
-    [K in keyof RalphaiConfig]: FieldOverride<K>;
-  }> = {},
-): ResolvedConfig {
-  const resolved: Record<string, unknown> = {};
-  for (const key of Object.keys(DEFAULTS) as Array<keyof RalphaiConfig>) {
-    resolved[key] = overrides[key] ?? {
-      value: DEFAULTS[key],
-      source: "default",
-    };
-  }
-  return resolved as unknown as ResolvedConfig;
-}
+import type { ResolvedConfig } from "./config.ts";
+import { makeTestResolvedConfig } from "./test-utils.ts";
 
 // ---------------------------------------------------------------------------
 // detectAgentType
@@ -102,7 +78,7 @@ describe("detectAgentType", () => {
 
 describe("formatShowConfig", () => {
   const defaultInput = (): FormatShowConfigInput => ({
-    config: makeResolved(),
+    config: makeTestResolvedConfig(),
     configFilePath: "/home/user/.ralphai/repos/test-repo/config.json",
     configFileExists: false,
     envVars: {},
@@ -119,77 +95,76 @@ describe("formatShowConfig", () => {
 
   it("shows all default values with default sources", () => {
     const output = formatShowConfig(defaultInput());
-    expect(output).toContain("  agentCommand       = <none>  (default (none))");
+    expect(output).toContain("  agent.command      = <none>  (default (none))");
     expect(output).toContain(
-      "  agentInteractiveCommand = <none>  (default (none))",
+      "  agent.interactiveCommand = <none>  (default (none))",
     );
-    expect(output).toContain("  setupCommand       = <none>  (default (none))");
-    expect(output).toContain("  feedbackCommands   = <none>  (default (none))");
-    expect(output).toContain("  prFeedbackCommands = <none>  (default (none))");
+    expect(output).toContain("  agent.setupCommand = <none>  (default (none))");
+    expect(output).toContain("  hooks.feedback     = <none>  (default (none))");
+    expect(output).toContain("  hooks.prFeedback   = <none>  (default (none))");
     expect(output).toContain("  baseBranch         = main  (default)");
-    expect(output).toContain("  review             = true  (default)");
-    expect(output).toContain("  terse              = true  (default)");
-    expect(output).toContain("  agentVerboseFlags  = <none>  (default (none))");
-    expect(output).toContain("  maxStuck           = 3  (default)");
-    expect(output).toContain("  iterationTimeout   = off  (default)");
-    expect(output).toContain("  issueSource        = none  (default)");
+    expect(output).toContain("  gate.review        = true  (default)");
+    expect(output).toContain("  prompt.verbose     = false  (default)");
+    expect(output).toContain("  gate.maxStuck      = 3  (default)");
+    expect(output).toContain("  gate.iterationTimeout = off  (default)");
+    expect(output).toContain("  issue.source       = none  (default)");
   });
 
-  it("shows setupCommand when configured", () => {
+  it("shows agent.setupCommand when configured", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      setupCommand: { value: "bun install", source: "config" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.agent.setupCommand = { value: "bun install", source: "config" };
+    input.config = rc;
     input.configFileExists = true;
     const output = formatShowConfig(input);
-    expect(output).toContain("  setupCommand       = bun install  (config (");
+    expect(output).toContain("  agent.setupCommand = bun install  (config (");
   });
 
-  it("shows <no agentCommand set> when agentCommand is empty", () => {
+  it("shows <no agent.command set> when agent.command is empty", () => {
     const output = formatShowConfig(defaultInput());
-    expect(output).toContain("  detectedAgentType  = <no agentCommand set>");
+    expect(output).toContain("  detectedAgentType  = <no agent.command set>");
   });
 
-  it("shows detected agent type when agentCommand is set", () => {
+  it("shows detected agent type when agent.command is set", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      agentCommand: { value: "claude -p", source: "config" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.agent.command = { value: "claude -p", source: "config" };
+    input.config = rc;
     input.configFileExists = true;
     const output = formatShowConfig(input);
     expect(output).toContain("  detectedAgentType  = claude");
   });
 
-  it("hides issue detail fields when issueSource is none", () => {
+  it("hides issue detail fields when issue.source is none", () => {
     const output = formatShowConfig(defaultInput());
-    expect(output).not.toContain("  standaloneLabel");
-    expect(output).not.toContain("  subissueLabel");
-    expect(output).not.toContain("  prdLabel");
-    expect(output).not.toContain("  issueRepo");
-    expect(output).not.toContain("  issueCommentProgress");
-    expect(output).not.toContain("  issueHitlLabel");
+    expect(output).not.toContain("  issue.standaloneLabel");
+    expect(output).not.toContain("  issue.subissueLabel");
+    expect(output).not.toContain("  issue.prdLabel");
+    expect(output).not.toContain("  issue.repo");
+    expect(output).not.toContain("  issue.commentProgress");
+    expect(output).not.toContain("  issue.hitlLabel");
   });
 
-  it("shows issue detail fields when issueSource is github", () => {
+  it("shows issue detail fields when issue.source is github", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      issueSource: { value: "github", source: "config" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.issue.source = { value: "github", source: "config" };
+    input.config = rc;
     input.configFileExists = true;
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  standaloneLabel    = ralphai-standalone  (default)",
+      "  issue.standaloneLabel = ralphai-standalone  (default)",
     );
     expect(output).toContain(
-      "  subissueLabel      = ralphai-subissue  (default)",
+      "  issue.subissueLabel = ralphai-subissue  (default)",
     );
-    expect(output).toContain("  prdLabel           = ralphai-prd  (default)");
+    expect(output).toContain("  issue.prdLabel     = ralphai-prd  (default)");
     expect(output).toContain(
-      "  issueRepo          = <auto-detect>  (default (auto-detect))",
+      "  issue.repo         = <auto-detect>  (default (auto-detect))",
     );
-    expect(output).toContain("  issueCommentProgress = true  (default)");
+    expect(output).toContain("  issue.commentProgress = true  (default)");
     expect(output).toContain(
-      "  issueHitlLabel     = ralphai-subissue-hitl  (default)",
+      "  issue.hitlLabel    = ralphai-subissue-hitl  (default)",
     );
   });
 
@@ -197,9 +172,9 @@ describe("formatShowConfig", () => {
 
   it("shows config source with file path", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      baseBranch: { value: "develop", source: "config" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.baseBranch = { value: "develop", source: "config" };
+    input.config = rc;
     input.configFilePath = "/home/user/.ralphai/repos/test-repo/config.json";
     input.configFileExists = true;
     const output = formatShowConfig(input);
@@ -208,49 +183,51 @@ describe("formatShowConfig", () => {
     );
   });
 
-  it("shows cli source for review --no-review", () => {
+  it("shows cli source for gate.review --gate-no-review", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      review: { value: "false", source: "cli" },
-    });
-    input.rawFlags = { review: "--no-review" };
+    const rc = makeTestResolvedConfig();
+    rc.gate.review = { value: false, source: "cli" };
+    input.config = rc;
+    input.rawFlags = { "gate.review": "--gate-no-review" };
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  review             = false  (cli (--no-review))",
+      "  gate.review        = false  (cli (--gate-no-review))",
     );
   });
 
-  it("shows env source for review", () => {
+  it("shows env source for gate.review", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      review: { value: "false", source: "env" },
-    });
-    input.envVars = { RALPHAI_REVIEW: "false" };
+    const rc = makeTestResolvedConfig();
+    rc.gate.review = { value: false, source: "env" };
+    input.config = rc;
+    input.envVars = { RALPHAI_GATE_REVIEW: "false" };
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  review             = false  (env (RALPHAI_REVIEW=false))",
+      "  gate.review        = false  (env (RALPHAI_GATE_REVIEW=false))",
     );
   });
 
-  it("shows cli source for terse --terse", () => {
+  it("shows cli source for prompt.verbose --prompt-verbose", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      terse: { value: "true", source: "cli" },
-    });
-    input.rawFlags = { terse: "--terse" };
-    const output = formatShowConfig(input);
-    expect(output).toContain("  terse              = true  (cli (--terse))");
-  });
-
-  it("shows env source for terse", () => {
-    const input = defaultInput();
-    input.config = makeResolved({
-      terse: { value: "false", source: "env" },
-    });
-    input.envVars = { RALPHAI_TERSE: "false" };
+    const rc = makeTestResolvedConfig();
+    rc.prompt.verbose = { value: true, source: "cli" };
+    input.config = rc;
+    input.rawFlags = { "prompt.verbose": "--prompt-verbose" };
     const output = formatShowConfig(input);
     expect(output).toContain(
-      "  terse              = false  (env (RALPHAI_TERSE=false))",
+      "  prompt.verbose     = true  (cli (--prompt-verbose))",
+    );
+  });
+
+  it("shows env source for prompt.verbose", () => {
+    const input = defaultInput();
+    const rc = makeTestResolvedConfig();
+    rc.prompt.verbose = { value: true, source: "env" };
+    input.config = rc;
+    input.envVars = { RALPHAI_PROMPT_VERBOSE: "true" };
+    const output = formatShowConfig(input);
+    expect(output).toContain(
+      "  prompt.verbose     = true  (env (RALPHAI_PROMPT_VERBOSE=true))",
     );
   });
 
@@ -357,18 +334,18 @@ describe("formatShowConfig", () => {
 
   it("shows auto-detected source for sandbox when Docker detected", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      sandbox: { value: "docker", source: "auto-detected" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.sandbox = { value: "docker", source: "auto-detected" };
+    input.config = rc;
     const output = formatShowConfig(input);
     expect(output).toContain("  sandbox            = docker  (auto-detected)");
   });
 
   it("shows auto-detected source for sandbox when Docker not detected", () => {
     const input = defaultInput();
-    input.config = makeResolved({
-      sandbox: { value: "none", source: "auto-detected" },
-    });
+    const rc = makeTestResolvedConfig();
+    rc.sandbox = { value: "none", source: "auto-detected" };
+    input.config = rc;
     const output = formatShowConfig(input);
     expect(output).toContain("  sandbox            = none  (auto-detected)");
   });

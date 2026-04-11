@@ -38,7 +38,7 @@ describe("ralphai config (bare)", () => {
     const result = await runCliInProcess(["config"], ctx.dir, env);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Resolved settings");
-    expect(result.stdout).toContain("agentCommand");
+    expect(result.stdout).toContain("agent.command");
     expect(result.stdout).toContain("baseBranch");
   });
 
@@ -111,7 +111,7 @@ describe("ralphai config --check=issues", () => {
   it("prints 'configured' and exits 0 when issueSource is github", async () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home-check-ok") };
     const configFile = await initAndGetConfigFile(ctx.dir, env);
-    writeFileSync(configFile, JSON.stringify({ issueSource: "github" }));
+    writeFileSync(configFile, JSON.stringify({ issue: { source: "github" } }));
 
     const result = await runCliInProcess(
       ["config", "--check=issues"],
@@ -125,7 +125,7 @@ describe("ralphai config --check=issues", () => {
   it("prints 'not configured' and exits 1 when issueSource is none", async () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home-check-none") };
     const configFile = await initAndGetConfigFile(ctx.dir, env);
-    writeFileSync(configFile, JSON.stringify({ issueSource: "none" }));
+    writeFileSync(configFile, JSON.stringify({ issue: { source: "none" } }));
 
     const result = await runCliInProcess(
       ["config", "--check=issues"],

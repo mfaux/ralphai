@@ -86,7 +86,10 @@ describe("dry-run safety — runner auto-drain path", () => {
     const { backlogDir } = setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
+      config: makeTestResolvedConfig({
+        agent: { command: "echo" },
+        gate: { review: false },
+      }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -115,7 +118,10 @@ describe("dry-run safety — runner auto-drain path", () => {
     );
 
     const opts: RunnerOptions = {
-      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
+      config: makeTestResolvedConfig({
+        agent: { command: "echo" },
+        gate: { review: false },
+      }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",
@@ -145,9 +151,9 @@ describe("dry-run safety — runner auto-drain path", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: "echo",
-        issueSource: "none",
-        review: "false",
+        agent: { command: "echo" },
+        issue: { source: "none" },
+        gate: { review: false },
       }),
       cwd: dir,
       isWorktree: false,
@@ -196,7 +202,10 @@ describe("dry-run safety — informational messages", () => {
     setupGlobalPipeline(dir);
 
     const opts: RunnerOptions = {
-      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
+      config: makeTestResolvedConfig({
+        agent: { command: "echo" },
+        gate: { review: false },
+      }),
       cwd: dir,
       isWorktree: false,
       mainWorktree: "",

@@ -486,24 +486,26 @@ function settingsDetail(resolvedConfig?: ResolvedConfig): DetailContent {
   }
 
   // Show a subset of the most important config values with their sources.
-  const interestingKeys: Array<keyof ResolvedConfig> = [
-    "agentCommand",
-    "baseBranch",
-    "issueSource",
-    "feedbackCommands",
-    "maxStuck",
+  const interestingEntries: Array<{
+    label: string;
+    resolved: { value: unknown; source: string };
+  }> = [
+    { label: "agent.command", resolved: resolvedConfig.agent.command },
+    { label: "baseBranch", resolved: resolvedConfig.baseBranch },
+    { label: "issue.source", resolved: resolvedConfig.issue.source },
+    { label: "hooks.feedback", resolved: resolvedConfig.hooks.feedback },
+    { label: "gate.maxStuck", resolved: resolvedConfig.gate.maxStuck },
   ];
 
   const lines: DetailLine[] = [];
-  for (const key of interestingKeys) {
-    const resolved = resolvedConfig[key];
+  for (const { label, resolved } of interestingEntries) {
     if (resolved) {
       const value =
         typeof resolved.value === "string" && resolved.value === ""
           ? "(not set)"
           : String(resolved.value);
       lines.push({
-        text: `${key}: ${value}`,
+        text: `${label}: ${value}`,
       });
       lines.push({
         text: `  source: ${resolved.source}`,

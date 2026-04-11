@@ -31,7 +31,6 @@ import {
   configValues,
   parseCLIArgs,
   ConfigError,
-  type RalphaiConfig,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 
@@ -42,21 +41,35 @@ function shellEscape(val: string): string {
   return val.replace(/'/g, "'\\''");
 }
 
-/** Map of config keys to their shell variable names. */
-const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
-  ["agentCommand", "AGENT_COMMAND"],
-  ["feedbackCommands", "FEEDBACK_COMMANDS"],
-  ["prFeedbackCommands", "PR_FEEDBACK_COMMANDS"],
-  ["baseBranch", "BASE_BRANCH"],
-  ["maxStuck", "MAX_STUCK"],
-  ["issueSource", "ISSUE_SOURCE"],
-  ["standaloneLabel", "STANDALONE_LABEL"],
-  ["subissueLabel", "SUBISSUE_LABEL"],
-  ["prdLabel", "PRD_LABEL"],
-  ["issueRepo", "ISSUE_REPO"],
-  ["issueCommentProgress", "ISSUE_COMMENT_PROGRESS"],
-  ["iterationTimeout", "ITERATION_TIMEOUT"],
-  ["review", "REVIEW"],
+/** Map of config paths to their shell variable names. */
+const CONFIG_TO_SHELL: ReadonlyArray<
+  [
+    path: string,
+    shellVar: string,
+    getter: (cfg: ReturnType<typeof configValues>) => string | number | boolean,
+  ]
+> = [
+  ["agent.command", "AGENT_COMMAND", (c) => c.agent.command],
+  ["hooks.feedback", "FEEDBACK_COMMANDS", (c) => c.hooks.feedback],
+  ["hooks.prFeedback", "PR_FEEDBACK_COMMANDS", (c) => c.hooks.prFeedback],
+  ["baseBranch", "BASE_BRANCH", (c) => c.baseBranch],
+  ["gate.maxStuck", "MAX_STUCK", (c) => c.gate.maxStuck],
+  ["issue.source", "ISSUE_SOURCE", (c) => c.issue.source],
+  ["issue.standaloneLabel", "STANDALONE_LABEL", (c) => c.issue.standaloneLabel],
+  ["issue.subissueLabel", "SUBISSUE_LABEL", (c) => c.issue.subissueLabel],
+  ["issue.prdLabel", "PRD_LABEL", (c) => c.issue.prdLabel],
+  ["issue.repo", "ISSUE_REPO", (c) => c.issue.repo],
+  [
+    "issue.commentProgress",
+    "ISSUE_COMMENT_PROGRESS",
+    (c) => c.issue.commentProgress,
+  ],
+  [
+    "gate.iterationTimeout",
+    "ITERATION_TIMEOUT",
+    (c) => c.gate.iterationTimeout,
+  ],
+  ["gate.review", "REVIEW", (c) => c.gate.review],
 ];
 
 const args = process.argv.slice(2);
@@ -132,8 +145,8 @@ try {
     // Output shell variable assignments for eval
     const cfg = configValues(result.config);
     const lines: string[] = [];
-    for (const [key, shellVar] of CONFIG_TO_SHELL) {
-      const val = String(cfg[key] ?? "");
+    for (const [, shellVar, getter] of CONFIG_TO_SHELL) {
+      const val = String(getter(cfg) ?? "");
       lines.push(`${shellVar}='${shellEscape(val)}'`);
     }
     // Workspaces: store as raw JSON string for scope resolution
@@ -148,11 +161,120 @@ try {
   // JSON mode (default): output full JSON for programmatic consumption
   const cfg = configValues(result.config);
   const config: Record<string, unknown> = {};
-  const sources: Record<string, string> = {};
-  for (const key of Object.keys(result.config) as Array<keyof RalphaiConfig>) {
-    config[key] = cfg[key];
-    sources[key] = result.config[key].source;
+  const sources: Record<string, unknown> = {};
+
+  // Flatten nested config for JSON output
+  function flattenObj(
+    prefix: string,
+    obj: Record<string, unknown>,
+    srcObj: Record<string, { value: unknown; source: string }>,
+  ): void {
+    for (const [key, val] of Object.entries(obj)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (
+        val !== null &&
+        typeof val === "object" &&
+        !Array.isArray(val) &&
+        key !== "workspaces"
+      ) {
+        flattenObj(
+          path,
+          val as Record<string, unknown>,
+          srcObj[key] as unknown as Record<
+            string,
+            { value: unknown; source: string }
+          >,
+        );
+      } else {
+        config[path] = val;
+        if (
+          srcObj[key] &&
+          typeof srcObj[key] === "object" &&
+          "source" in (srcObj[key] as object)
+        ) {
+          sources[path] = (srcObj[key] as { source: string }).source;
+        }
+      }
+    }
   }
+
+  // Use a simpler approach: output the nested structure directly
+  config["agent.command"] = cfg.agent.command;
+  config["agent.interactiveCommand"] = cfg.agent.interactiveCommand;
+  config["agent.setupCommand"] = cfg.agent.setupCommand;
+  config["hooks.feedback"] = cfg.hooks.feedback;
+  config["hooks.prFeedback"] = cfg.hooks.prFeedback;
+  config["hooks.beforeRun"] = cfg.hooks.beforeRun;
+  config["hooks.afterRun"] = cfg.hooks.afterRun;
+  config["hooks.feedbackTimeout"] = cfg.hooks.feedbackTimeout;
+  config["gate.maxStuck"] = cfg.gate.maxStuck;
+  config["gate.review"] = cfg.gate.review;
+  config["gate.maxRejections"] = cfg.gate.maxRejections;
+  config["gate.maxIterations"] = cfg.gate.maxIterations;
+  config["gate.reviewMaxFiles"] = cfg.gate.reviewMaxFiles;
+  config["gate.validators"] = cfg.gate.validators;
+  config["gate.iterationTimeout"] = cfg.gate.iterationTimeout;
+  config["prompt.verbose"] = cfg.prompt.verbose;
+  config["prompt.preamble"] = cfg.prompt.preamble;
+  config["prompt.learnings"] = cfg.prompt.learnings;
+  config["prompt.commitStyle"] = cfg.prompt.commitStyle;
+  config["pr.draft"] = cfg.pr.draft;
+  config["git.branchPrefix"] = cfg.git.branchPrefix;
+  config["issue.source"] = cfg.issue.source;
+  config["issue.standaloneLabel"] = cfg.issue.standaloneLabel;
+  config["issue.subissueLabel"] = cfg.issue.subissueLabel;
+  config["issue.prdLabel"] = cfg.issue.prdLabel;
+  config["issue.repo"] = cfg.issue.repo;
+  config["issue.commentProgress"] = cfg.issue.commentProgress;
+  config["issue.hitlLabel"] = cfg.issue.hitlLabel;
+  config["issue.inProgressLabel"] = cfg.issue.inProgressLabel;
+  config["issue.doneLabel"] = cfg.issue.doneLabel;
+  config["issue.stuckLabel"] = cfg.issue.stuckLabel;
+  config["baseBranch"] = cfg.baseBranch;
+  config["sandbox"] = cfg.sandbox;
+  config["dockerImage"] = cfg.dockerImage;
+  config["dockerMounts"] = cfg.dockerMounts;
+  config["dockerEnvVars"] = cfg.dockerEnvVars;
+  config["workspaces"] = cfg.workspaces;
+
+  sources["agent.command"] = result.config.agent.command.source;
+  sources["agent.interactiveCommand"] =
+    result.config.agent.interactiveCommand.source;
+  sources["agent.setupCommand"] = result.config.agent.setupCommand.source;
+  sources["hooks.feedback"] = result.config.hooks.feedback.source;
+  sources["hooks.prFeedback"] = result.config.hooks.prFeedback.source;
+  sources["hooks.beforeRun"] = result.config.hooks.beforeRun.source;
+  sources["hooks.afterRun"] = result.config.hooks.afterRun.source;
+  sources["hooks.feedbackTimeout"] = result.config.hooks.feedbackTimeout.source;
+  sources["gate.maxStuck"] = result.config.gate.maxStuck.source;
+  sources["gate.review"] = result.config.gate.review.source;
+  sources["gate.maxRejections"] = result.config.gate.maxRejections.source;
+  sources["gate.maxIterations"] = result.config.gate.maxIterations.source;
+  sources["gate.reviewMaxFiles"] = result.config.gate.reviewMaxFiles.source;
+  sources["gate.validators"] = result.config.gate.validators.source;
+  sources["gate.iterationTimeout"] = result.config.gate.iterationTimeout.source;
+  sources["prompt.verbose"] = result.config.prompt.verbose.source;
+  sources["prompt.preamble"] = result.config.prompt.preamble.source;
+  sources["prompt.learnings"] = result.config.prompt.learnings.source;
+  sources["prompt.commitStyle"] = result.config.prompt.commitStyle.source;
+  sources["pr.draft"] = result.config.pr.draft.source;
+  sources["git.branchPrefix"] = result.config.git.branchPrefix.source;
+  sources["issue.source"] = result.config.issue.source.source;
+  sources["issue.standaloneLabel"] = result.config.issue.standaloneLabel.source;
+  sources["issue.subissueLabel"] = result.config.issue.subissueLabel.source;
+  sources["issue.prdLabel"] = result.config.issue.prdLabel.source;
+  sources["issue.repo"] = result.config.issue.repo.source;
+  sources["issue.commentProgress"] = result.config.issue.commentProgress.source;
+  sources["issue.hitlLabel"] = result.config.issue.hitlLabel.source;
+  sources["issue.inProgressLabel"] = result.config.issue.inProgressLabel.source;
+  sources["issue.doneLabel"] = result.config.issue.doneLabel.source;
+  sources["issue.stuckLabel"] = result.config.issue.stuckLabel.source;
+  sources["baseBranch"] = result.config.baseBranch.source;
+  sources["sandbox"] = result.config.sandbox.source;
+  sources["dockerImage"] = result.config.dockerImage.source;
+  sources["dockerMounts"] = result.config.dockerMounts.source;
+  sources["dockerEnvVars"] = result.config.dockerEnvVars.source;
+  sources["workspaces"] = result.config.workspaces.source;
 
   const { rawFlags } = parseCLIArgs(configArgs);
 

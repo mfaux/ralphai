@@ -74,7 +74,7 @@ function makeKey(overrides?: Partial<Key>): Key {
 
 function makeWizardOption(overrides?: Partial<WizardOption>): WizardOption {
   return {
-    key: "agentCommand",
+    key: "agent.command",
     label: "Agent command",
     currentValue: "claude-code",
     sourceHint: "config file",
@@ -218,7 +218,7 @@ describe("buildCheckboxItems", () => {
   it("converts wizard options to list items with hints", () => {
     const options: WizardOption[] = [
       makeWizardOption({
-        key: "agentCommand",
+        key: "agent.command",
         label: "Agent command",
         currentValue: "claude-code",
         sourceHint: "config file",
@@ -234,7 +234,7 @@ describe("buildCheckboxItems", () => {
     const items = buildCheckboxItems(options);
     expect(items).toHaveLength(2);
     expect(items[0]).toEqual({
-      value: "agentCommand",
+      value: "agent.command",
       label: "Agent command",
       hint: "claude-code (config file)",
     });
@@ -252,7 +252,7 @@ describe("buildCheckboxItems", () => {
   it("handles options with empty currentValue", () => {
     const options: WizardOption[] = [
       makeWizardOption({
-        key: "setupCommand",
+        key: "agent.setupCommand",
         label: "Setup command",
         currentValue: "",
         sourceHint: "default",
@@ -265,15 +265,15 @@ describe("buildCheckboxItems", () => {
 
   it("uses the option key as the item value", () => {
     const options: WizardOption[] = [
-      makeWizardOption({ key: "maxStuck" }),
-      makeWizardOption({ key: "iterationTimeout" }),
+      makeWizardOption({ key: "gate.maxStuck" }),
+      makeWizardOption({ key: "gate.iterationTimeout" }),
       makeWizardOption({ key: "sandbox" }),
     ];
 
     const items = buildCheckboxItems(options);
     expect(items.map((i) => i.value)).toEqual([
-      "maxStuck",
-      "iterationTimeout",
+      "gate.maxStuck",
+      "gate.iterationTimeout",
       "sandbox",
     ]);
   });
@@ -287,11 +287,11 @@ describe("mergeWizardFlags", () => {
   it("inserts flags after 'run' in runArgs", () => {
     const result = mergeWizardFlags(
       ["run", "--plan", "test.md"],
-      ["--max-stuck=5", "--base-branch=dev"],
+      ["--gate-max-stuck=5", "--base-branch=dev"],
     );
     expect(result).toEqual([
       "run",
-      "--max-stuck=5",
+      "--gate-max-stuck=5",
       "--base-branch=dev",
       "--plan",
       "test.md",
@@ -299,8 +299,11 @@ describe("mergeWizardFlags", () => {
   });
 
   it("inserts flags at the start when no 'run' in args", () => {
-    const result = mergeWizardFlags(["--plan", "test.md"], ["--max-stuck=5"]);
-    expect(result).toEqual(["--max-stuck=5", "--plan", "test.md"]);
+    const result = mergeWizardFlags(
+      ["--plan", "test.md"],
+      ["--gate-max-stuck=5"],
+    );
+    expect(result).toEqual(["--gate-max-stuck=5", "--plan", "test.md"]);
   });
 
   it("returns original args unchanged when no wizard flags", () => {
@@ -317,14 +320,14 @@ describe("mergeWizardFlags", () => {
   });
 
   it("handles issue number args", () => {
-    const result = mergeWizardFlags(["run", "42"], ["--review"]);
-    expect(result).toEqual(["run", "--review", "42"]);
+    const result = mergeWizardFlags(["run", "42"], ["--gate-review"]);
+    expect(result).toEqual(["run", "--gate-review", "42"]);
   });
 
   it("does not modify the original runArgs array", () => {
     const original = ["run", "--plan", "test.md"];
     const originalCopy = [...original];
-    mergeWizardFlags(original, ["--max-stuck=5"]);
+    mergeWizardFlags(original, ["--gate-max-stuck=5"]);
     expect(original).toEqual(originalCopy);
   });
 });
@@ -336,18 +339,18 @@ describe("mergeWizardFlags", () => {
 describe("resolveWizardResult", () => {
   it("returns exit-to-runner with merged flags for a single selection", () => {
     const values: Partial<Record<WizardConfigKey, string>> = {
-      maxStuck: "5",
+      "gate.maxStuck": "5",
     };
     const result = resolveWizardResult(values, ["run", "--plan", "test.md"]);
     expect(result).toEqual({
       type: "exit-to-runner",
-      args: ["run", "--max-stuck=5", "--plan", "test.md"],
+      args: ["run", "--gate-max-stuck=5", "--plan", "test.md"],
     });
   });
 
   it("returns exit-to-runner with multiple merged flags", () => {
     const values: Partial<Record<WizardConfigKey, string>> = {
-      agentCommand: "aider",
+      "agent.command": "aider",
       baseBranch: "dev",
     };
     const result = resolveWizardResult(values, ["run"]);
@@ -467,9 +470,9 @@ describe("buildSelectItems", () => {
 
 describe("wizard flow: pure logic end-to-end", () => {
   it("checkbox selection → edit values → merged flags result", () => {
-    // Simulate: user selects maxStuck and sandbox, enters values, gets result
+    // Simulate: user selects gate.maxStuck and sandbox, enters values, gets result
     const values: Partial<Record<WizardConfigKey, string>> = {
-      maxStuck: "10",
+      "gate.maxStuck": "10",
       sandbox: "docker",
     };
     const runArgs = ["run", "--plan", "my-feature.md"];
@@ -478,12 +481,12 @@ describe("wizard flow: pure logic end-to-end", () => {
 
     expect(result.type).toBe("exit-to-runner");
     if (result.type === "exit-to-runner") {
-      expect(result.args).toContain("--max-stuck=10");
+      expect(result.args).toContain("--gate-max-stuck=10");
       expect(result.args).toContain("--sandbox=docker");
       expect(result.args).toContain("--plan");
       expect(result.args).toContain("my-feature.md");
       // Wizard flags should appear before --plan
-      const maxStuckIdx = result.args.indexOf("--max-stuck=10");
+      const maxStuckIdx = result.args.indexOf("--gate-max-stuck=10");
       const planIdx = result.args.indexOf("--plan");
       expect(maxStuckIdx).toBeLessThan(planIdx);
     }
@@ -499,25 +502,25 @@ describe("wizard flow: pure logic end-to-end", () => {
 
   it("all 8 options modified → all flags present", () => {
     const values: Partial<Record<WizardConfigKey, string>> = {
-      agentCommand: "aider",
-      setupCommand: "npm install",
-      feedbackCommands: "npm test",
-      prFeedbackCommands: "npm run lint",
+      "agent.command": "aider",
+      "agent.setupCommand": "npm install",
+      "hooks.feedback": "npm test",
+      "hooks.prFeedback": "npm run lint",
       baseBranch: "develop",
-      maxStuck: "3",
-      iterationTimeout: "600",
+      "gate.maxStuck": "3",
+      "gate.iterationTimeout": "600",
       sandbox: "docker",
     };
 
     const result = resolveWizardResult(values, ["run"]);
     if (result.type === "exit-to-runner") {
       expect(result.args).toContain("--agent-command=aider");
-      expect(result.args).toContain("--setup-command=npm install");
-      expect(result.args).toContain("--feedback-commands=npm test");
-      expect(result.args).toContain("--pr-feedback-commands=npm run lint");
+      expect(result.args).toContain("--agent-setup-command=npm install");
+      expect(result.args).toContain("--hooks-feedback=npm test");
+      expect(result.args).toContain("--hooks-pr-feedback=npm run lint");
       expect(result.args).toContain("--base-branch=develop");
-      expect(result.args).toContain("--max-stuck=3");
-      expect(result.args).toContain("--iteration-timeout=600");
+      expect(result.args).toContain("--gate-max-stuck=3");
+      expect(result.args).toContain("--gate-iteration-timeout=600");
       expect(result.args).toContain("--sandbox=docker");
       expect(result.args).toHaveLength(9); // "run" + 8 flags
     }
@@ -526,7 +529,7 @@ describe("wizard flow: pure logic end-to-end", () => {
   it("checkbox items reflect wizard options metadata", () => {
     const options: WizardOption[] = [
       makeWizardOption({
-        key: "agentCommand",
+        key: "agent.command",
         label: "Agent command",
         currentValue: "claude-code",
         sourceHint: "config file",
@@ -547,8 +550,11 @@ describe("wizard flow: pure logic end-to-end", () => {
 
   it("editing labels show correct step counting", () => {
     const options: WizardOption[] = [
-      makeWizardOption({ key: "agentCommand", label: "Agent command" }),
-      makeWizardOption({ key: "maxStuck", label: "Max stuck iterations" }),
+      makeWizardOption({ key: "agent.command", label: "Agent command" }),
+      makeWizardOption({
+        key: "gate.maxStuck",
+        label: "Max stuck iterations",
+      }),
       makeWizardOption({ key: "sandbox", label: "Sandbox mode" }),
     ];
 

@@ -19,24 +19,27 @@ describe("parseConfigFile — subissueLabel", () => {
 
   it("parses subissueLabel from config", () => {
     const file = join(ctx.dir, "subissue.json");
-    writeFileSync(file, JSON.stringify({ subissueLabel: "custom-subissue" }));
+    writeFileSync(
+      file,
+      JSON.stringify({ issue: { subissueLabel: "custom-subissue" } }),
+    );
     const result = parseConfigFile(file)!;
-    expect(result.values.subissueLabel).toBe("custom-subissue");
+    expect(result.values.issue!.subissueLabel).toBe("custom-subissue");
   });
 
   it("rejects empty subissueLabel", () => {
     const file = join(ctx.dir, "subissue-empty.json");
-    writeFileSync(file, JSON.stringify({ subissueLabel: "" }));
+    writeFileSync(file, JSON.stringify({ issue: { subissueLabel: "" } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'subissueLabel' must be a non-empty label name",
+      "'issue.subissueLabel' must be a non-empty label name",
     );
   });
 
   it("coerces non-string subissueLabel to string", () => {
     const file = join(ctx.dir, "subissue-num.json");
-    writeFileSync(file, JSON.stringify({ subissueLabel: 42 }));
+    writeFileSync(file, JSON.stringify({ issue: { subissueLabel: 42 } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.subissueLabel).toBe("42");
+    expect(result.values.issue!.subissueLabel).toBe("42");
   });
 });
 
@@ -45,16 +48,16 @@ describe("parseConfigFile — subissueLabel", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyEnvOverrides — subissueLabel", () => {
-  it("extracts RALPHAI_SUBISSUE_LABEL", () => {
+  it("extracts RALPHAI_ISSUE_SUBISSUE_LABEL", () => {
     const result = applyEnvOverrides({
-      RALPHAI_SUBISSUE_LABEL: "env-subissue",
+      RALPHAI_ISSUE_SUBISSUE_LABEL: "env-subissue",
     });
-    expect(result.subissueLabel).toBe("env-subissue");
+    expect(result.issue!.subissueLabel).toBe("env-subissue");
   });
 
-  it("ignores empty RALPHAI_SUBISSUE_LABEL", () => {
-    const result = applyEnvOverrides({ RALPHAI_SUBISSUE_LABEL: "" });
-    expect(result.subissueLabel).toBeUndefined();
+  it("ignores empty RALPHAI_ISSUE_SUBISSUE_LABEL", () => {
+    const result = applyEnvOverrides({ RALPHAI_ISSUE_SUBISSUE_LABEL: "" });
+    expect(result.issue).toBeUndefined();
   });
 });
 
@@ -64,7 +67,7 @@ describe("applyEnvOverrides — subissueLabel", () => {
 
 describe("DEFAULTS — subissueLabel", () => {
   it("has default ralphai-subissue", () => {
-    expect(DEFAULTS.subissueLabel).toBe("ralphai-subissue");
+    expect(DEFAULTS.issue.subissueLabel).toBe("ralphai-subissue");
   });
 });
 
@@ -94,29 +97,29 @@ describe("resolveConfig — subissueLabel precedence", () => {
     const cwd = join(ctx.dir, "repo-subissue-default");
     mkdirSync(cwd, { recursive: true });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.subissueLabel.value).toBe("ralphai-subissue");
-    expect(config.subissueLabel.source).toBe("default");
+    expect(config.issue.subissueLabel.value).toBe("ralphai-subissue");
+    expect(config.issue.subissueLabel.source).toBe("default");
   });
 
   it("config file overrides default", () => {
     const cwd = join(ctx.dir, "repo-subissue-config");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { subissueLabel: "from-config" });
+    writeGlobalConfig(cwd, { issue: { subissueLabel: "from-config" } });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.subissueLabel.value).toBe("from-config");
-    expect(config.subissueLabel.source).toBe("config");
+    expect(config.issue.subissueLabel.value).toBe("from-config");
+    expect(config.issue.subissueLabel.source).toBe("config");
   });
 
   it("env var overrides config file", () => {
     const cwd = join(ctx.dir, "repo-subissue-env");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { subissueLabel: "from-config" });
+    writeGlobalConfig(cwd, { issue: { subissueLabel: "from-config" } });
     const { config } = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_SUBISSUE_LABEL: "from-env" }),
+      envVars: env({ RALPHAI_ISSUE_SUBISSUE_LABEL: "from-env" }),
       cliArgs: [],
     });
-    expect(config.subissueLabel.value).toBe("from-env");
-    expect(config.subissueLabel.source).toBe("env");
+    expect(config.issue.subissueLabel.value).toBe("from-env");
+    expect(config.issue.subissueLabel.source).toBe("env");
   });
 });

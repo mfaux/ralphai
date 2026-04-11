@@ -91,32 +91,32 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   const cfg = configValues(cfgResult.config);
 
   // --- Validate agentInteractiveCommand ---
-  const agentInteractiveCommand = cfg.agentInteractiveCommand;
+  const agentInteractiveCommand = cfg.agent.interactiveCommand;
   if (!agentInteractiveCommand) {
     console.error(
-      `${TEXT}Error:${RESET} agentInteractiveCommand is not configured.`,
+      `${TEXT}Error:${RESET} agent.interactiveCommand is not configured.`,
     );
     console.error(
       `\nSet it in your ralphai config or via ${TEXT}RALPHAI_AGENT_INTERACTIVE_COMMAND${RESET} env var.`,
     );
     console.error(
-      `${DIM}Example: ${TEXT}ralphai config agentInteractiveCommand${RESET}${DIM} to check the current value.${RESET}`,
+      `${DIM}Example: ${TEXT}ralphai config agent.interactiveCommand${RESET}${DIM} to check the current value.${RESET}`,
     );
     process.exit(1);
   }
 
   // --- Detect GitHub repo ---
-  const repo = detectIssueRepo(cwd, cfg.issueRepo);
+  const repo = detectIssueRepo(cwd, cfg.issue.repo);
   if (!repo) {
     console.error(
       "Could not detect GitHub repo from git remote. " +
-        "Set issue-repo in config or ensure a remote is configured.",
+        "Set issue.repo in config or ensure a remote is configured.",
     );
     process.exit(1);
   }
 
   // --- Discover parent PRD ---
-  const prdLabel = cfg.prdLabel;
+  const prdLabel = cfg.issue.prdLabel;
   const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
 
   if (!parentResult.hasParent) {
@@ -161,7 +161,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   const parentTitle = parentResult.parentTitle!;
   const prdSlug = slugify(commitTypeFromTitle(parentTitle).description);
   const branch = issueBranchName(parentTitle);
-  const hitlLabel = cfg.issueHitlLabel;
+  const hitlLabel = cfg.issue.hitlLabel;
 
   // --- Dry-run ---
   if (dryRun) {
@@ -192,12 +192,12 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   // --- Prepare worktree ---
   ensureRepoHasCommit(cwd);
   const baseBranch = cfg.baseBranch;
-  const setupCommand = cfg.setupCommand;
+  const setupCommand = cfg.agent.setupCommand;
 
   // Build sandbox config for routing setup commands through Docker
   const setupSandboxConfig: SetupSandboxConfig = {
     sandbox: cfg.sandbox as "none" | "docker",
-    agentCommand: cfg.agentCommand,
+    agentCommand: cfg.agent.command,
     dockerConfig:
       cfg.sandbox === "docker"
         ? {

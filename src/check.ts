@@ -32,13 +32,13 @@ type CapabilityCheck = (values: Partial<RalphaiConfig>) => CapabilityResult;
 
 const CAPABILITY_MAP: Record<CapabilityName, CapabilityCheck> = {
   issues(values) {
-    const issueSource = values.issueSource ?? DEFAULTS.issueSource;
+    const issueSource = values.issue?.source ?? DEFAULTS.issue.source;
     if (issueSource === "github") {
       return { pass: true, message: "issues: github" };
     }
     return {
       pass: false,
-      message: `configured, but missing capability: issues (issueSource is "${issueSource}")`,
+      message: `configured, but missing capability: issues (issue.source is "${issueSource}")`,
     };
   },
 };

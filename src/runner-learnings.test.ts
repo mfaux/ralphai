@@ -108,8 +108,8 @@ describe("runRunner — in-memory learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -159,8 +159,8 @@ describe("runRunner — in-memory learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -202,8 +202,8 @@ describe("runRunner — in-memory learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -248,8 +248,8 @@ describe("runRunner — in-memory learnings", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

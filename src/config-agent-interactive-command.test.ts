@@ -22,24 +22,24 @@ describe("parseConfigFile — agentInteractiveCommand", () => {
     const file = join(ctx.dir, "interactive.json");
     writeFileSync(
       file,
-      JSON.stringify({ agentInteractiveCommand: "claude -i" }),
+      JSON.stringify({ agent: { interactiveCommand: "claude -i" } }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.agentInteractiveCommand).toBe("claude -i");
+    expect(result.values.agent!.interactiveCommand).toBe("claude -i");
   });
 
   it("accepts empty agentInteractiveCommand", () => {
     const file = join(ctx.dir, "interactive-empty.json");
-    writeFileSync(file, JSON.stringify({ agentInteractiveCommand: "" }));
+    writeFileSync(file, JSON.stringify({ agent: { interactiveCommand: "" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.agentInteractiveCommand).toBe("");
+    expect(result.values.agent!.interactiveCommand).toBe("");
   });
 
   it("rejects non-string agentInteractiveCommand", () => {
     const file = join(ctx.dir, "interactive-num.json");
-    writeFileSync(file, JSON.stringify({ agentInteractiveCommand: 42 }));
+    writeFileSync(file, JSON.stringify({ agent: { interactiveCommand: 42 } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'agentInteractiveCommand' must be a string, got number",
+      "'agent.interactiveCommand' must be a string, got number",
     );
   });
 });
@@ -53,14 +53,14 @@ describe("applyEnvOverrides — agentInteractiveCommand", () => {
     const result = applyEnvOverrides({
       RALPHAI_AGENT_INTERACTIVE_COMMAND: "claude -i",
     });
-    expect(result.agentInteractiveCommand).toBe("claude -i");
+    expect(result.agent!.interactiveCommand).toBe("claude -i");
   });
 
   it("ignores empty RALPHAI_AGENT_INTERACTIVE_COMMAND", () => {
     const result = applyEnvOverrides({
       RALPHAI_AGENT_INTERACTIVE_COMMAND: "",
     });
-    expect(result.agentInteractiveCommand).toBeUndefined();
+    expect(result.agent).toBeUndefined();
   });
 });
 
@@ -70,7 +70,7 @@ describe("applyEnvOverrides — agentInteractiveCommand", () => {
 
 describe("DEFAULTS — agentInteractiveCommand", () => {
   it("has default empty string", () => {
-    expect(DEFAULTS.agentInteractiveCommand).toBe("");
+    expect(DEFAULTS.agent.interactiveCommand).toBe("");
   });
 });
 
@@ -83,15 +83,15 @@ describe("parseCLIArgs — agentInteractiveCommand", () => {
     const { overrides, rawFlags } = parseCLIArgs([
       "--agent-interactive-command=claude -i",
     ]);
-    expect(overrides.agentInteractiveCommand).toBe("claude -i");
-    expect(rawFlags.agentInteractiveCommand).toBe(
+    expect(overrides.agent!.interactiveCommand).toBe("claude -i");
+    expect(rawFlags["agent.interactiveCommand"]).toBe(
       "--agent-interactive-command=claude -i",
     );
   });
 
   it("accepts empty --agent-interactive-command=", () => {
     const { overrides } = parseCLIArgs(["--agent-interactive-command="]);
-    expect(overrides.agentInteractiveCommand).toBe("");
+    expect(overrides.agent!.interactiveCommand).toBe("");
   });
 });
 
@@ -121,42 +121,42 @@ describe("resolveConfig — agentInteractiveCommand precedence", () => {
     const cwd = join(ctx.dir, "repo-interactive-default");
     mkdirSync(cwd, { recursive: true });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.agentInteractiveCommand.value).toBe("");
-    expect(config.agentInteractiveCommand.source).toBe("default");
+    expect(config.agent.interactiveCommand.value).toBe("");
+    expect(config.agent.interactiveCommand.source).toBe("default");
   });
 
   it("config file overrides default", () => {
     const cwd = join(ctx.dir, "repo-interactive-config");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { agentInteractiveCommand: "from-config" });
+    writeGlobalConfig(cwd, { agent: { interactiveCommand: "from-config" } });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.agentInteractiveCommand.value).toBe("from-config");
-    expect(config.agentInteractiveCommand.source).toBe("config");
+    expect(config.agent.interactiveCommand.value).toBe("from-config");
+    expect(config.agent.interactiveCommand.source).toBe("config");
   });
 
   it("env var overrides config file", () => {
     const cwd = join(ctx.dir, "repo-interactive-env");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { agentInteractiveCommand: "from-config" });
+    writeGlobalConfig(cwd, { agent: { interactiveCommand: "from-config" } });
     const { config } = resolveConfig({
       cwd,
       envVars: env({ RALPHAI_AGENT_INTERACTIVE_COMMAND: "from-env" }),
       cliArgs: [],
     });
-    expect(config.agentInteractiveCommand.value).toBe("from-env");
-    expect(config.agentInteractiveCommand.source).toBe("env");
+    expect(config.agent.interactiveCommand.value).toBe("from-env");
+    expect(config.agent.interactiveCommand.source).toBe("env");
   });
 
   it("CLI overrides env var", () => {
     const cwd = join(ctx.dir, "repo-interactive-cli");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { agentInteractiveCommand: "from-config" });
+    writeGlobalConfig(cwd, { agent: { interactiveCommand: "from-config" } });
     const { config } = resolveConfig({
       cwd,
       envVars: env({ RALPHAI_AGENT_INTERACTIVE_COMMAND: "from-env" }),
       cliArgs: ["--agent-interactive-command=from-cli"],
     });
-    expect(config.agentInteractiveCommand.value).toBe("from-cli");
-    expect(config.agentInteractiveCommand.source).toBe("cli");
+    expect(config.agent.interactiveCommand.value).toBe("from-cli");
+    expect(config.agent.interactiveCommand.source).toBe("cli");
   });
 });

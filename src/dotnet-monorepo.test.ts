@@ -368,10 +368,10 @@ describe("init --yes dotnet monorepo", () => {
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
     // Should contain both node and dotnet feedback commands
-    expect(config.feedbackCommands).toContain("pnpm build");
-    expect(config.feedbackCommands).toContain("pnpm test");
-    expect(config.feedbackCommands).toContain("dotnet build");
-    expect(config.feedbackCommands).toContain("dotnet test");
+    expect(config.hooks.feedback).toContain("pnpm build");
+    expect(config.hooks.feedback).toContain("pnpm test");
+    expect(config.hooks.feedback).toContain("dotnet build");
+    expect(config.hooks.feedback).toContain("dotnet test");
   });
 
   it("init --yes does not write workspaces to config for .NET monorepo", async () => {

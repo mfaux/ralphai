@@ -181,9 +181,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -226,9 +226,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -270,9 +270,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -305,9 +305,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -343,9 +343,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -381,9 +381,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -438,9 +438,9 @@ describe("runner GitHub drain behavior", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        issueSource: "github",
-        review: "false",
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

@@ -47,10 +47,10 @@ describe.skipIf(process.platform === "win32")(
         stdio: "ignore",
       });
 
-      // Override agentCommand and root feedbackCommands to always pass
+      // Override agent.command and root hooks.feedback to always pass
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      config.agentCommand = "true";
-      config.feedbackCommands = ["true"];
+      config.agent.command = "true";
+      config.hooks.feedback = ["true"];
 
       // Seed a plan in the global backlog so the backlog check passes
       const { backlogDir } = getRepoPipelineDirs(ctx.dir, testEnv());

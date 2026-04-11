@@ -3,12 +3,12 @@
  *
  * Provides two pure functions:
  *   1. buildWizardOptions — produces display-ready option descriptors from a
- *      ResolvedConfig for the 7 wizard-eligible config keys.
+ *      ResolvedConfig for the wizard-eligible config keys.
  *   2. selectionsToFlags — converts a map of config key → new value into
  *      synthetic CLI flag strings accepted by parseCLIArgs().
  */
 
-import type { ConfigSource, ResolvedConfig, RalphaiConfig } from "../config.ts";
+import type { ConfigSource, ResolvedConfig } from "../config.ts";
 import { configValues } from "../config.ts";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ export type PromptType =
 
 /** A single wizard option descriptor. */
 export interface WizardOption {
-  /** Config key name (e.g. "agentCommand"). */
+  /** Config key path (e.g. "agent.command"). */
   key: WizardConfigKey;
   /** Human-readable label shown in the multi-select. */
   label: string;
@@ -37,22 +37,22 @@ export interface WizardOption {
   prompt: PromptType;
 }
 
-/** The 7 config keys that the wizard can modify. */
+/** The config keys that the wizard can modify. */
 export type WizardConfigKey = (typeof WIZARD_KEYS)[number];
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Ordered list of wizard-eligible config keys. */
+/** Ordered list of wizard-eligible config keys (dot-path notation). */
 export const WIZARD_KEYS = [
-  "agentCommand",
-  "setupCommand",
-  "feedbackCommands",
-  "prFeedbackCommands",
+  "agent.command",
+  "agent.setupCommand",
+  "hooks.feedback",
+  "hooks.prFeedback",
   "baseBranch",
-  "maxStuck",
-  "iterationTimeout",
+  "gate.maxStuck",
+  "gate.iterationTimeout",
   "sandbox",
 ] as const;
 
@@ -65,29 +65,87 @@ const SOURCE_HINTS: Record<ConfigSource, string> = {
   cli: "CLI flag",
 };
 
-/** Map config key to the CLI flag name (without leading --). */
+/** Map config key path to the CLI flag name (without leading --). */
 const FLAG_NAMES: Record<WizardConfigKey, string> = {
-  agentCommand: "agent-command",
-  setupCommand: "setup-command",
-  feedbackCommands: "feedback-commands",
-  prFeedbackCommands: "pr-feedback-commands",
+  "agent.command": "agent-command",
+  "agent.setupCommand": "agent-setup-command",
+  "hooks.feedback": "hooks-feedback",
+  "hooks.prFeedback": "hooks-pr-feedback",
   baseBranch: "base-branch",
-  maxStuck: "max-stuck",
-  iterationTimeout: "iteration-timeout",
+  "gate.maxStuck": "gate-max-stuck",
+  "gate.iterationTimeout": "gate-iteration-timeout",
   sandbox: "sandbox",
 };
 
 /** Human-readable labels for each wizard key. */
 const LABELS: Record<WizardConfigKey, string> = {
-  agentCommand: "Agent command",
-  setupCommand: "Setup command",
-  feedbackCommands: "Feedback commands",
-  prFeedbackCommands: "PR feedback commands",
+  "agent.command": "Agent command",
+  "agent.setupCommand": "Setup command",
+  "hooks.feedback": "Feedback commands",
+  "hooks.prFeedback": "PR feedback commands",
   baseBranch: "Base branch",
-  maxStuck: "Max stuck iterations",
-  iterationTimeout: "Iteration timeout (seconds)",
+  "gate.maxStuck": "Max stuck iterations",
+  "gate.iterationTimeout": "Iteration timeout (seconds)",
   sandbox: "Sandbox mode",
 };
+
+// ---------------------------------------------------------------------------
+// Value / source accessors
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a dot-path key to its current value in a ConfigValues object.
+ */
+function getConfigValue(
+  cfg: ReturnType<typeof configValues>,
+  key: WizardConfigKey,
+): string | number | boolean {
+  switch (key) {
+    case "agent.command":
+      return cfg.agent.command;
+    case "agent.setupCommand":
+      return cfg.agent.setupCommand;
+    case "hooks.feedback":
+      return cfg.hooks.feedback;
+    case "hooks.prFeedback":
+      return cfg.hooks.prFeedback;
+    case "baseBranch":
+      return cfg.baseBranch;
+    case "gate.maxStuck":
+      return cfg.gate.maxStuck;
+    case "gate.iterationTimeout":
+      return cfg.gate.iterationTimeout;
+    case "sandbox":
+      return cfg.sandbox;
+  }
+}
+
+/**
+ * Resolve a dot-path key to its ConfigSource in a ResolvedConfig.
+ */
+function getConfigSource(
+  config: ResolvedConfig,
+  key: WizardConfigKey,
+): ConfigSource {
+  switch (key) {
+    case "agent.command":
+      return config.agent.command.source;
+    case "agent.setupCommand":
+      return config.agent.setupCommand.source;
+    case "hooks.feedback":
+      return config.hooks.feedback.source;
+    case "hooks.prFeedback":
+      return config.hooks.prFeedback.source;
+    case "baseBranch":
+      return config.baseBranch.source;
+    case "gate.maxStuck":
+      return config.gate.maxStuck.source;
+    case "gate.iterationTimeout":
+      return config.gate.iterationTimeout.source;
+    case "sandbox":
+      return config.sandbox.source;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -116,9 +174,9 @@ function validateNonNegInt(value: string | undefined): string | undefined {
 /** Build prompt metadata for a given wizard key. */
 function buildPrompt(key: WizardConfigKey): PromptType {
   switch (key) {
-    case "maxStuck":
+    case "gate.maxStuck":
       return { kind: "text", validate: validatePositiveInt };
-    case "iterationTimeout":
+    case "gate.iterationTimeout":
       return { kind: "text", validate: validateNonNegInt };
     case "sandbox":
       return { kind: "select", choices: ["none", "docker"] };
@@ -130,8 +188,9 @@ function buildPrompt(key: WizardConfigKey): PromptType {
 /**
  * Build an array of wizard option descriptors from a ResolvedConfig.
  *
- * Each descriptor includes the config key, a human-readable label, the current
- * resolved value (as a display string), a source hint, and prompt metadata.
+ * Each descriptor includes the config key path, a human-readable label,
+ * the current resolved value (as a display string), a source hint, and
+ * prompt metadata.
  */
 export function buildWizardOptions(config: ResolvedConfig): WizardOption[] {
   const cfg = configValues(config);
@@ -139,8 +198,8 @@ export function buildWizardOptions(config: ResolvedConfig): WizardOption[] {
     return {
       key,
       label: LABELS[key],
-      currentValue: String(cfg[key]),
-      sourceHint: SOURCE_HINTS[config[key].source],
+      currentValue: String(getConfigValue(cfg, key)),
+      sourceHint: SOURCE_HINTS[getConfigSource(config, key)],
       prompt: buildPrompt(key),
     };
   });
