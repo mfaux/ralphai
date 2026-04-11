@@ -29,7 +29,7 @@ Run `ralphai run` from anywhere — if you're inside a worktree, Ralphai automat
    (e.g. `feat/add-dark-mode`, `fix/broken-login`), branching from the
    configured `baseBranch` (default: `main`).
    It reuses existing worktrees for in-progress plans.
-2. If a `setupCommand` is configured, it runs in the worktree directory
+2. If `agent.setupCommand` is configured, it runs in the worktree directory
    immediately after creation (e.g. `bun install`). This ensures
    dependencies are available before the agent starts.
 3. Ralphai runs the agent inside that worktree and keeps the main checkout clean.
@@ -51,10 +51,6 @@ so they are automatically available in every worktree without symlinks.
 | Codex       | No               | Container sandbox restrictions   |
 | Others      | Likely           | Untested — no known restrictions |
 
-**Workaround for unsupported agents:** Set `"promptMode": "inline"` in
-`config.json` to embed pipeline file contents directly in the prompt,
-bypassing the agent's need to access external paths.
-
 ## Docker sandbox mode
 
 When `sandbox` is `"docker"`, Ralphai automatically mounts the main
@@ -66,7 +62,7 @@ directory is a git worktree.
 ## Setup command
 
 Fresh worktrees don't have `node_modules` or other dependency artifacts.
-The `setupCommand` option lets you run a command (e.g. `bun install`) in
+The `agent.setupCommand` option lets you run a command (e.g. `bun install`) in
 each new worktree before the agent starts, so it doesn't waste iterations
 on missing dependencies.
 
@@ -87,14 +83,14 @@ on missing dependencies.
 You can also set it manually:
 
 ```json
-{ "setupCommand": "npm install && npm run build" }
+{ "agent": { "setupCommand": "npm install && npm run build" } }
 ```
 
 Or override per-run:
 
 ```bash
-ralphai run --setup-command='pnpm install'
-RALPHAI_SETUP_COMMAND='yarn install' ralphai run
+ralphai run --agent-setup-command='pnpm install'
+RALPHAI_AGENT_SETUP_COMMAND='yarn install' ralphai run
 ```
 
 Set to `""` (empty string) to disable.

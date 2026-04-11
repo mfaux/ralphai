@@ -26,7 +26,7 @@ Processes all dependency-ready plans sequentially, one branch and PR per plan. W
 
 For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 
-1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `prdLabel`).
+1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `issue.prdLabel`).
 2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
 3. Point Ralphai at the PRD:
 
@@ -34,13 +34,13 @@ For multi-step features, create a PRD (Product Requirements Document) on GitHub:
 ralphai run 42           # issue #42: detected as PRD via label, processes sub-issues
 ```
 
-Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items.
+Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items.
 
 The interactive menu also supports PRDs: select "Pick from GitHub" (or press **g**) and PRD issues appear with their sub-issue tree.
 
 ## Run a single GitHub issue
 
-For one-off bugs or small tasks, label a GitHub issue with `ralphai-standalone` (configurable via `standaloneLabel`) and target it directly:
+For one-off bugs or small tasks, label a GitHub issue with `ralphai-standalone` (configurable via `issue.standaloneLabel`) and target it directly:
 
 ```bash
 ralphai run 57           # run standalone issue #57: one branch, one PR
@@ -50,11 +50,11 @@ Or let the drain loop auto-pull when the local backlog is empty — Ralphai chec
 
 `ralphai run <number>` uses label-driven dispatch: it reads the issue's labels to classify it as standalone, sub-issue, or PRD. Targeting a sub-issue (labeled `ralphai-subissue`) automatically discovers its parent PRD and processes through the PRD flow.
 
-Requires `issueSource: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
+Requires `issue.source: "github"` in config and the `gh` CLI. See the [CLI Reference](cli-reference.md#issue-tracking) for all options.
 
 ## Working on HITL sub-issues
 
-Some sub-issues require human collaboration — design decisions, manual testing, security review. Label these with `ralphai-subissue-hitl` (configurable via `issueHitlLabel`) and use the `hitl` command:
+Some sub-issues require human collaboration — design decisions, manual testing, security review. Label these with `ralphai-subissue-hitl` (configurable via `issue.hitlLabel`) and use the `hitl` command:
 
 ```bash
 ralphai hitl 55           # open interactive session for sub-issue #55
@@ -66,7 +66,7 @@ On clean exit (code 0), the HITL label is removed and `done` is added. On abnorm
 
 **Prerequisites:**
 
-- `agentInteractiveCommand` must be configured (e.g. `opencode`, `claude`)
+- `agent.interactiveCommand` must be configured (e.g. `opencode`, `claude`)
 - The sub-issue must have a parent PRD (with the `ralphai-prd` label)
 
 **Dry-run:**
@@ -145,13 +145,15 @@ Mounts use standard Docker bind-mount syntax (`host:container[:options]`). Env v
 
 ```json
 {
-  "agentCommand": "opencode run --agent build --model github-copilot/claude-opus-4.6"
+  "agent": {
+    "command": "opencode run --agent build --model github-copilot/claude-opus-4.6"
+  }
 }
 ```
 
 The exact flag depends on which agent you use — check your agent's CLI reference for the correct option.
 
-For details on the Docker execution flow and credential forwarding, see [How Ralphai Works](how-ralphai-works.md#docker-execution-flow).
+For details on the Docker execution flow and credential forwarding, see [How Ralphai Works](how-ralphai-works.md#docker-execution-flow). For all Docker-related config keys, see [Hooks, Gates, and Prompt Controls](hooks.md#top-level-keys).
 
 ## Test a plan without changing anything
 
@@ -203,7 +205,7 @@ ralphai run --allow-dirty
 ralphai run
 ```
 
-Drains the entire backlog on one worktree per plan and opens/updates a draft PR for each. Stuck detection (`--max-stuck`, default 3 consecutive iterations with no commits) skips runaway plans and continues to the next.
+Drains the entire backlog on one worktree per plan and opens/updates a draft PR for each. Stuck detection (`--gate-max-stuck`, default 3 consecutive iterations with no commits) skips runaway plans and continues to the next.
 
 ## Work on a specific plan
 
@@ -272,31 +274,35 @@ By default, Ralphai creates 6 GitHub labels: 3 family labels (`ralphai-standalon
 
 ```json
 {
-  "standaloneLabel": "ai-standalone",
-  "subissueLabel": "ai-subissue",
-  "prdLabel": "ai-prd"
+  "issue": {
+    "standaloneLabel": "ai-standalone",
+    "subissueLabel": "ai-subissue",
+    "prdLabel": "ai-prd"
+  }
 }
 ```
 
 Or via environment variables:
 
 ```bash
-export RALPHAI_STANDALONE_LABEL=ai-standalone
-export RALPHAI_SUBISSUE_LABEL=ai-subissue
-export RALPHAI_PRD_LABEL=ai-prd
+export RALPHAI_ISSUE_STANDALONE_LABEL=ai-standalone
+export RALPHAI_ISSUE_SUBISSUE_LABEL=ai-subissue
+export RALPHAI_ISSUE_PRD_LABEL=ai-prd
 ```
 
 See the [CLI Reference](cli-reference.md#config-keys) for all config keys and their defaults.
 
 ## Move slow tests to PR-only feedback
 
-If your E2E or integration tests are too slow to run every iteration, move them to `prFeedbackCommands`. They will only run at the completion gate — after the agent signals all tasks are done — instead of every loop iteration.
+If your E2E or integration tests are too slow to run every iteration, move them to `hooks.prFeedback`. They will only run at the completion gate — after the agent signals all tasks are done — instead of every loop iteration.
 
 **Before** — E2E tests run every iteration, slowing the feedback loop:
 
 ```json
 {
-  "feedbackCommands": ["pnpm build", "pnpm test", "pnpm test:e2e"]
+  "hooks": {
+    "feedback": "pnpm build,pnpm test,pnpm test:e2e"
+  }
 }
 ```
 
@@ -304,15 +310,17 @@ If your E2E or integration tests are too slow to run every iteration, move them 
 
 ```json
 {
-  "feedbackCommands": ["pnpm build", "pnpm test"],
-  "prFeedbackCommands": ["pnpm test:e2e"]
+  "hooks": {
+    "feedback": "pnpm build,pnpm test",
+    "prFeedback": "pnpm test:e2e"
+  }
 }
 ```
 
 Or via CLI flags:
 
 ```bash
-ralphai run --feedback-commands='pnpm build,pnpm test' --pr-feedback-commands='pnpm test:e2e'
+ralphai run --hooks-feedback='pnpm build,pnpm test' --hooks-pr-feedback='pnpm test:e2e'
 ```
 
 If a PR-tier command fails at the gate, Ralphai re-invokes the agent with the failure details so it can fix the issue before the PR is created. See [How Ralphai Works](how-ralphai-works.md#completion-gate) for details on the two-tier model.
@@ -330,3 +338,36 @@ feedback-scope: src/components
 With this set, the agent prompt suggests commands like `bun test src/components/` for quick iteration during development, while still advising the agent to run the full feedback suite before signaling COMPLETE.
 
 If you don't set `feedback-scope`, Ralphai tries to infer it automatically from the `## Relevant Files` section in the plan. When neither is available, no scope hint appears and behavior is unchanged.
+
+## Customize the agent preamble
+
+Replace the built-in preamble with a project-specific instruction file:
+
+```json
+{
+  "prompt": {
+    "preamble": "@.ralphai-preamble.md"
+  }
+}
+```
+
+The `@` prefix reads from a file relative to the repo root. The content replaces the built-in preamble entirely — use it to set coding standards, architectural constraints, or domain context that every agent session should know.
+
+Per-workspace preambles are also supported via `workspaces` overrides. See [Hooks, Gates, and Prompt Controls](hooks.md#workspace-overrides) for details.
+
+## Add lifecycle hooks
+
+Run setup before and cleanup after each plan:
+
+```json
+{
+  "hooks": {
+    "beforeRun": "bun install && bun run db:migrate",
+    "afterRun": "curl -s https://slack.example.com/webhook -d '{\"text\": \"Plan finished\"}'"
+  }
+}
+```
+
+`hooks.beforeRun` runs once per plan before the iteration loop. A non-zero exit marks the plan stuck immediately. `hooks.afterRun` runs in a `finally` block on all exit paths — failure is a warning only.
+
+See [Hooks, Gates, and Prompt Controls](hooks.md) for the full hooks, gates, and prompt reference.
