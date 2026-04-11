@@ -710,6 +710,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         const issueHitlLabel = cfg.issueHitlLabel;
         const pullOpts = {
           backlogDir: dirs.backlogDir,
+          wipDir: dirs.wipDir,
           cwd,
           issueSource,
           standaloneLabel,

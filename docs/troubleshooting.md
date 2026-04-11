@@ -185,6 +185,23 @@ The `ralphai worktree clean` and `ralphai worktree list` subcommands have been r
 
 Running the old commands prints a redirect message with the replacement command.
 
+## "Issue #N already has a plan in the pipeline"
+
+When pulling a GitHub issue (via `ralphai run <number>` or auto-drain), Ralphai checks the backlog and in-progress directories for an existing plan file matching the same issue number. If found, the pull is rejected:
+
+```
+Issue #42 already has a plan in the pipeline: gh-42-fix-the-widget.md
+```
+
+This prevents duplicate runs of the same issue. Archived (completed) issues are not checked, so re-running a previously completed issue works as expected.
+
+**Steps:**
+
+1. Run `ralphai status` to see which plans are active.
+2. If the existing plan is stuck or abandoned, reset it: `ralphai reset <slug>` (moves the plan back to the backlog and cleans up the worktree).
+3. If the existing plan is still in the backlog and hasn't started, delete the plan file manually from `pipeline/backlog/`.
+4. Re-run: `ralphai run <number>`
+
 ## Docker Sandboxing Issues
 
 ### "Docker is not installed"

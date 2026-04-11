@@ -5,7 +5,7 @@
  *
  * Also re-exports pure naming utilities from issue-naming.ts.
  */
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { execQuiet, checkGhAvailable } from "./exec.ts";
 import type { ExecOptions } from "./exec.ts";
@@ -507,6 +507,8 @@ export function validateSubissue(
 export interface PullIssueOptions {
   /** The backlog directory where plan files are written. */
   backlogDir: string;
+  /** The in-progress directory — checked for de-duplication to avoid double-pulling an issue. */
+  wipDir?: string;
   /** Working directory (for git remote detection). */
   cwd: string;
   /** Configured issue source — must be "github" to proceed. */
@@ -1042,10 +1044,34 @@ export function discoverParentIssue(
 // Internal: shared pull logic
 // ---------------------------------------------------------------------------
 
+/**
+ * Check whether a plan file for the given issue number already exists in a
+ * directory. Scans both flat files and slug-folders matching the
+ * `gh-{N}-` prefix. Returns the matching entry name or undefined.
+ */
+function findExistingPlanForIssue(
+  dir: string,
+  issueNumber: string,
+): string | undefined {
+  if (!existsSync(dir)) return undefined;
+  const prefix = `gh-${issueNumber}-`;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith(prefix)) {
+        return entry.name;
+      }
+    }
+  } catch {
+    // ignore read errors (permission, etc.)
+  }
+  return undefined;
+}
+
 interface FetchAndWriteOptions {
   repo: string;
   issueNumber: string;
   backlogDir: string;
+  wipDir?: string;
   cwd: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
@@ -1058,6 +1084,20 @@ interface FetchAndWriteOptions {
  */
 function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   const { repo, issueNumber, backlogDir, cwd, issueCommentProgress } = opts;
+
+  // De-duplication: reject if a plan for this issue already exists in
+  // backlog or in-progress. Archive is intentionally not checked so that
+  // completed issues can be re-pulled.
+  for (const dir of [backlogDir, opts.wipDir]) {
+    if (!dir) continue;
+    const existing = findExistingPlanForIssue(dir, issueNumber);
+    if (existing) {
+      return {
+        pulled: false,
+        message: `Issue #${issueNumber} already has a plan in the pipeline: ${existing}`,
+      };
+    }
+  }
 
   const title = execQuiet(
     `gh issue view ${issueNumber} --repo "${repo}" --json title --jq '.title'`,
@@ -1243,6 +1283,7 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     repo,
     issueNumber: String(issueNumber),
     backlogDir,
+    wipDir: options.wipDir,
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
@@ -1383,6 +1424,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     repo,
     issueNumber: String(subIssueNumber),
     backlogDir,
+    wipDir: options.wipDir,
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
@@ -1599,6 +1641,7 @@ export function pullGithubIssueByNumber(
     repo,
     issueNumber: String(issueNumber),
     backlogDir,
+    wipDir: options.wipDir,
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
