@@ -42,6 +42,8 @@ export interface PlanFrontmatter {
   issue: number | undefined;
   issueUrl: string;
   prd: number | undefined;
+  priority: number;
+  tags: string[];
 }
 
 /** Issue-specific subset of frontmatter. */
@@ -196,6 +198,71 @@ export function extractIssueFrontmatter(planPath: string): IssueFrontmatter {
 }
 
 /**
+ * Extract `priority` value from YAML frontmatter.
+ * Returns the numeric priority (lower = runs sooner) or 0 if not present.
+ */
+export function extractPriority(planPath: string): number {
+  const content = readPlanContent(planPath);
+  if (!content) return 0;
+  const fm = extractFrontmatterBlock(content);
+  if (!fm) return 0;
+
+  const match = fm.match(/^\s*priority:\s*(.+)$/m);
+  if (!match) return 0;
+
+  const parsed = parseInt(match[1]!.trim(), 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Extract `tags` from YAML frontmatter.
+ * Supports inline array syntax: `tags: [frontend, auth]`
+ * Returns string array, default `[]`.
+ */
+export function extractTags(planPath: string): string[] {
+  const content = readPlanContent(planPath);
+  if (!content) return [];
+  const fm = extractFrontmatterBlock(content);
+  if (!fm) return [];
+
+  // Inline array: tags: [frontend, auth]
+  const inlineMatch = fm.match(/^\s*tags:\s*\[([^\]]*)\]/m);
+  if (inlineMatch) {
+    return inlineMatch[1]!
+      .split(",")
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+
+  // Multiline list: tags:\n  - frontend\n  - auth
+  const lines = fm.split("\n");
+  const tags: string[] = [];
+  let collecting = false;
+
+  for (const line of lines) {
+    if (/^\s*tags:\s*$/.test(line)) {
+      collecting = true;
+      continue;
+    }
+
+    if (collecting) {
+      const itemMatch = line.match(/^\s*-\s+(.+)$/);
+      if (itemMatch) {
+        const val = itemMatch[1]!.trim().replace(/^["']|["']$/g, "");
+        if (val) tags.push(val);
+        continue;
+      }
+
+      if (/^\s*\S/.test(line)) {
+        collecting = false;
+      }
+    }
+  }
+
+  return tags;
+}
+
+/**
  * Parse all known frontmatter fields from a plan file.
  * Returns a typed object with all fields populated (defaults for missing ones).
  */
@@ -210,6 +277,8 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
       issue: undefined,
       issueUrl: "",
       prd: undefined,
+      priority: 0,
+      tags: [],
     };
   }
 
@@ -220,8 +289,20 @@ export function parseFrontmatter(planPath: string): PlanFrontmatter {
   const feedbackScope = extractFeedbackScope(planPath);
   const dependsOn = extractDependsOn(planPath);
   const { source, issue, issueUrl, prd } = extractIssueFrontmatter(planPath);
+  const priority = extractPriority(planPath);
+  const tags = extractTags(planPath);
 
-  return { scope, feedbackScope, dependsOn, source, issue, issueUrl, prd };
+  return {
+    scope,
+    feedbackScope,
+    dependsOn,
+    source,
+    issue,
+    issueUrl,
+    prd,
+    priority,
+    tags,
+  };
 }
 
 // =========================================================================
@@ -490,15 +571,23 @@ export function countCompletedTasks(
 
 /**
  * Collect backlog plans (flat `.md` files only).
- * Returns sorted array of absolute file paths.
+ * Returns array of absolute file paths sorted by (priority, filename).
+ * Lower priority value = runs sooner. Plans without priority get implicit 0.
  */
 export function collectBacklogPlans(backlogDir: string): string[] {
   if (!existsSync(backlogDir)) return [];
   try {
-    return readdirSync(backlogDir, { withFileTypes: true })
+    const files = readdirSync(backlogDir, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-      .map((entry) => join(backlogDir, entry.name))
-      .sort();
+      .map((entry) => join(backlogDir, entry.name));
+
+    // Sort by (priority ASC, filename ASC)
+    return files.sort((a, b) => {
+      const pa = extractPriority(a);
+      const pb = extractPriority(b);
+      if (pa !== pb) return pa - pb;
+      return basename(a).localeCompare(basename(b));
+    });
   } catch {
     return [];
   }
@@ -653,6 +742,8 @@ export function detectPlan(opts: {
   skippedSlugs?: Set<string>;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   targetPlan?: string;
+  /** Filter plans to those matching ANY of these tags (OR semantics). */
+  filterTags?: string[];
   /**
    * Liveness check for in-progress plans.
    * Returns true if a runner process is alive for the given slug.
@@ -667,6 +758,7 @@ export function detectPlan(opts: {
     dryRun = false,
     skippedSlugs,
     targetPlan,
+    filterTags,
     isRunnerAlive = isPlanRunnerAlive,
   } = opts;
 
@@ -737,6 +829,29 @@ export function detectPlan(opts: {
     // Replace backlogPlans with just the targeted plan for the readiness check
     backlogPlans.length = 0;
     backlogPlans.push(match);
+  }
+
+  // --- 2c. Filter by tags if --tags was specified (OR semantics) ---
+  if (filterTags && filterTags.length > 0) {
+    const tagSet = new Set(filterTags);
+    const filtered: string[] = [];
+    for (const f of backlogPlans) {
+      const planTags = extractTags(f);
+      if (planTags.some((t) => tagSet.has(t))) {
+        filtered.push(f);
+      }
+    }
+    backlogPlans.length = 0;
+    backlogPlans.push(...filtered);
+
+    if (backlogPlans.length === 0) {
+      return {
+        detected: false,
+        reason: "all-blocked",
+        backlogCount: 0,
+        blocked: [],
+      };
+    }
   }
 
   // --- 3. Filter by dependency readiness ---

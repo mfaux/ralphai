@@ -4,6 +4,10 @@
  * Provides a single resolveConfig() entry point that composes:
  *   defaults -> config file -> env vars -> CLI args
  * with source tracking for --show-config.
+ *
+ * Config keys are organized into nested groups:
+ *   agent, hooks, gate, prompt, pr, git, issue
+ * plus flat top-level keys: baseBranch, sandbox, dockerImage, etc.
  */
 
 import { execSync } from "child_process";
@@ -15,37 +19,89 @@ import { resolveRepoStateDir } from "./plan-lifecycle.ts";
 // Types
 // ---------------------------------------------------------------------------
 
-/** All recognised config keys. */
-export interface RalphaiConfig {
-  agentCommand: string;
+/** Agent-related config keys. */
+export interface AgentConfig {
+  command: string;
+  interactiveCommand: string;
   setupCommand: string;
-  feedbackCommands: string;
-  prFeedbackCommands: string;
-  baseBranch: string;
+}
+
+/** Hook/callback config keys. */
+export interface HooksConfig {
+  feedback: string;
+  prFeedback: string;
+  beforeRun: string;
+  afterRun: string;
+  feedbackTimeout: number;
+}
+
+/** Gating / iteration-control config keys. */
+export interface GateConfig {
   maxStuck: number;
-  issueSource: "none" | "github";
+  review: boolean;
+  maxRejections: number;
+  maxIterations: number;
+  reviewMaxFiles: number;
+  validators: string;
+  iterationTimeout: number;
+}
+
+/** Prompt-related config keys. */
+export interface PromptConfig {
+  verbose: boolean;
+  preamble: string;
+  learnings: boolean;
+  commitStyle: string;
+}
+
+/** PR-related config keys. */
+export interface PrConfig {
+  draft: boolean;
+}
+
+/** Git-related config keys. */
+export interface GitConfig {
+  branchPrefix: string;
+}
+
+/** Issue-tracker config keys. */
+export interface IssueConfig {
+  source: "none" | "github";
   standaloneLabel: string;
   subissueLabel: string;
   prdLabel: string;
-  issueRepo: string;
-  issueCommentProgress: string; // "true" | "false" — kept as string to match shell
-  issueHitlLabel: string;
-  agentInteractiveCommand: string;
-  iterationTimeout: number;
-  sandbox: "none" | "docker";
-  dockerImage: string;
-  dockerMounts: string;
-  dockerEnvVars: string;
-  review: string; // "true" | "false"
-  terse: string; // "true" | "false" — when true, agent prompt includes concise-mode instruction
-  agentVerboseFlags: string; // custom agent verbose flags (overrides built-in map)
-  workspaces: Record<string, WorkspaceOverrides> | null;
+  repo: string;
+  commentProgress: boolean;
+  hitlLabel: string;
+  inProgressLabel: string;
+  doneLabel: string;
+  stuckLabel: string;
 }
 
 export interface WorkspaceOverrides {
   feedbackCommands?: string[] | string;
   prFeedbackCommands?: string[] | string;
+  validators?: string[] | string;
+  beforeRun?: string;
+  preamble?: string;
   [key: string]: unknown;
+}
+
+/** All recognised config keys, organized into nested groups. */
+export interface RalphaiConfig {
+  agent: AgentConfig;
+  hooks: HooksConfig;
+  gate: GateConfig;
+  prompt: PromptConfig;
+  pr: PrConfig;
+  git: GitConfig;
+  issue: IssueConfig;
+  baseBranch: string;
+  sandbox: "none" | "docker";
+  dockerImage: string;
+  dockerMounts: string;
+  dockerEnvVars: string;
+  workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
 /** Where a resolved value came from. */
@@ -62,35 +118,97 @@ export interface ResolvedValue<T> {
   source: ConfigSource;
 }
 
-/** Fully resolved config with source tracking. */
-export type ResolvedConfig = {
-  [K in keyof RalphaiConfig]: ResolvedValue<RalphaiConfig[K]>;
+/** Resolved group: each leaf is wrapped with source metadata. */
+type ResolvedGroup<T> = {
+  [K in keyof T]: ResolvedValue<T[K]>;
 };
 
+/** Fully resolved config with source tracking at every leaf. */
+export interface ResolvedConfig {
+  agent: ResolvedGroup<AgentConfig>;
+  hooks: ResolvedGroup<HooksConfig>;
+  gate: ResolvedGroup<GateConfig>;
+  prompt: ResolvedGroup<PromptConfig>;
+  pr: ResolvedGroup<PrConfig>;
+  git: ResolvedGroup<GitConfig>;
+  issue: ResolvedGroup<IssueConfig>;
+  baseBranch: ResolvedValue<string>;
+  sandbox: ResolvedValue<"none" | "docker">;
+  dockerImage: ResolvedValue<string>;
+  dockerMounts: ResolvedValue<string>;
+  dockerEnvVars: ResolvedValue<string>;
+  workspaces: ResolvedValue<Record<string, WorkspaceOverrides> | null>;
+}
+
 /**
- * Plain config values without resolution metadata (source, raw).
+ * Plain config values without resolution metadata.
  *
  * Use `configValues(rc)` to strip a `ResolvedConfig` down to just values.
  * This is the type business-logic code should accept — it doesn't need to
  * know where a value came from.
  */
-export type ConfigValues = {
-  [K in keyof RalphaiConfig]: RalphaiConfig[K];
-};
+export type ConfigValues = RalphaiConfig;
 
 /**
  * Strip resolution metadata from a `ResolvedConfig`, returning plain values.
  *
- * Consumers that only need config values (not source information) should
- * call this once and pass the result around, avoiding `rc.someKey.value`
- * boilerplate everywhere.
+ * Walks the nested group structure, extracting `.value` from each
+ * `ResolvedValue` leaf.
  */
 export function configValues(rc: ResolvedConfig): ConfigValues {
-  const out = {} as Record<string, unknown>;
-  for (const key of Object.keys(rc) as Array<keyof ResolvedConfig>) {
-    out[key as string] = rc[key].value;
-  }
-  return out as ConfigValues;
+  return {
+    agent: {
+      command: rc.agent.command.value,
+      interactiveCommand: rc.agent.interactiveCommand.value,
+      setupCommand: rc.agent.setupCommand.value,
+    },
+    hooks: {
+      feedback: rc.hooks.feedback.value,
+      prFeedback: rc.hooks.prFeedback.value,
+      beforeRun: rc.hooks.beforeRun.value,
+      afterRun: rc.hooks.afterRun.value,
+      feedbackTimeout: rc.hooks.feedbackTimeout.value,
+    },
+    gate: {
+      maxStuck: rc.gate.maxStuck.value,
+      review: rc.gate.review.value,
+      maxRejections: rc.gate.maxRejections.value,
+      maxIterations: rc.gate.maxIterations.value,
+      reviewMaxFiles: rc.gate.reviewMaxFiles.value,
+      validators: rc.gate.validators.value,
+      iterationTimeout: rc.gate.iterationTimeout.value,
+    },
+    prompt: {
+      verbose: rc.prompt.verbose.value,
+      preamble: rc.prompt.preamble.value,
+      learnings: rc.prompt.learnings.value,
+      commitStyle: rc.prompt.commitStyle.value,
+    },
+    pr: {
+      draft: rc.pr.draft.value,
+    },
+    git: {
+      branchPrefix: rc.git.branchPrefix.value,
+    },
+    issue: {
+      source: rc.issue.source.value,
+      standaloneLabel: rc.issue.standaloneLabel.value,
+      subissueLabel: rc.issue.subissueLabel.value,
+      prdLabel: rc.issue.prdLabel.value,
+      repo: rc.issue.repo.value,
+      commentProgress: rc.issue.commentProgress.value,
+      hitlLabel: rc.issue.hitlLabel.value,
+      inProgressLabel: rc.issue.inProgressLabel.value,
+      doneLabel: rc.issue.doneLabel.value,
+      stuckLabel: rc.issue.stuckLabel.value,
+    },
+    baseBranch: rc.baseBranch.value,
+    sandbox: rc.sandbox.value,
+    dockerImage: rc.dockerImage.value,
+    dockerMounts: rc.dockerMounts.value,
+    dockerEnvVars: rc.dockerEnvVars.value,
+    workspaces: rc.workspaces.value,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -153,28 +271,57 @@ export function computeEffectiveSandbox(
 // ---------------------------------------------------------------------------
 
 export const DEFAULTS: Readonly<RalphaiConfig> = {
-  agentCommand: "",
-  setupCommand: "",
-  feedbackCommands: "",
-  prFeedbackCommands: "",
+  agent: {
+    command: "",
+    interactiveCommand: "",
+    setupCommand: "",
+  },
+  hooks: {
+    feedback: "",
+    prFeedback: "",
+    beforeRun: "",
+    afterRun: "",
+    feedbackTimeout: 300,
+  },
+  gate: {
+    maxStuck: 3,
+    review: true,
+    maxRejections: 2,
+    maxIterations: 0,
+    reviewMaxFiles: 25,
+    validators: "",
+    iterationTimeout: 0,
+  },
+  prompt: {
+    verbose: false,
+    preamble: "",
+    learnings: true,
+    commitStyle: "conventional",
+  },
+  pr: {
+    draft: true,
+  },
+  git: {
+    branchPrefix: "",
+  },
+  issue: {
+    source: "none",
+    standaloneLabel: "ralphai-standalone",
+    subissueLabel: "ralphai-subissue",
+    prdLabel: "ralphai-prd",
+    repo: "",
+    commentProgress: true,
+    hitlLabel: "ralphai-subissue-hitl",
+    inProgressLabel: "in-progress",
+    doneLabel: "done",
+    stuckLabel: "stuck",
+  },
   baseBranch: "main",
-  maxStuck: 3,
-  issueSource: "none",
-  standaloneLabel: "ralphai-standalone",
-  subissueLabel: "ralphai-subissue",
-  prdLabel: "ralphai-prd",
-  issueRepo: "",
-  issueCommentProgress: "true",
-  issueHitlLabel: "ralphai-subissue-hitl",
-  agentInteractiveCommand: "",
-  iterationTimeout: 0,
   sandbox: "none",
   dockerImage: "",
   dockerMounts: "",
   dockerEnvVars: "",
-  review: "true",
-  terse: "true",
-  agentVerboseFlags: "",
+
   workspaces: null,
 };
 
@@ -260,33 +407,52 @@ export function validateCommaList(value: string, label: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Old-key migration mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from old flat config key names to their new nested path.
+ * Used by parseConfigFile() to detect stale configs and guide migration.
+ */
+const OLD_KEY_TO_NEW: Readonly<Record<string, string>> = {
+  agentCommand: "agent.command",
+  setupCommand: "agent.setupCommand",
+  feedbackCommands: "hooks.feedback",
+  prFeedbackCommands: "hooks.prFeedback",
+  maxStuck: "gate.maxStuck",
+  issueSource: "issue.source",
+  standaloneLabel: "issue.standaloneLabel",
+  subissueLabel: "issue.subissueLabel",
+  prdLabel: "issue.prdLabel",
+  issueRepo: "issue.repo",
+  issueCommentProgress: "issue.commentProgress",
+  issueHitlLabel: "issue.hitlLabel",
+  agentInteractiveCommand: "agent.interactiveCommand",
+  iterationTimeout: "gate.iterationTimeout",
+  review: "gate.review",
+  verbose: "prompt.verbose",
+  promptMode: "(removed — no longer supported)",
+};
+
+// ---------------------------------------------------------------------------
 // Config file parsing
 // ---------------------------------------------------------------------------
 
-/** Allowed keys in config.json. */
-const ALLOWED_CONFIG_KEYS = new Set([
-  "agentCommand",
-  "setupCommand",
-  "feedbackCommands",
-  "prFeedbackCommands",
+/** Allowed top-level keys in nested config.json. */
+const ALLOWED_TOP_LEVEL_KEYS = new Set([
+  "agent",
+  "hooks",
+  "gate",
+  "prompt",
+  "pr",
+  "git",
+  "issue",
   "baseBranch",
-  "maxStuck",
-  "issueSource",
-  "standaloneLabel",
-  "subissueLabel",
-  "prdLabel",
-  "issueRepo",
-  "issueCommentProgress",
-  "issueHitlLabel",
-  "agentInteractiveCommand",
-  "iterationTimeout",
   "sandbox",
   "dockerImage",
   "dockerMounts",
   "dockerEnvVars",
-  "review",
-  "terse",
-  "agentVerboseFlags",
+
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -332,14 +498,26 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
   const warnings: string[] = [];
   const values: Partial<RalphaiConfig> = {};
 
-  // Warn on unknown keys
-  const unknown = Object.keys(obj).filter((k) => !ALLOWED_CONFIG_KEYS.has(k));
-  if (unknown.length > 0) {
-    warnings.push(`${filePath}: ignoring unknown config key '${unknown[0]}'`);
-  }
-
   function err(msg: string): never {
     throw new ConfigError(`${filePath}: ${msg}`);
+  }
+
+  // Detect old flat keys and throw with migration guidance
+  for (const key of Object.keys(obj)) {
+    if (key in OLD_KEY_TO_NEW) {
+      const newPath = OLD_KEY_TO_NEW[key]!;
+      err(
+        `'${key}' is no longer a top-level key. Use '${newPath}' instead (e.g. { "${newPath.split(".")[0]}": { "${newPath.split(".")[1] ?? key}": ... } })`,
+      );
+    }
+  }
+
+  // Warn on unknown top-level keys
+  const unknown = Object.keys(obj).filter(
+    (k) => !ALLOWED_TOP_LEVEL_KEYS.has(k),
+  );
+  if (unknown.length > 0) {
+    warnings.push(`${filePath}: ignoring unknown config key '${unknown[0]}'`);
   }
 
   /** Parse a value that accepts an array of strings or a comma-separated string. */
@@ -356,37 +534,287 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     );
   }
 
-  // agentCommand (string, non-empty)
-  if ("agentCommand" in obj) {
-    const v = obj.agentCommand;
-    if (typeof v !== "string" || v === "")
-      err("'agentCommand' must be a non-empty string");
-    values.agentCommand = v;
+  // --- agent group ---
+  if ("agent" in obj) {
+    const ag = obj.agent;
+    if (ag === null || typeof ag !== "object" || Array.isArray(ag))
+      err("'agent' must be an object");
+    const agObj = ag as Record<string, unknown>;
+    const agentValues: Partial<AgentConfig> = {};
+
+    if ("command" in agObj) {
+      const v = agObj.command;
+      if (typeof v !== "string" || v === "")
+        err("'agent.command' must be a non-empty string");
+      agentValues.command = v;
+    }
+    if ("interactiveCommand" in agObj) {
+      const v = agObj.interactiveCommand;
+      if (typeof v !== "string")
+        err(`'agent.interactiveCommand' must be a string, got ${typeof v}`);
+      agentValues.interactiveCommand = v;
+    }
+    if ("setupCommand" in agObj) {
+      const v = agObj.setupCommand;
+      if (typeof v !== "string")
+        err(`'agent.setupCommand' must be a string, got ${typeof v}`);
+      agentValues.setupCommand = v;
+    }
+
+    if (Object.keys(agentValues).length > 0) {
+      values.agent = { ...DEFAULTS.agent, ...agentValues };
+    }
   }
 
-  // setupCommand (string, can be empty)
-  if ("setupCommand" in obj) {
-    const v = obj.setupCommand;
-    if (typeof v !== "string")
-      err(`'setupCommand' must be a string, got ${typeof v}`);
-    values.setupCommand = v;
+  // --- hooks group ---
+  if ("hooks" in obj) {
+    const hk = obj.hooks;
+    if (hk === null || typeof hk !== "object" || Array.isArray(hk))
+      err("'hooks' must be an object");
+    const hkObj = hk as Record<string, unknown>;
+    const hooksValues: Partial<HooksConfig> = {};
+
+    if ("feedback" in hkObj) {
+      hooksValues.feedback = parseStringListField(
+        "hooks.feedback",
+        hkObj.feedback,
+      );
+    }
+    if ("prFeedback" in hkObj) {
+      hooksValues.prFeedback = parseStringListField(
+        "hooks.prFeedback",
+        hkObj.prFeedback,
+      );
+    }
+    if ("beforeRun" in hkObj) {
+      const v = hkObj.beforeRun;
+      if (typeof v !== "string")
+        err(`'hooks.beforeRun' must be a string, got ${typeof v}`);
+      hooksValues.beforeRun = v;
+    }
+    if ("afterRun" in hkObj) {
+      const v = hkObj.afterRun;
+      if (typeof v !== "string")
+        err(`'hooks.afterRun' must be a string, got ${typeof v}`);
+      hooksValues.afterRun = v;
+    }
+    if ("feedbackTimeout" in hkObj) {
+      const v = hkObj.feedbackTimeout;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
+        err(
+          `'hooks.feedbackTimeout' must be a non-negative integer (seconds), got '${v}'`,
+        );
+      hooksValues.feedbackTimeout = v;
+    }
+
+    if (Object.keys(hooksValues).length > 0) {
+      values.hooks = { ...DEFAULTS.hooks, ...hooksValues };
+    }
   }
 
-  // feedbackCommands (array of strings or comma-separated string)
-  if ("feedbackCommands" in obj) {
-    values.feedbackCommands = parseStringListField(
-      "feedbackCommands",
-      obj.feedbackCommands,
-    );
+  // --- gate group ---
+  if ("gate" in obj) {
+    const gt = obj.gate;
+    if (gt === null || typeof gt !== "object" || Array.isArray(gt))
+      err("'gate' must be an object");
+    const gtObj = gt as Record<string, unknown>;
+    const gateValues: Partial<GateConfig> = {};
+
+    if ("maxStuck" in gtObj) {
+      const v = gtObj.maxStuck;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1)
+        err(`'gate.maxStuck' must be a positive integer, got '${v}'`);
+      gateValues.maxStuck = v;
+    }
+    if ("review" in gtObj) {
+      const v = gtObj.review;
+      if (typeof v !== "boolean")
+        err(`'gate.review' must be true or false, got '${v}'`);
+      gateValues.review = v;
+    }
+    if ("maxRejections" in gtObj) {
+      const v = gtObj.maxRejections;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
+        err(`'gate.maxRejections' must be a non-negative integer, got '${v}'`);
+      gateValues.maxRejections = v;
+    }
+    if ("maxIterations" in gtObj) {
+      const v = gtObj.maxIterations;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
+        err(`'gate.maxIterations' must be a non-negative integer, got '${v}'`);
+      gateValues.maxIterations = v;
+    }
+    if ("reviewMaxFiles" in gtObj) {
+      const v = gtObj.reviewMaxFiles;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1)
+        err(`'gate.reviewMaxFiles' must be a positive integer, got '${v}'`);
+      gateValues.reviewMaxFiles = v;
+    }
+    if ("validators" in gtObj) {
+      const v = gtObj.validators;
+      if (typeof v !== "string")
+        err(`'gate.validators' must be a string, got ${typeof v}`);
+      gateValues.validators = v;
+    }
+    if ("iterationTimeout" in gtObj) {
+      const v = gtObj.iterationTimeout;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
+        err(
+          `'gate.iterationTimeout' must be a non-negative integer (seconds), got '${v}'`,
+        );
+      gateValues.iterationTimeout = v;
+    }
+
+    if (Object.keys(gateValues).length > 0) {
+      values.gate = { ...DEFAULTS.gate, ...gateValues };
+    }
   }
 
-  // prFeedbackCommands (array of strings or comma-separated string)
-  if ("prFeedbackCommands" in obj) {
-    values.prFeedbackCommands = parseStringListField(
-      "prFeedbackCommands",
-      obj.prFeedbackCommands,
-    );
+  // --- prompt group ---
+  if ("prompt" in obj) {
+    const pr = obj.prompt;
+    if (pr === null || typeof pr !== "object" || Array.isArray(pr))
+      err("'prompt' must be an object");
+    const prObj = pr as Record<string, unknown>;
+    const promptValues: Partial<PromptConfig> = {};
+
+    if ("verbose" in prObj) {
+      const v = prObj.verbose;
+      if (typeof v !== "boolean")
+        err(`'prompt.verbose' must be true or false, got '${v}'`);
+      promptValues.verbose = v;
+    }
+    if ("preamble" in prObj) {
+      const v = prObj.preamble;
+      if (typeof v !== "string")
+        err(`'prompt.preamble' must be a string, got ${typeof v}`);
+      promptValues.preamble = v;
+    }
+    if ("learnings" in prObj) {
+      const v = prObj.learnings;
+      if (typeof v !== "boolean")
+        err(`'prompt.learnings' must be true or false, got '${v}'`);
+      promptValues.learnings = v;
+    }
+    if ("commitStyle" in prObj) {
+      const v = prObj.commitStyle;
+      if (typeof v !== "string")
+        err(`'prompt.commitStyle' must be a string, got ${typeof v}`);
+      promptValues.commitStyle = v;
+    }
+
+    if (Object.keys(promptValues).length > 0) {
+      values.prompt = { ...DEFAULTS.prompt, ...promptValues };
+    }
   }
+
+  // --- pr group ---
+  if ("pr" in obj) {
+    const p = obj.pr;
+    if (p === null || typeof p !== "object" || Array.isArray(p))
+      err("'pr' must be an object");
+    const pObj = p as Record<string, unknown>;
+    const prValues: Partial<PrConfig> = {};
+
+    if ("draft" in pObj) {
+      const v = pObj.draft;
+      if (typeof v !== "boolean")
+        err(`'pr.draft' must be true or false, got '${v}'`);
+      prValues.draft = v;
+    }
+
+    if (Object.keys(prValues).length > 0) {
+      values.pr = { ...DEFAULTS.pr, ...prValues };
+    }
+  }
+
+  // --- git group ---
+  if ("git" in obj) {
+    const g = obj.git;
+    if (g === null || typeof g !== "object" || Array.isArray(g))
+      err("'git' must be an object");
+    const gObj = g as Record<string, unknown>;
+    const gitValues: Partial<GitConfig> = {};
+
+    if ("branchPrefix" in gObj) {
+      const v = gObj.branchPrefix;
+      if (typeof v !== "string")
+        err(`'git.branchPrefix' must be a string, got ${typeof v}`);
+      gitValues.branchPrefix = v;
+    }
+
+    if (Object.keys(gitValues).length > 0) {
+      values.git = { ...DEFAULTS.git, ...gitValues };
+    }
+  }
+
+  // --- issue group ---
+  if ("issue" in obj) {
+    const is = obj.issue;
+    if (is === null || typeof is !== "object" || Array.isArray(is))
+      err("'issue' must be an object");
+    const isObj = is as Record<string, unknown>;
+    const issueValues: Partial<IssueConfig> = {};
+
+    if ("source" in isObj) {
+      const v = String(isObj.source || "");
+      if (!["none", "github"].includes(v))
+        err(`'issue.source' must be 'none' or 'github', got '${v}'`);
+      issueValues.source = v as IssueConfig["source"];
+    }
+    if ("standaloneLabel" in isObj) {
+      const v = String(isObj.standaloneLabel || "");
+      if (v === "")
+        err("'issue.standaloneLabel' must be a non-empty label name");
+      issueValues.standaloneLabel = v;
+    }
+    if ("subissueLabel" in isObj) {
+      const v = String(isObj.subissueLabel || "");
+      if (v === "") err("'issue.subissueLabel' must be a non-empty label name");
+      issueValues.subissueLabel = v;
+    }
+    if ("prdLabel" in isObj) {
+      const v = String(isObj.prdLabel || "");
+      if (v === "") err("'issue.prdLabel' must be a non-empty label name");
+      issueValues.prdLabel = v;
+    }
+    if ("repo" in isObj) {
+      issueValues.repo = String(isObj.repo || "");
+    }
+    if ("commentProgress" in isObj) {
+      const v = isObj.commentProgress;
+      if (typeof v !== "boolean")
+        err(`'issue.commentProgress' must be true or false, got '${v}'`);
+      issueValues.commentProgress = v;
+    }
+    if ("hitlLabel" in isObj) {
+      const v = String(isObj.hitlLabel || "");
+      if (v === "") err("'issue.hitlLabel' must be a non-empty label name");
+      issueValues.hitlLabel = v;
+    }
+    if ("inProgressLabel" in isObj) {
+      const v = String(isObj.inProgressLabel || "");
+      if (v === "")
+        err("'issue.inProgressLabel' must be a non-empty label name");
+      issueValues.inProgressLabel = v;
+    }
+    if ("doneLabel" in isObj) {
+      const v = String(isObj.doneLabel || "");
+      if (v === "") err("'issue.doneLabel' must be a non-empty label name");
+      issueValues.doneLabel = v;
+    }
+    if ("stuckLabel" in isObj) {
+      const v = String(isObj.stuckLabel || "");
+      if (v === "") err("'issue.stuckLabel' must be a non-empty label name");
+      issueValues.stuckLabel = v;
+    }
+
+    if (Object.keys(issueValues).length > 0) {
+      values.issue = { ...DEFAULTS.issue, ...issueValues };
+    }
+  }
+
+  // --- flat top-level keys ---
 
   // baseBranch (string, non-empty, no spaces)
   if ("baseBranch" in obj) {
@@ -395,81 +823,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     if (/\s/.test(v))
       err(`'baseBranch' must be a single token without spaces, got '${v}'`);
     values.baseBranch = v;
-  }
-
-  // maxStuck (positive integer)
-  if ("maxStuck" in obj) {
-    const v = obj.maxStuck;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 1)
-      err(`'maxStuck' must be a positive integer, got '${v}'`);
-    values.maxStuck = v as number;
-  }
-
-  // issueSource (enum)
-  if ("issueSource" in obj) {
-    const v = String(obj.issueSource || "");
-    if (!["none", "github"].includes(v))
-      err(`'issueSource' must be 'none' or 'github', got '${v}'`);
-    values.issueSource = v as RalphaiConfig["issueSource"];
-  }
-
-  // standaloneLabel (string, non-empty)
-  if ("standaloneLabel" in obj) {
-    const v = String(obj.standaloneLabel || "");
-    if (v === "") err("'standaloneLabel' must be a non-empty label name");
-    values.standaloneLabel = v;
-  }
-
-  // subissueLabel (string, non-empty)
-  if ("subissueLabel" in obj) {
-    const v = String(obj.subissueLabel || "");
-    if (v === "") err("'subissueLabel' must be a non-empty label name");
-    values.subissueLabel = v;
-  }
-
-  // prdLabel (string, non-empty)
-  if ("prdLabel" in obj) {
-    const v = String(obj.prdLabel || "");
-    if (v === "") err("'prdLabel' must be a non-empty label name");
-    values.prdLabel = v;
-  }
-
-  // issueRepo (string, can be empty)
-  if ("issueRepo" in obj) {
-    values.issueRepo = String(obj.issueRepo || "");
-  }
-
-  // issueCommentProgress (boolean)
-  if ("issueCommentProgress" in obj) {
-    const v = obj.issueCommentProgress;
-    if (typeof v !== "boolean")
-      err(`'issueCommentProgress' must be 'true' or 'false', got '${v}'`);
-    values.issueCommentProgress = String(v);
-  }
-
-  // issueHitlLabel (string, non-empty)
-  if ("issueHitlLabel" in obj) {
-    const v = String(obj.issueHitlLabel || "");
-    if (v === "") err("'issueHitlLabel' must be a non-empty label name");
-    values.issueHitlLabel = v;
-  }
-
-  // agentInteractiveCommand (string, can be empty)
-  if ("agentInteractiveCommand" in obj) {
-    const v = obj.agentInteractiveCommand;
-    if (typeof v !== "string")
-      err(`'agentInteractiveCommand' must be a string, got ${typeof v}`);
-    values.agentInteractiveCommand = v;
-  }
-
-  // iterationTimeout (non-negative integer)
-  if ("iterationTimeout" in obj) {
-    const v = obj.iterationTimeout;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 0)
-      err(
-        `'iterationTimeout' must be a non-negative integer (seconds), got '${v}'`,
-      );
-    values.iterationTimeout = v as number;
   }
 
   // sandbox (enum: "none" | "docker")
@@ -504,37 +857,6 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     );
   }
 
-  // review (boolean)
-  if ("review" in obj) {
-    const v = obj.review;
-    if (typeof v !== "boolean")
-      err(`'review' must be 'true' or 'false', got '${v}'`);
-    values.review = String(v);
-  }
-
-  // verbose — rejected (renamed to terse, inverted)
-  if ("verbose" in obj) {
-    err(
-      '\'verbose\' has been renamed to \'terse\' (inverted). Use "terse": true instead of "verbose": false, or "terse": false instead of "verbose": true.',
-    );
-  }
-
-  // terse (boolean)
-  if ("terse" in obj) {
-    const v = obj.terse;
-    if (typeof v !== "boolean")
-      err(`'terse' must be 'true' or 'false', got '${v}'`);
-    values.terse = String(v);
-  }
-
-  // agentVerboseFlags (string)
-  if ("agentVerboseFlags" in obj) {
-    const v = obj.agentVerboseFlags;
-    if (typeof v !== "string")
-      err(`'agentVerboseFlags' must be a string, got ${typeof v}`);
-    values.agentVerboseFlags = v;
-  }
-
   // workspaces (object of per-package overrides)
   if ("workspaces" in obj) {
     const ws = obj.workspaces;
@@ -567,6 +889,13 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
         if (!Array.isArray(pfc) && typeof pfc !== "string")
           err(
             `workspaces['${k}'].prFeedbackCommands must be an array of strings or a comma-separated string, got ${typeof pfc}`,
+          );
+      }
+      if ("validators" in entryObj) {
+        const v = entryObj.validators;
+        if (!Array.isArray(v) && typeof v !== "string")
+          err(
+            `workspaces['${k}'].validators must be an array of strings or a comma-separated string, got ${typeof v}`,
           );
       }
     }
@@ -614,6 +943,7 @@ export function writeConfigFile(
 
 /**
  * Extract config overrides from environment variables.
+ * Uses RALPHAI_<GROUP>_<KEY> naming convention.
  * Validates values and tracks source for --show-config.
  */
 export function applyEnvOverrides(
@@ -626,22 +956,198 @@ export function applyEnvOverrides(
     return v !== undefined && v !== "" ? v : undefined;
   };
 
-  // agentCommand
+  // --- agent group ---
   const agentCmd = get("RALPHAI_AGENT_COMMAND");
-  if (agentCmd !== undefined) overrides.agentCommand = agentCmd;
+  const agentSetupCmd = get("RALPHAI_AGENT_SETUP_COMMAND");
+  const agentInteractiveCmd = get("RALPHAI_AGENT_INTERACTIVE_COMMAND");
 
-  // setupCommand
-  const setupCmd = get("RALPHAI_SETUP_COMMAND");
-  if (setupCmd !== undefined) overrides.setupCommand = setupCmd;
+  if (
+    agentCmd !== undefined ||
+    agentSetupCmd !== undefined ||
+    agentInteractiveCmd !== undefined
+  ) {
+    const agentOverrides: Partial<AgentConfig> = {};
+    if (agentCmd !== undefined) agentOverrides.command = agentCmd;
+    if (agentSetupCmd !== undefined)
+      agentOverrides.setupCommand = agentSetupCmd;
+    if (agentInteractiveCmd !== undefined)
+      agentOverrides.interactiveCommand = agentInteractiveCmd;
+    overrides.agent = { ...DEFAULTS.agent, ...agentOverrides };
+  }
 
-  // feedbackCommands
-  const feedbackCmds = get("RALPHAI_FEEDBACK_COMMANDS");
-  if (feedbackCmds !== undefined) overrides.feedbackCommands = feedbackCmds;
+  // --- hooks group ---
+  const hooksFeedback = get("RALPHAI_HOOKS_FEEDBACK");
+  const hooksPrFeedback = get("RALPHAI_HOOKS_PR_FEEDBACK");
+  const hooksBeforeRun = get("RALPHAI_HOOKS_BEFORE_RUN");
+  const hooksAfterRun = get("RALPHAI_HOOKS_AFTER_RUN");
+  const hooksFeedbackTimeout = get("RALPHAI_HOOKS_FEEDBACK_TIMEOUT");
 
-  // prFeedbackCommands
-  const prFeedbackCmds = get("RALPHAI_PR_FEEDBACK_COMMANDS");
-  if (prFeedbackCmds !== undefined)
-    overrides.prFeedbackCommands = prFeedbackCmds;
+  if (
+    hooksFeedback !== undefined ||
+    hooksPrFeedback !== undefined ||
+    hooksBeforeRun !== undefined ||
+    hooksAfterRun !== undefined ||
+    hooksFeedbackTimeout !== undefined
+  ) {
+    const hooksOverrides: Partial<HooksConfig> = {};
+    if (hooksFeedback !== undefined) hooksOverrides.feedback = hooksFeedback;
+    if (hooksPrFeedback !== undefined)
+      hooksOverrides.prFeedback = hooksPrFeedback;
+    if (hooksBeforeRun !== undefined) hooksOverrides.beforeRun = hooksBeforeRun;
+    if (hooksAfterRun !== undefined) hooksOverrides.afterRun = hooksAfterRun;
+    if (hooksFeedbackTimeout !== undefined) {
+      validateNonNegInt(
+        hooksFeedbackTimeout,
+        "RALPHAI_HOOKS_FEEDBACK_TIMEOUT",
+        "seconds",
+      );
+      hooksOverrides.feedbackTimeout = parseInt(hooksFeedbackTimeout, 10);
+    }
+    overrides.hooks = { ...DEFAULTS.hooks, ...hooksOverrides };
+  }
+
+  // --- gate group ---
+  const gateMaxStuck = get("RALPHAI_GATE_MAX_STUCK");
+  const gateReview = get("RALPHAI_GATE_REVIEW");
+  const gateMaxRejections = get("RALPHAI_GATE_MAX_REJECTIONS");
+  const gateMaxIterations = get("RALPHAI_GATE_MAX_ITERATIONS");
+  const gateReviewMaxFiles = get("RALPHAI_GATE_REVIEW_MAX_FILES");
+  const gateValidators = get("RALPHAI_GATE_VALIDATORS");
+  const gateIterationTimeout = get("RALPHAI_GATE_ITERATION_TIMEOUT");
+
+  if (
+    gateMaxStuck !== undefined ||
+    gateReview !== undefined ||
+    gateMaxRejections !== undefined ||
+    gateMaxIterations !== undefined ||
+    gateReviewMaxFiles !== undefined ||
+    gateValidators !== undefined ||
+    gateIterationTimeout !== undefined
+  ) {
+    const gateOverrides: Partial<GateConfig> = {};
+    if (gateMaxStuck !== undefined) {
+      validatePositiveInt(gateMaxStuck, "RALPHAI_GATE_MAX_STUCK");
+      gateOverrides.maxStuck = parseInt(gateMaxStuck, 10);
+    }
+    if (gateReview !== undefined) {
+      validateBoolean(gateReview, "RALPHAI_GATE_REVIEW");
+      gateOverrides.review = gateReview === "true";
+    }
+    if (gateMaxRejections !== undefined) {
+      validateNonNegInt(gateMaxRejections, "RALPHAI_GATE_MAX_REJECTIONS");
+      gateOverrides.maxRejections = parseInt(gateMaxRejections, 10);
+    }
+    if (gateMaxIterations !== undefined) {
+      validateNonNegInt(gateMaxIterations, "RALPHAI_GATE_MAX_ITERATIONS");
+      gateOverrides.maxIterations = parseInt(gateMaxIterations, 10);
+    }
+    if (gateReviewMaxFiles !== undefined) {
+      validatePositiveInt(gateReviewMaxFiles, "RALPHAI_GATE_REVIEW_MAX_FILES");
+      gateOverrides.reviewMaxFiles = parseInt(gateReviewMaxFiles, 10);
+    }
+    if (gateValidators !== undefined) {
+      gateOverrides.validators = gateValidators;
+    }
+    if (gateIterationTimeout !== undefined) {
+      validateNonNegInt(
+        gateIterationTimeout,
+        "RALPHAI_GATE_ITERATION_TIMEOUT",
+        "seconds",
+      );
+      gateOverrides.iterationTimeout = parseInt(gateIterationTimeout, 10);
+    }
+    overrides.gate = { ...DEFAULTS.gate, ...gateOverrides };
+  }
+
+  // --- prompt group ---
+  const promptVerbose = get("RALPHAI_PROMPT_VERBOSE");
+  const promptPreamble = get("RALPHAI_PROMPT_PREAMBLE");
+  const promptLearnings = get("RALPHAI_PROMPT_LEARNINGS");
+  const promptCommitStyle = get("RALPHAI_PROMPT_COMMIT_STYLE");
+
+  if (
+    promptVerbose !== undefined ||
+    promptPreamble !== undefined ||
+    promptLearnings !== undefined ||
+    promptCommitStyle !== undefined
+  ) {
+    const promptOverrides: Partial<PromptConfig> = {};
+    if (promptVerbose !== undefined) {
+      validateBoolean(promptVerbose, "RALPHAI_PROMPT_VERBOSE");
+      promptOverrides.verbose = promptVerbose === "true";
+    }
+    if (promptPreamble !== undefined) promptOverrides.preamble = promptPreamble;
+    if (promptLearnings !== undefined) {
+      validateBoolean(promptLearnings, "RALPHAI_PROMPT_LEARNINGS");
+      promptOverrides.learnings = promptLearnings === "true";
+    }
+    if (promptCommitStyle !== undefined)
+      promptOverrides.commitStyle = promptCommitStyle;
+    overrides.prompt = { ...DEFAULTS.prompt, ...promptOverrides };
+  }
+
+  // --- pr group ---
+  const prDraft = get("RALPHAI_PR_DRAFT");
+  if (prDraft !== undefined) {
+    validateBoolean(prDraft, "RALPHAI_PR_DRAFT");
+    overrides.pr = { ...DEFAULTS.pr, draft: prDraft === "true" };
+  }
+
+  // --- git group ---
+  const gitBranchPrefix = get("RALPHAI_GIT_BRANCH_PREFIX");
+  if (gitBranchPrefix !== undefined) {
+    overrides.git = { ...DEFAULTS.git, branchPrefix: gitBranchPrefix };
+  }
+
+  // --- issue group ---
+  const issueSource = get("RALPHAI_ISSUE_SOURCE");
+  const issueStandaloneLabel = get("RALPHAI_ISSUE_STANDALONE_LABEL");
+  const issueSubissueLabel = get("RALPHAI_ISSUE_SUBISSUE_LABEL");
+  const issuePrdLabel = get("RALPHAI_ISSUE_PRD_LABEL");
+  const issueRepo = get("RALPHAI_ISSUE_REPO");
+  const issueCommentProgress = get("RALPHAI_ISSUE_COMMENT_PROGRESS");
+  const issueHitlLabel = get("RALPHAI_ISSUE_HITL_LABEL");
+  const issueInProgressLabel = get("RALPHAI_ISSUE_IN_PROGRESS_LABEL");
+  const issueDoneLabel = get("RALPHAI_ISSUE_DONE_LABEL");
+  const issueStuckLabel = get("RALPHAI_ISSUE_STUCK_LABEL");
+
+  if (
+    issueSource !== undefined ||
+    issueStandaloneLabel !== undefined ||
+    issueSubissueLabel !== undefined ||
+    issuePrdLabel !== undefined ||
+    issueRepo !== undefined ||
+    issueCommentProgress !== undefined ||
+    issueHitlLabel !== undefined ||
+    issueInProgressLabel !== undefined ||
+    issueDoneLabel !== undefined ||
+    issueStuckLabel !== undefined
+  ) {
+    const issueOverrides: Partial<IssueConfig> = {};
+    if (issueSource !== undefined) {
+      validateEnum(issueSource, "RALPHAI_ISSUE_SOURCE", ["none", "github"]);
+      issueOverrides.source = issueSource as IssueConfig["source"];
+    }
+    if (issueStandaloneLabel !== undefined)
+      issueOverrides.standaloneLabel = issueStandaloneLabel;
+    if (issueSubissueLabel !== undefined)
+      issueOverrides.subissueLabel = issueSubissueLabel;
+    if (issuePrdLabel !== undefined) issueOverrides.prdLabel = issuePrdLabel;
+    if (issueRepo !== undefined) issueOverrides.repo = issueRepo;
+    if (issueCommentProgress !== undefined) {
+      validateBoolean(issueCommentProgress, "RALPHAI_ISSUE_COMMENT_PROGRESS");
+      issueOverrides.commentProgress = issueCommentProgress === "true";
+    }
+    if (issueHitlLabel !== undefined) issueOverrides.hitlLabel = issueHitlLabel;
+    if (issueInProgressLabel !== undefined)
+      issueOverrides.inProgressLabel = issueInProgressLabel;
+    if (issueDoneLabel !== undefined) issueOverrides.doneLabel = issueDoneLabel;
+    if (issueStuckLabel !== undefined)
+      issueOverrides.stuckLabel = issueStuckLabel;
+    overrides.issue = { ...DEFAULTS.issue, ...issueOverrides };
+  }
+
+  // --- flat top-level keys ---
 
   // baseBranch (validate no spaces)
   const baseBranch = get("RALPHAI_BASE_BRANCH");
@@ -653,60 +1159,6 @@ export function applyEnvOverrides(
     }
     overrides.baseBranch = baseBranch;
   }
-
-  // maxStuck (positive integer)
-  const maxStuck = get("RALPHAI_MAX_STUCK");
-  if (maxStuck !== undefined) {
-    validatePositiveInt(maxStuck, "RALPHAI_MAX_STUCK");
-    overrides.maxStuck = parseInt(maxStuck, 10);
-  }
-
-  // iterationTimeout (non-negative integer)
-  const iterationTimeout = get("RALPHAI_ITERATION_TIMEOUT");
-  if (iterationTimeout !== undefined) {
-    validateNonNegInt(iterationTimeout, "RALPHAI_ITERATION_TIMEOUT", "seconds");
-    overrides.iterationTimeout = parseInt(iterationTimeout, 10);
-  }
-
-  // issueSource (enum)
-  const issueSource = get("RALPHAI_ISSUE_SOURCE");
-  if (issueSource !== undefined) {
-    validateEnum(issueSource, "RALPHAI_ISSUE_SOURCE", ["none", "github"]);
-    overrides.issueSource = issueSource as RalphaiConfig["issueSource"];
-  }
-
-  // standaloneLabel
-  const standaloneLabel = get("RALPHAI_STANDALONE_LABEL");
-  if (standaloneLabel !== undefined)
-    overrides.standaloneLabel = standaloneLabel;
-
-  // subissueLabel
-  const subissueLabel = get("RALPHAI_SUBISSUE_LABEL");
-  if (subissueLabel !== undefined) overrides.subissueLabel = subissueLabel;
-
-  // prdLabel
-  const prdLabel = get("RALPHAI_PRD_LABEL");
-  if (prdLabel !== undefined) overrides.prdLabel = prdLabel;
-
-  // issueRepo
-  const issueRepo = get("RALPHAI_ISSUE_REPO");
-  if (issueRepo !== undefined) overrides.issueRepo = issueRepo;
-
-  // issueCommentProgress (boolean)
-  const issueComment = get("RALPHAI_ISSUE_COMMENT_PROGRESS");
-  if (issueComment !== undefined) {
-    validateBoolean(issueComment, "RALPHAI_ISSUE_COMMENT_PROGRESS");
-    overrides.issueCommentProgress = issueComment;
-  }
-
-  // issueHitlLabel
-  const issueHitlLabel = get("RALPHAI_ISSUE_HITL_LABEL");
-  if (issueHitlLabel !== undefined) overrides.issueHitlLabel = issueHitlLabel;
-
-  // agentInteractiveCommand
-  const agentInteractiveCmd = get("RALPHAI_AGENT_INTERACTIVE_COMMAND");
-  if (agentInteractiveCmd !== undefined)
-    overrides.agentInteractiveCommand = agentInteractiveCmd;
 
   // sandbox (enum: "none" | "docker")
   const sandbox = get("RALPHAI_SANDBOX");
@@ -733,25 +1185,6 @@ export function applyEnvOverrides(
     overrides.dockerEnvVars = dockerEnvVars;
   }
 
-  // review (boolean)
-  const review = get("RALPHAI_REVIEW");
-  if (review !== undefined) {
-    validateBoolean(review, "RALPHAI_REVIEW");
-    overrides.review = review;
-  }
-
-  // terse (boolean)
-  const terse = get("RALPHAI_TERSE");
-  if (terse !== undefined) {
-    validateBoolean(terse, "RALPHAI_TERSE");
-    overrides.terse = terse;
-  }
-
-  // agentVerboseFlags (string)
-  const agentVerboseFlags = get("RALPHAI_AGENT_VERBOSE_FLAGS");
-  if (agentVerboseFlags !== undefined)
-    overrides.agentVerboseFlags = agentVerboseFlags;
-
   return overrides;
 }
 
@@ -763,18 +1196,52 @@ export function applyEnvOverrides(
 export interface ParsedCLIArgs {
   overrides: Partial<RalphaiConfig>;
   /** Raw CLI flag strings for --show-config source labels. */
-  rawFlags: Partial<Record<keyof RalphaiConfig, string>>;
+  rawFlags: Record<string, string>;
 }
 
 /**
  * Parse config-related CLI flags from the argument list.
  * Non-config flags (--dry-run, --resume, etc.) are ignored here.
+ *
+ * CLI flags use --<group>-<key> naming, e.g. --hooks-feedback=,
+ * --gate-max-stuck=, --agent-command=.
  */
 export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
   const overrides: Partial<RalphaiConfig> = {};
-  const rawFlags: Partial<Record<keyof RalphaiConfig, string>> = {};
+  const rawFlags: Record<string, string> = {};
+
+  /** Ensure overrides.agent exists, merging with defaults. */
+  function ensureAgent(): AgentConfig {
+    if (!overrides.agent) overrides.agent = { ...DEFAULTS.agent };
+    return overrides.agent;
+  }
+  function ensureHooks(): HooksConfig {
+    if (!overrides.hooks) overrides.hooks = { ...DEFAULTS.hooks };
+    return overrides.hooks;
+  }
+  function ensureGate(): GateConfig {
+    if (!overrides.gate) overrides.gate = { ...DEFAULTS.gate };
+    return overrides.gate;
+  }
+  function ensurePrompt(): PromptConfig {
+    if (!overrides.prompt) overrides.prompt = { ...DEFAULTS.prompt };
+    return overrides.prompt;
+  }
+  function ensurePr(): PrConfig {
+    if (!overrides.pr) overrides.pr = { ...DEFAULTS.pr };
+    return overrides.pr;
+  }
+  function ensureGit(): GitConfig {
+    if (!overrides.git) overrides.git = { ...DEFAULTS.git };
+    return overrides.git;
+  }
+  function ensureIssue(): IssueConfig {
+    if (!overrides.issue) overrides.issue = { ...DEFAULTS.issue };
+    return overrides.issue;
+  }
 
   for (const arg of args) {
+    // --- agent group ---
     if (arg.startsWith("--agent-command=")) {
       const v = arg.slice("--agent-command=".length);
       if (v === "") {
@@ -782,22 +1249,124 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
           "ERROR: --agent-command requires a non-empty value (e.g. --agent-command='claude -p')",
         );
       }
-      overrides.agentCommand = v;
-      rawFlags.agentCommand = arg;
-    } else if (arg.startsWith("--setup-command=")) {
-      const v = arg.slice("--setup-command=".length);
-      overrides.setupCommand = v;
-      rawFlags.setupCommand = arg;
-    } else if (arg.startsWith("--feedback-commands=")) {
-      const v = arg.slice("--feedback-commands=".length);
-      if (v !== "") validateCommaList(v, "--feedback-commands");
-      overrides.feedbackCommands = v;
-      rawFlags.feedbackCommands = arg;
-    } else if (arg.startsWith("--pr-feedback-commands=")) {
-      const v = arg.slice("--pr-feedback-commands=".length);
-      if (v !== "") validateCommaList(v, "--pr-feedback-commands");
-      overrides.prFeedbackCommands = v;
-      rawFlags.prFeedbackCommands = arg;
+      ensureAgent().command = v;
+      rawFlags["agent.command"] = arg;
+    } else if (arg.startsWith("--agent-setup-command=")) {
+      const v = arg.slice("--agent-setup-command=".length);
+      ensureAgent().setupCommand = v;
+      rawFlags["agent.setupCommand"] = arg;
+    } else if (arg.startsWith("--agent-interactive-command=")) {
+      const v = arg.slice("--agent-interactive-command=".length);
+      ensureAgent().interactiveCommand = v;
+      rawFlags["agent.interactiveCommand"] = arg;
+
+      // --- hooks group ---
+    } else if (arg.startsWith("--hooks-feedback=")) {
+      const v = arg.slice("--hooks-feedback=".length);
+      if (v !== "") validateCommaList(v, "--hooks-feedback");
+      ensureHooks().feedback = v;
+      rawFlags["hooks.feedback"] = arg;
+    } else if (arg.startsWith("--hooks-pr-feedback=")) {
+      const v = arg.slice("--hooks-pr-feedback=".length);
+      if (v !== "") validateCommaList(v, "--hooks-pr-feedback");
+      ensureHooks().prFeedback = v;
+      rawFlags["hooks.prFeedback"] = arg;
+    } else if (arg.startsWith("--hooks-before-run=")) {
+      const v = arg.slice("--hooks-before-run=".length);
+      ensureHooks().beforeRun = v;
+      rawFlags["hooks.beforeRun"] = arg;
+    } else if (arg.startsWith("--hooks-after-run=")) {
+      const v = arg.slice("--hooks-after-run=".length);
+      ensureHooks().afterRun = v;
+      rawFlags["hooks.afterRun"] = arg;
+    } else if (arg.startsWith("--hooks-feedback-timeout=")) {
+      const v = arg.slice("--hooks-feedback-timeout=".length);
+      validateNonNegInt(v, "--hooks-feedback-timeout", "seconds");
+      ensureHooks().feedbackTimeout = parseInt(v, 10);
+      rawFlags["hooks.feedbackTimeout"] = arg;
+
+      // --- gate group ---
+    } else if (arg.startsWith("--gate-max-stuck=")) {
+      const v = arg.slice("--gate-max-stuck=".length);
+      validatePositiveInt(v, "--gate-max-stuck");
+      ensureGate().maxStuck = parseInt(v, 10);
+      rawFlags["gate.maxStuck"] = arg;
+    } else if (arg === "--gate-review") {
+      ensureGate().review = true;
+      rawFlags["gate.review"] = "--gate-review";
+    } else if (arg === "--gate-no-review") {
+      ensureGate().review = false;
+      rawFlags["gate.review"] = "--gate-no-review";
+    } else if (arg.startsWith("--gate-max-rejections=")) {
+      const v = arg.slice("--gate-max-rejections=".length);
+      validateNonNegInt(v, "--gate-max-rejections");
+      ensureGate().maxRejections = parseInt(v, 10);
+      rawFlags["gate.maxRejections"] = arg;
+    } else if (arg.startsWith("--gate-max-iterations=")) {
+      const v = arg.slice("--gate-max-iterations=".length);
+      validateNonNegInt(v, "--gate-max-iterations");
+      ensureGate().maxIterations = parseInt(v, 10);
+      rawFlags["gate.maxIterations"] = arg;
+    } else if (arg.startsWith("--gate-review-max-files=")) {
+      const v = arg.slice("--gate-review-max-files=".length);
+      validatePositiveInt(v, "--gate-review-max-files");
+      ensureGate().reviewMaxFiles = parseInt(v, 10);
+      rawFlags["gate.reviewMaxFiles"] = arg;
+    } else if (arg.startsWith("--gate-validators=")) {
+      const v = arg.slice("--gate-validators=".length);
+      ensureGate().validators = v;
+      rawFlags["gate.validators"] = arg;
+    } else if (arg.startsWith("--gate-iteration-timeout=")) {
+      const v = arg.slice("--gate-iteration-timeout=".length);
+      validateNonNegInt(v, "--gate-iteration-timeout", "seconds");
+      ensureGate().iterationTimeout = parseInt(v, 10);
+      rawFlags["gate.iterationTimeout"] = arg;
+
+      // --- prompt group ---
+    } else if (arg === "--prompt-verbose") {
+      ensurePrompt().verbose = true;
+      rawFlags["prompt.verbose"] = "--prompt-verbose";
+    } else if (arg.startsWith("--prompt-preamble=")) {
+      const v = arg.slice("--prompt-preamble=".length);
+      ensurePrompt().preamble = v;
+      rawFlags["prompt.preamble"] = arg;
+    } else if (arg === "--prompt-learnings") {
+      ensurePrompt().learnings = true;
+      rawFlags["prompt.learnings"] = "--prompt-learnings";
+    } else if (arg === "--no-prompt-learnings") {
+      ensurePrompt().learnings = false;
+      rawFlags["prompt.learnings"] = "--no-prompt-learnings";
+    } else if (arg.startsWith("--prompt-commit-style=")) {
+      const v = arg.slice("--prompt-commit-style=".length);
+      ensurePrompt().commitStyle = v;
+      rawFlags["prompt.commitStyle"] = arg;
+
+      // --- pr group ---
+    } else if (arg === "--pr-draft") {
+      ensurePr().draft = true;
+      rawFlags["pr.draft"] = "--pr-draft";
+    } else if (arg === "--no-pr-draft") {
+      ensurePr().draft = false;
+      rawFlags["pr.draft"] = "--no-pr-draft";
+
+      // --- git group ---
+    } else if (arg.startsWith("--git-branch-prefix=")) {
+      const v = arg.slice("--git-branch-prefix=".length);
+      ensureGit().branchPrefix = v;
+      rawFlags["git.branchPrefix"] = arg;
+
+      // --- issue group ---
+    } else if (arg.startsWith("--issue-hitl-label=")) {
+      const v = arg.slice("--issue-hitl-label=".length);
+      if (v === "") {
+        throw new ConfigError(
+          "ERROR: --issue-hitl-label requires a non-empty value (e.g. --issue-hitl-label='ralphai-subissue-hitl')",
+        );
+      }
+      ensureIssue().hitlLabel = v;
+      rawFlags["issue.hitlLabel"] = arg;
+
+      // --- flat top-level keys ---
     } else if (arg.startsWith("--base-branch=")) {
       const v = arg.slice("--base-branch=".length);
       if (v === "") {
@@ -811,73 +1380,28 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
         );
       }
       overrides.baseBranch = v;
-      rawFlags.baseBranch = arg;
-    } else if (arg.startsWith("--max-stuck=")) {
-      const v = arg.slice("--max-stuck=".length);
-      validatePositiveInt(v, "--max-stuck");
-      overrides.maxStuck = parseInt(v, 10);
-      rawFlags.maxStuck = arg;
-    } else if (arg.startsWith("--iteration-timeout=")) {
-      const v = arg.slice("--iteration-timeout=".length);
-      validateNonNegInt(v, "--iteration-timeout", "seconds");
-      overrides.iterationTimeout = parseInt(v, 10);
-      rawFlags.iterationTimeout = arg;
-    } else if (arg === "--review") {
-      overrides.review = "true";
-      rawFlags.review = "--review";
-    } else if (arg === "--no-review") {
-      overrides.review = "false";
-      rawFlags.review = "--no-review";
-    } else if (arg === "--verbose") {
-      // --verbose is no longer a config flag (it's a runtime-only flag for
-      // agent logging). Old behaviour was terse mode toggle — reject with
-      // guidance pointing to --terse / --no-terse.
-      throw new ConfigError(
-        "ERROR: --verbose now enables agent debug logging. To control concise mode, use --terse (default) or --no-terse, or set terse in config/env.",
-      );
-    } else if (arg === "--terse") {
-      overrides.terse = "true";
-      rawFlags.terse = "--terse";
-    } else if (arg === "--no-terse") {
-      overrides.terse = "false";
-      rawFlags.terse = "--no-terse";
-    } else if (arg.startsWith("--agent-verbose-flags=")) {
-      const v = arg.slice("--agent-verbose-flags=".length);
-      overrides.agentVerboseFlags = v;
-      rawFlags.agentVerboseFlags = arg;
-    } else if (arg.startsWith("--issue-hitl-label=")) {
-      const v = arg.slice("--issue-hitl-label=".length);
-      if (v === "") {
-        throw new ConfigError(
-          "ERROR: --issue-hitl-label requires a non-empty value (e.g. --issue-hitl-label='ralphai-subissue-hitl')",
-        );
-      }
-      overrides.issueHitlLabel = v;
-      rawFlags.issueHitlLabel = arg;
-    } else if (arg.startsWith("--agent-interactive-command=")) {
-      const v = arg.slice("--agent-interactive-command=".length);
-      overrides.agentInteractiveCommand = v;
-      rawFlags.agentInteractiveCommand = arg;
+      rawFlags["baseBranch"] = arg;
     } else if (arg.startsWith("--sandbox=")) {
       const v = arg.slice("--sandbox=".length);
       validateEnum(v, "--sandbox", ["none", "docker"]);
       overrides.sandbox = v as RalphaiConfig["sandbox"];
-      rawFlags.sandbox = arg;
+      rawFlags["sandbox"] = arg;
     } else if (arg.startsWith("--docker-image=")) {
       const v = arg.slice("--docker-image=".length);
       overrides.dockerImage = v;
-      rawFlags.dockerImage = arg;
+      rawFlags["dockerImage"] = arg;
     } else if (arg.startsWith("--docker-mounts=")) {
       const v = arg.slice("--docker-mounts=".length);
       if (v !== "") validateCommaList(v, "--docker-mounts");
       overrides.dockerMounts = v;
-      rawFlags.dockerMounts = arg;
+      rawFlags["dockerMounts"] = arg;
     } else if (arg.startsWith("--docker-env-vars=")) {
       const v = arg.slice("--docker-env-vars=".length);
       if (v !== "") validateCommaList(v, "--docker-env-vars");
       overrides.dockerEnvVars = v;
-      rawFlags.dockerEnvVars = arg;
+      rawFlags["dockerEnvVars"] = arg;
     }
+
     // Non-config flags (--dry-run, --resume, --allow-dirty, --show-config,
     // --help) are deliberately not handled here.
   }
@@ -959,6 +1483,51 @@ export interface ResolveConfigResult {
 }
 
 /**
+ * Build a fresh ResolvedConfig from DEFAULTS, with every leaf set to
+ * source "default".
+ */
+function buildDefaultResolved(): ResolvedConfig {
+  function wrapGroup<T extends object>(group: T): ResolvedGroup<T> {
+    const out: Record<string, ResolvedValue<unknown>> = {};
+    for (const [k, v] of Object.entries(group)) {
+      out[k] = { value: v, source: "default" as ConfigSource };
+    }
+    return out as ResolvedGroup<T>;
+  }
+
+  return {
+    agent: wrapGroup(DEFAULTS.agent),
+    hooks: wrapGroup(DEFAULTS.hooks),
+    gate: wrapGroup(DEFAULTS.gate),
+    prompt: wrapGroup(DEFAULTS.prompt),
+    pr: wrapGroup(DEFAULTS.pr),
+    git: wrapGroup(DEFAULTS.git),
+    issue: wrapGroup(DEFAULTS.issue),
+    baseBranch: { value: DEFAULTS.baseBranch, source: "default" },
+    sandbox: { value: DEFAULTS.sandbox, source: "default" },
+    dockerImage: { value: DEFAULTS.dockerImage, source: "default" },
+    dockerMounts: { value: DEFAULTS.dockerMounts, source: "default" },
+    dockerEnvVars: { value: DEFAULTS.dockerEnvVars, source: "default" },
+    workspaces: { value: DEFAULTS.workspaces, source: "default" },
+  };
+}
+
+/** Apply a group override: only override keys that differ from defaults. */
+function applyGroupOverride<T extends object>(
+  target: ResolvedGroup<T>,
+  defaults: T,
+  override: T,
+  source: ConfigSource,
+): void {
+  for (const key of Object.keys(override) as Array<keyof T & string>) {
+    if (override[key] !== defaults[key] || source !== "default") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (target as any)[key] = { value: override[key], source };
+    }
+  }
+}
+
+/**
  * Resolve the full config by composing layers:
  *   1. Built-in defaults
  *   2. Config file values
@@ -974,58 +1543,60 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
   const warnings: string[] = [];
 
   // Layer 1: defaults
-  const resolved: ResolvedConfig = {} as ResolvedConfig;
-  for (const key of Object.keys(DEFAULTS) as Array<keyof RalphaiConfig>) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (resolved as any)[key] = {
-      value: DEFAULTS[key],
-      source: "default" as ConfigSource,
-    };
+  const resolved = buildDefaultResolved();
+
+  // Helper to apply a partial RalphaiConfig override at a given source
+  function applyPartial(
+    partial: Partial<RalphaiConfig>,
+    source: ConfigSource,
+  ): void {
+    if (partial.agent)
+      applyGroupOverride(resolved.agent, DEFAULTS.agent, partial.agent, source);
+    if (partial.hooks)
+      applyGroupOverride(resolved.hooks, DEFAULTS.hooks, partial.hooks, source);
+    if (partial.gate)
+      applyGroupOverride(resolved.gate, DEFAULTS.gate, partial.gate, source);
+    if (partial.prompt)
+      applyGroupOverride(
+        resolved.prompt,
+        DEFAULTS.prompt,
+        partial.prompt,
+        source,
+      );
+    if (partial.pr)
+      applyGroupOverride(resolved.pr, DEFAULTS.pr, partial.pr, source);
+    if (partial.git)
+      applyGroupOverride(resolved.git, DEFAULTS.git, partial.git, source);
+    if (partial.issue)
+      applyGroupOverride(resolved.issue, DEFAULTS.issue, partial.issue, source);
+    if (partial.baseBranch !== undefined)
+      resolved.baseBranch = { value: partial.baseBranch, source };
+    if (partial.sandbox !== undefined)
+      resolved.sandbox = { value: partial.sandbox, source };
+    if (partial.dockerImage !== undefined)
+      resolved.dockerImage = { value: partial.dockerImage, source };
+    if (partial.dockerMounts !== undefined)
+      resolved.dockerMounts = { value: partial.dockerMounts, source };
+    if (partial.dockerEnvVars !== undefined)
+      resolved.dockerEnvVars = { value: partial.dockerEnvVars, source };
+    if (partial.workspaces !== undefined)
+      resolved.workspaces = { value: partial.workspaces, source };
   }
 
   // Layer 2: config file
   const parsed = parseConfigFile(configFilePath);
   if (parsed) {
     warnings.push(...parsed.warnings);
-    for (const key of Object.keys(parsed.values) as Array<
-      keyof RalphaiConfig
-    >) {
-      const val = parsed.values[key];
-      if (val !== undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (resolved as any)[key] = {
-          value: val,
-          source: "config" as ConfigSource,
-        };
-      }
-    }
+    applyPartial(parsed.values, "config");
   }
 
   // Layer 3: env vars
   const envOverrides = applyEnvOverrides(envVars);
-  for (const key of Object.keys(envOverrides) as Array<keyof RalphaiConfig>) {
-    const val = envOverrides[key];
-    if (val !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (resolved as any)[key] = {
-        value: val,
-        source: "env" as ConfigSource,
-      };
-    }
-  }
+  applyPartial(envOverrides, "env");
 
   // Layer 4: CLI args
   const { overrides: cliOverrides } = parseCLIArgs(cliArgs);
-  for (const key of Object.keys(cliOverrides) as Array<keyof RalphaiConfig>) {
-    const val = cliOverrides[key];
-    if (val !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (resolved as any)[key] = {
-        value: val,
-        source: "cli" as ConfigSource,
-      };
-    }
-  }
+  applyPartial(cliOverrides, "cli");
 
   // Layer 5: Auto-detection fallbacks
   // When sandbox has no explicit value (still at default "none"), probe

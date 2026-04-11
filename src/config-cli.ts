@@ -31,7 +31,6 @@ import {
   configValues,
   parseCLIArgs,
   ConfigError,
-  type RalphaiConfig,
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 
@@ -42,21 +41,35 @@ function shellEscape(val: string): string {
   return val.replace(/'/g, "'\\''");
 }
 
-/** Map of config keys to their shell variable names. */
-const CONFIG_TO_SHELL: ReadonlyArray<[keyof RalphaiConfig, string]> = [
-  ["agentCommand", "AGENT_COMMAND"],
-  ["feedbackCommands", "FEEDBACK_COMMANDS"],
-  ["prFeedbackCommands", "PR_FEEDBACK_COMMANDS"],
-  ["baseBranch", "BASE_BRANCH"],
-  ["maxStuck", "MAX_STUCK"],
-  ["issueSource", "ISSUE_SOURCE"],
-  ["standaloneLabel", "STANDALONE_LABEL"],
-  ["subissueLabel", "SUBISSUE_LABEL"],
-  ["prdLabel", "PRD_LABEL"],
-  ["issueRepo", "ISSUE_REPO"],
-  ["issueCommentProgress", "ISSUE_COMMENT_PROGRESS"],
-  ["iterationTimeout", "ITERATION_TIMEOUT"],
-  ["review", "REVIEW"],
+/** Map of config paths to their shell variable names. */
+const CONFIG_TO_SHELL: ReadonlyArray<
+  [
+    path: string,
+    shellVar: string,
+    getter: (cfg: ReturnType<typeof configValues>) => string | number | boolean,
+  ]
+> = [
+  ["agent.command", "AGENT_COMMAND", (c) => c.agent.command],
+  ["hooks.feedback", "FEEDBACK_COMMANDS", (c) => c.hooks.feedback],
+  ["hooks.prFeedback", "PR_FEEDBACK_COMMANDS", (c) => c.hooks.prFeedback],
+  ["baseBranch", "BASE_BRANCH", (c) => c.baseBranch],
+  ["gate.maxStuck", "MAX_STUCK", (c) => c.gate.maxStuck],
+  ["issue.source", "ISSUE_SOURCE", (c) => c.issue.source],
+  ["issue.standaloneLabel", "STANDALONE_LABEL", (c) => c.issue.standaloneLabel],
+  ["issue.subissueLabel", "SUBISSUE_LABEL", (c) => c.issue.subissueLabel],
+  ["issue.prdLabel", "PRD_LABEL", (c) => c.issue.prdLabel],
+  ["issue.repo", "ISSUE_REPO", (c) => c.issue.repo],
+  [
+    "issue.commentProgress",
+    "ISSUE_COMMENT_PROGRESS",
+    (c) => c.issue.commentProgress,
+  ],
+  [
+    "gate.iterationTimeout",
+    "ITERATION_TIMEOUT",
+    (c) => c.gate.iterationTimeout,
+  ],
+  ["gate.review", "REVIEW", (c) => c.gate.review],
 ];
 
 const args = process.argv.slice(2);
@@ -132,8 +145,8 @@ try {
     // Output shell variable assignments for eval
     const cfg = configValues(result.config);
     const lines: string[] = [];
-    for (const [key, shellVar] of CONFIG_TO_SHELL) {
-      const val = String(cfg[key] ?? "");
+    for (const [, shellVar, getter] of CONFIG_TO_SHELL) {
+      const val = String(getter(cfg) ?? "");
       lines.push(`${shellVar}='${shellEscape(val)}'`);
     }
     // Workspaces: store as raw JSON string for scope resolution
@@ -146,12 +159,32 @@ try {
   }
 
   // JSON mode (default): output full JSON for programmatic consumption
-  const cfg = configValues(result.config);
   const config: Record<string, unknown> = {};
-  const sources: Record<string, string> = {};
-  for (const key of Object.keys(result.config) as Array<keyof RalphaiConfig>) {
-    config[key] = cfg[key];
-    sources[key] = result.config[key].source;
+  const sources: Record<string, unknown> = {};
+
+  // Flatten the nested ResolvedConfig into dotted-key config/sources maps.
+  // Groups (agent, hooks, ...) have nested { value, source } leaves;
+  // flat top-level keys are directly { value, source }.
+  const rc = result.config as unknown as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(rc)) {
+    if (
+      entry !== null &&
+      typeof entry === "object" &&
+      "value" in (entry as Record<string, unknown>) &&
+      "source" in (entry as Record<string, unknown>)
+    ) {
+      // Flat top-level key (e.g. baseBranch, sandbox)
+      const resolved = entry as { value: unknown; source: string };
+      config[key] = resolved.value;
+      sources[key] = resolved.source;
+    } else if (entry !== null && typeof entry === "object") {
+      // Group (e.g. agent, hooks, gate) — each property is { value, source }
+      const group = entry as Record<string, { value: unknown; source: string }>;
+      for (const [subKey, leaf] of Object.entries(group)) {
+        config[`${key}.${subKey}`] = leaf.value;
+        sources[`${key}.${subKey}`] = leaf.source;
+      }
+    }
   }
 
   const { rawFlags } = parseCLIArgs(configArgs);

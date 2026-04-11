@@ -37,10 +37,10 @@ import { slugify, issueDepSlug } from "./issue-naming.ts";
  *    - `ralphai-subissue`    — PRD sub-issues
  *    - `ralphai-prd`         — PRD parent issues
  *
- * 2. **State labels** (fixed, shared across all families):
- *    - `in-progress`  — issue is being worked on
- *    - `done`         — issue completed successfully
- *    - `stuck`        — agent is stuck on this issue
+ * 2. **State labels** (configurable per repo via config):
+ *    - `in-progress`  — issue is being worked on (default)
+ *    - `done`         — issue completed successfully (default)
+ *    - `stuck`        — agent is stuck on this issue (default)
  *
  * An issue carries its family label through all states. When a state
  * transition occurs, only the state label changes — the family label
@@ -55,6 +55,24 @@ export const DONE_LABEL = "done";
 
 /** Label added when the agent gets stuck on an issue. */
 export const STUCK_LABEL = "stuck";
+
+/**
+ * Configurable state label names. All transition functions accept an
+ * optional `stateLabels` parameter; when omitted the hardcoded defaults
+ * above are used, preserving backward compatibility.
+ */
+export interface StateLabelConfig {
+  inProgressLabel: string;
+  doneLabel: string;
+  stuckLabel: string;
+}
+
+/** Default state labels — matches the hardcoded constants. */
+const DEFAULT_STATE_LABELS: StateLabelConfig = {
+  inProgressLabel: IN_PROGRESS_LABEL,
+  doneLabel: DONE_LABEL,
+  stuckLabel: STUCK_LABEL,
+};
 
 // ===========================================================================
 // Label lifecycle — centralised label transitions
@@ -132,9 +150,11 @@ export function transitionPull(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel, doneLabel } = stateLabels;
   if (dryRun) {
-    return dryRunSkip(`Issue #${issue.number}: add ${IN_PROGRESS_LABEL}`);
+    return dryRunSkip(`Issue #${issue.number}: add ${inProgressLabel}`);
   }
 
   // Guard: refuse to add in-progress if the issue already has the done label.
@@ -149,12 +169,12 @@ export function transitionPull(
     try {
       const data: { labels?: Array<{ name: string }> } = JSON.parse(labelsRaw);
       const labels = (data.labels ?? []).map((l) => l.name);
-      if (labels.includes(DONE_LABEL)) {
+      if (labels.includes(doneLabel)) {
         return {
           ok: false,
           message:
-            `Refused to add ${IN_PROGRESS_LABEL} to issue #${issue.number}: ` +
-            `already has ${DONE_LABEL} label`,
+            `Refused to add ${inProgressLabel} to issue #${issue.number}: ` +
+            `already has ${doneLabel} label`,
         };
       }
     } catch {
@@ -164,18 +184,18 @@ export function transitionPull(
 
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${IN_PROGRESS_LABEL}"`,
+      `--add-label "${inProgressLabel}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label add failed for issue #${issue.number} (pull: add ${IN_PROGRESS_LABEL})`,
+      message: `Label add failed for issue #${issue.number} (pull: add ${inProgressLabel})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: added ${IN_PROGRESS_LABEL}`,
+    message: `Issue #${issue.number}: added ${inProgressLabel}`,
   };
 }
 
@@ -189,26 +209,28 @@ export function transitionDone(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel, doneLabel, stuckLabel } = stateLabels;
   if (dryRun) {
     return dryRunSkip(
-      `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
+      `Issue #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`,
+      `--add-label "${doneLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label swap failed for issue #${issue.number} (done: ${IN_PROGRESS_LABEL} → ${DONE_LABEL})`,
+      message: `Label swap failed for issue #${issue.number} (done: ${inProgressLabel} → ${doneLabel})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
+    message: `Issue #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
   };
 }
 
@@ -221,26 +243,28 @@ export function transitionStuck(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel, stuckLabel } = stateLabels;
   if (dryRun) {
     return dryRunSkip(
-      `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL}`,
+      `Issue #${issue.number}: ${inProgressLabel} → ${stuckLabel}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${STUCK_LABEL}" --remove-label "${IN_PROGRESS_LABEL}"`,
+      `--add-label "${stuckLabel}" --remove-label "${inProgressLabel}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Label swap failed for issue #${issue.number} (stuck: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL})`,
+      message: `Label swap failed for issue #${issue.number} (stuck: ${inProgressLabel} → ${stuckLabel})`,
     };
   }
   return {
     ok: true,
-    message: `Issue #${issue.number}: ${IN_PROGRESS_LABEL} → ${STUCK_LABEL}`,
+    message: `Issue #${issue.number}: ${inProgressLabel} → ${stuckLabel}`,
   };
 }
 
@@ -255,13 +279,15 @@ export function transitionReset(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel, stuckLabel } = stateLabels;
   if (dryRun) {
     return dryRunSkip(`Issue #${issue.number}: remove state labels`);
   }
   const cmd =
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-    `--remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`;
+    `--remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`;
   const result = execQuiet(cmd, cwd);
   if (result === null) {
     return {
@@ -290,24 +316,26 @@ export function prdTransitionInProgress(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel } = stateLabels;
   if (dryRun) {
-    return dryRunSkip(`PRD #${issue.number}: add ${IN_PROGRESS_LABEL}`);
+    return dryRunSkip(`PRD #${issue.number}: add ${inProgressLabel}`);
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${IN_PROGRESS_LABEL}"`,
+      `--add-label "${inProgressLabel}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Failed to add ${IN_PROGRESS_LABEL} to PRD #${issue.number}`,
+      message: `Failed to add ${inProgressLabel} to PRD #${issue.number}`,
     };
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: added ${IN_PROGRESS_LABEL}`,
+    message: `PRD #${issue.number}: added ${inProgressLabel}`,
   };
 }
 
@@ -321,15 +349,17 @@ export function prdTransitionDone(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { inProgressLabel, doneLabel, stuckLabel } = stateLabels;
   if (dryRun) {
     return dryRunSkip(
-      `PRD #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
+      `PRD #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
     );
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${DONE_LABEL}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}"`,
+      `--add-label "${doneLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}"`,
     cwd,
   );
   if (result === null) {
@@ -340,7 +370,7 @@ export function prdTransitionDone(
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: ${IN_PROGRESS_LABEL} → ${DONE_LABEL}`,
+    message: `PRD #${issue.number}: ${inProgressLabel} → ${doneLabel}`,
   };
 }
 
@@ -355,24 +385,26 @@ export function prdTransitionStuck(
   issue: IssueMeta,
   cwd: string,
   dryRun = false,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): LabelTransitionResult {
+  const { stuckLabel } = stateLabels;
   if (dryRun) {
-    return dryRunSkip(`PRD #${issue.number}: add ${STUCK_LABEL}`);
+    return dryRunSkip(`PRD #${issue.number}: add ${stuckLabel}`);
   }
   const result = execQuiet(
     `gh issue edit ${issue.number} --repo "${issue.repo}" ` +
-      `--add-label "${STUCK_LABEL}"`,
+      `--add-label "${stuckLabel}"`,
     cwd,
   );
   if (result === null) {
     return {
       ok: false,
-      message: `Failed to add ${STUCK_LABEL} to PRD #${issue.number}`,
+      message: `Failed to add ${stuckLabel} to PRD #${issue.number}`,
     };
   }
   return {
     ok: true,
-    message: `PRD #${issue.number}: added ${STUCK_LABEL}`,
+    message: `PRD #${issue.number}: added ${stuckLabel}`,
   };
 }
 
@@ -551,6 +583,8 @@ export interface PullIssueOptions {
   issuePrdLabel?: string;
   /** Label that marks a sub-issue as requiring human-in-the-loop review (e.g. "ralphai-subissue-hitl"). */
   issueHitlLabel?: string;
+  /** Configurable state label names (defaults to hardcoded constants). */
+  stateLabels?: StateLabelConfig;
 }
 
 /** Result of a pullGithubIssues() call. */
@@ -885,7 +919,7 @@ export function peekPrdIssues(options: PeekIssueOptions): PeekIssueResult {
     cwd: options.cwd,
     issueSource: options.issueSource,
     issueRepo: options.issueRepo,
-    label: options.issuePrdLabel ?? DEFAULTS.prdLabel,
+    label: options.issuePrdLabel ?? DEFAULTS.issue.prdLabel,
     limit: 10,
     msg: {
       skipPeek: "PRD peek",
@@ -922,7 +956,7 @@ export function discoverParentPrd(
   cwd: string,
   prdLabel?: string,
 ): number | undefined {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -1026,7 +1060,7 @@ export function discoverParentIssue(
   cwd: string,
   prdLabel?: string,
 ): ParentIssueResult {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   const raw = execQuiet(
     `gh api repos/${repo}/issues/${issueNumber}/parent`,
     cwd,
@@ -1101,6 +1135,7 @@ interface FetchAndWriteOptions {
   cwd: string;
   issueCommentProgress: boolean;
   issuePrdLabel?: string;
+  stateLabels?: StateLabelConfig;
 }
 
 /**
@@ -1170,7 +1205,12 @@ function fetchAndWriteIssuePlan(opts: FetchAndWriteOptions): PullIssueResult {
   writeFileSync(planPath, planContent, "utf-8");
 
   // Update issue labels: add in-progress (family label stays)
-  transitionPull({ number: Number(issueNumber), repo }, cwd);
+  transitionPull(
+    { number: Number(issueNumber), repo },
+    cwd,
+    false,
+    opts.stateLabels,
+  );
 
   if (issueCommentProgress) {
     execQuiet(
@@ -1294,7 +1334,8 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
 
   // Iterate oldest-first (gh returns newest first, so reverse).
   // Skip any candidate that already has a state label.
-  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL];
+  const sl0 = options.stateLabels ?? DEFAULT_STATE_LABELS;
+  const skipLabels = [sl0.inProgressLabel, sl0.doneLabel, sl0.stuckLabel];
   const reversed = [...candidates].reverse();
   const issueNumber = findFirstEligibleIssue(reversed, skipLabels, repo, cwd);
 
@@ -1313,6 +1354,7 @@ export function pullGithubIssues(options: PullIssueOptions): PullIssueResult {
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
+    stateLabels: options.stateLabels,
   });
 }
 
@@ -1333,7 +1375,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   const { backlogDir, cwd, issueSource, issueRepo, issueCommentProgress } =
     options;
 
-  const prdLabel = options.issuePrdLabel ?? DEFAULTS.prdLabel;
+  const prdLabel = options.issuePrdLabel ?? DEFAULTS.issue.prdLabel;
 
   if (issueSource !== "github") {
     return { pulled: false, message: "Issue source is not 'github'" };
@@ -1423,8 +1465,14 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   // Find the first open sub-issue that hasn't already been picked up
   // or completed (label check prevents re-pulling issues that were
   // already processed by a prior drain iteration).
-  const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issueHitlLabel;
-  const skipLabels = [IN_PROGRESS_LABEL, DONE_LABEL, STUCK_LABEL, hitlLabel];
+  const hitlLabel = options.issueHitlLabel ?? DEFAULTS.issue.hitlLabel;
+  const sl = options.stateLabels ?? DEFAULT_STATE_LABELS;
+  const skipLabels = [
+    sl.inProgressLabel,
+    sl.doneLabel,
+    sl.stuckLabel,
+    hitlLabel,
+  ];
   const subIssueNumber = findFirstEligibleIssue(
     openSubIssues,
     skipLabels,
@@ -1444,7 +1492,12 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
   );
 
   // Best-effort: mark the PRD parent as in-progress when we first pull a sub-issue.
-  prdTransitionInProgress({ number: prd.number, repo }, cwd);
+  prdTransitionInProgress(
+    { number: prd.number, repo },
+    cwd,
+    false,
+    options.stateLabels,
+  );
 
   return fetchAndWriteIssuePlan({
     repo,
@@ -1454,6 +1507,7 @@ export function pullPrdSubIssue(options: PullIssueOptions): PullIssueResult {
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
+    stateLabels: options.stateLabels,
   });
 }
 
@@ -1476,7 +1530,7 @@ export function fetchPrdIssueByNumber(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot fetch PRD issue",
@@ -1530,7 +1584,7 @@ export function fetchPrdIssue(
   cwd: string,
   prdLabel?: string,
 ): PrdIssue | null {
-  const label = prdLabel ?? DEFAULTS.prdLabel;
+  const label = prdLabel ?? DEFAULTS.issue.prdLabel;
   if (!checkGhAvailable()) {
     throw new Error(
       "gh CLI not available or not authenticated — cannot auto-detect PRD issue",
@@ -1671,6 +1725,7 @@ export function pullGithubIssueByNumber(
     cwd,
     issueCommentProgress,
     issuePrdLabel: options.issuePrdLabel,
+    stateLabels: options.stateLabels,
   });
 }
 
@@ -1692,6 +1747,7 @@ export function checkAllPrdSubIssuesDone(
   repo: string,
   prdNumber: number,
   cwd: string,
+  stateLabels: StateLabelConfig = DEFAULT_STATE_LABELS,
 ): boolean {
   // Fetch all sub-issues via the native REST API
   const subIssuesRaw = execQuiet(
@@ -1720,7 +1776,7 @@ export function checkAllPrdSubIssuesDone(
       cwd,
     );
     const labels = labelsRaw ? labelsRaw.split(",") : [];
-    if (!labels.includes(DONE_LABEL)) {
+    if (!labels.includes(stateLabels.doneLabel)) {
       return false;
     }
   }
@@ -1812,7 +1868,7 @@ export function discoverPrdTarget(
   }
 
   const hasLabel = data.labels.some(
-    (l) => l.name === (prdLabel ?? DEFAULTS.prdLabel),
+    (l) => l.name === (prdLabel ?? DEFAULTS.issue.prdLabel),
   );
 
   if (!hasLabel) {
@@ -1971,6 +2027,8 @@ export interface RestoreIssueLabelsOptions {
   issueRepo: string;
   /** Working directory for gh CLI calls. */
   cwd: string;
+  /** Configurable state label names (defaults to hardcoded constants). */
+  stateLabels?: StateLabelConfig;
 }
 
 export interface RestoreIssueLabelsResult {
@@ -2039,7 +2097,12 @@ export function restoreIssueLabels(
 
   // Remove shared state labels (in-progress and stuck).
   // The family label stays — it was never removed during pull.
-  const transitionResult = transitionReset({ number: fm.issue, repo }, cwd);
+  const transitionResult = transitionReset(
+    { number: fm.issue, repo },
+    cwd,
+    false,
+    options.stateLabels,
+  );
 
   return {
     restored: transitionResult.ok,

@@ -32,7 +32,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([
+    expect(parsed.hooks.feedback).toEqual([
       "pnpm build",
       "pnpm test",
       "pnpm lint",
@@ -54,7 +54,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual(["npm run build", "npm test"]);
+    expect(parsed.hooks.feedback).toEqual(["npm run build", "npm test"]);
   });
 
   it("detects yarn from yarn.lock and populates feedbackCommands", async () => {
@@ -75,7 +75,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([
+    expect(parsed.hooks.feedback).toEqual([
       "yarn build",
       "yarn test",
       "yarn lint",
@@ -100,7 +100,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([
+    expect(parsed.hooks.feedback).toEqual([
       "bun run build",
       "bun run test",
       "bun run lint",
@@ -122,7 +122,7 @@ describe("package manager detection", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // No test task in deno.json, but deno has a built-in test runner
-    expect(parsed.feedbackCommands).toEqual([
+    expect(parsed.hooks.feedback).toEqual([
       "deno task build",
       "deno task lint",
       "deno test",
@@ -147,7 +147,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
+    expect(parsed.hooks.feedback).toEqual(["pnpm build", "pnpm test"]);
   });
 
   it("only includes scripts that actually exist in package.json", async () => {
@@ -161,7 +161,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual(["npm test"]);
+    expect(parsed.hooks.feedback).toEqual(["npm test"]);
   });
 
   it("defaults feedbackCommands to empty array when no scripts exist", async () => {
@@ -180,7 +180,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([]);
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("defaults feedbackCommands to empty array for non-JS projects", async () => {
@@ -189,7 +189,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([]);
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("defaults feedbackCommands to empty array when no matching scripts detected", async () => {
@@ -208,7 +208,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([]);
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("feedbackCommands is empty array for non-JS projects (no package.json)", async () => {
@@ -217,7 +217,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([]);
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("feedbackCommands is empty array when no matching scripts detected", async () => {
@@ -236,7 +236,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([]);
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("detects type-check and format:check scripts", async () => {
@@ -263,7 +263,7 @@ describe("package manager detection", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.feedbackCommands).toEqual([
+    expect(parsed.hooks.feedback).toEqual([
       "pnpm build",
       "pnpm test",
       "pnpm type-check",
@@ -292,6 +292,6 @@ describe("package manager detection", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // pnpm should win because lock file beats packageManager field
-    expect(parsed.feedbackCommands).toEqual(["pnpm build", "pnpm test"]);
+    expect(parsed.hooks.feedback).toEqual(["pnpm build", "pnpm test"]);
   });
 });

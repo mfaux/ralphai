@@ -592,3 +592,119 @@ describe("resolveScope prFeedbackCommands", () => {
     expect(result.prFeedbackCommands).toBe("pnpm --filter @repo/web test:e2e");
   });
 });
+
+// ---------------------------------------------------------------------------
+// resolveScope() preamble workspace override tests
+// ---------------------------------------------------------------------------
+
+describe("resolveScope preamble override", () => {
+  const ctx = useTempDir();
+
+  it("returns undefined preamble when no scope and no rootPreamble", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root" }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
+    });
+
+    expect(result.preamble).toBeUndefined();
+  });
+
+  it("returns rootPreamble when scope is set but workspace has no preamble override", () => {
+    writeFileSync(join(ctx.dir, "go.mod"), "module example.com/mymod\n");
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "cmd/server",
+      rootFeedbackCommands: "go test ./...",
+      rootPrFeedbackCommands: "",
+      rootPreamble: "Always use TDD.",
+    });
+
+    expect(result.preamble).toBe("Always use TDD.");
+  });
+
+  it("uses workspace preamble override when matching scope has preamble", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root" }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const wsConfig = JSON.stringify({
+      "packages/web": {
+        feedbackCommands: ["pnpm test"],
+        preamble: "Web-specific: focus on accessibility.",
+      },
+    });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
+      rootPreamble: "Root preamble.",
+      workspacesConfig: wsConfig,
+    });
+
+    expect(result.preamble).toBe("Web-specific: focus on accessibility.");
+  });
+
+  it("falls back to rootPreamble when workspace scope has no preamble key", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root" }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const wsConfig = JSON.stringify({
+      "packages/api": {
+        feedbackCommands: ["pnpm test"],
+      },
+    });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/api",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
+      rootPreamble: "Root preamble.",
+      workspacesConfig: wsConfig,
+    });
+
+    expect(result.preamble).toBe("Root preamble.");
+  });
+
+  it("workspace preamble with @path syntax is passed through as-is (resolved by runner)", () => {
+    writeFileSync(
+      join(ctx.dir, "package.json"),
+      JSON.stringify({ name: "root" }),
+    );
+    writeFileSync(join(ctx.dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
+
+    const wsConfig = JSON.stringify({
+      "packages/web": {
+        feedbackCommands: ["pnpm test"],
+        preamble: "@packages/web/PREAMBLE.md",
+      },
+    });
+
+    const result = resolveScope({
+      cwd: ctx.dir,
+      planScope: "packages/web",
+      rootFeedbackCommands: "pnpm test",
+      rootPrFeedbackCommands: "",
+      workspacesConfig: wsConfig,
+    });
+
+    // @path resolution is handled by the runner, not resolveScope
+    expect(result.preamble).toBe("@packages/web/PREAMBLE.md");
+  });
+});

@@ -78,8 +78,8 @@ describe("runRunner — resume", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

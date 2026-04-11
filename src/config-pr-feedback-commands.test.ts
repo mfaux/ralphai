@@ -1,78 +1,83 @@
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { join } from "path";
+import { useTempDir, makeConfigTestHelpers } from "./test-utils.ts";
 import {
   parseConfigFile,
   applyEnvOverrides,
   parseCLIArgs,
   resolveConfig,
-  getConfigFilePath,
   DEFAULTS,
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — default value
+// prFeedback (hooks.prFeedback) — default value
 // ---------------------------------------------------------------------------
 
-describe("DEFAULTS — prFeedbackCommands", () => {
+describe("DEFAULTS — hooks.prFeedback", () => {
   it('has default ""', () => {
-    expect(DEFAULTS.prFeedbackCommands).toBe("");
+    expect(DEFAULTS.hooks.prFeedback).toBe("");
   });
 });
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — config file parsing
+// prFeedback — config file parsing
 // ---------------------------------------------------------------------------
 
-describe("parseConfigFile — prFeedbackCommands", () => {
+describe("parseConfigFile — hooks.prFeedback", () => {
   const ctx = useTempDir();
 
   it("parses array format and joins to comma-separated string", () => {
     const file = join(ctx.dir, "arr.json");
     writeFileSync(
       file,
-      JSON.stringify({ prFeedbackCommands: ["cmd1", "cmd2"] }),
+      JSON.stringify({ hooks: { prFeedback: ["cmd1", "cmd2"] } }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.prFeedbackCommands).toBe("cmd1,cmd2");
+    expect(result.values.hooks!.prFeedback).toBe("cmd1,cmd2");
   });
 
   it("parses string format as-is", () => {
     const file = join(ctx.dir, "str.json");
-    writeFileSync(file, JSON.stringify({ prFeedbackCommands: "cmd1,cmd2" }));
+    writeFileSync(file, JSON.stringify({ hooks: { prFeedback: "cmd1,cmd2" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.prFeedbackCommands).toBe("cmd1,cmd2");
+    expect(result.values.hooks!.prFeedback).toBe("cmd1,cmd2");
   });
 
   it("missing key defaults to undefined (not in values)", () => {
     const file = join(ctx.dir, "empty.json");
-    writeFileSync(file, JSON.stringify({ agentCommand: "claude -p" }));
+    writeFileSync(file, JSON.stringify({ agent: { command: "claude -p" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.prFeedbackCommands).toBeUndefined();
+    expect(result.values.hooks).toBeUndefined();
   });
 
   it("rejects non-string/non-array type", () => {
     const file = join(ctx.dir, "bad-type.json");
-    writeFileSync(file, JSON.stringify({ prFeedbackCommands: 42 }));
+    writeFileSync(file, JSON.stringify({ hooks: { prFeedback: 42 } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'prFeedbackCommands' must be an array of strings or a comma-separated string, got number",
+      "'hooks.prFeedback' must be an array of strings or a comma-separated string, got number",
     );
   });
 
   it("rejects array with empty entry", () => {
     const file = join(ctx.dir, "empty-entry.json");
-    writeFileSync(file, JSON.stringify({ prFeedbackCommands: ["cmd1", ""] }));
+    writeFileSync(
+      file,
+      JSON.stringify({ hooks: { prFeedback: ["cmd1", ""] } }),
+    );
     expect(() => parseConfigFile(file)).toThrow(
-      "'prFeedbackCommands' array contains an empty entry",
+      "'hooks.prFeedback' array contains an empty entry",
     );
   });
 
   it("rejects array with whitespace-only entry", () => {
     const file = join(ctx.dir, "ws-entry.json");
-    writeFileSync(file, JSON.stringify({ prFeedbackCommands: ["cmd1", "  "] }));
+    writeFileSync(
+      file,
+      JSON.stringify({ hooks: { prFeedback: ["cmd1", "  "] } }),
+    );
     expect(() => parseConfigFile(file)).toThrow(
-      "'prFeedbackCommands' array contains an empty entry",
+      "'hooks.prFeedback' array contains an empty entry",
     );
   });
 
@@ -80,7 +85,7 @@ describe("parseConfigFile — prFeedbackCommands", () => {
     const file = join(ctx.dir, "unknown-key.json");
     writeFileSync(
       file,
-      JSON.stringify({ prFeedbackCommands: "cmd1", bogusKey: true }),
+      JSON.stringify({ hooks: { prFeedback: "cmd1" }, bogusKey: true }),
     );
     const result = parseConfigFile(file)!;
     expect(result.warnings.length).toBeGreaterThan(0);
@@ -89,7 +94,7 @@ describe("parseConfigFile — prFeedbackCommands", () => {
 });
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — workspace overrides
+// prFeedback — workspace overrides
 // ---------------------------------------------------------------------------
 
 describe("parseConfigFile — workspace prFeedbackCommands", () => {
@@ -144,141 +149,127 @@ describe("parseConfigFile — workspace prFeedbackCommands", () => {
 });
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — env var override
+// prFeedback — env var override
 // ---------------------------------------------------------------------------
 
-describe("applyEnvOverrides — prFeedbackCommands", () => {
-  it("extracts RALPHAI_PR_FEEDBACK_COMMANDS", () => {
+describe("applyEnvOverrides — hooks.prFeedback", () => {
+  it("extracts RALPHAI_HOOKS_PR_FEEDBACK", () => {
     const result = applyEnvOverrides({
-      RALPHAI_PR_FEEDBACK_COMMANDS: "cmd1,cmd2",
+      RALPHAI_HOOKS_PR_FEEDBACK: "cmd1,cmd2",
     });
-    expect(result.prFeedbackCommands).toBe("cmd1,cmd2");
+    expect(result.hooks!.prFeedback).toBe("cmd1,cmd2");
   });
 
-  it("ignores empty RALPHAI_PR_FEEDBACK_COMMANDS", () => {
+  it("ignores empty RALPHAI_HOOKS_PR_FEEDBACK", () => {
     const result = applyEnvOverrides({
-      RALPHAI_PR_FEEDBACK_COMMANDS: "",
+      RALPHAI_HOOKS_PR_FEEDBACK: "",
     });
-    expect(result.prFeedbackCommands).toBeUndefined();
+    expect(result.hooks).toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — CLI flag parsing
+// prFeedback — CLI flag parsing
 // ---------------------------------------------------------------------------
 
-describe("parseCLIArgs — prFeedbackCommands", () => {
-  it("parses --pr-feedback-commands=value", () => {
-    const result = parseCLIArgs(["--pr-feedback-commands=cmd1,cmd2"]);
-    expect(result.overrides.prFeedbackCommands).toBe("cmd1,cmd2");
-    expect(result.rawFlags.prFeedbackCommands).toBe(
-      "--pr-feedback-commands=cmd1,cmd2",
+describe("parseCLIArgs — hooks.prFeedback", () => {
+  it("parses --hooks-pr-feedback=value", () => {
+    const result = parseCLIArgs(["--hooks-pr-feedback=cmd1,cmd2"]);
+    expect(result.overrides.hooks!.prFeedback).toBe("cmd1,cmd2");
+    expect(result.rawFlags["hooks.prFeedback"]).toBe(
+      "--hooks-pr-feedback=cmd1,cmd2",
     );
   });
 
-  it("allows empty --pr-feedback-commands= to clear", () => {
-    const result = parseCLIArgs(["--pr-feedback-commands="]);
-    expect(result.overrides.prFeedbackCommands).toBe("");
+  it("allows empty --hooks-pr-feedback= to clear", () => {
+    const result = parseCLIArgs(["--hooks-pr-feedback="]);
+    expect(result.overrides.hooks!.prFeedback).toBe("");
   });
 
   it("rejects comma list with empty entry", () => {
-    expect(() => parseCLIArgs(["--pr-feedback-commands=cmd1,,cmd2"])).toThrow(
-      "--pr-feedback-commands contains an empty entry",
+    expect(() => parseCLIArgs(["--hooks-pr-feedback=cmd1,,cmd2"])).toThrow(
+      "--hooks-pr-feedback contains an empty entry",
     );
   });
 
   it("rejects trailing comma", () => {
-    expect(() => parseCLIArgs(["--pr-feedback-commands=cmd1,"])).toThrow(
-      "--pr-feedback-commands contains an empty entry",
+    expect(() => parseCLIArgs(["--hooks-pr-feedback=cmd1,"])).toThrow(
+      "--hooks-pr-feedback contains an empty entry",
     );
   });
 });
 
 // ---------------------------------------------------------------------------
-// prFeedbackCommands — resolveConfig precedence chain
+// prFeedback — resolveConfig precedence chain
 // ---------------------------------------------------------------------------
 
-describe("resolveConfig — prFeedbackCommands precedence", () => {
+describe("resolveConfig — hooks.prFeedback precedence", () => {
   const ctx = useTempDir();
-
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   it('returns default "" when no overrides', () => {
     const cwd = join(ctx.dir, "repo-prfc-default");
     mkdirSync(cwd, { recursive: true });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.prFeedbackCommands.value).toBe("");
-    expect(config.prFeedbackCommands.source).toBe("default");
+    expect(config.hooks.prFeedback.value).toBe("");
+    expect(config.hooks.prFeedback.source).toBe("default");
   });
 
   it("config file overrides default", () => {
     const cwd = join(ctx.dir, "repo-prfc-config");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { prFeedbackCommands: "from-config" });
+    writeGlobalConfig(cwd, { hooks: { prFeedback: "from-config" } });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.prFeedbackCommands.value).toBe("from-config");
-    expect(config.prFeedbackCommands.source).toBe("config");
+    expect(config.hooks.prFeedback.value).toBe("from-config");
+    expect(config.hooks.prFeedback.source).toBe("config");
   });
 
   it("env var overrides config file", () => {
     const cwd = join(ctx.dir, "repo-prfc-env");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { prFeedbackCommands: "from-config" });
+    writeGlobalConfig(cwd, { hooks: { prFeedback: "from-config" } });
     const { config } = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_PR_FEEDBACK_COMMANDS: "from-env" }),
+      envVars: env({ RALPHAI_HOOKS_PR_FEEDBACK: "from-env" }),
       cliArgs: [],
     });
-    expect(config.prFeedbackCommands.value).toBe("from-env");
-    expect(config.prFeedbackCommands.source).toBe("env");
+    expect(config.hooks.prFeedback.value).toBe("from-env");
+    expect(config.hooks.prFeedback.source).toBe("env");
   });
 
   it("CLI flag overrides env var", () => {
     const cwd = join(ctx.dir, "repo-prfc-cli");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { prFeedbackCommands: "from-config" });
+    writeGlobalConfig(cwd, { hooks: { prFeedback: "from-config" } });
     const { config } = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_PR_FEEDBACK_COMMANDS: "from-env" }),
-      cliArgs: ["--pr-feedback-commands=from-cli"],
+      envVars: env({ RALPHAI_HOOKS_PR_FEEDBACK: "from-env" }),
+      cliArgs: ["--hooks-pr-feedback=from-cli"],
     });
-    expect(config.prFeedbackCommands.value).toBe("from-cli");
-    expect(config.prFeedbackCommands.source).toBe("cli");
+    expect(config.hooks.prFeedback.value).toBe("from-cli");
+    expect(config.hooks.prFeedback.source).toBe("cli");
   });
 
   it("empty CLI flag clears lower layers", () => {
     const cwd = join(ctx.dir, "repo-prfc-cli-empty");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { prFeedbackCommands: "from-config" });
+    writeGlobalConfig(cwd, { hooks: { prFeedback: "from-config" } });
     const { config } = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_PR_FEEDBACK_COMMANDS: "from-env" }),
-      cliArgs: ["--pr-feedback-commands="],
+      envVars: env({ RALPHAI_HOOKS_PR_FEEDBACK: "from-env" }),
+      cliArgs: ["--hooks-pr-feedback="],
     });
-    expect(config.prFeedbackCommands.value).toBe("");
-    expect(config.prFeedbackCommands.source).toBe("cli");
+    expect(config.hooks.prFeedback.value).toBe("");
+    expect(config.hooks.prFeedback.source).toBe("cli");
   });
 
-  it("existing config without prFeedbackCommands works", () => {
+  it("existing config without hooks.prFeedback works", () => {
     const cwd = join(ctx.dir, "repo-prfc-absent");
     mkdirSync(cwd, { recursive: true });
     writeGlobalConfig(cwd, { baseBranch: "develop" });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(config.prFeedbackCommands.value).toBe("");
-    expect(config.prFeedbackCommands.source).toBe("default");
+    expect(config.hooks.prFeedback.value).toBe("");
+    expect(config.hooks.prFeedback.source).toBe("default");
     // Verify other config is not affected
     expect(config.baseBranch.value).toBe("develop");
   });

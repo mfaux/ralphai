@@ -2,11 +2,7 @@
  * show-config.ts — Formats the --show-config output.
  */
 
-import type {
-  ResolvedConfig,
-  RalphaiConfig,
-  WorkspaceOverrides,
-} from "./config.ts";
+import type { ResolvedConfig, WorkspaceOverrides } from "./config.ts";
 
 // ---------------------------------------------------------------------------
 // Agent type detection
@@ -44,30 +40,44 @@ export function detectAgentType(agentCommand: string): string {
 // Source label formatting
 // ---------------------------------------------------------------------------
 
-/** Env var name for each config key. */
-const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
-  agentCommand: "RALPHAI_AGENT_COMMAND",
-  setupCommand: "RALPHAI_SETUP_COMMAND",
-  feedbackCommands: "RALPHAI_FEEDBACK_COMMANDS",
-  prFeedbackCommands: "RALPHAI_PR_FEEDBACK_COMMANDS",
+/** Env var name for each config path (dot-notation). */
+const CONFIG_PATH_TO_ENV: Readonly<Record<string, string>> = {
+  "agent.command": "RALPHAI_AGENT_COMMAND",
+  "agent.setupCommand": "RALPHAI_AGENT_SETUP_COMMAND",
+  "agent.interactiveCommand": "RALPHAI_AGENT_INTERACTIVE_COMMAND",
+  "hooks.feedback": "RALPHAI_HOOKS_FEEDBACK",
+  "hooks.prFeedback": "RALPHAI_HOOKS_PR_FEEDBACK",
+  "hooks.beforeRun": "RALPHAI_HOOKS_BEFORE_RUN",
+  "hooks.afterRun": "RALPHAI_HOOKS_AFTER_RUN",
+  "hooks.feedbackTimeout": "RALPHAI_HOOKS_FEEDBACK_TIMEOUT",
+  "gate.maxStuck": "RALPHAI_GATE_MAX_STUCK",
+  "gate.review": "RALPHAI_GATE_REVIEW",
+  "gate.maxRejections": "RALPHAI_GATE_MAX_REJECTIONS",
+  "gate.maxIterations": "RALPHAI_GATE_MAX_ITERATIONS",
+  "gate.reviewMaxFiles": "RALPHAI_GATE_REVIEW_MAX_FILES",
+  "gate.validators": "RALPHAI_GATE_VALIDATORS",
+  "gate.iterationTimeout": "RALPHAI_GATE_ITERATION_TIMEOUT",
+  "prompt.verbose": "RALPHAI_PROMPT_VERBOSE",
+  "prompt.preamble": "RALPHAI_PROMPT_PREAMBLE",
+  "prompt.learnings": "RALPHAI_PROMPT_LEARNINGS",
+  "prompt.commitStyle": "RALPHAI_PROMPT_COMMIT_STYLE",
+  "pr.draft": "RALPHAI_PR_DRAFT",
+  "git.branchPrefix": "RALPHAI_GIT_BRANCH_PREFIX",
+  "issue.source": "RALPHAI_ISSUE_SOURCE",
+  "issue.standaloneLabel": "RALPHAI_ISSUE_STANDALONE_LABEL",
+  "issue.subissueLabel": "RALPHAI_ISSUE_SUBISSUE_LABEL",
+  "issue.prdLabel": "RALPHAI_ISSUE_PRD_LABEL",
+  "issue.repo": "RALPHAI_ISSUE_REPO",
+  "issue.commentProgress": "RALPHAI_ISSUE_COMMENT_PROGRESS",
+  "issue.hitlLabel": "RALPHAI_ISSUE_HITL_LABEL",
+  "issue.inProgressLabel": "RALPHAI_ISSUE_IN_PROGRESS_LABEL",
+  "issue.doneLabel": "RALPHAI_ISSUE_DONE_LABEL",
+  "issue.stuckLabel": "RALPHAI_ISSUE_STUCK_LABEL",
   baseBranch: "RALPHAI_BASE_BRANCH",
-  maxStuck: "RALPHAI_MAX_STUCK",
-  iterationTimeout: "RALPHAI_ITERATION_TIMEOUT",
-  issueSource: "RALPHAI_ISSUE_SOURCE",
-  standaloneLabel: "RALPHAI_STANDALONE_LABEL",
-  subissueLabel: "RALPHAI_SUBISSUE_LABEL",
-  prdLabel: "RALPHAI_PRD_LABEL",
-  issueRepo: "RALPHAI_ISSUE_REPO",
-  issueCommentProgress: "RALPHAI_ISSUE_COMMENT_PROGRESS",
-  issueHitlLabel: "RALPHAI_ISSUE_HITL_LABEL",
-  agentInteractiveCommand: "RALPHAI_AGENT_INTERACTIVE_COMMAND",
   sandbox: "RALPHAI_SANDBOX",
   dockerImage: "RALPHAI_DOCKER_IMAGE",
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
   dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
-  review: "RALPHAI_REVIEW",
-  terse: "RALPHAI_TERSE",
-  agentVerboseFlags: "RALPHAI_AGENT_VERBOSE_FLAGS",
 };
 
 // ---------------------------------------------------------------------------
@@ -79,7 +89,7 @@ export interface FormatShowConfigInput {
   configFilePath: string;
   configFileExists: boolean;
   envVars: Record<string, string | undefined>;
-  rawFlags: Partial<Record<keyof RalphaiConfig, string>>;
+  rawFlags: Record<string, string>;
   worktree?: { isWorktree: boolean; mainWorktree: string };
   /** Workspaces JSON as parsed from config file (for display). */
   workspaces: Record<string, WorkspaceOverrides> | null;
@@ -89,17 +99,17 @@ export interface FormatShowConfigInput {
  * Build the source label for a single config field.
  */
 function sourceLabel(
-  key: keyof RalphaiConfig,
+  configPath: string,
   source: string,
   input: FormatShowConfigInput,
   defaultLabel?: string,
 ): string {
   if (source === "cli") {
-    const raw = input.rawFlags[key];
+    const raw = input.rawFlags[configPath];
     return raw ? `cli (${raw})` : "cli";
   }
   if (source === "env") {
-    const envName = CONFIG_KEY_TO_ENV[key];
+    const envName = CONFIG_PATH_TO_ENV[configPath];
     if (envName) {
       const envVal = input.envVars[envName];
       return `env (${envName}=${envVal ?? ""})`;
@@ -128,60 +138,88 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   lines.push("");
 
   // --- Setting lines ---
-  // Each line: "  <name padded> = <value>  (<source>)"
-  // Field names are manually aligned to match the shell output exactly.
 
-  const agentCmd = config.agentCommand.value;
+  const agentCmd = config.agent.command.value;
   const agentCmdDisplay = agentCmd || "<none>";
   const agentSrc = sourceLabel(
-    "agentCommand",
-    config.agentCommand.source,
+    "agent.command",
+    config.agent.command.source,
     input,
     "none",
   );
-  lines.push(`  agentCommand       = ${agentCmdDisplay}  (${agentSrc})`);
+  lines.push(`  agent.command      = ${agentCmdDisplay}  (${agentSrc})`);
 
-  const agentInteractiveCmd = config.agentInteractiveCommand.value;
+  const agentInteractiveCmd = config.agent.interactiveCommand.value;
   const agentInteractiveCmdDisplay = agentInteractiveCmd || "<none>";
   const agentInteractiveSrc = sourceLabel(
-    "agentInteractiveCommand",
-    config.agentInteractiveCommand.source,
+    "agent.interactiveCommand",
+    config.agent.interactiveCommand.source,
     input,
     "none",
   );
   lines.push(
-    `  agentInteractiveCommand = ${agentInteractiveCmdDisplay}  (${agentInteractiveSrc})`,
+    `  agent.interactiveCommand = ${agentInteractiveCmdDisplay}  (${agentInteractiveSrc})`,
   );
 
-  const setupCmd = config.setupCommand.value;
+  const setupCmd = config.agent.setupCommand.value;
   const setupCmdDisplay = setupCmd || "<none>";
   const setupSrc = sourceLabel(
-    "setupCommand",
-    config.setupCommand.source,
+    "agent.setupCommand",
+    config.agent.setupCommand.source,
     input,
     "none",
   );
-  lines.push(`  setupCommand       = ${setupCmdDisplay}  (${setupSrc})`);
+  lines.push(`  agent.setupCommand = ${setupCmdDisplay}  (${setupSrc})`);
 
-  const feedbackCmd = config.feedbackCommands.value;
+  const feedbackCmd = config.hooks.feedback.value;
   const feedbackDisplay = feedbackCmd || "<none>";
   const feedbackSrc = sourceLabel(
-    "feedbackCommands",
-    config.feedbackCommands.source,
+    "hooks.feedback",
+    config.hooks.feedback.source,
     input,
     "none",
   );
-  lines.push(`  feedbackCommands   = ${feedbackDisplay}  (${feedbackSrc})`);
+  lines.push(`  hooks.feedback     = ${feedbackDisplay}  (${feedbackSrc})`);
 
-  const prFeedbackCmd = config.prFeedbackCommands.value;
+  const prFeedbackCmd = config.hooks.prFeedback.value;
   const prFeedbackDisplay = prFeedbackCmd || "<none>";
   const prFeedbackSrc = sourceLabel(
-    "prFeedbackCommands",
-    config.prFeedbackCommands.source,
+    "hooks.prFeedback",
+    config.hooks.prFeedback.source,
     input,
     "none",
   );
-  lines.push(`  prFeedbackCommands = ${prFeedbackDisplay}  (${prFeedbackSrc})`);
+  lines.push(`  hooks.prFeedback   = ${prFeedbackDisplay}  (${prFeedbackSrc})`);
+
+  const beforeRunCmd = config.hooks.beforeRun.value;
+  const beforeRunDisplay = beforeRunCmd || "<none>";
+  const beforeRunSrc = sourceLabel(
+    "hooks.beforeRun",
+    config.hooks.beforeRun.source,
+    input,
+    "none",
+  );
+  lines.push(`  hooks.beforeRun    = ${beforeRunDisplay}  (${beforeRunSrc})`);
+
+  const afterRunCmd = config.hooks.afterRun.value;
+  const afterRunDisplay = afterRunCmd || "<none>";
+  const afterRunSrc = sourceLabel(
+    "hooks.afterRun",
+    config.hooks.afterRun.source,
+    input,
+    "none",
+  );
+  lines.push(`  hooks.afterRun     = ${afterRunDisplay}  (${afterRunSrc})`);
+
+  const feedbackTimeout = config.hooks.feedbackTimeout.value;
+  const feedbackTimeoutSrc = sourceLabel(
+    "hooks.feedbackTimeout",
+    config.hooks.feedbackTimeout.source,
+    input,
+  );
+  lines.push(
+    `  hooks.feedbackTimeout = ${feedbackTimeout}s  (${feedbackTimeoutSrc})`,
+  );
 
   const baseBranchSrc = sourceLabel(
     "baseBranch",
@@ -234,98 +272,154 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     );
   }
 
-  // review: CLI label is "--review" or "--no-review"
-  const reviewSrc = sourceLabel("review", config.review.source, input);
-  lines.push(`  review             = ${config.review.value}  (${reviewSrc})`);
+  // gate.review
+  const reviewSrc = sourceLabel(
+    "gate.review",
+    config.gate.review.source,
+    input,
+  );
+  lines.push(
+    `  gate.review        = ${config.gate.review.value}  (${reviewSrc})`,
+  );
 
-  // terse: CLI label is "--terse" or "--no-terse"
-  const terseSrc = sourceLabel("terse", config.terse.source, input);
-  lines.push(`  terse              = ${config.terse.value}  (${terseSrc})`);
+  // prompt.verbose
+  const verboseSrc = sourceLabel(
+    "prompt.verbose",
+    config.prompt.verbose.source,
+    input,
+  );
+  lines.push(
+    `  prompt.verbose     = ${config.prompt.verbose.value}  (${verboseSrc})`,
+  );
 
-  // agentVerboseFlags: CLI label is "--agent-verbose-flags=..."
-  const avfVal = config.agentVerboseFlags.value || "<none>";
-  const avfSrc = sourceLabel(
-    "agentVerboseFlags",
-    config.agentVerboseFlags.source,
+  const maxStuckSrc = sourceLabel(
+    "gate.maxStuck",
+    config.gate.maxStuck.source,
+    input,
+  );
+  lines.push(
+    `  gate.maxStuck      = ${config.gate.maxStuck.value}  (${maxStuckSrc})`,
+  );
+
+  // gate.maxRejections
+  const maxRejectionsSrc = sourceLabel(
+    "gate.maxRejections",
+    config.gate.maxRejections.source,
+    input,
+  );
+  lines.push(
+    `  gate.maxRejections = ${config.gate.maxRejections.value}  (${maxRejectionsSrc})`,
+  );
+
+  // gate.maxIterations: 0 displays as "unlimited", otherwise the number
+  const maxIterVal = config.gate.maxIterations.value;
+  const maxIterDisplay = maxIterVal > 0 ? `${maxIterVal}` : "unlimited";
+  const maxIterSrc = sourceLabel(
+    "gate.maxIterations",
+    config.gate.maxIterations.source,
+    input,
+  );
+  lines.push(`  gate.maxIterations = ${maxIterDisplay}  (${maxIterSrc})`);
+
+  // gate.reviewMaxFiles
+  const reviewMaxFilesSrc = sourceLabel(
+    "gate.reviewMaxFiles",
+    config.gate.reviewMaxFiles.source,
+    input,
+  );
+  lines.push(
+    `  gate.reviewMaxFiles = ${config.gate.reviewMaxFiles.value}  (${reviewMaxFilesSrc})`,
+  );
+
+  // gate.iterationTimeout: 0 displays as "off", otherwise "<N>s"
+  const timeoutVal = config.gate.iterationTimeout.value;
+  const timeoutDisplay = timeoutVal > 0 ? `${timeoutVal}s` : "off";
+  const timeoutSrc = sourceLabel(
+    "gate.iterationTimeout",
+    config.gate.iterationTimeout.source,
+    input,
+  );
+  lines.push(`  gate.iterationTimeout = ${timeoutDisplay}  (${timeoutSrc})`);
+
+  // pr.draft
+  const prDraftSrc = sourceLabel("pr.draft", config.pr.draft.source, input);
+  lines.push(
+    `  pr.draft           = ${config.pr.draft.value}  (${prDraftSrc})`,
+  );
+
+  // git.branchPrefix
+  const branchPrefixVal = config.git.branchPrefix.value || "<none>";
+  const branchPrefixSrc = sourceLabel(
+    "git.branchPrefix",
+    config.git.branchPrefix.source,
     input,
     "none",
   );
-  lines.push(`  agentVerboseFlags  = ${avfVal}  (${avfSrc})`);
-
-  const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
-  lines.push(
-    `  maxStuck           = ${config.maxStuck.value}  (${maxStuckSrc})`,
-  );
-
-  // iterationTimeout: 0 displays as "off", otherwise "<N>s"
-  const timeoutVal = config.iterationTimeout.value;
-  const timeoutDisplay = timeoutVal > 0 ? `${timeoutVal}s` : "off";
-  const timeoutSrc = sourceLabel(
-    "iterationTimeout",
-    config.iterationTimeout.source,
-    input,
-  );
-  lines.push(`  iterationTimeout   = ${timeoutDisplay}  (${timeoutSrc})`);
+  lines.push(`  git.branchPrefix   = ${branchPrefixVal}  (${branchPrefixSrc})`);
 
   const issueSourceSrc = sourceLabel(
-    "issueSource",
-    config.issueSource.source,
+    "issue.source",
+    config.issue.source.source,
     input,
   );
   lines.push(
-    `  issueSource        = ${config.issueSource.value}  (${issueSourceSrc})`,
+    `  issue.source       = ${config.issue.source.value}  (${issueSourceSrc})`,
   );
 
-  // Conditional issue settings (only shown when issueSource != "none")
-  if (config.issueSource.value !== "none") {
+  // Conditional issue settings (only shown when issue.source != "none")
+  if (config.issue.source.value !== "none") {
     const standaloneLabelSrc = sourceLabel(
-      "standaloneLabel",
-      config.standaloneLabel.source,
+      "issue.standaloneLabel",
+      config.issue.standaloneLabel.source,
       input,
     );
     lines.push(
-      `  standaloneLabel    = ${config.standaloneLabel.value}  (${standaloneLabelSrc})`,
+      `  issue.standaloneLabel = ${config.issue.standaloneLabel.value}  (${standaloneLabelSrc})`,
     );
 
     const subissueLabelSrc = sourceLabel(
-      "subissueLabel",
-      config.subissueLabel.source,
+      "issue.subissueLabel",
+      config.issue.subissueLabel.source,
       input,
     );
     lines.push(
-      `  subissueLabel      = ${config.subissueLabel.value}  (${subissueLabelSrc})`,
+      `  issue.subissueLabel = ${config.issue.subissueLabel.value}  (${subissueLabelSrc})`,
     );
 
-    const prdLabelSrc = sourceLabel("prdLabel", config.prdLabel.source, input);
+    const prdLabelSrc = sourceLabel(
+      "issue.prdLabel",
+      config.issue.prdLabel.source,
+      input,
+    );
     lines.push(
-      `  prdLabel           = ${config.prdLabel.value}  (${prdLabelSrc})`,
+      `  issue.prdLabel     = ${config.issue.prdLabel.value}  (${prdLabelSrc})`,
     );
 
-    const issueRepoVal = config.issueRepo.value || "<auto-detect>";
+    const issueRepoVal = config.issue.repo.value || "<auto-detect>";
     const issueRepoSrc = sourceLabel(
-      "issueRepo",
-      config.issueRepo.source,
+      "issue.repo",
+      config.issue.repo.source,
       input,
       "auto-detect",
     );
-    lines.push(`  issueRepo          = ${issueRepoVal}  (${issueRepoSrc})`);
+    lines.push(`  issue.repo         = ${issueRepoVal}  (${issueRepoSrc})`);
 
     const issueCommentSrc = sourceLabel(
-      "issueCommentProgress",
-      config.issueCommentProgress.source,
+      "issue.commentProgress",
+      config.issue.commentProgress.source,
       input,
     );
     lines.push(
-      `  issueCommentProgress = ${config.issueCommentProgress.value}  (${issueCommentSrc})`,
+      `  issue.commentProgress = ${config.issue.commentProgress.value}  (${issueCommentSrc})`,
     );
 
     const issueHitlLabelSrc = sourceLabel(
-      "issueHitlLabel",
-      config.issueHitlLabel.source,
+      "issue.hitlLabel",
+      config.issue.hitlLabel.source,
       input,
     );
     lines.push(
-      `  issueHitlLabel     = ${config.issueHitlLabel.value}  (${issueHitlLabelSrc})`,
+      `  issue.hitlLabel    = ${config.issue.hitlLabel.value}  (${issueHitlLabelSrc})`,
     );
   }
 
@@ -336,7 +430,7 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     const agentType = detectAgentType(agentCmd);
     lines.push(`  detectedAgentType  = ${agentType}`);
   } else {
-    lines.push("  detectedAgentType  = <no agentCommand set>");
+    lines.push("  detectedAgentType  = <no agent.command set>");
   }
 
   lines.push("");
@@ -363,6 +457,7 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
         lines.push(
           `  ${pkg}: prFeedbackCommands=${fmtList(overrides.prFeedbackCommands)}`,
         );
+        lines.push(`  ${pkg}: validators=${fmtList(overrides.validators)}`);
       }
     }
   } else {

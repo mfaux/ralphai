@@ -27,9 +27,6 @@ import {
   issueBranchName,
   slugify,
   commitTypeFromTitle,
-  DONE_LABEL,
-  IN_PROGRESS_LABEL,
-  STUCK_LABEL,
 } from "./issue-lifecycle.ts";
 import { execQuiet } from "./exec.ts";
 import {
@@ -91,32 +88,32 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   const cfg = configValues(cfgResult.config);
 
   // --- Validate agentInteractiveCommand ---
-  const agentInteractiveCommand = cfg.agentInteractiveCommand;
+  const agentInteractiveCommand = cfg.agent.interactiveCommand;
   if (!agentInteractiveCommand) {
     console.error(
-      `${TEXT}Error:${RESET} agentInteractiveCommand is not configured.`,
+      `${TEXT}Error:${RESET} agent.interactiveCommand is not configured.`,
     );
     console.error(
       `\nSet it in your ralphai config or via ${TEXT}RALPHAI_AGENT_INTERACTIVE_COMMAND${RESET} env var.`,
     );
     console.error(
-      `${DIM}Example: ${TEXT}ralphai config agentInteractiveCommand${RESET}${DIM} to check the current value.${RESET}`,
+      `${DIM}Example: ${TEXT}ralphai config agent.interactiveCommand${RESET}${DIM} to check the current value.${RESET}`,
     );
     process.exit(1);
   }
 
   // --- Detect GitHub repo ---
-  const repo = detectIssueRepo(cwd, cfg.issueRepo);
+  const repo = detectIssueRepo(cwd, cfg.issue.repo);
   if (!repo) {
     console.error(
       "Could not detect GitHub repo from git remote. " +
-        "Set issue-repo in config or ensure a remote is configured.",
+        "Set issue.repo in config or ensure a remote is configured.",
     );
     process.exit(1);
   }
 
   // --- Discover parent PRD ---
-  const prdLabel = cfg.prdLabel;
+  const prdLabel = cfg.issue.prdLabel;
   const parentResult = discoverParentIssue(repo, issueNumber, cwd, prdLabel);
 
   if (!parentResult.hasParent) {
@@ -160,8 +157,14 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   // --- Derive PRD branch and slug from parent title ---
   const parentTitle = parentResult.parentTitle!;
   const prdSlug = slugify(commitTypeFromTitle(parentTitle).description);
-  const branch = issueBranchName(parentTitle);
-  const hitlLabel = cfg.issueHitlLabel;
+  const branch = issueBranchName(parentTitle, {
+    branchPrefix: cfg.git.branchPrefix,
+    commitStyle: cfg.prompt.commitStyle,
+  });
+  const hitlLabel = cfg.issue.hitlLabel;
+  const doneLabel = cfg.issue.doneLabel;
+  const inProgressLabel = cfg.issue.inProgressLabel;
+  const stuckLabel = cfg.issue.stuckLabel;
 
   // --- Dry-run ---
   if (dryRun) {
@@ -180,7 +183,7 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
       `[dry-run] Would spawn agent interactively with stdio: "inherit"`,
     );
     console.log(
-      `[dry-run] On clean exit: remove "${hitlLabel}" label, add "${DONE_LABEL}" label`,
+      `[dry-run] On clean exit: remove "${hitlLabel}" label, add "${doneLabel}" label`,
     );
     console.log("[dry-run] On abnormal exit: labels unchanged");
     console.log(
@@ -192,12 +195,12 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   // --- Prepare worktree ---
   ensureRepoHasCommit(cwd);
   const baseBranch = cfg.baseBranch;
-  const setupCommand = cfg.setupCommand;
+  const setupCommand = cfg.agent.setupCommand;
 
   // Build sandbox config for routing setup commands through Docker
   const setupSandboxConfig: SetupSandboxConfig = {
     sandbox: cfg.sandbox as "none" | "docker",
-    agentCommand: cfg.agentCommand,
+    agentCommand: cfg.agent.command,
     dockerConfig:
       cfg.sandbox === "docker"
         ? {
@@ -271,10 +274,10 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   if (exitCode === 0) {
     // Clean exit: remove HITL label, add done
     execQuiet(
-      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --remove-label "${IN_PROGRESS_LABEL}" --remove-label "${STUCK_LABEL}" --add-label "${DONE_LABEL}"`,
+      `gh issue edit ${issueNumber} --repo "${repo}" --remove-label "${hitlLabel}" --remove-label "${inProgressLabel}" --remove-label "${stuckLabel}" --add-label "${doneLabel}"`,
       cwd,
     );
-    const message = `Sub-issue #${issueNumber} completed. Removed "${hitlLabel}" label, added "${DONE_LABEL}".`;
+    const message = `Sub-issue #${issueNumber} completed. Removed "${hitlLabel}" label, added "${doneLabel}".`;
     console.log();
     console.log(message);
     return { exitCode: 0, message };

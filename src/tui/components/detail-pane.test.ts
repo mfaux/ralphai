@@ -552,16 +552,15 @@ describe("detailForItem — settings", () => {
   });
 
   it("shows config values with sources", () => {
-    const config = makeTestResolvedConfig(undefined, {
-      agentCommand: { value: "opencode", source: "config" },
-      baseBranch: { value: "develop", source: "cli" },
-    });
+    const config = makeTestResolvedConfig();
+    config.agent.command = { value: "opencode", source: "config" };
+    config.baseBranch = { value: "develop", source: "cli" };
     const detail = detailForItem("settings", null, false, undefined, config);
     expect(detail.title).toBe("Settings");
 
-    // Find agentCommand line
+    // Find agent.command line
     const agentLine = detail.lines.find((l) =>
-      l.text.startsWith("agentCommand"),
+      l.text.startsWith("agent.command"),
     );
     expect(agentLine).toBeDefined();
     expect(agentLine!.text).toContain("opencode");
@@ -580,12 +579,11 @@ describe("detailForItem — settings", () => {
   });
 
   it("shows (not set) for empty string values", () => {
-    const config = makeTestResolvedConfig(undefined, {
-      agentCommand: { value: "", source: "default" },
-    });
+    const config = makeTestResolvedConfig();
+    config.agent.command = { value: "", source: "default" };
     const detail = detailForItem("settings", null, false, undefined, config);
     const agentLine = detail.lines.find((l) =>
-      l.text.startsWith("agentCommand"),
+      l.text.startsWith("agent.command"),
     );
     expect(agentLine!.text).toContain("(not set)");
   });

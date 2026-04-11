@@ -143,7 +143,7 @@ describe("runConfigWizard", () => {
 
   it("returns null when user cancels at individual text prompt", async () => {
     const cancelSymbol = Symbol("cancel");
-    mockMultiselect.mockResolvedValue(["agentCommand"]);
+    mockMultiselect.mockResolvedValue(["agent.command"]);
     mockText.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
 
@@ -163,7 +163,7 @@ describe("runConfigWizard", () => {
   });
 
   it("returns synthetic flags for selected text options", async () => {
-    mockMultiselect.mockResolvedValue(["agentCommand", "baseBranch"]);
+    mockMultiselect.mockResolvedValue(["agent.command", "baseBranch"]);
     mockText
       .mockResolvedValueOnce("claude -p")
       .mockResolvedValueOnce("develop");
@@ -176,18 +176,23 @@ describe("runConfigWizard", () => {
   });
 
   it("returns flags for numeric options", async () => {
-    mockMultiselect.mockResolvedValue(["maxStuck", "iterationTimeout"]);
+    mockMultiselect.mockResolvedValue([
+      "gate.maxStuck",
+      "gate.iterationTimeout",
+    ]);
     mockText.mockResolvedValueOnce("5").mockResolvedValueOnce("120");
 
     const result = await runConfigWizard(makeTestResolvedConfig());
-    expect(result).toEqual(["--max-stuck=5", "--iteration-timeout=120"]);
+    expect(result).toEqual([
+      "--gate-max-stuck=5",
+      "--gate-iteration-timeout=120",
+    ]);
   });
 
   it("multiselect options show current values and source hints", async () => {
-    const config = makeTestResolvedConfig(undefined, {
-      agentCommand: { value: "claude -p", source: "config" },
-      maxStuck: { value: 5, source: "env" },
-    });
+    const config = makeTestResolvedConfig();
+    config.agent.command = { value: "claude -p", source: "config" };
+    config.gate.maxStuck = { value: 5, source: "env" };
     mockMultiselect.mockResolvedValue([]);
 
     await runConfigWizard(config);
@@ -196,11 +201,11 @@ describe("runConfigWizard", () => {
     const call = mockMultiselect.mock.calls[0]![0] as {
       options: { value: string; hint: string }[];
     };
-    const agentOpt = call.options.find((o) => o.value === "agentCommand");
+    const agentOpt = call.options.find((o) => o.value === "agent.command");
     expect(agentOpt!.hint).toContain("claude -p");
     expect(agentOpt!.hint).toContain("config file");
 
-    const maxStuckOpt = call.options.find((o) => o.value === "maxStuck");
+    const maxStuckOpt = call.options.find((o) => o.value === "gate.maxStuck");
     expect(maxStuckOpt!.hint).toContain("5");
     expect(maxStuckOpt!.hint).toContain("env var");
   });
@@ -214,21 +219,23 @@ describe("runConfigWizard", () => {
     };
     expect(call.options).toHaveLength(8);
     const keys = call.options.map((o) => o.value);
-    expect(keys).toContain("agentCommand");
-    expect(keys).toContain("setupCommand");
-    expect(keys).toContain("feedbackCommands");
-    expect(keys).toContain("prFeedbackCommands");
+    expect(keys).toContain("agent.command");
+    expect(keys).toContain("agent.setupCommand");
+    expect(keys).toContain("hooks.feedback");
+    expect(keys).toContain("hooks.prFeedback");
     expect(keys).toContain("baseBranch");
-    expect(keys).toContain("maxStuck");
-    expect(keys).toContain("iterationTimeout");
+    expect(keys).toContain("gate.maxStuck");
+    expect(keys).toContain("gate.iterationTimeout");
     expect(keys).toContain("sandbox");
   });
 
   it("text prompt receives current value as initialValue", async () => {
-    const config = makeTestResolvedConfig(undefined, {
-      agentCommand: { value: "opencode run --agent build", source: "default" },
-    });
-    mockMultiselect.mockResolvedValue(["agentCommand"]);
+    const config = makeTestResolvedConfig();
+    config.agent.command = {
+      value: "opencode run --agent build",
+      source: "default",
+    };
+    mockMultiselect.mockResolvedValue(["agent.command"]);
     mockText.mockResolvedValue("claude -p");
 
     await runConfigWizard(config);
@@ -238,9 +245,8 @@ describe("runConfigWizard", () => {
   });
 
   it("select prompt receives current value as initialValue", async () => {
-    const config = makeTestResolvedConfig(undefined, {
-      sandbox: { value: "docker", source: "config" },
-    });
+    const config = makeTestResolvedConfig();
+    config.sandbox = { value: "docker", source: "config" };
     mockMultiselect.mockResolvedValue(["sandbox"]);
     mockSelect.mockResolvedValue("none");
 
@@ -254,12 +260,12 @@ describe("runConfigWizard", () => {
 
   it("handles all 7 options selected at once", async () => {
     mockMultiselect.mockResolvedValue([
-      "agentCommand",
-      "setupCommand",
-      "feedbackCommands",
+      "agent.command",
+      "agent.setupCommand",
+      "hooks.feedback",
       "baseBranch",
-      "maxStuck",
-      "iterationTimeout",
+      "gate.maxStuck",
+      "gate.iterationTimeout",
       "sandbox",
     ]);
     // First 6 are text, last is select
@@ -275,11 +281,11 @@ describe("runConfigWizard", () => {
     const result = await runConfigWizard(makeTestResolvedConfig());
     expect(result).toEqual([
       "--agent-command=claude -p",
-      "--setup-command=npm ci",
-      "--feedback-commands=bun test,bun build",
+      "--agent-setup-command=npm ci",
+      "--hooks-feedback=bun test,bun build",
       "--base-branch=develop",
-      "--max-stuck=5",
-      "--iteration-timeout=300",
+      "--gate-max-stuck=5",
+      "--gate-iteration-timeout=300",
       "--sandbox=docker",
     ]);
   });

@@ -118,7 +118,7 @@ In non-TTY environments (piped output, CI), `ralphai` prints the version header 
 
 In monorepo projects, `init` detects workspace packages from `pnpm-workspace.yaml`, `package.json` `workspaces`, or `.sln` files for .NET projects. In mixed repos, workspaces from all ecosystems are merged. Both modes display workspace info without adding config, and feedback commands are auto-filtered by scope at runtime.
 
-GitHub Issues integration is enabled by default during `init` (both interactive and `--yes`). To use a different issue tracker, decline the prompt in interactive mode or set `issueSource` to `"none"` in `config.json` after init.
+GitHub Issues integration is enabled by default during `init` (both interactive and `--yes`). To use a different issue tracker, decline the prompt in interactive mode or set `issue.source` to `"none"` in `config.json` after init.
 
 ## Run
 
@@ -137,39 +137,50 @@ What it does:
 5. Opens or updates a draft PR when `gh` is available
 
 ```
-<issue-number>                    Target a GitHub issue or PRD by number
---prd=<number>                    Explicitly target a PRD issue (alternative to positional arg)
---dry-run, -n                     Preview what would happen without changing anything
---wizard, -w                      Interactively configure run options before starting
---resume, -r                      Commit dirty state and continue
---allow-dirty                     Skip the clean working tree check
---plan=<file>                     Target a specific backlog plan (default: auto-detect)
---agent-command=<command>         Override agent CLI command
---setup-command=<command>         Command to run in worktree after creation (e.g. 'bun install')
---feedback-commands=<list>        Comma-separated feedback commands
---pr-feedback-commands=<list>     Comma-separated PR feedback commands
---base-branch=<branch>            Override base branch (default: main)
---once                            Process a single work unit then exit
---max-stuck=<n>                   Stuck threshold before abort (default: 3)
---iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)
---sandbox=<mode>                  Execution sandbox mode: 'none' or 'docker' (default: auto-detected)
---docker-image=<image>            Override Docker image (default: auto-resolve from agent name)
---docker-mounts=<csv>             Extra bind mounts for Docker sandbox (comma-separated)
---docker-env-vars=<csv>           Extra env vars to forward into Docker sandbox (comma-separated)
---review                          Enable review pass after completion (default)
---no-review                       Disable review pass after completion
---verbose                         Inject agent-specific debug/verbose flags into the agent command
---terse                           Enable terse mode (concise agent output; default: on)
---no-terse                        Disable terse mode (allow full unabridged agent output)
---agent-verbose-flags=<flags>     Override built-in per-agent verbose flags (shell-quoted string)
---prompt-mode=<mode>              Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)
---issue-hitl-label=<label>        Label marking sub-issues as requiring human interaction
---show-config                     Print resolved settings and exit
+<issue-number>                       Target a GitHub issue or PRD by number
+--prd=<number>                       Explicitly target a PRD issue (alternative to positional arg)
+--dry-run, -n                        Preview what would happen without changing anything
+--wizard, -w                         Interactively configure run options before starting
+--resume, -r                         Commit dirty state and continue
+--allow-dirty                        Skip the clean working tree check
+--plan=<file>                        Target a specific backlog plan (default: auto-detect)
+--tags=<list>                        Comma-separated tags to filter plans (OR semantics)
+--agent-command=<command>            Override agent CLI command
+--agent-setup-command=<command>      Command to run in worktree after creation (e.g. 'bun install')
+--hooks-feedback=<list>              Comma-separated loop-tier feedback commands
+--hooks-pr-feedback=<list>           Comma-separated PR-tier feedback commands
+--hooks-before-run=<cmd>             Hook to run before each plan's iteration loop
+--hooks-after-run=<cmd>              Hook to run after each plan completes
+--hooks-feedback-timeout=<sec>       Timeout per feedback command at the gate (default: 300)
+--base-branch=<branch>               Override base branch (default: main)
+--once                               Process a single work unit then exit
+--gate-max-stuck=<n>                 Stuck threshold before abort (default: 3)
+--gate-max-rejections=<n>            Max gate rejections before force-accept (default: 2, 0 = never)
+--gate-max-iterations=<n>            Max runner iterations before stuck (default: 0 = unlimited)
+--gate-review-max-files=<n>          Max files in review-pass prompt (default: 25)
+--gate-iteration-timeout=<sec>       Timeout per agent invocation (default: 0 = no timeout)
+--gate-validators=<list>             Comma-separated validator commands (run at gate after feedback)
+--gate-review                        Enable review pass after completion (default)
+--gate-no-review                     Disable review pass after completion
+--sandbox=<mode>                     Execution sandbox mode: 'none' or 'docker' (default: auto-detected)
+--docker-image=<image>               Override Docker image (default: auto-resolve from agent name)
+--docker-mounts=<csv>                Extra bind mounts for Docker sandbox (comma-separated)
+--docker-env-vars=<csv>              Extra env vars to forward into Docker sandbox (comma-separated)
+--prompt-verbose                     Enable verbose mode (full unabridged agent output; default: concise)
+--prompt-preamble=<text>             Override default preamble (use @path to read from file)
+--prompt-learnings                   Enable learnings extraction (default: on)
+--no-prompt-learnings                Disable learnings extraction, prompt mandate, and PR section
+--prompt-commit-style=<style>        Commit style: 'conventional' (default) or 'none'
+--pr-draft                           Create draft PRs (default: on)
+--no-pr-draft                        Create ready-for-review PRs instead of drafts
+--git-branch-prefix=<prefix>         Override branch prefix (e.g. 'ralphai/' produces ralphai/<slug>)
+--issue-hitl-label=<label>           Label marking sub-issues as requiring human interaction
+--show-config                        Print resolved settings and exit
 ```
 
 ### Wizard Mode
 
-`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override any of the 8 config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, sandbox). Each option shows its current value and source (default, auto-detected, config file, env var, or CLI flag).
+`--wizard` (or `-w`) opens an interactive multi-select before the run starts, letting you override config options (agent command, setup command, feedback commands, PR feedback commands, base branch, max stuck, iteration timeout, sandbox). Each option shows its current value and source (default, auto-detected, config file, env var, or CLI flag).
 
 Wizard overrides are injected as synthetic CLI flags. Explicit flags passed alongside `--wizard` take precedence (last-wins):
 
@@ -193,11 +204,11 @@ By default, `ralphai run` drains the backlog — processing plans sequentially, 
 
 ### Issue Tracking
 
-Issue tracking is configured via `config.json` or environment variables (see [Configuration](#configuration)). Set `issueSource` to `"github"` to enable pulling plans from GitHub issues when the backlog is empty.
+Issue tracking is configured via `config.json` or environment variables (see [Configuration](#configuration)). Set `issue.source` to `"github"` to enable pulling plans from GitHub issues when the backlog is empty.
 
 #### PRDs (Product Requirements Documents)
 
-For multi-step features, create a GitHub issue labeled with the PRD label (`ralphai-prd` by default, configurable via `prdLabel`) with sub-issues.
+For multi-step features, create a GitHub issue labeled with the PRD label (`ralphai-prd` by default, configurable via `issue.prdLabel`) with sub-issues.
 
 ```bash
 ralphai run 42           # auto-detects PRD label, processes sub-issues sequentially
@@ -210,7 +221,7 @@ PRD behavior:
 - Sub-issues are processed in GitHub API order; dependencies via blocking relationships are respected
 - Per-sub-issue PRs are suppressed; one aggregate draft PR is opened at the end
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
-- HITL sub-issues (labeled with `issueHitlLabel`, default `ralphai-subissue-hitl`) and sub-issues blocked by HITL dependencies are skipped; the PRD continues to the next eligible sub-issue
+- HITL sub-issues (labeled with `issue.hitlLabel`, default `ralphai-subissue-hitl`) and sub-issues blocked by HITL dependencies are skipped; the PRD continues to the next eligible sub-issue
 - The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck/HITL checklists
 
 The `ralphai run <number>` form uses label-driven dispatch: it reads the issue's labels to classify it as standalone (`ralphai-standalone`), sub-issue (`ralphai-subissue`), or PRD (`ralphai-prd`). Sub-issues automatically discover their parent PRD and process through the PRD flow. Issues with no recognized label produce an error with guidance. The old unified `ralphai` label is not recognized.
@@ -236,7 +247,7 @@ Open an interactive agent session for a HITL (human-in-the-loop) sub-issue. This
 --dry-run, -n         Preview what would happen without spawning the agent
 ```
 
-**Requires:** `agentInteractiveCommand` must be configured (in `config.json` or via `RALPHAI_AGENT_INTERACTIVE_COMMAND` env var).
+**Requires:** `agent.interactiveCommand` must be configured (in `config.json` or via `RALPHAI_AGENT_INTERACTIVE_COMMAND` env var).
 
 Orchestration flow:
 
@@ -254,7 +265,7 @@ Validation errors with descriptive messages when:
 
 - The issue has no parent
 - The parent lacks the PRD label
-- `agentInteractiveCommand` is not configured
+- `agent.interactiveCommand` is not configured
 
 ## Clean
 
@@ -371,18 +382,18 @@ ralphai config --check=issues
 
 **Capability check output:**
 
-| Condition               | stdout                                                               | Exit code |
-| ----------------------- | -------------------------------------------------------------------- | --------- |
-| All capabilities met    | `configured (issues: github)`                                        | 0         |
-| Capability not met      | `configured, but missing capability: issues (issueSource is "none")` | 1         |
-| Not configured          | `not configured — run ralphai init`                                  | 1         |
-| Unknown capability name | `unknown capability: "foo" (supported: issues)`                      | 1         |
+| Condition               | stdout                                                                | Exit code |
+| ----------------------- | --------------------------------------------------------------------- | --------- |
+| All capabilities met    | `configured (issues: github)`                                         | 0         |
+| Capability not met      | `configured, but missing capability: issues (issue.source is "none")` | 1         |
+| Not configured          | `not configured — run ralphai init`                                   | 1         |
+| Unknown capability name | `unknown capability: "foo" (supported: issues)`                       | 1         |
 
 Supported capabilities:
 
-| Name     | Checks                                |
-| -------- | ------------------------------------- |
-| `issues` | `issueSource` is `"github"` in config |
+| Name     | Checks                                 |
+| -------- | -------------------------------------- |
+| `issues` | `issue.source` is `"github"` in config |
 
 Multiple `--capability` flags can be combined; all must pass for exit 0.
 
@@ -418,63 +429,68 @@ A repo entry is stale when its stored `repoPath` no longer exists on disk and it
 
 ## Configuration
 
-Settings resolve in this order: **CLI flags > env vars > `config.json` > defaults**.
+Settings resolve in this order: **CLI flags > env vars > `config.json` > defaults**. See [Hooks, Gates, and Prompt Controls](hooks.md) for the full config reference with examples.
 
 ### Environment Variables
 
-| Env Var                             | Config Key                |
-| ----------------------------------- | ------------------------- |
-| `RALPHAI_AGENT_COMMAND`             | `agentCommand`            |
-| `RALPHAI_SETUP_COMMAND`             | `setupCommand`            |
-| `RALPHAI_FEEDBACK_COMMANDS`         | `feedbackCommands`        |
-| `RALPHAI_PR_FEEDBACK_COMMANDS`      | `prFeedbackCommands`      |
-| `RALPHAI_BASE_BRANCH`               | `baseBranch`              |
-| `RALPHAI_REVIEW`                    | `review`                  |
-| `RALPHAI_TERSE`                     | `terse`                   |
-| `RALPHAI_AGENT_VERBOSE_FLAGS`       | `agentVerboseFlags`       |
-| `RALPHAI_MAX_STUCK`                 | `maxStuck`                |
-| `RALPHAI_ITERATION_TIMEOUT`         | `iterationTimeout`        |
-| `RALPHAI_NO_UPDATE_CHECK`           | _(none)_                  |
-| `RALPHAI_ISSUE_SOURCE`              | `issueSource`             |
-| `RALPHAI_STANDALONE_LABEL`          | `standaloneLabel`         |
-| `RALPHAI_SUBISSUE_LABEL`            | `subissueLabel`           |
-| `RALPHAI_PRD_LABEL`                 | `prdLabel`                |
-| `RALPHAI_ISSUE_REPO`                | `issueRepo`               |
-| `RALPHAI_ISSUE_COMMENT_PROGRESS`    | `issueCommentProgress`    |
-| `RALPHAI_ISSUE_HITL_LABEL`          | `issueHitlLabel`          |
-| `RALPHAI_AGENT_INTERACTIVE_COMMAND` | `agentInteractiveCommand` |
-| `RALPHAI_SANDBOX`                   | `sandbox`                 |
-| `RALPHAI_DOCKER_IMAGE`              | `dockerImage`             |
-| `RALPHAI_DOCKER_MOUNTS`             | `dockerMounts`            |
-| `RALPHAI_DOCKER_ENV_VARS`           | `dockerEnvVars`           |
+| Env Var                             | Config Key                 |
+| ----------------------------------- | -------------------------- |
+| `RALPHAI_AGENT_COMMAND`             | `agent.command`            |
+| `RALPHAI_AGENT_SETUP_COMMAND`       | `agent.setupCommand`       |
+| `RALPHAI_AGENT_INTERACTIVE_COMMAND` | `agent.interactiveCommand` |
+| `RALPHAI_HOOKS_FEEDBACK`            | `hooks.feedback`           |
+| `RALPHAI_HOOKS_PR_FEEDBACK`         | `hooks.prFeedback`         |
+| `RALPHAI_HOOKS_BEFORE_RUN`          | `hooks.beforeRun`          |
+| `RALPHAI_HOOKS_AFTER_RUN`           | `hooks.afterRun`           |
+| `RALPHAI_HOOKS_FEEDBACK_TIMEOUT`    | `hooks.feedbackTimeout`    |
+| `RALPHAI_BASE_BRANCH`               | `baseBranch`               |
+| `RALPHAI_GATE_REVIEW`               | `gate.review`              |
+| `RALPHAI_PROMPT_VERBOSE`            | `prompt.verbose`           |
+| `RALPHAI_PROMPT_PREAMBLE`           | `prompt.preamble`          |
+| `RALPHAI_PROMPT_LEARNINGS`          | `prompt.learnings`         |
+| `RALPHAI_PROMPT_COMMIT_STYLE`       | `prompt.commitStyle`       |
+| `RALPHAI_GATE_MAX_STUCK`            | `gate.maxStuck`            |
+| `RALPHAI_GATE_ITERATION_TIMEOUT`    | `gate.iterationTimeout`    |
+| `RALPHAI_GATE_MAX_REJECTIONS`       | `gate.maxRejections`       |
+| `RALPHAI_GATE_MAX_ITERATIONS`       | `gate.maxIterations`       |
+| `RALPHAI_GATE_REVIEW_MAX_FILES`     | `gate.reviewMaxFiles`      |
+| `RALPHAI_GATE_VALIDATORS`           | `gate.validators`          |
+| `RALPHAI_PR_DRAFT`                  | `pr.draft`                 |
+| `RALPHAI_GIT_BRANCH_PREFIX`         | `git.branchPrefix`         |
+| `RALPHAI_NO_UPDATE_CHECK`           | _(none)_                   |
+| `RALPHAI_ISSUE_SOURCE`              | `issue.source`             |
+| `RALPHAI_ISSUE_STANDALONE_LABEL`    | `issue.standaloneLabel`    |
+| `RALPHAI_ISSUE_SUBISSUE_LABEL`      | `issue.subissueLabel`      |
+| `RALPHAI_ISSUE_PRD_LABEL`           | `issue.prdLabel`           |
+| `RALPHAI_ISSUE_REPO`                | `issue.repo`               |
+| `RALPHAI_ISSUE_COMMENT_PROGRESS`    | `issue.commentProgress`    |
+| `RALPHAI_ISSUE_HITL_LABEL`          | `issue.hitlLabel`          |
+| `RALPHAI_ISSUE_IN_PROGRESS_LABEL`   | `issue.inProgressLabel`    |
+| `RALPHAI_ISSUE_DONE_LABEL`          | `issue.doneLabel`          |
+| `RALPHAI_ISSUE_STUCK_LABEL`         | `issue.stuckLabel`         |
+| `RALPHAI_SANDBOX`                   | `sandbox`                  |
+| `RALPHAI_DOCKER_IMAGE`              | `dockerImage`              |
+| `RALPHAI_DOCKER_MOUNTS`             | `dockerMounts`             |
+| `RALPHAI_DOCKER_ENV_VARS`           | `dockerEnvVars`            |
 
 ### Config Keys
 
-| Key                       | Default                   | Env Var                             | Description                                                                                                                                                                                                                                                                                                               |
-| ------------------------- | ------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agentCommand`            | _(none)_                  | `RALPHAI_AGENT_COMMAND`             | CLI command to invoke the coding agent                                                                                                                                                                                                                                                                                    |
-| `setupCommand`            | `""`                      | `RALPHAI_SETUP_COMMAND`             | Command to run in worktree after creation (e.g. `bun install`)                                                                                                                                                                                                                                                            |
-| `feedbackCommands`        | _(auto-detected)_         | `RALPHAI_FEEDBACK_COMMANDS`         | Comma-separated build/test/lint commands                                                                                                                                                                                                                                                                                  |
-| `prFeedbackCommands`      | `""`                      | `RALPHAI_PR_FEEDBACK_COMMANDS`      | Comma-separated PR-tier feedback commands (run only at the completion gate, not during iterations)                                                                                                                                                                                                                        |
-| `baseBranch`              | `"main"`                  | `RALPHAI_BASE_BRANCH`               | Base branch for worktree creation                                                                                                                                                                                                                                                                                         |
-| `review`                  | `true`                    | `RALPHAI_REVIEW`                    | Enable review pass after completion                                                                                                                                                                                                                                                                                       |
-| `terse`                   | `true`                    | `RALPHAI_TERSE`                     | Enable terse mode for concise agent output. By default, the iteration prompt instructs the agent to drop filler words, articles, pleasantries, and hedging while preserving technical accuracy. Setting terse to false disables this concise instruction.                                                                 |
-| `agentVerboseFlags`       | `""`                      | `RALPHAI_AGENT_VERBOSE_FLAGS`       | Override the built-in per-agent verbose flags injected when `--verbose` is passed. By default, each agent type has its own flags (e.g. opencode: `--print-logs --log-level DEBUG`, claude/aider/codex/gemini: `--verbose`). Set this to use custom flags for any agent.                                                   |
-| `maxStuck`                | `3`                       | `RALPHAI_MAX_STUCK`                 | Consecutive no-commit iterations before abort                                                                                                                                                                                                                                                                             |
-| `iterationTimeout`        | `0`                       | `RALPHAI_ITERATION_TIMEOUT`         | Per-agent-invocation timeout in seconds (0 = no timeout)                                                                                                                                                                                                                                                                  |
-| `issueSource`             | `"none"`                  | `RALPHAI_ISSUE_SOURCE`              | Issue source (`"github"` or `"none"`); `init` defaults to `"github"`                                                                                                                                                                                                                                                      |
-| `standaloneLabel`         | `"ralphai-standalone"`    | `RALPHAI_STANDALONE_LABEL`          | Family label for standalone issues                                                                                                                                                                                                                                                                                        |
-| `subissueLabel`           | `"ralphai-subissue"`      | `RALPHAI_SUBISSUE_LABEL`            | Family label for PRD sub-issues                                                                                                                                                                                                                                                                                           |
-| `prdLabel`                | `"ralphai-prd"`           | `RALPHAI_PRD_LABEL`                 | Family label for PRD parent issues                                                                                                                                                                                                                                                                                        |
-| `issueRepo`               | _(auto-detected)_         | `RALPHAI_ISSUE_REPO`                | GitHub `owner/repo` for issue queries                                                                                                                                                                                                                                                                                     |
-| `issueCommentProgress`    | `true`                    | `RALPHAI_ISSUE_COMMENT_PROGRESS`    | Post progress comments on GitHub issues                                                                                                                                                                                                                                                                                   |
-| `issueHitlLabel`          | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`          | Label marking sub-issues as requiring human interaction                                                                                                                                                                                                                                                                   |
-| `agentInteractiveCommand` | `""`                      | `RALPHAI_AGENT_INTERACTIVE_COMMAND` | CLI command to spawn for interactive HITL sessions                                                                                                                                                                                                                                                                        |
-| `sandbox`                 | _(auto-detected)_         | `RALPHAI_SANDBOX`                   | Execution sandbox mode (`"none"` for local, `"docker"` for containerized). When unset, auto-detects Docker availability: defaults to `"docker"` if Docker is running, `"none"` otherwise. `--show-config` reports source as `auto-detected`. Plans running in Docker show a `docker` tag in `ralphai status` and the TUI. |
-| `dockerImage`             | `""`                      | `RALPHAI_DOCKER_IMAGE`              | Override Docker image (default: auto-resolve from agent name, e.g. `ghcr.io/mfaux/ralphai-sandbox:claude`)                                                                                                                                                                                                                |
-| `dockerMounts`            | `""`                      | `RALPHAI_DOCKER_MOUNTS`             | Extra bind mounts for Docker sandbox (comma-separated, e.g. `/host:/container:ro`)                                                                                                                                                                                                                                        |
-| `dockerEnvVars`           | `""`                      | `RALPHAI_DOCKER_ENV_VARS`           | Extra env vars to forward into Docker sandbox (comma-separated)                                                                                                                                                                                                                                                           |
-| `workspaces`              | `null`                    | _(none)_                            | Per-package feedback command overrides for monorepos (see [Workspaces](#workspaces) below)                                                                                                                                                                                                                                |
+Config keys are organized into nested groups: `agent`, `hooks`, `gate`, `prompt`, `pr`, `git`, `issue`, plus flat top-level keys. See [Hooks, Gates, and Prompt Controls](hooks.md#config-reference) for the complete table with defaults, env vars, CLI flags, and descriptions.
+
+Example `config.json`:
+
+```json
+{
+  "agent": { "command": "claude -p" },
+  "hooks": { "feedback": "pnpm build,pnpm test" },
+  "gate": { "maxStuck": 3, "review": true },
+  "prompt": { "verbose": false },
+  "pr": { "draft": true },
+  "git": { "branchPrefix": "" },
+  "issue": { "source": "github" },
+  "baseBranch": "main"
+}
+```
 
 ### Plan Frontmatter Fields
 
@@ -489,15 +505,21 @@ Plan files support these YAML frontmatter fields:
 | `issue`          | GitHub issue number associated with this plan.                                                                          |
 | `issue-url`      | Full URL of the GitHub issue.                                                                                           |
 | `prd`            | Parent PRD issue number.                                                                                                |
+| `priority`       | Numeric priority (lower = runs sooner). Plans without `priority` get implicit `0`.                                      |
+| `tags`           | Tags for filtering plans (e.g. `[frontend, auth]`). Use `--tags=frontend` to run only matching plans. OR semantics.     |
+
+See [Hooks, Gates, and Prompt Controls](hooks.md#plan-frontmatter-reference) for the full reference including `## Agent Instructions`.
 
 ### Workspaces
 
-The `workspaces` key in `config.json` provides per-package feedback command overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value. Both `feedbackCommands` and `prFeedbackCommands` can be overridden per workspace.
+The `workspaces` key in `config.json` provides per-package overrides for monorepo projects. Each key is a relative path matching a plan's `scope` frontmatter value. Overridable fields: `feedbackCommands`, `prFeedbackCommands`, `validators`, `beforeRun`, `preamble`.
 
 ```json
 {
-  "feedbackCommands": ["pnpm build", "pnpm test"],
-  "prFeedbackCommands": ["pnpm test:e2e"],
+  "hooks": {
+    "feedback": "pnpm build,pnpm test",
+    "prFeedback": "pnpm test:e2e"
+  },
   "workspaces": {
     "packages/web": {
       "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"],
@@ -510,8 +532,10 @@ The `workspaces` key in `config.json` provides per-package feedback command over
 }
 ```
 
-When a plan declares `scope: packages/web`, Ralphai first checks for a matching `workspaces` entry. If none exists, it derives scoped commands automatically. Workspace entries that override `feedbackCommands` but omit `prFeedbackCommands` inherit the root-level `prFeedbackCommands` unchanged.
+When a plan declares `scope: packages/web`, Ralphai first checks for a matching `workspaces` entry. If none exists, it derives scoped commands automatically. Workspace entries that override `feedbackCommands` but omit `prFeedbackCommands` inherit the root-level `hooks.prFeedback` unchanged.
 
 - **Node.js** -> uses the package manager's workspace filter
 - **C# / .NET** -> appends the scope path to dotnet commands
 - **Other ecosystems** -> passes commands through unchanged
+
+See [Hooks, Gates, and Prompt Controls](hooks.md#workspace-overrides) for the full workspace override reference.

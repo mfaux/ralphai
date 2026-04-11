@@ -41,9 +41,6 @@ import {
 } from "./config.ts";
 import { formatShowConfig } from "./show-config.ts";
 import {
-  IN_PROGRESS_LABEL,
-  DONE_LABEL,
-  STUCK_LABEL,
   prdTransitionInProgress,
   prdTransitionDone,
   detectIssueRepo,
@@ -273,7 +270,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
   // 6. GitHub Issues integration (enabled by default)
   clack.note(
     "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
-      `open issue labeled "${DEFAULTS.standaloneLabel}" and convert it to a plan.\n` +
+      `open issue labeled "${DEFAULTS.issue.standaloneLabel}" and convert it to a plan.\n` +
       "Disable this if you use a different issue tracker.",
     "GitHub Issues",
   );
@@ -349,6 +346,9 @@ interface LabelNames {
   standalone: string;
   subissue: string;
   prd: string;
+  inProgress: string;
+  done: string;
+  stuck: string;
 }
 
 /** Build a `gh label create` command string for a given label. */
@@ -399,17 +399,17 @@ function labelDefs(names: LabelNames) {
     },
     // Shared state labels
     {
-      name: IN_PROGRESS_LABEL,
+      name: names.inProgress,
       description: "Ralphai is working on this issue",
       color: IN_PROGRESS_COLOR,
     },
     {
-      name: DONE_LABEL,
+      name: names.done,
       description: "Ralphai finished this issue",
       color: DONE_COLOR,
     },
     {
-      name: STUCK_LABEL,
+      name: names.stuck,
       description: "Ralphai is stuck on this issue",
       color: STUCK_COLOR,
     },
@@ -494,26 +494,23 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
         .filter((cmd) => cmd.length > 0)
     : [];
 
-  const configObj: Record<
-    string,
-    | string
-    | string[]
-    | number
-    | boolean
-    | Record<string, { feedbackCommands: string[] }>
-  > = {
-    agentCommand: answers.agentCommand,
-    feedbackCommands,
-    prFeedbackCommands,
+  const configObj: Record<string, unknown> = {
+    agent: {
+      command: answers.agentCommand,
+      setupCommand: answers.setupCommand ?? "",
+    },
+    hooks: {
+      feedback: feedbackCommands,
+      prFeedback: prFeedbackCommands,
+    },
     baseBranch: answers.baseBranch,
-    setupCommand: answers.setupCommand ?? "",
-    iterationTimeout: 0,
-    issueSource: answers.issueSource ?? "none",
-    standaloneLabel: DEFAULTS.standaloneLabel,
-    subissueLabel: DEFAULTS.subissueLabel,
-    prdLabel: DEFAULTS.prdLabel,
-    issueRepo: "",
-    issueCommentProgress: true,
+    issue: {
+      source: answers.issueSource ?? "none",
+      standaloneLabel: DEFAULTS.issue.standaloneLabel,
+      subissueLabel: DEFAULTS.issue.subissueLabel,
+      prdLabel: DEFAULTS.issue.prdLabel,
+      commentProgress: true,
+    },
     sandbox: answers.sandbox ?? "none",
   };
 
@@ -545,10 +542,14 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   }
 
   // Create GitHub labels if issues integration is enabled
+  const issueConfig = configObj.issue as Record<string, unknown>;
   const initLabelNames: LabelNames = {
-    standalone: configObj.standaloneLabel as string,
-    subissue: configObj.subissueLabel as string,
-    prd: configObj.prdLabel as string,
+    standalone: issueConfig.standaloneLabel as string,
+    subissue: issueConfig.subissueLabel as string,
+    prd: issueConfig.prdLabel as string,
+    inProgress: DEFAULTS.issue.inProgressLabel,
+    done: DEFAULTS.issue.doneLabel,
+    stuck: DEFAULTS.issue.stuckLabel,
   };
   let labelResult: LabelResult | null = null;
   if (answers.issueSource === "github") {
@@ -580,13 +581,13 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
         `  GitHub labels              ${DIM}Created 6 labels (3 family + 3 shared state):${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.standaloneLabel}${RESET}       ${DIM}Family label for standalone issues${RESET}`,
+        `    ${TEXT}${issueConfig.standaloneLabel}${RESET}       ${DIM}Family label for standalone issues${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.subissueLabel}${RESET}         ${DIM}Family label for PRD sub-issues${RESET}`,
+        `    ${TEXT}${issueConfig.subissueLabel}${RESET}         ${DIM}Family label for PRD sub-issues${RESET}`,
       );
       console.log(
-        `    ${TEXT}${configObj.prdLabel}${RESET}              ${DIM}Family label for PRD parent issues${RESET}`,
+        `    ${TEXT}${issueConfig.prdLabel}${RESET}              ${DIM}Family label for PRD parent issues${RESET}`,
       );
       console.log(
         `                             ${DIM}Shared state: in-progress, done, stuck${RESET}`,
@@ -628,7 +629,7 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
   if (answers.issueSource === "github") {
     console.log();
     console.log(
-      `${DIM}Label a GitHub issue with "${configObj.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
+      `${DIM}Label a GitHub issue with "${issueConfig.standaloneLabel}" and Ralphai will pick it up automatically.${RESET}`,
     );
     console.log();
     console.log(
@@ -752,13 +753,22 @@ async function runRalphaiReset(
   // Load config to get issue repo for GitHub issue restoration.
   // Best-effort: if config resolution fails we skip label restoration.
   let issueRepo = "";
+  let resetStateLabels:
+    | { inProgressLabel: string; doneLabel: string; stuckLabel: string }
+    | undefined;
   try {
     const cfgResult = resolveConfig({
       cwd,
       envVars: process.env,
       cliArgs: [],
     });
-    issueRepo = configValues(cfgResult.config).issueRepo;
+    const cfgVals = configValues(cfgResult.config);
+    issueRepo = cfgVals.issue.repo;
+    resetStateLabels = {
+      inProgressLabel: cfgVals.issue.inProgressLabel,
+      doneLabel: cfgVals.issue.doneLabel,
+      stuckLabel: cfgVals.issue.stuckLabel,
+    };
   } catch {
     // Config resolution failure is not critical — skip label restoration.
   }
@@ -778,6 +788,7 @@ async function runRalphaiReset(
         planPath: planFile,
         issueRepo,
         cwd,
+        stateLabels: resetStateLabels,
       });
       if (labelResult.restored) {
         console.log(`  ${DIM}${labelResult.message}${RESET}`);
@@ -915,11 +926,17 @@ export function resetPlanBySlug(cwd: string, slug: string): void {
         envVars: process.env,
         cliArgs: [],
       });
-      const issueRepo = configValues(cfgResult.config).issueRepo;
+      const cfgVals = configValues(cfgResult.config);
+      const issueRepo = cfgVals.issue.repo;
       const labelResult = restoreIssueLabels({
         planPath: planFile,
         issueRepo,
         cwd,
+        stateLabels: {
+          inProgressLabel: cfgVals.issue.inProgressLabel,
+          doneLabel: cfgVals.issue.doneLabel,
+          stuckLabel: cfgVals.issue.stuckLabel,
+        },
       });
       if (labelResult.restored) {
         console.log(`  ${DIM}${labelResult.message}${RESET}`);
@@ -1646,23 +1663,36 @@ const KNOWN_RUN_FLAGS = new Set([
 ]);
 
 /** Patterns for run flags parsed directly (not by config resolver). */
-const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/];
+const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/, /^--tags=/];
 
 /** Patterns for config flags that are parsed by the TS config resolver. */
 const CONFIG_FLAG_PATTERNS = [
   /^--agent-command=/,
-  /^--setup-command=/,
-  /^--feedback-commands=/,
-  /^--pr-feedback-commands=/,
+  /^--agent-setup-command=/,
+  /^--agent-interactive-command=/,
+  /^--hooks-feedback=/,
+  /^--hooks-pr-feedback=/,
+  /^--hooks-before-run=/,
+  /^--hooks-after-run=/,
+  /^--hooks-feedback-timeout=/,
+  /^--gate-max-stuck=/,
+  /^--gate-review$/,
+  /^--gate-no-review$/,
+  /^--gate-max-rejections=/,
+  /^--gate-max-iterations=/,
+  /^--gate-review-max-files=/,
+  /^--gate-validators=/,
+  /^--gate-iteration-timeout=/,
+  /^--prompt-verbose$/,
+  /^--prompt-preamble=/,
+  /^--prompt-learnings$/,
+  /^--no-prompt-learnings$/,
+  /^--prompt-commit-style=/,
+  /^--pr-draft$/,
+  /^--no-pr-draft$/,
+  /^--git-branch-prefix=/,
+  /^--issue-hitl-label=/,
   /^--base-branch=/,
-  /^--max-stuck=/,
-  /^--iteration-timeout=/,
-  /^--review$/,
-  /^--no-review$/,
-  /^--terse$/,
-  /^--no-terse$/,
-  /^--agent-verbose-flags=/,
-  /^--prompt-mode=/,
   /^--sandbox=/,
   /^--docker-image=/,
   /^--docker-mounts=/,
@@ -1704,47 +1734,55 @@ function showRunHelp(): void {
     "  --resume, -r                     Commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
     "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
+    "  --tags=<list>                    Comma-separated tags to filter plans (OR semantics)",
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
-    "  --setup-command=<command>        Command to run in worktree after creation (e.g. 'bun install')",
-    "  --feedback-commands=<list>       Comma-separated feedback commands (e.g. 'npm test,npm run build')",
-    "  --pr-feedback-commands=<list>    Comma-separated PR feedback commands (run before PR creation)",
+    "  --agent-setup-command=<command>  Command to run in worktree after creation (e.g. 'bun install')",
+    "  --hooks-feedback=<list>          Comma-separated feedback commands (e.g. 'npm test,npm run build')",
+    "  --hooks-pr-feedback=<list>       Comma-separated PR feedback commands (run before PR creation)",
     "  --base-branch=<branch>           Override base branch (default: main)",
-    "  --max-stuck=<n>                  Override stuck threshold (default: 3)",
-    "  --iteration-timeout=<seconds>     Timeout per agent invocation (default: 0 = no timeout)",
+    "  --gate-max-stuck=<n>             Override stuck threshold (default: 3)",
+    "  --gate-max-rejections=<n>        Max gate rejections before force-accept (default: 2, 0 = never)",
+    "  --gate-max-iterations=<n>        Max runner iterations before stuck (default: 0 = unlimited)",
+    "  --gate-review-max-files=<n>      Max files in review-pass prompt (default: 25)",
+    "  --gate-iteration-timeout=<sec>   Timeout per agent invocation (default: 0 = no timeout)",
+    "  --gate-validators=<list>         Comma-separated validator commands (run at gate after feedback)",
     "  --sandbox=<mode>                 Execution sandbox mode: 'none' (local) or 'docker' (default: none)",
     "  --docker-image=<image>           Override Docker image (default: auto-resolve from agent name)",
     "  --docker-mounts=<csv>            Extra bind mounts for Docker sandbox (comma-separated)",
     "  --docker-env-vars=<csv>          Extra env vars to forward into Docker sandbox (comma-separated)",
-    "  --review                         Enable review pass after completion (default: on)",
-    "  --no-review                      Disable review pass after completion",
-    "  --verbose                        Stream agent debug logs to stderr (agent-specific flags injected automatically)",
-    "  --terse                          Enable concise/terse agent output (default: on)",
-    "  --no-terse                       Disable concise mode (full unabridged agent output)",
-    "  --agent-verbose-flags=<flags>    Override built-in agent verbose flags (e.g. '--debug --log-level trace')",
-    "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
+    "  --gate-review                    Enable review pass after completion (default: on)",
+    "  --gate-no-review                 Disable review pass after completion",
+    "  --prompt-verbose                 Enable verbose mode (full unabridged agent output; default: concise)",
+    "  --prompt-preamble=<text>         Override default preamble (use @path to read from file)",
+    "  --prompt-learnings               Enable learnings extraction (default: on)",
+    "  --no-prompt-learnings            Disable learnings extraction, prompt mandate, and PR section",
+    "  --prompt-commit-style=<style>    Commit style: 'conventional' (default) or 'none'",
+    "  --pr-draft                       Create draft PRs (default: on)",
+    "  --no-pr-draft                    Create ready-for-review PRs instead of drafts",
+    "  --git-branch-prefix=<prefix>     Override branch prefix (e.g. 'ralphai/' produces ralphai/<slug>)",
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
     "",
-    "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
-    "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
-    "                  baseBranch, maxStuck, sandbox, dockerImage, dockerMounts, dockerEnvVars,",
-    "                  review, terse, agentVerboseFlags, iterationTimeout,",
-    "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
-    "                  issueRepo, issueCommentProgress",
+    "Config file: config.json (optional, nested JSON, stored in ~/.ralphai/repos/<id>/)",
+    "  Groups: agent, hooks, gate, prompt, pr, git, issue",
+    '  Example: { "agent": { "command": "claude -p" }, "baseBranch": "main" }',
     "",
-    "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_SETUP_COMMAND,",
-    "                   RALPHAI_FEEDBACK_COMMANDS,",
-    "                   RALPHAI_PR_FEEDBACK_COMMANDS,",
-    "                   RALPHAI_BASE_BRANCH, RALPHAI_MAX_STUCK,",
+    "Env var overrides: RALPHAI_AGENT_COMMAND, RALPHAI_AGENT_SETUP_COMMAND,",
+    "                   RALPHAI_HOOKS_FEEDBACK, RALPHAI_HOOKS_PR_FEEDBACK,",
+    "                   RALPHAI_BASE_BRANCH, RALPHAI_GATE_MAX_STUCK,",
+    "                   RALPHAI_GATE_MAX_REJECTIONS, RALPHAI_GATE_MAX_ITERATIONS,",
+    "                   RALPHAI_GATE_REVIEW_MAX_FILES,",
     "                   RALPHAI_SANDBOX,",
     "                   RALPHAI_DOCKER_IMAGE, RALPHAI_DOCKER_MOUNTS,",
-    "                   RALPHAI_DOCKER_ENV_VARS, RALPHAI_REVIEW,",
-    "                   RALPHAI_TERSE, RALPHAI_AGENT_VERBOSE_FLAGS,",
-    ,
-    "                   RALPHAI_ITERATION_TIMEOUT,",
+    "                   RALPHAI_DOCKER_ENV_VARS, RALPHAI_GATE_REVIEW,",
+    "                   RALPHAI_PROMPT_VERBOSE, RALPHAI_PROMPT_PREAMBLE,",
+    "                   RALPHAI_PROMPT_LEARNINGS, RALPHAI_PROMPT_COMMIT_STYLE,",
+    "                   RALPHAI_PR_DRAFT, RALPHAI_GIT_BRANCH_PREFIX,",
+    "                   RALPHAI_GATE_ITERATION_TIMEOUT,",
+    "                   RALPHAI_GATE_VALIDATORS,",
     "                   RALPHAI_ISSUE_SOURCE,",
-    "                   RALPHAI_STANDALONE_LABEL, RALPHAI_SUBISSUE_LABEL,",
-    "                   RALPHAI_PRD_LABEL,",
+    "                   RALPHAI_ISSUE_STANDALONE_LABEL, RALPHAI_ISSUE_SUBISSUE_LABEL,",
+    "                   RALPHAI_ISSUE_PRD_LABEL,",
     "                   RALPHAI_ISSUE_REPO,",
     "                   RALPHAI_ISSUE_COMMENT_PROGRESS",
     "",
@@ -1798,6 +1836,9 @@ async function runIssueTarget(
     prdLabel: string;
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
+    gitBranchPrefix: string;
+    commitStyle: string;
+    prDraft: boolean;
   },
 ): Promise<void> {
   const {
@@ -1810,6 +1851,9 @@ async function runIssueTarget(
     prdLabel,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
+    gitBranchPrefix,
+    commitStyle,
+    prDraft,
   } = flags;
 
   // Pass through --help and --show-config unchanged
@@ -1863,7 +1907,10 @@ async function runIssueTarget(
     }
 
     const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
-    const branch = issueBranchName(issueTitle);
+    const branch = issueBranchName(issueTitle, {
+      branchPrefix: gitBranchPrefix,
+      commitStyle,
+    });
 
     console.log();
     console.log("========================================");
@@ -1938,6 +1985,9 @@ async function runIssueTarget(
       setupCommand,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
+      gitBranchPrefix,
+      commitStyle,
+      prDraft,
     });
   }
 
@@ -1985,6 +2035,9 @@ async function runIssueTarget(
       setupCommand,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
+      gitBranchPrefix,
+      commitStyle,
+      prDraft,
     });
   }
 
@@ -2002,7 +2055,10 @@ async function runIssueTarget(
 
   const issueTitle = issueInfo.title;
   const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
-  const branch = issueBranchName(issueTitle);
+  const branch = issueBranchName(issueTitle, {
+    branchPrefix: gitBranchPrefix,
+    commitStyle,
+  });
 
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
@@ -2027,10 +2083,15 @@ async function runIssueTarget(
     wipDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
-    standaloneLabel: worktreeConfig.standaloneLabel,
-    issueRepo: worktreeConfig.issueRepo || repo,
-    issueCommentProgress: worktreeConfig.issueCommentProgress === "true",
+    standaloneLabel: worktreeConfig.issue.standaloneLabel,
+    issueRepo: worktreeConfig.issue.repo || repo,
+    issueCommentProgress: worktreeConfig.issue.commentProgress,
     issueNumber,
+    stateLabels: {
+      inProgressLabel: worktreeConfig.issue.inProgressLabel,
+      doneLabel: worktreeConfig.issue.doneLabel,
+      stuckLabel: worktreeConfig.issue.stuckLabel,
+    },
   });
 
   if (!pullResult.pulled) {
@@ -2094,6 +2155,9 @@ async function runPrdIssueTarget(
     setupCommand: string;
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
+    gitBranchPrefix: string;
+    commitStyle: string;
+    prDraft: boolean;
   },
 ): Promise<void> {
   const {
@@ -2101,10 +2165,16 @@ async function runPrdIssueTarget(
     setupCommand,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
+    gitBranchPrefix,
+    commitStyle,
+    prDraft,
   } = flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
-  const branch = issueBranchName(prd.title);
+  const branch = issueBranchName(prd.title, {
+    branchPrefix: gitBranchPrefix,
+    commitStyle,
+  });
 
   // --- All sub-issues already completed ---
   if (allCompleted) {
@@ -2168,7 +2238,11 @@ async function runPrdIssueTarget(
   // --- PRD with unchecked sub-issues: work through sequentially ---
 
   // Best-effort: mark the PRD parent as in-progress before processing sub-issues.
-  prdTransitionInProgress({ number: prd.number, repo }, cwd);
+  prdTransitionInProgress({ number: prd.number, repo }, cwd, false, {
+    inProgressLabel: worktreeConfig.issue.inProgressLabel,
+    doneLabel: worktreeConfig.issue.doneLabel,
+    stuckLabel: worktreeConfig.issue.stuckLabel,
+  });
 
   console.log(
     `PRD #${prd.number} — ${prd.title}: ${subIssues.length} sub-issue(s) to work through.`,
@@ -2178,7 +2252,7 @@ async function runPrdIssueTarget(
   // --- HITL sub-issue filtering ---
   // Before processing, check each sub-issue's labels for the HITL label.
   // HITL sub-issues require human review and are skipped by the automated runner.
-  const hitlLabel = worktreeConfig.issueHitlLabel;
+  const hitlLabel = worktreeConfig.issue.hitlLabel;
   const hitlSubIssues: number[] = [];
   const eligibleSubIssues: number[] = [];
   for (const num of subIssues) {
@@ -2233,11 +2307,16 @@ async function runPrdIssueTarget(
       wipDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
-      standaloneLabel: worktreeConfig.standaloneLabel,
-      subissueLabel: worktreeConfig.subissueLabel,
-      issueRepo: worktreeConfig.issueRepo || repo,
-      issueCommentProgress: worktreeConfig.issueCommentProgress === "true",
+      standaloneLabel: worktreeConfig.issue.standaloneLabel,
+      subissueLabel: worktreeConfig.issue.subissueLabel,
+      issueRepo: worktreeConfig.issue.repo || repo,
+      issueCommentProgress: worktreeConfig.issue.commentProgress,
       issueNumber: subIssueNumber,
+      stateLabels: {
+        inProgressLabel: worktreeConfig.issue.inProgressLabel,
+        doneLabel: worktreeConfig.issue.doneLabel,
+        stuckLabel: worktreeConfig.issue.stuckLabel,
+      },
     });
 
     if (!pullResult.pulled) {
@@ -2362,14 +2441,18 @@ async function runPrdIssueTarget(
     console.log(
       `All sub-issues of PRD #${prd.number} are done — transitioning PRD to done.`,
     );
-    prdTransitionDone({ number: prd.number, repo }, cwd);
+    prdTransitionDone({ number: prd.number, repo }, cwd, false, {
+      inProgressLabel: worktreeConfig.issue.inProgressLabel,
+      doneLabel: worktreeConfig.issue.doneLabel,
+      stuckLabel: worktreeConfig.issue.stuckLabel,
+    });
   }
 
   // --- Create aggregate PRD pull request ---
   if (completedCount > 0) {
     console.log();
     console.log("Creating PRD pull request...");
-    const issueRepo = worktreeConfig.issueRepo || repo;
+    const issueRepo = worktreeConfig.issue.repo || repo;
     const prResult = createPrdPr({
       branch,
       baseBranch: resolvedBaseBranch,
@@ -2382,6 +2465,7 @@ async function runPrdIssueTarget(
       issueRepo,
       summaries: subIssueSummaries,
       learnings: prdLearnings,
+      draft: prDraft,
     });
     console.log(prResult.message);
   } else {
@@ -2505,12 +2589,24 @@ async function runRalphaiInManagedWorktree(
   // Resolve config from config/env/CLI (read-only, safe for dry-run)
   let setupCommand = "";
   let resolvedIssueSource = "none";
-  let resolvedIssueLabel = DEFAULTS.standaloneLabel;
-  let resolvedIssuePrdLabel = DEFAULTS.prdLabel;
-  let resolvedSubissueLabel = DEFAULTS.subissueLabel;
+  let resolvedIssueLabel = DEFAULTS.issue.standaloneLabel;
+  let resolvedIssuePrdLabel = DEFAULTS.issue.prdLabel;
+  let resolvedSubissueLabel = DEFAULTS.issue.subissueLabel;
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
-  let resolvedIssueHitlLabel = DEFAULTS.issueHitlLabel;
+  let resolvedIssueHitlLabel = DEFAULTS.issue.hitlLabel;
+  let resolvedStateLabels: {
+    inProgressLabel: string;
+    doneLabel: string;
+    stuckLabel: string;
+  } = {
+    inProgressLabel: DEFAULTS.issue.inProgressLabel,
+    doneLabel: DEFAULTS.issue.doneLabel,
+    stuckLabel: DEFAULTS.issue.stuckLabel,
+  };
+  let resolvedGitBranchPrefix = DEFAULTS.git.branchPrefix;
+  let resolvedPromptCommitStyle = DEFAULTS.prompt.commitStyle;
+  let resolvedPrDraft = DEFAULTS.pr.draft;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
   let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
@@ -2521,19 +2617,27 @@ async function runRalphaiInManagedWorktree(
     });
     resolvedConfig = cfgResult.config;
     const cfg = configValues(cfgResult.config);
-    setupCommand = cfg.setupCommand;
-    resolvedIssueSource = cfg.issueSource;
-    resolvedIssueLabel = cfg.standaloneLabel;
-    resolvedIssuePrdLabel = cfg.prdLabel;
-    resolvedSubissueLabel = cfg.subissueLabel;
-    resolvedIssueRepo = cfg.issueRepo;
-    resolvedIssueCommentProgress = cfg.issueCommentProgress === "true";
-    resolvedIssueHitlLabel = cfg.issueHitlLabel;
+    setupCommand = cfg.agent.setupCommand;
+    resolvedIssueSource = cfg.issue.source;
+    resolvedIssueLabel = cfg.issue.standaloneLabel;
+    resolvedIssuePrdLabel = cfg.issue.prdLabel;
+    resolvedSubissueLabel = cfg.issue.subissueLabel;
+    resolvedIssueRepo = cfg.issue.repo;
+    resolvedIssueCommentProgress = cfg.issue.commentProgress;
+    resolvedIssueHitlLabel = cfg.issue.hitlLabel;
+    resolvedStateLabels = {
+      inProgressLabel: cfg.issue.inProgressLabel,
+      doneLabel: cfg.issue.doneLabel,
+      stuckLabel: cfg.issue.stuckLabel,
+    };
+    resolvedGitBranchPrefix = cfg.git.branchPrefix;
+    resolvedPromptCommitStyle = cfg.prompt.commitStyle;
+    resolvedPrDraft = cfg.pr.draft;
 
     // Build sandbox config for routing setup commands through Docker
     setupSandboxConfig = {
       sandbox: cfg.sandbox as "none" | "docker",
-      agentCommand: cfg.agentCommand,
+      agentCommand: cfg.agent.command,
       dockerConfig:
         cfg.sandbox === "docker"
           ? {
@@ -2553,9 +2657,6 @@ async function runRalphaiInManagedWorktree(
             }
           : undefined,
       // Mount the main repo's .git directory for worktree support.
-      // In managed worktree mode, cwd is always the main repo root,
-      // so worktrees created from it need this path mounted in Docker
-      // for git operations to work inside the container.
       mainGitDir: cfg.sandbox === "docker" ? join(cwd, ".git") : undefined,
     };
   } catch {
@@ -2570,7 +2671,7 @@ async function runRalphaiInManagedWorktree(
         `${DIM}Run without --wizard, or use explicit flags instead:${RESET}`,
       );
       console.error(
-        `  ${TEXT}ralphai run --agent-command='claude -p' --max-stuck=5${RESET}`,
+        `  ${TEXT}ralphai run --agent-command='claude -p' --gate-max-stuck=5${RESET}`,
       );
       process.exit(1);
     }
@@ -2609,6 +2710,9 @@ async function runRalphaiInManagedWorktree(
       prdLabel: resolvedIssuePrdLabel,
       baseBranch,
       setupSandboxConfig,
+      gitBranchPrefix: resolvedGitBranchPrefix,
+      commitStyle: resolvedPromptCommitStyle,
+      prDraft: resolvedPrDraft,
     });
   }
 
@@ -2674,7 +2778,10 @@ async function runRalphaiInManagedWorktree(
       }
 
       const prdSlug = slugify(commitTypeFromTitle(prdIssue.title).description);
-      const branch = issueBranchName(prdIssue.title);
+      const branch = issueBranchName(prdIssue.title, {
+        branchPrefix: resolvedGitBranchPrefix,
+        commitStyle: resolvedPromptCommitStyle,
+      });
 
       if (isDryRun) {
         console.log();
@@ -2786,6 +2893,7 @@ async function runRalphaiInManagedWorktree(
               issueCommentProgress: resolvedIssueCommentProgress,
               issuePrdLabel: resolvedIssuePrdLabel,
               issueHitlLabel: resolvedIssueHitlLabel,
+              stateLabels: resolvedStateLabels,
             };
             // Priority chain: try PRD sub-issues first, then regular issues
             const prdResult = pullPrdSubIssue(pullOpts);
@@ -2864,6 +2972,9 @@ async function runRalphaiInManagedWorktree(
             setupCommand,
             baseBranch,
             setupSandboxConfig,
+            gitBranchPrefix: resolvedGitBranchPrefix,
+            commitStyle: resolvedPromptCommitStyle,
+            prDraft: resolvedPrDraft,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done
           break;
@@ -2879,7 +2990,10 @@ async function runRalphaiInManagedWorktree(
     const planDesc = planFullPath
       ? getPlanDescription(planFullPath)
       : plan.planFile;
-    const branch = issueBranchName(planDesc);
+    const branch = issueBranchName(planDesc, {
+      branchPrefix: resolvedGitBranchPrefix,
+      commitStyle: resolvedPromptCommitStyle,
+    });
     const resolvedWorktreeDir = prepareWorktree(
       cwd,
       plan.slug,
@@ -2965,6 +3079,14 @@ async function runRalphaiRunner(
   const hasShowConfig = runArgs.includes("--show-config");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
+  const tagsFlag = runArgs.find((a) => a.startsWith("--tags="));
+  const filterTags = tagsFlag
+    ? tagsFlag
+        .slice("--tags=".length)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : undefined;
 
   // --- Resolve config: defaults -> file -> env -> CLI ---
   const envVars = process.env as Record<string, string | undefined>;
@@ -3027,12 +3149,15 @@ async function runRalphaiRunner(
   // Best-effort: ensure all issue-tracking labels exist. Non-throwing so
   // upgrading users don't need to re-run `ralphai init`. Skipped in dry-run.
   const cfg = configValues(config);
-  if (!isDryRun && cfg.issueSource === "github") {
+  if (!isDryRun && cfg.issue.source === "github") {
     try {
       ensureGitHubLabels(cwd, {
-        standalone: cfg.standaloneLabel,
-        subissue: cfg.subissueLabel,
-        prd: cfg.prdLabel,
+        standalone: cfg.issue.standaloneLabel,
+        subissue: cfg.issue.subissueLabel,
+        prd: cfg.issue.prdLabel,
+        inProgress: cfg.issue.inProgressLabel,
+        done: cfg.issue.doneLabel,
+        stuck: cfg.issue.stuckLabel,
       });
     } catch {
       // Intentionally swallowed — label creation is best-effort.
@@ -3093,6 +3218,7 @@ async function runRalphaiRunner(
     allowDirty: hasAllowDirty,
     once: hasOnce,
     plan: targetPlan,
+    filterTags,
     prd: prdIssue,
     skipPrCreation: runnerFlags?.skipPrCreation,
     verbose: hasVerbose,

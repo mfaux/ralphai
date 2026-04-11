@@ -29,6 +29,11 @@ mock.module("./exec.ts", () => ({
     stdout: "",
     stderr: "",
   }),
+  execInherit: (cmd: string, cwd: string) => ({
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+  }),
   checkGhAvailable: () => true,
   setExecImpl: () => () => {},
   execOk: () => true,
@@ -150,10 +155,9 @@ function setupDefaultMocks(tmpDir: string) {
   // Default config resolution
   mockResolveConfig.mockReturnValue({
     config: makeTestResolvedConfig({
-      agentCommand: "echo",
-      agentInteractiveCommand: "opencode",
-      issueSource: "github",
-      review: "false",
+      agent: { command: "echo", interactiveCommand: "opencode" },
+      issue: { source: "github" },
+      gate: { review: false },
     }),
   });
 
@@ -301,10 +305,9 @@ describe("runHitl", () => {
   test("errors when agentInteractiveCommand is not configured", async () => {
     mockResolveConfig.mockReturnValue({
       config: makeTestResolvedConfig({
-        agentCommand: "echo",
-        agentInteractiveCommand: "",
-        issueSource: "github",
-        review: "false",
+        agent: { command: "echo", interactiveCommand: "" },
+        issue: { source: "github" },
+        gate: { review: false },
       }),
     });
 
@@ -335,7 +338,9 @@ describe("runHitl", () => {
 
     expect(exitCode).toBe(1);
     expect(
-      logs.some((l) => l.includes("agentInteractiveCommand is not configured")),
+      logs.some((l) =>
+        l.includes("agent.interactiveCommand is not configured"),
+      ),
     ).toBe(true);
   });
 
@@ -520,8 +525,7 @@ describe("runHitl", () => {
     // Config says "develop", but detectBaseBranch returns "main"
     mockResolveConfig.mockReturnValue({
       config: makeTestResolvedConfig({
-        agentCommand: "echo",
-        agentInteractiveCommand: "opencode",
+        agent: { command: "echo", interactiveCommand: "opencode" },
         baseBranch: "develop",
       }),
     });

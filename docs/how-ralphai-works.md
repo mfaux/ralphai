@@ -56,16 +56,18 @@ When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the pipeline s
 
 Ralphai supports two tiers of feedback commands:
 
-| Tier          | Config key           | When it runs                                    |
-| ------------- | -------------------- | ----------------------------------------------- |
-| **Loop-tier** | `feedbackCommands`   | Every agent iteration (build, unit tests, lint) |
-| **PR-tier**   | `prFeedbackCommands` | Only at the completion gate, before PR creation |
+| Tier          | Config key         | When it runs                                    |
+| ------------- | ------------------ | ----------------------------------------------- |
+| **Loop-tier** | `hooks.feedback`   | Every agent iteration (build, unit tests, lint) |
+| **PR-tier**   | `hooks.prFeedback` | Only at the completion gate, before PR creation |
 
-**Loop-tier commands** (`feedbackCommands`) are included in the agent prompt and run every iteration. These should be fast — build, unit tests, and lint. The agent sees their output and fixes failures inline.
+**Loop-tier commands** (`hooks.feedback`) are included in the agent prompt and run every iteration. These should be fast — build, unit tests, and lint. The agent sees their output and fixes failures inline.
 
-**PR-tier commands** (`prFeedbackCommands`) are slower checks like E2E tests or integration suites. They are _not_ included in the agent prompt and do not run during normal iterations. They only execute when the agent signals completion, at which point the completion gate runs both tiers. This avoids burning time on expensive checks every iteration while still ensuring they pass before a PR is created.
+**PR-tier commands** (`hooks.prFeedback`) are slower checks like E2E tests or integration suites. They are _not_ included in the agent prompt and do not run during normal iterations. They only execute when the agent signals completion, at which point the completion gate runs both tiers. This avoids burning time on expensive checks every iteration while still ensuring they pass before a PR is created.
 
-Feedback commands are auto-detected during `ralphai init` or configured via `feedbackCommands` and `prFeedbackCommands` in `config.json`. During init, Ralphai detects PR-tier candidates from common script names like `test:e2e`, `test:integration`, `cypress`, and `playwright`.
+Feedback commands are auto-detected during `ralphai init` or configured via `hooks.feedback` and `hooks.prFeedback` in `config.json`. During init, Ralphai detects PR-tier candidates from common script names like `test:e2e`, `test:integration`, `cypress`, and `playwright`.
+
+See [Hooks, Gates, and Prompt Controls](hooks.md) for the full hooks and gate reference.
 
 ### Feedback Wrapper Script
 
@@ -86,12 +88,15 @@ The completion gate does **not** use the wrapper — it runs feedback commands d
 When the agent signals that all tasks are complete, Ralphai runs a **completion gate** before creating a PR. The gate checks:
 
 1. **Task completion** — all plan tasks are marked done in `progress.md`
-2. **Loop-tier feedback** — all `feedbackCommands` pass
-3. **PR-tier feedback** — all `prFeedbackCommands` pass
+2. **Loop-tier feedback** — all `hooks.feedback` commands pass
+3. **PR-tier feedback** — all `hooks.prFeedback` commands pass
+4. **Validators** — all `gate.validators` commands pass (only run when feedback passes)
 
 If any check fails, the gate **rejects** and Ralphai re-invokes the agent with a fresh session that includes the rejection details. PR-tier failures are labeled `[PR-tier]` in the rejection message so the agent knows which commands failed and can fix them.
 
-The gate allows up to 2 consecutive rejections before force-accepting to prevent infinite loops. However, if the plan has **zero tasks completed** out of a non-zero total when the rejection budget is exhausted, the plan is marked **stuck** instead of force-accepted — zero progress indicates the agent failed entirely and should not produce a PR.
+The gate allows up to `gate.maxRejections` (default 2) consecutive rejections before force-accepting to prevent infinite loops. Set to `0` to never force-accept (mark stuck instead). However, if the plan has **zero tasks completed** out of a non-zero total when the rejection budget is exhausted, the plan is marked **stuck** instead of force-accepted — zero progress indicates the agent failed entirely and should not produce a PR.
+
+Validators (`gate.validators`) are agent-invisible commands that run at the gate after all feedback passes. They are not included in the prompt, so the agent cannot game them. Validator failures are reported in the gate rejection details. See [Hooks, Gates, and Prompt Controls](hooks.md#completion-gate) for the full gate configuration reference.
 
 ```
     Agent signals COMPLETE
@@ -124,12 +129,12 @@ The gate allows up to 2 consecutive rejections before force-accepting to prevent
 
 ### Review Pass
 
-After the completion gate passes, Ralphai optionally runs a **review pass** — a one-shot agent invocation that performs behavior-preserving simplifications on the changed files. The review pass is enabled by default and can be disabled with `--no-review` or `review: false` in `config.json`.
+After the completion gate passes, Ralphai optionally runs a **review pass** — a one-shot agent invocation that performs behavior-preserving simplifications on the changed files. The review pass is enabled by default and can be disabled with `--gate-no-review` or `gate.review: false` in `config.json`.
 
 The review pass:
 
 1. **Detects changed files** — runs `git diff --name-only <baseBranch>...HEAD` and filters out deleted files
-2. **Assembles a focused prompt** — lists the changed files (capped at 25) and instructs the agent to perform behavior-preserving simplifications: dead code removal, redundant logic elimination, unused imports cleanup, and control flow simplification
+2. **Assembles a focused prompt** — lists the changed files (capped at `gate.reviewMaxFiles`, default 25) and instructs the agent to perform behavior-preserving simplifications: dead code removal, redundant logic elimination, unused imports cleanup, and control flow simplification
 3. **Invokes the agent** — runs a single agent session with the review prompt; the agent runs feedback commands to verify its changes and commits with a `refactor:` prefix if it makes any changes
 4. **Re-runs the gate if changes were made** — if the agent committed simplifications, the completion gate runs again to verify nothing was broken; gate failures follow the normal rejection flow
 
@@ -187,7 +192,9 @@ Use `ralphai run` directly when you want automation, scripting, or a non-interac
 
 ## Stuck Detection
 
-If **N consecutive iterations** produce no new commits, Ralphai aborts. The default threshold is 3. Configure it with `maxStuck` in `config.json`, `RALPHAI_MAX_STUCK`, or `--max-stuck`.
+If **N consecutive iterations** produce no new commits, Ralphai aborts. The default threshold is 3. Configure it with `gate.maxStuck` in `config.json`, `RALPHAI_GATE_MAX_STUCK`, or `--gate-max-stuck`.
+
+Separately, `gate.maxIterations` sets an absolute cap on total runner iterations regardless of progress. When exceeded, the plan is marked stuck. Default is `0` (unlimited). This is independent of `gate.maxStuck`, which only counts zero-progress iterations.
 
 The plan stays in `in-progress/<slug>/` so you can inspect and resume it.
 
@@ -197,7 +204,7 @@ By default, `ralphai run` drains the backlog — processing plans sequentially u
 
 1. **Each completed plan** -> pushes the branch and creates a draft PR
 2. **Stuck plans** -> skipped, logged, and reported in the exit summary
-3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`) are skipped during auto-drain — they require human attention.
+3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are skipped during auto-drain — they require human attention.
 4. **Nothing left** -> exits with a summary: "Completed N, skipped M (stuck)"
 
 Use `--once` to process a single work unit and exit instead of draining.
@@ -226,7 +233,7 @@ Before processing, Ralphai validates the dispatch classification to catch miscon
 
 ## PRD Execution Model
 
-PRDs (Product Requirements Documents) are the recommended way to drive multi-step features. A PRD is a GitHub issue labeled with the configured PRD label (`ralphai-prd` by default, configurable via `prdLabel`) with sub-issues representing each piece of work.
+PRDs (Product Requirements Documents) are the recommended way to drive multi-step features. A PRD is a GitHub issue labeled with the configured PRD label (`ralphai-prd` by default, configurable via `issue.prdLabel`) with sub-issues representing each piece of work.
 
 ```bash
 ralphai run 42           # reads issue #42's labels to determine dispatch path
@@ -270,11 +277,11 @@ Per-sub-issue PRs are suppressed. When all sub-issues complete (or are skipped),
 
 ### Stuck sub-issues
 
-When a sub-issue hits the stuck threshold (default 3 consecutive no-commit iterations), Ralphai skips it and moves to the next sub-issue. The stuck sub-issue is listed in the aggregate PR body so you can address it manually.
+When a sub-issue hits the stuck threshold (default 3 consecutive no-commit iterations, configurable via `gate.maxStuck`), Ralphai skips it and moves to the next sub-issue. The stuck sub-issue is listed in the aggregate PR body so you can address it manually.
 
 ### HITL sub-issues
 
-When a sub-issue is labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`), Ralphai skips it before processing begins. These sub-issues require human review — they are not attempted by the automated runner.
+When a sub-issue is labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`), Ralphai skips it before processing begins. These sub-issues require human review — they are not attempted by the automated runner.
 
 Sub-issues that depend on a HITL sub-issue (via `depends-on` frontmatter) are also skipped as blocked. Both HITL and blocked-by-HITL sub-issues are reported in the exit summary and aggregate PR body. The PRD is not marked done while HITL or blocked sub-issues remain.
 
@@ -282,7 +289,7 @@ To resume after human review: remove the HITL label from the sub-issue, then re-
 
 ## Iteration Timeout
 
-Use `--iteration-timeout=<seconds>` or `iterationTimeout` in `config.json` to set a per-invocation timeout. If the agent exceeds the limit, Ralphai kills it and the iteration counts toward the stuck budget. The default is `0`, which means no timeout.
+Use `--gate-iteration-timeout=<seconds>` or `gate.iterationTimeout` in `config.json` to set a per-invocation timeout. If the agent exceeds the limit, Ralphai kills it and the iteration counts toward the stuck budget. The default is `0`, which means no timeout.
 
 ## Plan Lifecycle
 
@@ -416,11 +423,13 @@ When no feedback scope is available, the scope hint is omitted entirely and prom
 
 ### Workspace Overrides
 
-When automatic derivation is insufficient, use the `workspaces` key in `config.json` to provide explicit per-package feedback commands:
+When automatic derivation is insufficient, use the `workspaces` key in `config.json` to provide explicit per-package overrides. Overridable fields: `feedbackCommands`, `prFeedbackCommands`, `validators`, `beforeRun`, `preamble`.
 
 ```json
 {
-  "feedbackCommands": ["pnpm build", "pnpm test"],
+  "hooks": {
+    "feedback": "pnpm build,pnpm test"
+  },
   "workspaces": {
     "packages/web": {
       "feedbackCommands": ["pnpm --filter web build", "pnpm --filter web test"]
@@ -429,7 +438,7 @@ When automatic derivation is insufficient, use the `workspaces` key in `config.j
 }
 ```
 
-Workspace overrides take precedence over automatic derivation. Plans without a scope use the top-level feedback commands unchanged.
+Workspace overrides take precedence over automatic derivation. Plans without a scope use the root-level config unchanged. See [Hooks, Gates, and Prompt Controls](hooks.md#workspace-overrides) for the full workspace reference.
 
 ### Independent Sub-Projects
 
@@ -437,7 +446,9 @@ Some repos contain sub-projects that are not connected to the root by workspace 
 
 ```json
 {
-  "feedbackCommands": ["dotnet build", "dotnet test"],
+  "hooks": {
+    "feedback": "dotnet build,dotnet test"
+  },
   "workspaces": {
     "ui": {
       "feedbackCommands": ["cd ui && npm run build", "cd ui && npm test"]

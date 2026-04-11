@@ -28,7 +28,7 @@ describe("init multi-language detection", () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    expect(config.feedbackCommands).toEqual(["dotnet build", "dotnet test"]);
+    expect(config.hooks.feedback).toEqual(["dotnet build", "dotnet test"]);
   });
 
   it("init --yes in a Go module directory detects go", async () => {
@@ -44,10 +44,7 @@ describe("init multi-language detection", () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    expect(config.feedbackCommands).toEqual([
-      "go build ./...",
-      "go test ./...",
-    ]);
+    expect(config.hooks.feedback).toEqual(["go build ./...", "go test ./..."]);
   });
 
   it("init --yes in a Rust project directory detects cargo", async () => {
@@ -85,7 +82,7 @@ describe("init multi-language detection", () => {
     await runCliInProcess(["init", "--yes"], ctx.dir, testEnv());
 
     const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-    expect(config.feedbackCommands).toEqual(["python -m pytest"]);
+    expect(config.hooks.feedback).toEqual(["python -m pytest"]);
   });
 
   it("init --yes does not warn about missing feedback for non-JS projects with feedback", async () => {

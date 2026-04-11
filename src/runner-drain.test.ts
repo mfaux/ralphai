@@ -108,8 +108,8 @@ describe("drain-by-default", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -139,8 +139,8 @@ describe("drain-by-default", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -189,8 +189,8 @@ describe("--once flag", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -241,9 +241,8 @@ describe("exit summary", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: stuckAgent,
-        maxStuck: 2,
-        review: "false",
+        agent: { command: stuckAgent },
+        gate: { maxStuck: 2, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -283,9 +282,8 @@ describe("exit summary", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: mixedAgent,
-        maxStuck: 2,
-        review: "false",
+        agent: { command: mixedAgent },
+        gate: { maxStuck: 2, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -311,7 +309,10 @@ describe("exit summary", () => {
     const worktreeDir = createManagedWorktree(dir, "empty-run");
 
     const opts: RunnerOptions = {
-      config: makeTestResolvedConfig({ agentCommand: "echo", review: "false" }),
+      config: makeTestResolvedConfig({
+        agent: { command: "echo" },
+        gate: { review: false },
+      }),
       cwd: worktreeDir,
       isWorktree: true,
       mainWorktree: dir,
@@ -371,8 +372,8 @@ describe("priority: in-progress before backlog", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: completeAgent,
-        review: "false",
+        agent: { command: completeAgent },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

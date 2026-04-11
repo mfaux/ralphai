@@ -50,7 +50,7 @@ describe("runner config", () => {
         testEnv(),
       );
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("iterationTimeout   = off");
+      expect(result.stdout).toContain("gate.iterationTimeout = off");
       expect(result.stdout).toContain("(default)");
     });
 

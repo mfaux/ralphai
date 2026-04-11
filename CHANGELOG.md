@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Features
+
+- **`gate.validators` config key** — run custom policy checks (changelog presence, migration files, bundle size) at the completion gate after feedback commands pass. Validators are agent-invisible and all run independently. Failures are prefixed with `[Validator]` in gate rejection details. Configurable via `RALPHAI_GATE_VALIDATORS` env var, `--gate-validators=` CLI flag, and per-workspace overrides.
+
 ### Breaking
 
 - **`autoCommit` feature removed** — the `autoCommit` config key, `--auto-commit` / `--no-auto-commit` CLI flags, and `RALPHAI_AUTO_COMMIT` environment variable have been removed. Ralphai no longer commits changes on behalf of the agent; agents are expected to commit their own work.

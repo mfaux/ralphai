@@ -66,13 +66,12 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // Agent command is auto-detected from PATH or falls back to OpenCode
-    expect(typeof parsed.agentCommand).toBe("string");
-    expect(parsed.agentCommand.length).toBeGreaterThan(0);
+    expect(typeof parsed.agent.command).toBe("string");
+    expect(parsed.agent.command.length).toBeGreaterThan(0);
     expect(parsed.baseBranch).toBeDefined();
     expect(parsed).not.toHaveProperty("protectedBranches");
-    // feedbackCommands should be an empty array when not detected
-    expect(parsed.feedbackCommands).toEqual([]);
-    expect(parsed.iterationTimeout).toBe(0);
+    // hooks.feedback should be an empty array when not detected
+    expect(parsed.hooks.feedback).toEqual([]);
   });
 
   it("init --yes writes all config keys with defaults", async () => {
@@ -81,25 +80,21 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 14 keys are present (includes repoPath)
-    expect(Object.keys(parsed)).toHaveLength(14);
+    // Verify exactly 6 top-level keys are present (agent, hooks, baseBranch, issue, sandbox, repoPath)
+    expect(Object.keys(parsed)).toHaveLength(6);
 
     // Core settings from wizard
-    expect(typeof parsed.agentCommand).toBe("string");
-    expect(parsed.agentCommand.length).toBeGreaterThan(0);
+    expect(typeof parsed.agent.command).toBe("string");
+    expect(parsed.agent.command.length).toBeGreaterThan(0);
     expect(parsed.baseBranch).toBeDefined();
-    expect(parsed.feedbackCommands).toEqual([]);
-
-    // Runtime defaults
-    expect(parsed.iterationTimeout).toBe(0);
+    expect(parsed.hooks.feedback).toEqual([]);
 
     // Issue tracking defaults
-    expect(parsed.issueSource).toBe("github");
-    expect(parsed.standaloneLabel).toBe("ralphai-standalone");
-    expect(parsed.subissueLabel).toBe("ralphai-subissue");
-    expect(parsed.prdLabel).toBe("ralphai-prd");
-    expect(parsed.issueRepo).toBe("");
-    expect(parsed.issueCommentProgress).toBe(true);
+    expect(parsed.issue.source).toBe("github");
+    expect(parsed.issue.standaloneLabel).toBe("ralphai-standalone");
+    expect(parsed.issue.subissueLabel).toBe("ralphai-subissue");
+    expect(parsed.issue.prdLabel).toBe("ralphai-prd");
+    expect(parsed.issue.commentProgress).toBe(true);
 
     // Sandbox (auto-detected: "docker" if Docker available, "none" otherwise)
     expect(["none", "docker"]).toContain(parsed.sandbox);
@@ -114,9 +109,9 @@ describe("init command", () => {
 
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
-    expect(parsed.agentCommand).toBe("claude -p");
+    expect(parsed.agent.command).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(14);
+    expect(Object.keys(parsed)).toHaveLength(6);
   });
 
   it("init --yes warns when agent command binary is not in PATH", async () => {
@@ -294,7 +289,7 @@ describe("init command", () => {
     // Write custom config
     writeConfigFile(
       ctx.dir,
-      { agentCommand: "my-agent", baseBranch: "main" },
+      { agent: { command: "my-agent" }, baseBranch: "main" },
       testEnv(),
     );
 
@@ -312,7 +307,7 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
     // Agent command is auto-detected, so just verify it's not the custom one
-    expect(parsed.agentCommand).not.toBe("my-agent");
+    expect(parsed.agent.command).not.toBe("my-agent");
   });
 
   // -------------------------------------------------------------------------

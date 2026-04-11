@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { beforeEach, afterEach } from "bun:test";
 import { stripAnsi } from "./utils.ts";
@@ -15,11 +15,42 @@ import { runRalphai } from "./ralphai.ts";
 import { ExitIntercepted } from "./interactive/maintenance-actions.ts";
 import {
   DEFAULTS,
+  getConfigFilePath,
+  type AgentConfig,
   type ConfigSource,
   type ConfigValues,
+  type GateConfig,
+  type GitConfig,
+  type HooksConfig,
+  type IssueConfig,
+  type PrConfig,
+  type PromptConfig,
   type RalphaiConfig,
   type ResolvedConfig,
+  type ResolvedValue,
+  type WorkspaceOverrides,
 } from "./config.ts";
+
+/**
+ * Like `Partial<RalphaiConfig>` but nested group objects are also partial.
+ * This lets callers write `{ agent: { command: "echo" } }` without
+ * specifying every field inside the group.
+ */
+export type PartialRalphaiConfig = {
+  agent?: Partial<AgentConfig>;
+  hooks?: Partial<HooksConfig>;
+  gate?: Partial<GateConfig>;
+  prompt?: Partial<PromptConfig>;
+  pr?: Partial<PrConfig>;
+  git?: Partial<GitConfig>;
+  issue?: Partial<IssueConfig>;
+  baseBranch?: string;
+  sandbox?: "none" | "docker";
+  dockerImage?: string;
+  dockerMounts?: string;
+  dockerEnvVars?: string;
+  workspaces?: Record<string, WorkspaceOverrides> | null;
+};
 
 function sleepMs(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -329,58 +360,144 @@ export function useTempGitDir() {
 }
 
 /**
+ * Deep-merge two config objects. Only merges group objects (agent, hooks,
+ * gate, prompt, pr, git, issue); flat keys are overwritten directly.
+ */
+function deepMergeConfig(
+  base: RalphaiConfig,
+  overrides: PartialRalphaiConfig,
+): RalphaiConfig {
+  const result = { ...base };
+  const groups = [
+    "agent",
+    "hooks",
+    "gate",
+    "prompt",
+    "pr",
+    "git",
+    "issue",
+  ] as const;
+  for (const g of groups) {
+    if (overrides[g] !== undefined) {
+      result[g] = { ...base[g], ...overrides[g] } as never;
+    }
+  }
+  if (overrides.baseBranch !== undefined)
+    result.baseBranch = overrides.baseBranch;
+  if (overrides.sandbox !== undefined) result.sandbox = overrides.sandbox;
+  if (overrides.dockerImage !== undefined)
+    result.dockerImage = overrides.dockerImage;
+  if (overrides.dockerMounts !== undefined)
+    result.dockerMounts = overrides.dockerMounts;
+  if (overrides.dockerEnvVars !== undefined)
+    result.dockerEnvVars = overrides.dockerEnvVars;
+  if (overrides.workspaces !== undefined)
+    result.workspaces = overrides.workspaces;
+  return result;
+}
+
+/**
  * Build a `ConfigValues` object for tests with sensible defaults.
  *
  * Every key starts at its `DEFAULTS` value (from `src/config.ts`), then
- * the caller's `overrides` are spread on top. This replaces the duplicated
- * per-file `makeResolvedConfig()` helpers — tests that only need plain
- * config values can use `makeTestConfig()` directly.
+ * the caller's `overrides` are deep-merged on top.
  *
  * @example
- *   const cfg = makeTestConfig({ agentCommand: "echo hi", maxStuck: 1 });
- *   expect(cfg.agentCommand).toBe("echo hi");
+ *   const cfg = makeTestConfig({ agent: { command: "echo hi" } });
+ *   expect(cfg.agent.command).toBe("echo hi");
  *   expect(cfg.baseBranch).toBe("main"); // default preserved
  */
-export function makeTestConfig(
-  overrides?: Partial<ConfigValues>,
-): ConfigValues {
-  return { ...DEFAULTS, ...overrides };
+export function makeTestConfig(overrides?: PartialRalphaiConfig): ConfigValues {
+  if (!overrides)
+    return {
+      ...DEFAULTS,
+      agent: { ...DEFAULTS.agent },
+      hooks: { ...DEFAULTS.hooks },
+      gate: { ...DEFAULTS.gate },
+      prompt: { ...DEFAULTS.prompt },
+      pr: { ...DEFAULTS.pr },
+      git: { ...DEFAULTS.git },
+      issue: { ...DEFAULTS.issue },
+    };
+  return deepMergeConfig(DEFAULTS, overrides);
+}
+
+/**
+ * Wrap a group's plain values with ResolvedValue metadata.
+ */
+function wrapGroup<T extends object>(
+  group: T,
+  source: ConfigSource = "default",
+): { [K in keyof T]: ResolvedValue<T[K]> } {
+  const out: Record<string, ResolvedValue<unknown>> = {};
+  for (const [k, v] of Object.entries(group)) {
+    out[k] = { value: v, source };
+  }
+  return out as { [K in keyof T]: ResolvedValue<T[K]> };
 }
 
 /**
  * Build a `ResolvedConfig` for tests with sensible defaults.
  *
  * Every key starts at its `DEFAULTS` value wrapped with `source: "default"`.
- * Plain-value `overrides` are merged on top (keeping `source: "default"`),
- * then `resolvedOverrides` are applied last — these carry an explicit
- * `{ value, source }` pair so tests can verify source-dependent behaviour.
+ * Plain-value `overrides` are deep-merged on top (keeping `source: "default"`).
+ *
+ * For fine-grained source control, directly mutate the returned object,
+ * e.g.:
+ *   const rc = makeTestResolvedConfig();
+ *   rc.agent.command = { value: "claude -p", source: "config" };
  *
  * @example
- *   // All defaults, agentCommand overridden with default source:
- *   const rc = makeTestResolvedConfig({ agentCommand: "echo hi" });
- *   // rc.agentCommand === { value: "echo hi", source: "default" }
- *
- *   // Explicit source:
- *   const rc2 = makeTestResolvedConfig(undefined, {
- *     agentCommand: { value: "claude -p", source: "config" },
- *   });
- *   // rc2.agentCommand === { value: "claude -p", source: "config" }
+ *   const rc = makeTestResolvedConfig({ agent: { command: "echo hi" } });
+ *   // rc.agent.command === { value: "echo hi", source: "default" }
  */
 export function makeTestResolvedConfig(
-  overrides?: Partial<RalphaiConfig>,
-  resolvedOverrides?: Partial<
-    Record<keyof RalphaiConfig, { value: unknown; source: ConfigSource }>
-  >,
+  overrides?: PartialRalphaiConfig,
 ): ResolvedConfig {
-  const merged = { ...DEFAULTS, ...overrides };
-  const resolved: Record<string, { value: unknown; source: string }> = {};
-  for (const [key, value] of Object.entries(merged)) {
-    resolved[key] = { value, source: "default" };
+  const merged = overrides ? deepMergeConfig(DEFAULTS, overrides) : DEFAULTS;
+  return {
+    agent: wrapGroup(merged.agent),
+    hooks: wrapGroup(merged.hooks),
+    gate: wrapGroup(merged.gate),
+    prompt: wrapGroup(merged.prompt),
+    pr: wrapGroup(merged.pr),
+    git: wrapGroup(merged.git),
+    issue: wrapGroup(merged.issue),
+    baseBranch: { value: merged.baseBranch, source: "default" },
+    sandbox: { value: merged.sandbox, source: "default" },
+    dockerImage: { value: merged.dockerImage, source: "default" },
+    dockerMounts: { value: merged.dockerMounts, source: "default" },
+    dockerEnvVars: { value: merged.dockerEnvVars, source: "default" },
+    workspaces: { value: merged.workspaces, source: "default" },
+  };
+}
+
+/**
+ * Create `env()` and `writeGlobalConfig()` helpers scoped to a
+ * `useTempDir()` context.
+ *
+ * Eliminates the identical helper pair that was copy-pasted across
+ * every `resolveConfig` test file.
+ *
+ * @example
+ *   const ctx = useTempDir();
+ *   const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
+ */
+export function makeConfigTestHelpers(ctx: { dir: string }) {
+  function env(
+    extra?: Record<string, string>,
+  ): Record<string, string | undefined> {
+    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
   }
-  if (resolvedOverrides) {
-    for (const [key, rv] of Object.entries(resolvedOverrides)) {
-      resolved[key] = rv!;
-    }
+
+  function writeGlobalConfig(
+    cwd: string,
+    config: Record<string, unknown>,
+  ): void {
+    const filePath = getConfigFilePath(cwd, env());
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, JSON.stringify(config));
   }
-  return resolved as unknown as ResolvedConfig;
+
+  return { env, writeGlobalConfig };
 }

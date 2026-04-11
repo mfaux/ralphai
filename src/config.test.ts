@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
-import { useTempDir } from "./test-utils.ts";
+import { join } from "path";
+import { useTempDir, makeConfigTestHelpers } from "./test-utils.ts";
 import {
   validateEnum,
   validateBoolean,
@@ -14,7 +14,6 @@ import {
   resolveConfig,
   getConfigFilePath,
   writeConfigFile,
-  ConfigError,
   DEFAULTS,
 } from "./config.ts";
 
@@ -190,65 +189,71 @@ describe("parseConfigFile", () => {
     );
   });
 
-  it("parses agentCommand", () => {
+  it("parses agent.command", () => {
     const file = join(ctx.dir, "agent.json");
-    writeFileSync(file, JSON.stringify({ agentCommand: "claude -p" }));
+    writeFileSync(file, JSON.stringify({ agent: { command: "claude -p" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.agentCommand).toBe("claude -p");
+    expect(result.values.agent?.command).toBe("claude -p");
   });
 
-  it("rejects empty agentCommand", () => {
+  it("rejects empty agent.command", () => {
     const file = join(ctx.dir, "empty-agent.json");
-    writeFileSync(file, JSON.stringify({ agentCommand: "" }));
+    writeFileSync(file, JSON.stringify({ agent: { command: "" } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'agentCommand' must be a non-empty string",
+      "'agent.command' must be a non-empty string",
     );
   });
 
-  it("parses setupCommand", () => {
+  it("parses agent.setupCommand", () => {
     const file = join(ctx.dir, "setup.json");
-    writeFileSync(file, JSON.stringify({ setupCommand: "bun install" }));
+    writeFileSync(
+      file,
+      JSON.stringify({ agent: { setupCommand: "bun install" } }),
+    );
     const result = parseConfigFile(file)!;
-    expect(result.values.setupCommand).toBe("bun install");
+    expect(result.values.agent?.setupCommand).toBe("bun install");
   });
 
-  it("allows empty setupCommand (disabled)", () => {
+  it("allows empty agent.setupCommand (disabled)", () => {
     const file = join(ctx.dir, "setup-empty.json");
-    writeFileSync(file, JSON.stringify({ setupCommand: "" }));
+    writeFileSync(file, JSON.stringify({ agent: { setupCommand: "" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.setupCommand).toBe("");
+    expect(result.values.agent?.setupCommand).toBe("");
   });
 
-  it("rejects non-string setupCommand", () => {
+  it("rejects non-string agent.setupCommand", () => {
     const file = join(ctx.dir, "setup-bad.json");
-    writeFileSync(file, JSON.stringify({ setupCommand: 42 }));
+    writeFileSync(file, JSON.stringify({ agent: { setupCommand: 42 } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'setupCommand' must be a string",
+      "'agent.setupCommand' must be a string",
     );
   });
 
-  it("parses feedbackCommands as array", () => {
+  it("parses hooks.feedback as array", () => {
     const file = join(ctx.dir, "fc-array.json");
     writeFileSync(
       file,
-      JSON.stringify({ feedbackCommands: ["npm test", "npm run build"] }),
+      JSON.stringify({ hooks: { feedback: ["npm test", "npm run build"] } }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.feedbackCommands).toBe("npm test,npm run build");
+    expect(result.values.hooks?.feedback).toBe("npm test,npm run build");
   });
 
-  it("parses feedbackCommands as string", () => {
+  it("parses hooks.feedback as string", () => {
     const file = join(ctx.dir, "fc-string.json");
-    writeFileSync(file, JSON.stringify({ feedbackCommands: "npm test" }));
+    writeFileSync(file, JSON.stringify({ hooks: { feedback: "npm test" } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.feedbackCommands).toBe("npm test");
+    expect(result.values.hooks?.feedback).toBe("npm test");
   });
 
-  it("rejects feedbackCommands array with empty entry", () => {
+  it("rejects hooks.feedback array with empty entry", () => {
     const file = join(ctx.dir, "fc-bad.json");
-    writeFileSync(file, JSON.stringify({ feedbackCommands: ["npm test", ""] }));
+    writeFileSync(
+      file,
+      JSON.stringify({ hooks: { feedback: ["npm test", ""] } }),
+    );
     expect(() => parseConfigFile(file)).toThrow(
-      "'feedbackCommands' array contains an empty entry",
+      "'hooks.feedback' array contains an empty entry",
     );
   });
 
@@ -267,50 +272,50 @@ describe("parseConfigFile", () => {
     );
   });
 
-  it("parses maxStuck", () => {
+  it("parses gate.maxStuck", () => {
     const file = join(ctx.dir, "stuck.json");
-    writeFileSync(file, JSON.stringify({ maxStuck: 5 }));
+    writeFileSync(file, JSON.stringify({ gate: { maxStuck: 5 } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.maxStuck).toBe(5);
+    expect(result.values.gate?.maxStuck).toBe(5);
   });
 
-  it("rejects maxStuck of 0", () => {
+  it("rejects gate.maxStuck of 0", () => {
     const file = join(ctx.dir, "stuck0.json");
-    writeFileSync(file, JSON.stringify({ maxStuck: 0 }));
+    writeFileSync(file, JSON.stringify({ gate: { maxStuck: 0 } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'maxStuck' must be a positive integer",
+      "'gate.maxStuck' must be a positive integer",
     );
   });
 
-  it("parses boolean fields as booleans in JSON, stored as strings", () => {
+  it("parses boolean fields as native booleans", () => {
     const file = join(ctx.dir, "bools.json");
     writeFileSync(
       file,
       JSON.stringify({
-        issueCommentProgress: false,
+        issue: { commentProgress: false },
       }),
     );
     const result = parseConfigFile(file)!;
-    expect(result.values.issueCommentProgress).toBe("false");
+    expect(result.values.issue?.commentProgress).toBe(false);
   });
 
-  it("parses review boolean field", () => {
+  it("parses gate.review boolean field", () => {
     const file = join(ctx.dir, "review-true.json");
-    writeFileSync(file, JSON.stringify({ review: true }));
+    writeFileSync(file, JSON.stringify({ gate: { review: true } }));
     const result = parseConfigFile(file)!;
-    expect(result.values.review).toBe("true");
+    expect(result.values.gate?.review).toBe(true);
 
     const file2 = join(ctx.dir, "review-false.json");
-    writeFileSync(file2, JSON.stringify({ review: false }));
+    writeFileSync(file2, JSON.stringify({ gate: { review: false } }));
     const result2 = parseConfigFile(file2)!;
-    expect(result2.values.review).toBe("false");
+    expect(result2.values.gate?.review).toBe(false);
   });
 
-  it("rejects non-boolean review value", () => {
+  it("rejects non-boolean gate.review value", () => {
     const file = join(ctx.dir, "review-bad.json");
-    writeFileSync(file, JSON.stringify({ review: "yes" }));
+    writeFileSync(file, JSON.stringify({ gate: { review: "yes" } }));
     expect(() => parseConfigFile(file)).toThrow(
-      "'review' must be 'true' or 'false'",
+      "'gate.review' must be true or false",
     );
   });
 
@@ -352,24 +357,24 @@ describe("applyEnvOverrides", () => {
     expect(result).toEqual({});
   });
 
-  it("extracts agentCommand", () => {
+  it("extracts agent.command", () => {
     const result = applyEnvOverrides({ RALPHAI_AGENT_COMMAND: "claude -p" });
-    expect(result.agentCommand).toBe("claude -p");
+    expect(result.agent?.command).toBe("claude -p");
   });
 
-  it("extracts setupCommand", () => {
+  it("extracts agent.setupCommand", () => {
     const result = applyEnvOverrides({
-      RALPHAI_SETUP_COMMAND: "npm install",
+      RALPHAI_AGENT_SETUP_COMMAND: "npm install",
     });
-    expect(result.setupCommand).toBe("npm install");
+    expect(result.agent?.setupCommand).toBe("npm install");
   });
 
-  it("extracts empty setupCommand (disables)", () => {
+  it("extracts empty agent.setupCommand (disables)", () => {
     // Empty env vars are ignored by the generic guard, but an explicit
     // non-empty value should come through. This test documents that
-    // RALPHAI_SETUP_COMMAND="" is treated as "not set" (same as other keys).
-    const result = applyEnvOverrides({ RALPHAI_SETUP_COMMAND: "" });
-    expect(result.setupCommand).toBeUndefined();
+    // RALPHAI_AGENT_SETUP_COMMAND="" is treated as "not set" (same as other keys).
+    const result = applyEnvOverrides({ RALPHAI_AGENT_SETUP_COMMAND: "" });
+    expect(result.agent).toBeUndefined();
   });
 
   it("extracts baseBranch", () => {
@@ -383,26 +388,49 @@ describe("applyEnvOverrides", () => {
     ).toThrow("must be a single token without spaces");
   });
 
-  it("validates maxStuck as positive int", () => {
-    expect(() => applyEnvOverrides({ RALPHAI_MAX_STUCK: "0" })).toThrow(
+  it("validates gate.maxStuck as positive int", () => {
+    expect(() => applyEnvOverrides({ RALPHAI_GATE_MAX_STUCK: "0" })).toThrow(
       "must be a positive integer",
     );
   });
 
-  it("extracts maxStuck as number", () => {
-    const result = applyEnvOverrides({ RALPHAI_MAX_STUCK: "5" });
-    expect(result.maxStuck).toBe(5);
+  it("extracts gate.maxStuck as number", () => {
+    const result = applyEnvOverrides({ RALPHAI_GATE_MAX_STUCK: "5" });
+    expect(result.gate?.maxStuck).toBe(5);
   });
 
-  it("extracts review from RALPHAI_REVIEW", () => {
-    const result = applyEnvOverrides({ RALPHAI_REVIEW: "false" });
-    expect(result.review).toBe("false");
+  it("extracts gate.review from RALPHAI_GATE_REVIEW", () => {
+    const result = applyEnvOverrides({ RALPHAI_GATE_REVIEW: "false" });
+    expect(result.gate?.review).toBe(false);
   });
 
-  it("validates review env var as boolean", () => {
-    expect(() => applyEnvOverrides({ RALPHAI_REVIEW: "yes" })).toThrow(
+  it("validates gate.review env var as boolean", () => {
+    expect(() => applyEnvOverrides({ RALPHAI_GATE_REVIEW: "yes" })).toThrow(
       "must be 'true' or 'false'",
     );
+  });
+
+  it("parses RALPHAI_PR_DRAFT=false", () => {
+    const result = applyEnvOverrides({ RALPHAI_PR_DRAFT: "false" });
+    expect(result.pr?.draft).toBe(false);
+  });
+
+  it("parses RALPHAI_PR_DRAFT=true", () => {
+    const result = applyEnvOverrides({ RALPHAI_PR_DRAFT: "true" });
+    expect(result.pr?.draft).toBe(true);
+  });
+
+  it("validates RALPHAI_PR_DRAFT as boolean", () => {
+    expect(() => applyEnvOverrides({ RALPHAI_PR_DRAFT: "yes" })).toThrow(
+      "must be 'true' or 'false'",
+    );
+  });
+
+  it("parses RALPHAI_GIT_BRANCH_PREFIX", () => {
+    const result = applyEnvOverrides({
+      RALPHAI_GIT_BRANCH_PREFIX: "ralphai/",
+    });
+    expect(result.git?.branchPrefix).toBe("ralphai/");
   });
 });
 
@@ -417,7 +445,7 @@ describe("parseCLIArgs", () => {
 
   it("parses --agent-command=value", () => {
     const result = parseCLIArgs(["--agent-command=claude -p"]);
-    expect(result.overrides.agentCommand).toBe("claude -p");
+    expect(result.overrides.agent?.command).toBe("claude -p");
   });
 
   it("rejects empty --agent-command", () => {
@@ -426,25 +454,27 @@ describe("parseCLIArgs", () => {
     );
   });
 
-  it("parses --setup-command=value", () => {
-    const result = parseCLIArgs(["--setup-command=bun install"]);
-    expect(result.overrides.setupCommand).toBe("bun install");
-    expect(result.rawFlags.setupCommand).toBe("--setup-command=bun install");
+  it("parses --agent-setup-command=value", () => {
+    const result = parseCLIArgs(["--agent-setup-command=bun install"]);
+    expect(result.overrides.agent?.setupCommand).toBe("bun install");
+    expect(result.rawFlags["agent.setupCommand"]).toBe(
+      "--agent-setup-command=bun install",
+    );
   });
 
-  it("parses empty --setup-command= (disables)", () => {
-    const result = parseCLIArgs(["--setup-command="]);
-    expect(result.overrides.setupCommand).toBe("");
+  it("parses empty --agent-setup-command= (disables)", () => {
+    const result = parseCLIArgs(["--agent-setup-command="]);
+    expect(result.overrides.agent?.setupCommand).toBe("");
   });
 
-  it("parses --feedback-commands=value", () => {
-    const result = parseCLIArgs(["--feedback-commands=npm test,npm run build"]);
-    expect(result.overrides.feedbackCommands).toBe("npm test,npm run build");
+  it("parses --hooks-feedback=value", () => {
+    const result = parseCLIArgs(["--hooks-feedback=npm test,npm run build"]);
+    expect(result.overrides.hooks?.feedback).toBe("npm test,npm run build");
   });
 
-  it("parses empty --feedback-commands (disables)", () => {
-    const result = parseCLIArgs(["--feedback-commands="]);
-    expect(result.overrides.feedbackCommands).toBe("");
+  it("parses empty --hooks-feedback (disables)", () => {
+    const result = parseCLIArgs(["--hooks-feedback="]);
+    expect(result.overrides.hooks?.feedback).toBe("");
   });
 
   it("parses --base-branch=value", () => {
@@ -452,16 +482,16 @@ describe("parseCLIArgs", () => {
     expect(result.overrides.baseBranch).toBe("develop");
   });
 
-  it("parses --review", () => {
-    const result = parseCLIArgs(["--review"]);
-    expect(result.overrides.review).toBe("true");
-    expect(result.rawFlags.review).toBe("--review");
+  it("parses --gate-review", () => {
+    const result = parseCLIArgs(["--gate-review"]);
+    expect(result.overrides.gate?.review).toBe(true);
+    expect(result.rawFlags["gate.review"]).toBe("--gate-review");
   });
 
-  it("parses --no-review", () => {
-    const result = parseCLIArgs(["--no-review"]);
-    expect(result.overrides.review).toBe("false");
-    expect(result.rawFlags.review).toBe("--no-review");
+  it("parses --gate-no-review", () => {
+    const result = parseCLIArgs(["--gate-no-review"]);
+    expect(result.overrides.gate?.review).toBe(false);
+    expect(result.rawFlags["gate.review"]).toBe("--gate-no-review");
   });
 
   it("ignores non-config flags", () => {
@@ -476,9 +506,34 @@ describe("parseCLIArgs", () => {
   });
 
   it("parses multiple flags together", () => {
-    const result = parseCLIArgs(["--agent-command=claude -p", "--review"]);
-    expect(result.overrides.agentCommand).toBe("claude -p");
-    expect(result.overrides.review).toBe("true");
+    const result = parseCLIArgs(["--agent-command=claude -p", "--gate-review"]);
+    expect(result.overrides.agent?.command).toBe("claude -p");
+    expect(result.overrides.gate?.review).toBe(true);
+  });
+
+  it("parses --pr-draft", () => {
+    const result = parseCLIArgs(["--pr-draft"]);
+    expect(result.overrides.pr?.draft).toBe(true);
+    expect(result.rawFlags["pr.draft"]).toBe("--pr-draft");
+  });
+
+  it("parses --no-pr-draft", () => {
+    const result = parseCLIArgs(["--no-pr-draft"]);
+    expect(result.overrides.pr?.draft).toBe(false);
+    expect(result.rawFlags["pr.draft"]).toBe("--no-pr-draft");
+  });
+
+  it("parses --git-branch-prefix=value", () => {
+    const result = parseCLIArgs(["--git-branch-prefix=ralphai/"]);
+    expect(result.overrides.git?.branchPrefix).toBe("ralphai/");
+    expect(result.rawFlags["git.branchPrefix"]).toBe(
+      "--git-branch-prefix=ralphai/",
+    );
+  });
+
+  it("parses empty --git-branch-prefix= (reset to default)", () => {
+    const result = parseCLIArgs(["--git-branch-prefix="]);
+    expect(result.overrides.git?.branchPrefix).toBe("");
   });
 });
 
@@ -486,23 +541,7 @@ describe("parseCLIArgs", () => {
 
 describe("resolveConfig", () => {
   const ctx = useTempDir();
-
-  /** Build envVars that route global state into the temp dir. */
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  /** Write a config file to the global state path for the given cwd. */
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   it("returns defaults when no config file, env, or CLI args", () => {
     const cwd = join(ctx.dir, "repo-defaults");
@@ -510,23 +549,26 @@ describe("resolveConfig", () => {
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
     expect(config.baseBranch.value).toBe("main");
     expect(config.baseBranch.source).toBe("default");
-    expect(config.maxStuck.value).toBe(3);
-    expect(config.maxStuck.source).toBe("default");
-    expect(config.setupCommand.value).toBe("");
-    expect(config.setupCommand.source).toBe("default");
-    expect(config.review.value).toBe("true");
-    expect(config.review.source).toBe("default");
+    expect(config.gate.maxStuck.value).toBe(3);
+    expect(config.gate.maxStuck.source).toBe("default");
+    expect(config.agent.setupCommand.value).toBe("");
+    expect(config.agent.setupCommand.source).toBe("default");
+    expect(config.gate.review.value).toBe(true);
+    expect(config.gate.review.source).toBe("default");
   });
 
   it("config file overrides defaults", () => {
     const cwd = join(ctx.dir, "repo-override");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { baseBranch: "develop", maxStuck: 5 });
+    writeGlobalConfig(cwd, {
+      baseBranch: "develop",
+      gate: { maxStuck: 5 },
+    });
     const { config } = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
     expect(config.baseBranch.value).toBe("develop");
     expect(config.baseBranch.source).toBe("config");
-    expect(config.maxStuck.value).toBe(5);
-    expect(config.maxStuck.source).toBe("config");
+    expect(config.gate.maxStuck.value).toBe(5);
+    expect(config.gate.maxStuck.source).toBe("config");
   });
 
   it("env vars override config file", () => {
@@ -559,7 +601,7 @@ describe("resolveConfig", () => {
     mkdirSync(cwd, { recursive: true });
     writeGlobalConfig(cwd, {
       baseBranch: "from-config",
-      maxStuck: 7,
+      gate: { maxStuck: 7 },
     });
     const { config } = resolveConfig({
       cwd,
@@ -571,38 +613,38 @@ describe("resolveConfig", () => {
     // baseBranch: CLI wins
     expect(config.baseBranch.value).toBe("from-cli");
     expect(config.baseBranch.source).toBe("cli");
-    // maxStuck: config wins (no env or CLI override)
-    expect(config.maxStuck.value).toBe(7);
-    expect(config.maxStuck.source).toBe("config");
+    // gate.maxStuck: config wins (no env or CLI override)
+    expect(config.gate.maxStuck.value).toBe(7);
+    expect(config.gate.maxStuck.source).toBe("config");
   });
 
-  it("setupCommand: full precedence chain", () => {
+  it("agent.setupCommand: full precedence chain", () => {
     const cwd = join(ctx.dir, "repo-setup-prec");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { setupCommand: "npm install" });
+    writeGlobalConfig(cwd, { agent: { setupCommand: "npm install" } });
 
     // Config file wins over default
     const r1 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(r1.config.setupCommand.value).toBe("npm install");
-    expect(r1.config.setupCommand.source).toBe("config");
+    expect(r1.config.agent.setupCommand.value).toBe("npm install");
+    expect(r1.config.agent.setupCommand.source).toBe("config");
 
     // Env wins over config
     const r2 = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_SETUP_COMMAND: "pnpm install" }),
+      envVars: env({ RALPHAI_AGENT_SETUP_COMMAND: "pnpm install" }),
       cliArgs: [],
     });
-    expect(r2.config.setupCommand.value).toBe("pnpm install");
-    expect(r2.config.setupCommand.source).toBe("env");
+    expect(r2.config.agent.setupCommand.value).toBe("pnpm install");
+    expect(r2.config.agent.setupCommand.source).toBe("env");
 
     // CLI wins over env
     const r3 = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_SETUP_COMMAND: "pnpm install" }),
-      cliArgs: ["--setup-command=bun install"],
+      envVars: env({ RALPHAI_AGENT_SETUP_COMMAND: "pnpm install" }),
+      cliArgs: ["--agent-setup-command=bun install"],
     });
-    expect(r3.config.setupCommand.value).toBe("bun install");
-    expect(r3.config.setupCommand.source).toBe("cli");
+    expect(r3.config.agent.setupCommand.value).toBe("bun install");
+    expect(r3.config.agent.setupCommand.source).toBe("cli");
   });
 
   it("propagates config file warnings", () => {
@@ -621,9 +663,9 @@ describe("resolveConfig", () => {
   it("throws on config file validation error", () => {
     const cwd = join(ctx.dir, "repo-bad");
     mkdirSync(cwd, { recursive: true });
-    writeGlobalConfig(cwd, { maxStuck: 0 });
+    writeGlobalConfig(cwd, { gate: { maxStuck: 0 } });
     expect(() => resolveConfig({ cwd, envVars: env(), cliArgs: [] })).toThrow(
-      "'maxStuck' must be a positive integer",
+      "'gate.maxStuck' must be a positive integer",
     );
   });
 
@@ -633,7 +675,7 @@ describe("resolveConfig", () => {
     expect(() =>
       resolveConfig({
         cwd,
-        envVars: env({ RALPHAI_MAX_STUCK: "0" }),
+        envVars: env({ RALPHAI_GATE_MAX_STUCK: "0" }),
         cliArgs: [],
       }),
     ).toThrow("must be a positive integer");
@@ -643,42 +685,46 @@ describe("resolveConfig", () => {
     const cwd = join(ctx.dir, "repo-cli-bad");
     mkdirSync(cwd, { recursive: true });
     expect(() =>
-      resolveConfig({ cwd, envVars: env(), cliArgs: ["--max-stuck=abc"] }),
+      resolveConfig({
+        cwd,
+        envVars: env(),
+        cliArgs: ["--gate-max-stuck=abc"],
+      }),
     ).toThrow("must be a positive integer");
   });
 
-  it("review: full precedence chain (default < config < env < CLI)", () => {
+  it("gate.review: full precedence chain (default < config < env < CLI)", () => {
     const cwd = join(ctx.dir, "repo-review-prec");
     mkdirSync(cwd, { recursive: true });
 
-    // Default: "true"
+    // Default: true
     const r0 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(r0.config.review.value).toBe("true");
-    expect(r0.config.review.source).toBe("default");
+    expect(r0.config.gate.review.value).toBe(true);
+    expect(r0.config.gate.review.source).toBe("default");
 
     // Config file overrides default
-    writeGlobalConfig(cwd, { review: false });
+    writeGlobalConfig(cwd, { gate: { review: false } });
     const r1 = resolveConfig({ cwd, envVars: env(), cliArgs: [] });
-    expect(r1.config.review.value).toBe("false");
-    expect(r1.config.review.source).toBe("config");
+    expect(r1.config.gate.review.value).toBe(false);
+    expect(r1.config.gate.review.source).toBe("config");
 
     // Env var overrides config
     const r2 = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_REVIEW: "true" }),
+      envVars: env({ RALPHAI_GATE_REVIEW: "true" }),
       cliArgs: [],
     });
-    expect(r2.config.review.value).toBe("true");
-    expect(r2.config.review.source).toBe("env");
+    expect(r2.config.gate.review.value).toBe(true);
+    expect(r2.config.gate.review.source).toBe("env");
 
     // CLI flag overrides env
     const r3 = resolveConfig({
       cwd,
-      envVars: env({ RALPHAI_REVIEW: "true" }),
-      cliArgs: ["--no-review"],
+      envVars: env({ RALPHAI_GATE_REVIEW: "true" }),
+      cliArgs: ["--gate-no-review"],
     });
-    expect(r3.config.review.value).toBe("false");
-    expect(r3.config.review.source).toBe("cli");
+    expect(r3.config.gate.review.value).toBe(false);
+    expect(r3.config.gate.review.source).toBe("cli");
   });
 
   it("returns the resolved config file path", () => {
@@ -703,13 +749,16 @@ describe("writeConfigFile", () => {
     const cwd = join(ctx.dir, "repo-write");
     mkdirSync(cwd, { recursive: true });
     const envVars = { RALPHAI_HOME: join(ctx.dir, "home") };
-    const configData = { agentCommand: "claude -p", baseBranch: "main" };
+    const configData = {
+      agent: { command: "claude -p" },
+      baseBranch: "main",
+    };
     const filePath = writeConfigFile(cwd, configData, envVars);
     expect(filePath).toContain("config.json");
 
     const parsed = parseConfigFile(filePath);
     expect(parsed).not.toBeNull();
-    expect(parsed!.values.agentCommand).toBe("claude -p");
+    expect(parsed!.values.agent?.command).toBe("claude -p");
     expect(parsed!.values.baseBranch).toBe("main");
   });
 

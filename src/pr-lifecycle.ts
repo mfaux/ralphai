@@ -19,6 +19,7 @@ import {
   detectIssueRepo,
   transitionDone,
   type BlockedSubIssue,
+  type StateLabelConfig,
 } from "./issue-lifecycle.ts";
 import { formatLearningsForPr } from "./learnings.ts";
 import { stripAnsi } from "./utils.ts";
@@ -344,10 +345,16 @@ export function buildContinuousPrBodyStructured(
 
 /**
  * Build a PR title from an issue/PRD title, ensuring a conventional-commit
- * prefix.  If the title already starts with one (e.g. `"fix: broken login"`),
+ * prefix when commitStyle is "conventional" (default).  When commitStyle
+ * is "none", the title is returned as-is (trimmed).
+ *
+ * If the title already starts with a CC prefix (e.g. `"fix: broken login"`),
  * it is returned as-is; otherwise `"feat: "` is prepended.
  */
-function formatPrTitle(title: string): string {
+function formatPrTitle(title: string, commitStyle?: string): string {
+  if (commitStyle === "none") {
+    return title.trim();
+  }
   const { type, description } = commitTypeFromTitle(title);
   return `${type}: ${description}`;
 }
@@ -399,12 +406,17 @@ export interface CreatePrOptions {
   learnings?: string[];
   /** Whether the review pass made simplification changes. */
   reviewPassMadeChanges?: boolean;
+  /** Commit style: "conventional" applies CC prefix; "none" uses plain title. */
+  commitStyle?: string;
+  /** When true (default), passes --draft to `gh pr create`. */
+  draft?: boolean;
 }
 
 export interface ArchiveRunOptions {
   wipFiles: string[];
   archiveDir: string;
   cwd: string;
+  stateLabels?: StateLabelConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -496,7 +508,12 @@ export function archiveRun(options: ArchiveRunOptions): {
           `--body "Ralphai completed this task and is preparing to merge."`,
         cwd,
       );
-      transitionDone({ number: issueNumber, repo }, cwd);
+      transitionDone(
+        { number: issueNumber, repo },
+        cwd,
+        false,
+        options.stateLabels,
+      );
     }
   }
 
@@ -524,11 +541,14 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     learnings: options.learnings,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
-  const prTitle = sanitizePrText(formatPrTitle(planDescription));
+  const prTitle = sanitizePrText(
+    formatPrTitle(planDescription, options.commitStyle),
+  );
 
+  const draftFlag = options.draft !== false ? " --draft" : "";
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file -${draftFlag}`,
     sanitizePrText(prBody),
     cwd,
   );
@@ -551,7 +571,11 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     }
   }
 
-  return { ok: true, prUrl, message: `Draft PR created: ${prUrl}` };
+  return {
+    ok: true,
+    prUrl,
+    message: `${options.draft !== false ? "Draft PR" : "PR"} created: ${prUrl}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -683,6 +707,8 @@ export interface CreatePrdPrOptions {
   summaries?: Map<number, string>;
   /** Accumulated learnings from sub-issue runs. */
   learnings?: string[];
+  /** When true (default), passes --draft to `gh pr create`. */
+  draft?: boolean;
 }
 
 /** Push branch and create (or update) a draft PR for a PRD aggregate run. */
@@ -750,10 +776,11 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     };
   }
 
-  // Create new draft PR
+  // Create new PR
+  const draftFlag = options.draft !== false ? " --draft" : "";
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file -${draftFlag}`,
     sanitizePrText(prBody),
     cwd,
   );
@@ -761,8 +788,12 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     return {
       ok: false,
       prUrl: "",
-      message: `Failed to create PRD draft PR. Branch '${branch}' pushed. Create PR manually.`,
+      message: `Failed to create PRD ${options.draft !== false ? "draft " : ""}PR. Branch '${branch}' pushed. Create PR manually.`,
     };
   }
-  return { ok: true, prUrl, message: `PRD draft PR created: ${prUrl}` };
+  return {
+    ok: true,
+    prUrl,
+    message: `PRD ${options.draft !== false ? "draft " : ""}PR created: ${prUrl}`,
+  };
 }

@@ -22,8 +22,14 @@ export interface ResolveScopeInput {
   rootFeedbackCommands: string;
   /** Root-level PR-tier feedback commands (comma-separated string). */
   rootPrFeedbackCommands: string;
+  /** Root-level validator commands (comma-separated string). */
+  rootValidators?: string;
   /** Workspace config JSON (stringified object keyed by scope path). */
   workspacesConfig?: string;
+  /** Root-level beforeRun hook command. */
+  rootBeforeRun?: string;
+  /** Root-level preamble (already resolved from config). */
+  rootPreamble?: string;
 }
 
 export interface ResolveScopeResult {
@@ -31,7 +37,12 @@ export interface ResolveScopeResult {
   packageManager: string;
   feedbackCommands: string;
   prFeedbackCommands: string;
+  validators: string;
   scopeHint: string;
+  /** Per-workspace beforeRun override (undefined = use root value). */
+  beforeRun?: string;
+  /** Per-workspace preamble override (undefined = use root value). */
+  preamble?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +62,10 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     planScope,
     rootFeedbackCommands,
     rootPrFeedbackCommands,
+    rootValidators = "",
     workspacesConfig,
+    rootBeforeRun,
+    rootPreamble,
   } = input;
 
   // No scope means pass everything through unchanged.
@@ -61,6 +75,7 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
       prFeedbackCommands: rootPrFeedbackCommands,
+      validators: rootValidators,
       scopeHint: "",
     };
   }
@@ -69,11 +84,26 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
   const project = detectProject(cwd);
   const ecosystem = project?.ecosystem ?? "unknown";
 
-  // Check for workspace-specific feedbackCommands override
+  // Extract workspace-level beforeRun and preamble overrides (if any).
+  let wsBeforeRun: string | undefined;
+  let wsPreamble: string | undefined;
+
+  // Check for workspace-specific overrides
   if (workspacesConfig) {
     try {
       const config = JSON.parse(workspacesConfig);
       const wsEntry = config[planScope];
+
+      // Capture beforeRun override from workspace config.
+      if (wsEntry && typeof wsEntry.beforeRun === "string") {
+        wsBeforeRun = wsEntry.beforeRun;
+      }
+
+      // Capture preamble override from workspace config.
+      if (wsEntry && typeof wsEntry.preamble === "string") {
+        wsPreamble = wsEntry.preamble;
+      }
+
       if (wsEntry?.feedbackCommands) {
         const fc = Array.isArray(wsEntry.feedbackCommands)
           ? wsEntry.feedbackCommands.join(",")
@@ -85,11 +115,21 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
             ? wsEntry.prFeedbackCommands.join(",")
             : wsEntry.prFeedbackCommands
           : rootPrFeedbackCommands;
+        // Use workspace validators override if present, otherwise
+        // pass through the root value.
+        const val = wsEntry.validators
+          ? Array.isArray(wsEntry.validators)
+            ? wsEntry.validators.join(",")
+            : wsEntry.validators
+          : rootValidators;
         return {
           ecosystem,
           packageManager: "",
           feedbackCommands: fc,
           prFeedbackCommands: pfc,
+          validators: val,
+          beforeRun: wsBeforeRun ?? rootBeforeRun,
+          preamble: wsPreamble ?? rootPreamble,
           scopeHint: buildScopeHint(planScope),
         };
       }
@@ -105,6 +145,9 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: rootFeedbackCommands,
       prFeedbackCommands: rootPrFeedbackCommands,
+      validators: rootValidators,
+      beforeRun: wsBeforeRun ?? rootBeforeRun,
+      preamble: wsPreamble ?? rootPreamble,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -116,6 +159,9 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
       packageManager: "",
       feedbackCommands: "",
       prFeedbackCommands: "",
+      validators: rootValidators,
+      beforeRun: wsBeforeRun ?? rootBeforeRun,
+      preamble: wsPreamble ?? rootPreamble,
       scopeHint: buildScopeHint(planScope),
     };
   }
@@ -162,6 +208,9 @@ export function resolveScope(input: ResolveScopeInput): ResolveScopeResult {
     packageManager: pm?.manager ?? "",
     feedbackCommands: rewrite(rootFeedbackCommands),
     prFeedbackCommands: rewrite(rootPrFeedbackCommands),
+    validators: rootValidators,
+    beforeRun: wsBeforeRun ?? rootBeforeRun,
+    preamble: wsPreamble ?? rootPreamble,
     scopeHint: buildScopeHint(planScope),
   };
 }

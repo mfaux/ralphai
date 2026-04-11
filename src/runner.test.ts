@@ -186,8 +186,8 @@ describe("runRunner — completion", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -218,8 +218,8 @@ describe("runRunner — completion", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -254,9 +254,8 @@ describe("runRunner — completion", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        maxStuck: 2,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { maxStuck: 2, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -320,9 +319,8 @@ describe("runRunner — RunnerResult", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        maxStuck: 2,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { maxStuck: 2, review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -359,8 +357,8 @@ describe("runRunner — RunnerResult", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,
@@ -390,8 +388,8 @@ describe("runRunner — RunnerResult", () => {
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
-        agentCommand: agentScript,
-        review: "false",
+        agent: { command: agentScript },
+        gate: { review: false },
       }),
       cwd: worktreeDir,
       isWorktree: true,

@@ -4,7 +4,7 @@ Common issues and how to resolve them.
 
 ## "My plan is stuck"
 
-Ralphai aborts when it detects 3 consecutive iterations with no new commits (configurable via `maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
+Ralphai aborts when it detects 3 consecutive iterations with no new commits (configurable via `gate.maxStuck`). The plan stays in `pipeline/in-progress/<slug>/` so you can resume after fixing the issue.
 
 **Steps:**
 
@@ -31,30 +31,32 @@ The agent is instructed to run feedback commands each iteration, but the command
 
 **Check:**
 
-1. Verify `feedbackCommands` in `config.json` lists the right commands:
+1. Verify `hooks.feedback` in `config.json` lists the right commands:
    ```json
    {
-     "feedbackCommands": ["pnpm build", "pnpm test", "pnpm type-check"]
+     "hooks": {
+       "feedback": "pnpm build,pnpm test,pnpm type-check"
+     }
    }
    ```
 2. Run each command manually to confirm it works — if a command fails outside of ralphai, it will fail inside too.
 3. Run `ralphai doctor` to validate your setup. It checks each feedback command and reports pass/fail.
 
-If `feedbackCommands` is empty, `ralphai init` auto-detects commands based on your project ecosystem. For Node.js, it reads `package.json` scripts (looks for `build`, `test`, `type-check`, `typecheck`, `lint`, `format:check`). For .NET, it suggests `dotnet build` and `dotnet test`. Other ecosystems (Go, Rust, Python, Java/Kotlin) get similar defaults.
+If `hooks.feedback` is empty, `ralphai init` auto-detects commands based on your project ecosystem. For Node.js, it reads `package.json` scripts (looks for `build`, `test`, `type-check`, `typecheck`, `lint`, `format:check`). For .NET, it suggests `dotnet build` and `dotnet test`. Other ecosystems (Go, Rust, Python, Java/Kotlin) get similar defaults.
 
 ## "Wrong agent was used"
 
-The agent CLI is configured via `agentCommand` with this precedence:
+The agent CLI is configured via `agent.command` with this precedence:
 
 1. `--agent-command=<cmd>` CLI flag (highest priority)
 2. `RALPHAI_AGENT_COMMAND` environment variable
-3. `agentCommand` in `config.json`
+3. `agent.command` in `config.json`
 
 **Check:**
 
 - Run `ralphai run --show-config` to see the resolved value.
 - Verify the first token of the command is in your `PATH` — `ralphai doctor` checks this.
-- If unset, ralphai exits with: `ERROR: agentCommand is required.`
+- If unset, ralphai exits with: `ERROR: agent.command is required.`
 
 ## "Plan failed on first iteration"
 
@@ -62,7 +64,7 @@ The agent CLI is configured via `agentCommand` with this precedence:
 
 1. Run `ralphai status` to see pipeline state and any reported problems (orphaned receipts, missing worktrees).
 2. Ensure the plan follows the Ralphai plan format — it needs a title, description, and implementation tasks. Install the skills (`npx skills add mfaux/ralphai -g`) for format guidance.
-3. Verify the agent CLI is installed and working: run your `agentCommand` manually (e.g., `claude --version` or `opencode --version`).
+3. Verify the agent CLI is installed and working: run your `agent.command` manually (e.g., `claude --version` or `opencode --version`).
 4. Run `ralphai doctor` for a full health check of your setup.
 
 ## "ralphai run says a plan is already running in a worktree"
@@ -137,7 +139,7 @@ When a sub-issue hits the stuck threshold during a PRD run, Ralphai skips it and
 
 ## "Sub-issue skipped as HITL during PRD run"
 
-When a sub-issue has the HITL label (`ralphai-subissue-hitl` by default, configurable via `issueHitlLabel`), Ralphai skips it automatically during PRD processing. Sub-issues that depend on a HITL sub-issue are also skipped as blocked.
+When a sub-issue has the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`), Ralphai skips it automatically during PRD processing. Sub-issues that depend on a HITL sub-issue are also skipped as blocked.
 
 **Steps:**
 
@@ -152,7 +154,7 @@ When `ralphai run <number>` treats your PRD as a standalone issue, the issue is 
 
 **Check:**
 
-1. The issue must have the configured PRD label (`ralphai-prd` by default, configurable via `prdLabel`).
+1. The issue must have the configured PRD label (`ralphai-prd` by default, configurable via `issue.prdLabel`).
 2. The issue must have at least one **open** sub-issue. If all sub-issues are closed, Ralphai reports "all sub-issues are already completed."
 3. Run `gh issue view <number> --json labels` to verify the label is present.
 4. If the label doesn't exist in your repo yet, `ralphai run --prd=<number>` auto-creates it. The positional `ralphai run <number>` form does not.
@@ -172,7 +174,7 @@ When your test suite is large, the agent may spend most of its iteration budget 
 
 If you don't set `feedback-scope`, Ralphai tries to infer it from the `## Relevant Files` section in the plan. For plans that touch widely scattered files, consider splitting into smaller plans with narrower scope.
 
-You can also move slow tests (E2E, integration) to `prFeedbackCommands` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).
+You can also move slow tests (E2E, integration) to `hooks.prFeedback` so they only run at the completion gate. See [Move slow tests to PR-only feedback](workflows.md#move-slow-tests-to-pr-only-feedback).
 
 ## "`ralphai worktree` command not found"
 

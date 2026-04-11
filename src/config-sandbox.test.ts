@@ -4,18 +4,16 @@
  */
 import { describe, it, expect } from "bun:test";
 import { writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 
-import { useTempDir } from "./test-utils.ts";
+import { useTempDir, makeConfigTestHelpers } from "./test-utils.ts";
 import {
   parseConfigFile,
   applyEnvOverrides,
   parseCLIArgs,
   resolveConfig,
-  getConfigFilePath,
   detectDockerAvailable,
   DEFAULTS,
-  ConfigError,
 } from "./config.ts";
 
 // ---------------------------------------------------------------------------
@@ -113,7 +111,7 @@ describe("parseCLIArgs — --sandbox flag", () => {
       "--agent-command=claude -p",
       "--sandbox=docker",
     ]);
-    expect(result.overrides.agentCommand).toBe("claude -p");
+    expect(result.overrides.agent!.command).toBe("claude -p");
     expect(result.overrides.sandbox).toBe("docker");
   });
 });
@@ -124,21 +122,7 @@ describe("parseCLIArgs — --sandbox flag", () => {
 
 describe("resolveConfig — sandbox 4-layer resolution", () => {
   const ctx = useTempDir();
-
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   // Use detectDocker override to keep existing layer tests deterministic —
   // they test precedence, not auto-detection.
@@ -271,21 +255,7 @@ describe("detectDockerAvailable", () => {
 
 describe("resolveConfig — sandbox auto-detection", () => {
   const ctx = useTempDir();
-
-  function env(
-    extra?: Record<string, string>,
-  ): Record<string, string | undefined> {
-    return { RALPHAI_HOME: join(ctx.dir, "home"), ...extra };
-  }
-
-  function writeGlobalConfig(
-    cwd: string,
-    config: Record<string, unknown>,
-  ): void {
-    const filePath = getConfigFilePath(cwd, env());
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(config));
-  }
+  const { env, writeGlobalConfig } = makeConfigTestHelpers(ctx);
 
   it("auto-detects 'docker' when Docker is available and sandbox unset", () => {
     const cwd = join(ctx.dir, "repo-autodetect-docker");

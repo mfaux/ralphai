@@ -6,14 +6,8 @@
  */
 
 import { existsSync } from "fs";
-import {
-  getConfigFilePath,
-  parseConfigFile,
-  ConfigError,
-  DEFAULTS,
-} from "./config.ts";
+import { getConfigFilePath, parseConfigFile, DEFAULTS } from "./config.ts";
 import type { RalphaiConfig } from "./config.ts";
-import { RESET, DIM, TEXT } from "./utils.ts";
 
 // ---------------------------------------------------------------------------
 // Capability map
@@ -32,13 +26,13 @@ type CapabilityCheck = (values: Partial<RalphaiConfig>) => CapabilityResult;
 
 const CAPABILITY_MAP: Record<CapabilityName, CapabilityCheck> = {
   issues(values) {
-    const issueSource = values.issueSource ?? DEFAULTS.issueSource;
+    const issueSource = values.issue?.source ?? DEFAULTS.issue.source;
     if (issueSource === "github") {
       return { pass: true, message: "issues: github" };
     }
     return {
       pass: false,
-      message: `configured, but missing capability: issues (issueSource is "${issueSource}")`,
+      message: `configured, but missing capability: issues (issue.source is "${issueSource}")`,
     };
   },
 };
@@ -72,12 +66,8 @@ export function runCheck(cwd: string, capabilities: string[] = []): void {
     values = parsed.values;
   } catch (err) {
     // Case 3: malformed JSON or invalid values
-    if (err instanceof ConfigError) {
-      console.log(`invalid config — ${err.message}`);
-    } else {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`invalid config — ${msg}`);
-    }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`invalid config — ${msg}`);
     process.exit(1);
     return; // unreachable but helps TypeScript narrow
   }

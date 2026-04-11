@@ -110,7 +110,7 @@ describe.skipIf(process.platform === "win32")(
       expect(output).toContain("opencode run --agent build");
 
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      expect(config.agentCommand).toBe("opencode run --agent build");
+      expect(config.agent.command).toBe("opencode run --agent build");
     });
 
     it("falls back to OpenCode when no agent binaries are in PATH", () => {
@@ -126,7 +126,7 @@ describe.skipIf(process.platform === "win32")(
       expect(output).toContain("--agent-command=<cmd>");
 
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      expect(config.agentCommand).toBe("opencode run --agent build");
+      expect(config.agent.command).toBe("opencode run --agent build");
     });
 
     it("explicit --agent-command skips detection entirely", () => {
@@ -142,7 +142,7 @@ describe.skipIf(process.platform === "win32")(
       expect(output).not.toContain("No supported agent found");
 
       const config = JSON.parse(readFileSync(configPath(), "utf-8"));
-      expect(config.agentCommand).toBe("custom-agent --flag");
+      expect(config.agent.command).toBe("custom-agent --flag");
     });
   },
 );
