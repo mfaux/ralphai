@@ -159,87 +159,33 @@ try {
   }
 
   // JSON mode (default): output full JSON for programmatic consumption
-  const cfg = configValues(result.config);
   const config: Record<string, unknown> = {};
   const sources: Record<string, unknown> = {};
 
-  // Output the nested structure directly
-  config["agent.command"] = cfg.agent.command;
-  config["agent.interactiveCommand"] = cfg.agent.interactiveCommand;
-  config["agent.setupCommand"] = cfg.agent.setupCommand;
-  config["hooks.feedback"] = cfg.hooks.feedback;
-  config["hooks.prFeedback"] = cfg.hooks.prFeedback;
-  config["hooks.beforeRun"] = cfg.hooks.beforeRun;
-  config["hooks.afterRun"] = cfg.hooks.afterRun;
-  config["hooks.feedbackTimeout"] = cfg.hooks.feedbackTimeout;
-  config["gate.maxStuck"] = cfg.gate.maxStuck;
-  config["gate.review"] = cfg.gate.review;
-  config["gate.maxRejections"] = cfg.gate.maxRejections;
-  config["gate.maxIterations"] = cfg.gate.maxIterations;
-  config["gate.reviewMaxFiles"] = cfg.gate.reviewMaxFiles;
-  config["gate.validators"] = cfg.gate.validators;
-  config["gate.iterationTimeout"] = cfg.gate.iterationTimeout;
-  config["prompt.verbose"] = cfg.prompt.verbose;
-  config["prompt.preamble"] = cfg.prompt.preamble;
-  config["prompt.learnings"] = cfg.prompt.learnings;
-  config["prompt.commitStyle"] = cfg.prompt.commitStyle;
-  config["pr.draft"] = cfg.pr.draft;
-  config["git.branchPrefix"] = cfg.git.branchPrefix;
-  config["issue.source"] = cfg.issue.source;
-  config["issue.standaloneLabel"] = cfg.issue.standaloneLabel;
-  config["issue.subissueLabel"] = cfg.issue.subissueLabel;
-  config["issue.prdLabel"] = cfg.issue.prdLabel;
-  config["issue.repo"] = cfg.issue.repo;
-  config["issue.commentProgress"] = cfg.issue.commentProgress;
-  config["issue.hitlLabel"] = cfg.issue.hitlLabel;
-  config["issue.inProgressLabel"] = cfg.issue.inProgressLabel;
-  config["issue.doneLabel"] = cfg.issue.doneLabel;
-  config["issue.stuckLabel"] = cfg.issue.stuckLabel;
-  config["baseBranch"] = cfg.baseBranch;
-  config["sandbox"] = cfg.sandbox;
-  config["dockerImage"] = cfg.dockerImage;
-  config["dockerMounts"] = cfg.dockerMounts;
-  config["dockerEnvVars"] = cfg.dockerEnvVars;
-  config["workspaces"] = cfg.workspaces;
-
-  sources["agent.command"] = result.config.agent.command.source;
-  sources["agent.interactiveCommand"] =
-    result.config.agent.interactiveCommand.source;
-  sources["agent.setupCommand"] = result.config.agent.setupCommand.source;
-  sources["hooks.feedback"] = result.config.hooks.feedback.source;
-  sources["hooks.prFeedback"] = result.config.hooks.prFeedback.source;
-  sources["hooks.beforeRun"] = result.config.hooks.beforeRun.source;
-  sources["hooks.afterRun"] = result.config.hooks.afterRun.source;
-  sources["hooks.feedbackTimeout"] = result.config.hooks.feedbackTimeout.source;
-  sources["gate.maxStuck"] = result.config.gate.maxStuck.source;
-  sources["gate.review"] = result.config.gate.review.source;
-  sources["gate.maxRejections"] = result.config.gate.maxRejections.source;
-  sources["gate.maxIterations"] = result.config.gate.maxIterations.source;
-  sources["gate.reviewMaxFiles"] = result.config.gate.reviewMaxFiles.source;
-  sources["gate.validators"] = result.config.gate.validators.source;
-  sources["gate.iterationTimeout"] = result.config.gate.iterationTimeout.source;
-  sources["prompt.verbose"] = result.config.prompt.verbose.source;
-  sources["prompt.preamble"] = result.config.prompt.preamble.source;
-  sources["prompt.learnings"] = result.config.prompt.learnings.source;
-  sources["prompt.commitStyle"] = result.config.prompt.commitStyle.source;
-  sources["pr.draft"] = result.config.pr.draft.source;
-  sources["git.branchPrefix"] = result.config.git.branchPrefix.source;
-  sources["issue.source"] = result.config.issue.source.source;
-  sources["issue.standaloneLabel"] = result.config.issue.standaloneLabel.source;
-  sources["issue.subissueLabel"] = result.config.issue.subissueLabel.source;
-  sources["issue.prdLabel"] = result.config.issue.prdLabel.source;
-  sources["issue.repo"] = result.config.issue.repo.source;
-  sources["issue.commentProgress"] = result.config.issue.commentProgress.source;
-  sources["issue.hitlLabel"] = result.config.issue.hitlLabel.source;
-  sources["issue.inProgressLabel"] = result.config.issue.inProgressLabel.source;
-  sources["issue.doneLabel"] = result.config.issue.doneLabel.source;
-  sources["issue.stuckLabel"] = result.config.issue.stuckLabel.source;
-  sources["baseBranch"] = result.config.baseBranch.source;
-  sources["sandbox"] = result.config.sandbox.source;
-  sources["dockerImage"] = result.config.dockerImage.source;
-  sources["dockerMounts"] = result.config.dockerMounts.source;
-  sources["dockerEnvVars"] = result.config.dockerEnvVars.source;
-  sources["workspaces"] = result.config.workspaces.source;
+  // Flatten the nested ResolvedConfig into dotted-key config/sources maps.
+  // Groups (agent, hooks, ...) have nested { value, source } leaves;
+  // flat top-level keys are directly { value, source }.
+  const rc = result.config as unknown as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(rc)) {
+    if (
+      entry !== null &&
+      typeof entry === "object" &&
+      "value" in (entry as Record<string, unknown>) &&
+      "source" in (entry as Record<string, unknown>)
+    ) {
+      // Flat top-level key (e.g. baseBranch, sandbox)
+      const resolved = entry as { value: unknown; source: string };
+      config[key] = resolved.value;
+      sources[key] = resolved.source;
+    } else if (entry !== null && typeof entry === "object") {
+      // Group (e.g. agent, hooks, gate) — each property is { value, source }
+      const group = entry as Record<string, { value: unknown; source: string }>;
+      for (const [subKey, leaf] of Object.entries(group)) {
+        config[`${key}.${subKey}`] = leaf.value;
+        sources[`${key}.${subKey}`] = leaf.source;
+      }
+    }
+  }
 
   const { rawFlags } = parseCLIArgs(configArgs);
 
