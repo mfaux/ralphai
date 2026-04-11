@@ -445,63 +445,17 @@ export function runRalphaiDoctor(cwd: string): void {
   console.log(`${TEXT}ralphai doctor${RESET}`);
   console.log();
 
-  function emit(result: DoctorCheckResult): void {
-    if (result.status === "fail") failures++;
-    if (result.status === "warn") warnings++;
-    const icon = statusIcons[result.status];
-    console.log(`  ${icon} ${DIM}${result.message}${RESET}`);
-  }
-
-  function emitAll(results: DoctorCheckResult[]): void {
-    for (const r of results) emit(r);
-  }
-
-  // 1. Config exists
-  const configExists = checkConfigExists(cwd);
-  emit(configExists);
-
-  // 2. config.json valid
-  const configValid = checkConfigValid(cwd);
-  emit(configValid);
-
-  // 3. Git repo detected
-  const gitRepo = checkGitRepo(cwd);
-  emit(gitRepo);
-
-  // 4. Working tree clean (only if git repo detected)
-  if (gitRepo.status !== "fail") {
-    emit(checkWorkingTreeClean(cwd));
-  }
-
-  // 5. Base branch exists (only if git repo detected)
-  if (gitRepo.status !== "fail") {
-    emit(checkBaseBranchExists(cwd));
-  }
-
-  // 6. Agent command in PATH (only if config valid)
-  if (configValid.status !== "fail") {
-    emit(checkAgentCommand(cwd));
-  }
-
-  // 7. Feedback commands (only if config valid)
-  if (configValid.status !== "fail") {
-    emitAll(checkFeedbackCommands(cwd));
-  }
-
-  // 7b. Workspace feedback commands (only if config valid)
-  if (configValid.status !== "fail") {
-    emitAll(checkWorkspaceFeedbackCommands(cwd));
-  }
-
-  // 8. Backlog has plans (only if config exists)
-  if (configExists.status !== "fail") {
-    emit(checkBacklogHasPlans(cwd));
-  }
-
-  // 9. No orphaned receipts (only if config exists)
-  if (configExists.status !== "fail") {
-    emit(checkOrphanedReceipts(cwd));
-  }
+  // Reuse the declarative check list and gating logic from runDoctorChecks,
+  // emitting each result to the console as it completes.
+  runDoctorChecks(cwd, undefined, (_key, outcome) => {
+    if (outcome.status !== "done") return;
+    for (const r of outcome.results) {
+      if (r.status === "fail") failures++;
+      if (r.status === "warn") warnings++;
+      const icon = statusIcons[r.status];
+      console.log(`  ${icon} ${DIM}${r.message}${RESET}`);
+    }
+  });
 
   // --- Summary ---
   console.log();

@@ -13,7 +13,6 @@ import {
   DEFAULTS,
 } from "./config.ts";
 import type { RalphaiConfig } from "./config.ts";
-import { RESET, DIM, TEXT } from "./utils.ts";
 
 // ---------------------------------------------------------------------------
 // Capability map

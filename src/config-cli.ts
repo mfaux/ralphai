@@ -163,42 +163,7 @@ try {
   const config: Record<string, unknown> = {};
   const sources: Record<string, unknown> = {};
 
-  // Flatten nested config for JSON output
-  function flattenObj(
-    prefix: string,
-    obj: Record<string, unknown>,
-    srcObj: Record<string, { value: unknown; source: string }>,
-  ): void {
-    for (const [key, val] of Object.entries(obj)) {
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (
-        val !== null &&
-        typeof val === "object" &&
-        !Array.isArray(val) &&
-        key !== "workspaces"
-      ) {
-        flattenObj(
-          path,
-          val as Record<string, unknown>,
-          srcObj[key] as unknown as Record<
-            string,
-            { value: unknown; source: string }
-          >,
-        );
-      } else {
-        config[path] = val;
-        if (
-          srcObj[key] &&
-          typeof srcObj[key] === "object" &&
-          "source" in (srcObj[key] as object)
-        ) {
-          sources[path] = (srcObj[key] as { source: string }).source;
-        }
-      }
-    }
-  }
-
-  // Use a simpler approach: output the nested structure directly
+  // Output the nested structure directly
   config["agent.command"] = cfg.agent.command;
   config["agent.interactiveCommand"] = cfg.agent.interactiveCommand;
   config["agent.setupCommand"] = cfg.agent.setupCommand;
