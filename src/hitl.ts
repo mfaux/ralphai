@@ -160,7 +160,10 @@ export async function runHitl(options: HitlOptions): Promise<HitlResult> {
   // --- Derive PRD branch and slug from parent title ---
   const parentTitle = parentResult.parentTitle!;
   const prdSlug = slugify(commitTypeFromTitle(parentTitle).description);
-  const branch = issueBranchName(parentTitle);
+  const branch = issueBranchName(parentTitle, {
+    branchPrefix: cfg.git.branchPrefix,
+    commitStyle: cfg.prompt.commitStyle,
+  });
   const hitlLabel = cfg.issue.hitlLabel;
 
   // --- Dry-run ---

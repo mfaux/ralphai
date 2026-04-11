@@ -72,13 +72,31 @@ export function commitTypeFromTitle(title: string): {
 /**
  * Derive a branch name from an issue or PRD title.
  *
- * If the title starts with a conventional-commit prefix (e.g. `"fix: broken
- * login"`), the branch uses that type: `fix/broken-login`.
- * Otherwise defaults to `feat/<slugified-title>`.
+ * When `branchPrefix` is non-empty, uses `<branchPrefix><slug>` directly,
+ * bypassing commit-type detection.
+ *
+ * When `branchPrefix` is empty and `commitStyle` is `"none"`, produces
+ * just `<slug>` with no type prefix.
+ *
+ * Otherwise (empty prefix + conventional commit style), uses the current
+ * `<type>/<slug>` format.
  */
-export function issueBranchName(title: string): string {
+export function issueBranchName(
+  title: string,
+  options?: { branchPrefix?: string; commitStyle?: string },
+): string {
+  const branchPrefix = options?.branchPrefix ?? "";
+  const commitStyle = options?.commitStyle ?? "conventional";
   const { type, description } = commitTypeFromTitle(title);
-  return `${type}/${slugify(description)}`;
+  const slug = slugify(description);
+
+  if (branchPrefix !== "") {
+    return `${branchPrefix}${slug}`;
+  }
+  if (commitStyle === "none") {
+    return slug;
+  }
+  return `${type}/${slug}`;
 }
 
 // ---------------------------------------------------------------------------

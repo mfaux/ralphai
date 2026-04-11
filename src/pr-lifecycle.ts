@@ -407,6 +407,8 @@ export interface CreatePrOptions {
   reviewPassMadeChanges?: boolean;
   /** Commit style: "conventional" applies CC prefix; "none" uses plain title. */
   commitStyle?: string;
+  /** When true (default), passes --draft to `gh pr create`. */
+  draft?: boolean;
 }
 
 export interface ArchiveRunOptions {
@@ -536,9 +538,10 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     formatPrTitle(planDescription, options.commitStyle),
   );
 
+  const draftFlag = options.draft !== false ? " --draft" : "";
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file -${draftFlag}`,
     sanitizePrText(prBody),
     cwd,
   );
@@ -561,7 +564,11 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     }
   }
 
-  return { ok: true, prUrl, message: `Draft PR created: ${prUrl}` };
+  return {
+    ok: true,
+    prUrl,
+    message: `${options.draft !== false ? "Draft PR" : "PR"} created: ${prUrl}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +700,8 @@ export interface CreatePrdPrOptions {
   summaries?: Map<number, string>;
   /** Accumulated learnings from sub-issue runs. */
   learnings?: string[];
+  /** When true (default), passes --draft to `gh pr create`. */
+  draft?: boolean;
 }
 
 /** Push branch and create (or update) a draft PR for a PRD aggregate run. */
@@ -760,10 +769,11 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     };
   }
 
-  // Create new draft PR
+  // Create new PR
+  const draftFlag = options.draft !== false ? " --draft" : "";
   const prUrl = execWithStdin(
     `gh pr create --base "${baseBranch}" --head "${branch}" ` +
-      `--title "${escapeQuotes(prTitle)}" --body-file - --draft`,
+      `--title "${escapeQuotes(prTitle)}" --body-file -${draftFlag}`,
     sanitizePrText(prBody),
     cwd,
   );
@@ -771,8 +781,12 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
     return {
       ok: false,
       prUrl: "",
-      message: `Failed to create PRD draft PR. Branch '${branch}' pushed. Create PR manually.`,
+      message: `Failed to create PRD ${options.draft !== false ? "draft " : ""}PR. Branch '${branch}' pushed. Create PR manually.`,
     };
   }
-  return { ok: true, prUrl, message: `PRD draft PR created: ${prUrl}` };
+  return {
+    ok: true,
+    prUrl,
+    message: `PRD ${options.draft !== false ? "draft " : ""}PR created: ${prUrl}`,
+  };
 }

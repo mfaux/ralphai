@@ -56,6 +56,54 @@ describe("issue naming", () => {
     it("defaults to feat/ for plain title", () => {
       expect(issueBranchName("Add tests")).toBe("feat/add-tests");
     });
+
+    it("uses branchPrefix when non-empty", () => {
+      expect(
+        issueBranchName("fix: broken login", { branchPrefix: "ralphai/" }),
+      ).toBe("ralphai/broken-login");
+    });
+
+    it("uses branchPrefix 'auto/' for plain title", () => {
+      expect(issueBranchName("Add dark mode", { branchPrefix: "auto/" })).toBe(
+        "auto/add-dark-mode",
+      );
+    });
+
+    it("empty branchPrefix + conventional preserves type/slug", () => {
+      expect(
+        issueBranchName("fix: broken login", {
+          branchPrefix: "",
+          commitStyle: "conventional",
+        }),
+      ).toBe("fix/broken-login");
+    });
+
+    it("empty branchPrefix + commitStyle=none produces slug only", () => {
+      expect(
+        issueBranchName("Add dark mode", {
+          branchPrefix: "",
+          commitStyle: "none",
+        }),
+      ).toBe("add-dark-mode");
+    });
+
+    it("empty branchPrefix + commitStyle=none with CC title strips type", () => {
+      expect(
+        issueBranchName("fix: broken login", {
+          branchPrefix: "",
+          commitStyle: "none",
+        }),
+      ).toBe("broken-login");
+    });
+
+    it("branchPrefix takes precedence over commitStyle", () => {
+      expect(
+        issueBranchName("fix: broken login", {
+          branchPrefix: "ralphai/",
+          commitStyle: "none",
+        }),
+      ).toBe("ralphai/broken-login");
+    });
   });
 
   describe("issueDepSlug", () => {

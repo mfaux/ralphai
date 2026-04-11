@@ -410,6 +410,29 @@ describe("applyEnvOverrides", () => {
       "must be 'true' or 'false'",
     );
   });
+
+  it("parses RALPHAI_PR_DRAFT=false", () => {
+    const result = applyEnvOverrides({ RALPHAI_PR_DRAFT: "false" });
+    expect(result.pr?.draft).toBe(false);
+  });
+
+  it("parses RALPHAI_PR_DRAFT=true", () => {
+    const result = applyEnvOverrides({ RALPHAI_PR_DRAFT: "true" });
+    expect(result.pr?.draft).toBe(true);
+  });
+
+  it("validates RALPHAI_PR_DRAFT as boolean", () => {
+    expect(() => applyEnvOverrides({ RALPHAI_PR_DRAFT: "yes" })).toThrow(
+      "must be 'true' or 'false'",
+    );
+  });
+
+  it("parses RALPHAI_GIT_BRANCH_PREFIX", () => {
+    const result = applyEnvOverrides({
+      RALPHAI_GIT_BRANCH_PREFIX: "ralphai/",
+    });
+    expect(result.git?.branchPrefix).toBe("ralphai/");
+  });
 });
 
 // ---- CLI arg parsing ----
@@ -487,6 +510,31 @@ describe("parseCLIArgs", () => {
     const result = parseCLIArgs(["--agent-command=claude -p", "--gate-review"]);
     expect(result.overrides.agent?.command).toBe("claude -p");
     expect(result.overrides.gate?.review).toBe(true);
+  });
+
+  it("parses --pr-draft", () => {
+    const result = parseCLIArgs(["--pr-draft"]);
+    expect(result.overrides.pr?.draft).toBe(true);
+    expect(result.rawFlags["pr.draft"]).toBe("--pr-draft");
+  });
+
+  it("parses --no-pr-draft", () => {
+    const result = parseCLIArgs(["--no-pr-draft"]);
+    expect(result.overrides.pr?.draft).toBe(false);
+    expect(result.rawFlags["pr.draft"]).toBe("--no-pr-draft");
+  });
+
+  it("parses --git-branch-prefix=value", () => {
+    const result = parseCLIArgs(["--git-branch-prefix=ralphai/"]);
+    expect(result.overrides.git?.branchPrefix).toBe("ralphai/");
+    expect(result.rawFlags["git.branchPrefix"]).toBe(
+      "--git-branch-prefix=ralphai/",
+    );
+  });
+
+  it("parses empty --git-branch-prefix= (reset to default)", () => {
+    const result = parseCLIArgs(["--git-branch-prefix="]);
+    expect(result.overrides.git?.branchPrefix).toBe("");
   });
 });
 

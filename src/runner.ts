@@ -475,7 +475,10 @@ function runDryRun(
     console.log(`[dry-run] Scope: ${planScope}`);
   }
 
-  const branch = issueBranchName(planDesc);
+  const branch = issueBranchName(planDesc, {
+    branchPrefix: cfg.git.branchPrefix,
+    commitStyle: cfg.prompt.commitStyle,
+  });
   const progressFile = join(dirs.wipDir, planSlug, "progress.md");
   const worktreeDir = join(cwd, "..", ".ralphai-worktrees", planSlug);
 
@@ -601,6 +604,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const promptPreamble = cfg.prompt.preamble;
   const promptLearnings = cfg.prompt.learnings;
   const promptCommitStyle = cfg.prompt.commitStyle;
+  const prDraft = cfg.pr.draft;
+  const gitBranchPrefix = cfg.git.branchPrefix;
   const beforeRunHook = cfg.hooks.beforeRun;
   const afterRunHook = cfg.hooks.afterRun;
   const feedbackTimeoutSeconds = cfg.hooks.feedbackTimeout;
@@ -899,7 +904,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         );
         console.error("Create a worktree on a feature branch instead:");
         console.error(
-          `  git worktree add ../<dir> -b ${issueBranchName(planDesc)} ${baseBranch}`,
+          `  git worktree add ../<dir> -b ${issueBranchName(planDesc, { branchPrefix: gitBranchPrefix, commitStyle: promptCommitStyle })} ${baseBranch}`,
         );
         rollbackPlan(planFile, dirs.backlogDir);
         process.exit(1);
@@ -1365,6 +1370,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 learnings: promptLearnings ? accumulatedLearnings : [],
                 reviewPassMadeChanges,
                 commitStyle: promptCommitStyle,
+                draft: prDraft,
               });
               console.log(prResult.message);
 

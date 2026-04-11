@@ -1227,6 +1227,14 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     if (!overrides.prompt) overrides.prompt = { ...DEFAULTS.prompt };
     return overrides.prompt;
   }
+  function ensurePr(): PrConfig {
+    if (!overrides.pr) overrides.pr = { ...DEFAULTS.pr };
+    return overrides.pr;
+  }
+  function ensureGit(): GitConfig {
+    if (!overrides.git) overrides.git = { ...DEFAULTS.git };
+    return overrides.git;
+  }
   function ensureIssue(): IssueConfig {
     if (!overrides.issue) overrides.issue = { ...DEFAULTS.issue };
     return overrides.issue;
@@ -1332,6 +1340,20 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       const v = arg.slice("--prompt-commit-style=".length);
       ensurePrompt().commitStyle = v;
       rawFlags["prompt.commitStyle"] = arg;
+
+      // --- pr group ---
+    } else if (arg === "--pr-draft") {
+      ensurePr().draft = true;
+      rawFlags["pr.draft"] = "--pr-draft";
+    } else if (arg === "--no-pr-draft") {
+      ensurePr().draft = false;
+      rawFlags["pr.draft"] = "--no-pr-draft";
+
+      // --- git group ---
+    } else if (arg.startsWith("--git-branch-prefix=")) {
+      const v = arg.slice("--git-branch-prefix=".length);
+      ensureGit().branchPrefix = v;
+      rawFlags["git.branchPrefix"] = arg;
 
       // --- issue group ---
     } else if (arg.startsWith("--issue-hitl-label=")) {

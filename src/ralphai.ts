@@ -1669,6 +1669,9 @@ const CONFIG_FLAG_PATTERNS = [
   /^--prompt-learnings$/,
   /^--no-prompt-learnings$/,
   /^--prompt-commit-style=/,
+  /^--pr-draft$/,
+  /^--no-pr-draft$/,
+  /^--git-branch-prefix=/,
   /^--issue-hitl-label=/,
   /^--base-branch=/,
   /^--sandbox=/,
@@ -1734,6 +1737,9 @@ function showRunHelp(): void {
     "  --prompt-learnings               Enable learnings extraction (default: on)",
     "  --no-prompt-learnings            Disable learnings extraction, prompt mandate, and PR section",
     "  --prompt-commit-style=<style>    Commit style: 'conventional' (default) or 'none'",
+    "  --pr-draft                       Create draft PRs (default: on)",
+    "  --no-pr-draft                    Create ready-for-review PRs instead of drafts",
+    "  --git-branch-prefix=<prefix>     Override branch prefix (e.g. 'ralphai/' produces ralphai/<slug>)",
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
     "",
@@ -1751,6 +1757,7 @@ function showRunHelp(): void {
     "                   RALPHAI_DOCKER_ENV_VARS, RALPHAI_GATE_REVIEW,",
     "                   RALPHAI_PROMPT_VERBOSE, RALPHAI_PROMPT_PREAMBLE,",
     "                   RALPHAI_PROMPT_LEARNINGS, RALPHAI_PROMPT_COMMIT_STYLE,",
+    "                   RALPHAI_PR_DRAFT, RALPHAI_GIT_BRANCH_PREFIX,",
     "                   RALPHAI_GATE_ITERATION_TIMEOUT,",
     "                   RALPHAI_GATE_VALIDATORS,",
     "                   RALPHAI_ISSUE_SOURCE,",
@@ -1809,6 +1816,9 @@ async function runIssueTarget(
     prdLabel: string;
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
+    gitBranchPrefix: string;
+    commitStyle: string;
+    prDraft: boolean;
   },
 ): Promise<void> {
   const {
@@ -1821,6 +1831,9 @@ async function runIssueTarget(
     prdLabel,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
+    gitBranchPrefix,
+    commitStyle,
+    prDraft,
   } = flags;
 
   // Pass through --help and --show-config unchanged
@@ -1874,7 +1887,10 @@ async function runIssueTarget(
     }
 
     const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
-    const branch = issueBranchName(issueTitle);
+    const branch = issueBranchName(issueTitle, {
+      branchPrefix: gitBranchPrefix,
+      commitStyle,
+    });
 
     console.log();
     console.log("========================================");
@@ -1949,6 +1965,9 @@ async function runIssueTarget(
       setupCommand,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
+      gitBranchPrefix,
+      commitStyle,
+      prDraft,
     });
   }
 
@@ -1996,6 +2015,9 @@ async function runIssueTarget(
       setupCommand,
       baseBranch: resolvedBaseBranch,
       setupSandboxConfig,
+      gitBranchPrefix,
+      commitStyle,
+      prDraft,
     });
   }
 
@@ -2013,7 +2035,10 @@ async function runIssueTarget(
 
   const issueTitle = issueInfo.title;
   const issueSlug = slugify(commitTypeFromTitle(issueTitle).description);
-  const branch = issueBranchName(issueTitle);
+  const branch = issueBranchName(issueTitle, {
+    branchPrefix: gitBranchPrefix,
+    commitStyle,
+  });
 
   // Ensure repo has at least one commit
   ensureRepoHasCommit(cwd);
@@ -2105,6 +2130,9 @@ async function runPrdIssueTarget(
     setupCommand: string;
     baseBranch: string;
     setupSandboxConfig?: SetupSandboxConfig;
+    gitBranchPrefix: string;
+    commitStyle: string;
+    prDraft: boolean;
   },
 ): Promise<void> {
   const {
@@ -2112,10 +2140,16 @@ async function runPrdIssueTarget(
     setupCommand,
     baseBranch: resolvedBaseBranch,
     setupSandboxConfig,
+    gitBranchPrefix,
+    commitStyle,
+    prDraft,
   } = flags;
   const { prd, subIssues, allCompleted } = discovery;
   const prdSlug = slugify(commitTypeFromTitle(prd.title).description);
-  const branch = issueBranchName(prd.title);
+  const branch = issueBranchName(prd.title, {
+    branchPrefix: gitBranchPrefix,
+    commitStyle,
+  });
 
   // --- All sub-issues already completed ---
   if (allCompleted) {
@@ -2393,6 +2427,7 @@ async function runPrdIssueTarget(
       issueRepo,
       summaries: subIssueSummaries,
       learnings: prdLearnings,
+      draft: prDraft,
     });
     console.log(prResult.message);
   } else {
@@ -2522,6 +2557,9 @@ async function runRalphaiInManagedWorktree(
   let resolvedIssueRepo = "";
   let resolvedIssueCommentProgress = false;
   let resolvedIssueHitlLabel = DEFAULTS.issue.hitlLabel;
+  let resolvedGitBranchPrefix = DEFAULTS.git.branchPrefix;
+  let resolvedPromptCommitStyle = DEFAULTS.prompt.commitStyle;
+  let resolvedPrDraft = DEFAULTS.pr.draft;
   let resolvedConfig: import("./config.ts").ResolvedConfig | undefined;
   let setupSandboxConfig: SetupSandboxConfig | undefined;
   try {
@@ -2540,6 +2578,9 @@ async function runRalphaiInManagedWorktree(
     resolvedIssueRepo = cfg.issue.repo;
     resolvedIssueCommentProgress = cfg.issue.commentProgress;
     resolvedIssueHitlLabel = cfg.issue.hitlLabel;
+    resolvedGitBranchPrefix = cfg.git.branchPrefix;
+    resolvedPromptCommitStyle = cfg.prompt.commitStyle;
+    resolvedPrDraft = cfg.pr.draft;
 
     // Build sandbox config for routing setup commands through Docker
     setupSandboxConfig = {
@@ -2617,6 +2658,9 @@ async function runRalphaiInManagedWorktree(
       prdLabel: resolvedIssuePrdLabel,
       baseBranch,
       setupSandboxConfig,
+      gitBranchPrefix: resolvedGitBranchPrefix,
+      commitStyle: resolvedPromptCommitStyle,
+      prDraft: resolvedPrDraft,
     });
   }
 
@@ -2682,7 +2726,10 @@ async function runRalphaiInManagedWorktree(
       }
 
       const prdSlug = slugify(commitTypeFromTitle(prdIssue.title).description);
-      const branch = issueBranchName(prdIssue.title);
+      const branch = issueBranchName(prdIssue.title, {
+        branchPrefix: resolvedGitBranchPrefix,
+        commitStyle: resolvedPromptCommitStyle,
+      });
 
       if (isDryRun) {
         console.log();
@@ -2872,6 +2919,9 @@ async function runRalphaiInManagedWorktree(
             setupCommand,
             baseBranch,
             setupSandboxConfig,
+            gitBranchPrefix: resolvedGitBranchPrefix,
+            commitStyle: resolvedPromptCommitStyle,
+            prDraft: resolvedPrDraft,
           });
           // runPrdIssueTarget handles all sub-issues and PR creation — we're done
           break;
@@ -2887,7 +2937,10 @@ async function runRalphaiInManagedWorktree(
     const planDesc = planFullPath
       ? getPlanDescription(planFullPath)
       : plan.planFile;
-    const branch = issueBranchName(planDesc);
+    const branch = issueBranchName(planDesc, {
+      branchPrefix: resolvedGitBranchPrefix,
+      commitStyle: resolvedPromptCommitStyle,
+    });
     const resolvedWorktreeDir = prepareWorktree(
       cwd,
       plan.slug,

@@ -341,6 +341,22 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   );
   lines.push(`  gate.iterationTimeout = ${timeoutDisplay}  (${timeoutSrc})`);
 
+  // pr.draft
+  const prDraftSrc = sourceLabel("pr.draft", config.pr.draft.source, input);
+  lines.push(
+    `  pr.draft           = ${config.pr.draft.value}  (${prDraftSrc})`,
+  );
+
+  // git.branchPrefix
+  const branchPrefixVal = config.git.branchPrefix.value || "<none>";
+  const branchPrefixSrc = sourceLabel(
+    "git.branchPrefix",
+    config.git.branchPrefix.source,
+    input,
+    "none",
+  );
+  lines.push(`  git.branchPrefix   = ${branchPrefixVal}  (${branchPrefixSrc})`);
+
   const issueSourceSrc = sourceLabel(
     "issue.source",
     config.issue.source.source,
