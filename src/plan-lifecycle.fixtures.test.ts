@@ -37,6 +37,8 @@ describe("makePlanFrontmatter", () => {
     expect(fm.issue).toBeUndefined();
     expect(fm.issueUrl).toBe("");
     expect(fm.prd).toBeUndefined();
+    expect(fm.priority).toBe(0);
+    expect(fm.tags).toEqual([]);
   });
 
   it("applies overrides", () => {

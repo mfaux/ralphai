@@ -221,6 +221,8 @@ export interface RunnerOptions {
   once: boolean;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   plan?: string;
+  /** Filter plans to those matching ANY of these tags (OR semantics). */
+  filterTags?: string[];
   /** PRD issue driving this run (set by --prd=N). */
   prd?: { number: number; title: string };
   /** Skip per-plan PR creation (used by PRD target to defer to aggregate PR). */
@@ -576,6 +578,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     dryRun,
     resume,
     plan,
+    filterTags,
     once,
     skipPrCreation,
     verbose: agentVerbose,
@@ -743,6 +746,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
       dryRun: false,
       skippedSlugs,
       targetPlan: plan,
+      filterTags,
     });
 
     if (!detectResult.detected) {

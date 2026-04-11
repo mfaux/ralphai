@@ -32,6 +32,8 @@ const FRONTMATTER_DEFAULTS: PlanFrontmatter = {
   issue: undefined,
   issueUrl: "",
   prd: undefined,
+  priority: 0,
+  tags: [],
 };
 
 export function makePlanFrontmatter(
@@ -152,6 +154,8 @@ export function buildPlanMarkdown(opts?: {
   issue?: number;
   issueUrl?: string;
   prd?: number;
+  priority?: number;
+  tags?: string[];
   body?: string;
 }): string {
   const parts: string[] = [];
@@ -166,6 +170,10 @@ export function buildPlanMarkdown(opts?: {
   if (opts?.issue !== undefined) fm.push(`issue: ${opts.issue}`);
   if (opts?.issueUrl) fm.push(`issue-url: ${opts.issueUrl}`);
   if (opts?.prd !== undefined) fm.push(`prd: ${opts.prd}`);
+  if (opts?.priority !== undefined) fm.push(`priority: ${opts.priority}`);
+  if (opts?.tags?.length) {
+    fm.push(`tags: [${opts.tags.join(", ")}]`);
+  }
 
   if (fm.length) {
     parts.push("---", ...fm, "---", "");

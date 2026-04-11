@@ -1663,7 +1663,7 @@ const KNOWN_RUN_FLAGS = new Set([
 ]);
 
 /** Patterns for run flags parsed directly (not by config resolver). */
-const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/];
+const RUN_FLAG_PATTERNS_EXTRA = [/^--plan=/, /^--tags=/];
 
 /** Patterns for config flags that are parsed by the TS config resolver. */
 const CONFIG_FLAG_PATTERNS = [
@@ -1734,6 +1734,7 @@ function showRunHelp(): void {
     "  --resume, -r                     Commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
     "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
+    "  --tags=<list>                    Comma-separated tags to filter plans (OR semantics)",
     "  --agent-command=<command>        Override agent CLI command (e.g. 'claude -p')",
     "  --agent-setup-command=<command>  Command to run in worktree after creation (e.g. 'bun install')",
     "  --hooks-feedback=<list>          Comma-separated feedback commands (e.g. 'npm test,npm run build')",
@@ -3078,6 +3079,14 @@ async function runRalphaiRunner(
   const hasShowConfig = runArgs.includes("--show-config");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
+  const tagsFlag = runArgs.find((a) => a.startsWith("--tags="));
+  const filterTags = tagsFlag
+    ? tagsFlag
+        .slice("--tags=".length)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : undefined;
 
   // --- Resolve config: defaults -> file -> env -> CLI ---
   const envVars = process.env as Record<string, string | undefined>;
@@ -3209,6 +3218,7 @@ async function runRalphaiRunner(
     allowDirty: hasAllowDirty,
     once: hasOnce,
     plan: targetPlan,
+    filterTags,
     prd: prdIssue,
     skipPrCreation: runnerFlags?.skipPrCreation,
     verbose: hasVerbose,
