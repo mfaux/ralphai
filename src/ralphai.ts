@@ -1642,6 +1642,7 @@ const KNOWN_RUN_FLAGS = new Set([
   "-w",
   "--help",
   "-h",
+  "--verbose",
 ]);
 
 /** Patterns for run flags parsed directly (not by config resolver). */
@@ -1658,7 +1659,9 @@ const CONFIG_FLAG_PATTERNS = [
   /^--iteration-timeout=/,
   /^--review$/,
   /^--no-review$/,
-  /^--verbose$/,
+  /^--terse$/,
+  /^--no-terse$/,
+  /^--agent-verbose-flags=/,
   /^--prompt-mode=/,
   /^--sandbox=/,
   /^--docker-image=/,
@@ -1714,7 +1717,10 @@ function showRunHelp(): void {
     "  --docker-env-vars=<csv>          Extra env vars to forward into Docker sandbox (comma-separated)",
     "  --review                         Enable review pass after completion (default: on)",
     "  --no-review                      Disable review pass after completion",
-    "  --verbose                        Enable verbose mode (full unabridged agent output; default: concise)",
+    "  --verbose                        Stream agent debug logs to stderr (agent-specific flags injected automatically)",
+    "  --terse                          Enable concise/terse agent output (default: on)",
+    "  --no-terse                       Disable concise mode (full unabridged agent output)",
+    "  --agent-verbose-flags=<flags>    Override built-in agent verbose flags (e.g. '--debug --log-level trace')",
     "  --prompt-mode=<mode>             Prompt file ref format: 'auto', 'at-path', or 'inline' (default: auto)",
     "  --show-config                    Print resolved settings and exit",
     "  --help, -h                       Show this help message",
@@ -1722,7 +1728,7 @@ function showRunHelp(): void {
     "Config file: config.json (optional, JSON format, stored in ~/.ralphai/repos/<id>/)",
     "  Supported keys: agentCommand, setupCommand, feedbackCommands, prFeedbackCommands,",
     "                  baseBranch, maxStuck, sandbox, dockerImage, dockerMounts, dockerEnvVars,",
-    "                  review, verbose, iterationTimeout, promptMode,",
+    "                  review, terse, agentVerboseFlags, iterationTimeout,",
     "                  issueSource, standaloneLabel, subissueLabel, prdLabel,",
     "                  issueRepo, issueCommentProgress",
     "",
@@ -1733,10 +1739,9 @@ function showRunHelp(): void {
     "                   RALPHAI_SANDBOX,",
     "                   RALPHAI_DOCKER_IMAGE, RALPHAI_DOCKER_MOUNTS,",
     "                   RALPHAI_DOCKER_ENV_VARS, RALPHAI_REVIEW,",
-    "                   RALPHAI_VERBOSE,",
+    "                   RALPHAI_TERSE, RALPHAI_AGENT_VERBOSE_FLAGS,",
     ,
     "                   RALPHAI_ITERATION_TIMEOUT,",
-    "                   RALPHAI_PROMPT_MODE,",
     "                   RALPHAI_ISSUE_SOURCE,",
     "                   RALPHAI_STANDALONE_LABEL, RALPHAI_SUBISSUE_LABEL,",
     "                   RALPHAI_PRD_LABEL,",
@@ -2953,6 +2958,7 @@ async function runRalphaiRunner(
   let hasAllowDirty = runArgs.includes("--allow-dirty");
   const hasResume = runArgs.includes("--resume") || runArgs.includes("-r");
   const hasOnce = runArgs.includes("--once");
+  const hasVerbose = runArgs.includes("--verbose");
   const hasShowConfig = runArgs.includes("--show-config");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
   const targetPlan = planFlag ? planFlag.slice("--plan=".length) : undefined;
@@ -3086,6 +3092,7 @@ async function runRalphaiRunner(
     plan: targetPlan,
     prd: prdIssue,
     skipPrCreation: runnerFlags?.skipPrCreation,
+    verbose: hasVerbose,
   };
 
   return await runRunner(runnerOpts);

@@ -66,7 +66,8 @@ const CONFIG_KEY_TO_ENV: Readonly<Record<string, string>> = {
   dockerMounts: "RALPHAI_DOCKER_MOUNTS",
   dockerEnvVars: "RALPHAI_DOCKER_ENV_VARS",
   review: "RALPHAI_REVIEW",
-  verbose: "RALPHAI_VERBOSE",
+  terse: "RALPHAI_TERSE",
+  agentVerboseFlags: "RALPHAI_AGENT_VERBOSE_FLAGS",
 };
 
 // ---------------------------------------------------------------------------
@@ -237,9 +238,19 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   const reviewSrc = sourceLabel("review", config.review.source, input);
   lines.push(`  review             = ${config.review.value}  (${reviewSrc})`);
 
-  // verbose: CLI label is "--verbose"
-  const verboseSrc = sourceLabel("verbose", config.verbose.source, input);
-  lines.push(`  verbose            = ${config.verbose.value}  (${verboseSrc})`);
+  // terse: CLI label is "--terse" or "--no-terse"
+  const terseSrc = sourceLabel("terse", config.terse.source, input);
+  lines.push(`  terse              = ${config.terse.value}  (${terseSrc})`);
+
+  // agentVerboseFlags: CLI label is "--agent-verbose-flags=..."
+  const avfVal = config.agentVerboseFlags.value || "<none>";
+  const avfSrc = sourceLabel(
+    "agentVerboseFlags",
+    config.agentVerboseFlags.source,
+    input,
+    "none",
+  );
+  lines.push(`  agentVerboseFlags  = ${avfVal}  (${avfSrc})`);
 
   const maxStuckSrc = sourceLabel("maxStuck", config.maxStuck.source, input);
   lines.push(

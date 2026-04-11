@@ -283,6 +283,51 @@ describe("buildDockerArgs", () => {
       expect(hasFeedback).toBe(false);
     });
   });
+
+  // --- extraAgentFlags injection ---
+
+  it("injects extraAgentFlags between command and prompt", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: "/work/project",
+      extraAgentFlags: ["--verbose"],
+    });
+    // The tail should be: ...image, "claude", "-p", "--verbose", "test prompt"
+    const promptIdx = args.lastIndexOf("test prompt");
+    expect(promptIdx).toBeGreaterThan(-1);
+    expect(args[promptIdx - 1]).toBe("--verbose");
+    expect(args[promptIdx - 2]).toBe("-p");
+    expect(args[promptIdx - 3]).toBe("claude");
+  });
+
+  it("injects multiple extraAgentFlags in order", () => {
+    const args = buildDockerArgs({
+      agentCommand: "opencode run",
+      prompt: "test prompt",
+      cwd: "/work/project",
+      extraAgentFlags: ["--print-logs", "--log-level", "DEBUG"],
+    });
+    const promptIdx = args.lastIndexOf("test prompt");
+    expect(args[promptIdx - 3]).toBe("--print-logs");
+    expect(args[promptIdx - 2]).toBe("--log-level");
+    expect(args[promptIdx - 1]).toBe("DEBUG");
+  });
+
+  it("empty extraAgentFlags produces no extra args", () => {
+    const argsWithout = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: "/work/project",
+    });
+    const argsWith = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: "/work/project",
+      extraAgentFlags: [],
+    });
+    expect(argsWith).toEqual(argsWithout);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1127,5 +1172,50 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
     }, []);
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
     expect(gitMount).toBeUndefined();
+  });
+
+  it("injects verbose flags when verbose is true", () => {
+    const mainRepo = ctx.dir;
+    execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+    const executor = new DockerExecutor();
+    const args = executor.buildSpawnDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: mainRepo,
+      verbose: true,
+    });
+    // Claude's built-in verbose flag is --verbose
+    const promptIdx = args.lastIndexOf("test prompt");
+    expect(args[promptIdx - 1]).toBe("--verbose");
+  });
+
+  it("does not inject verbose flags when verbose is false", () => {
+    const mainRepo = ctx.dir;
+    execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+    const executor = new DockerExecutor();
+    const args = executor.buildSpawnDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: mainRepo,
+      verbose: false,
+    });
+    const promptIdx = args.lastIndexOf("test prompt");
+    // Without verbose, the last arg before prompt should be "-p" (part of agent command)
+    expect(args[promptIdx - 1]).toBe("-p");
+  });
+
+  it("uses agentVerboseFlags override when verbose is true", () => {
+    const mainRepo = ctx.dir;
+    execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+    const executor = new DockerExecutor();
+    const args = executor.buildSpawnDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test prompt",
+      cwd: mainRepo,
+      verbose: true,
+      agentVerboseFlags: "--custom-debug",
+    });
+    const promptIdx = args.lastIndexOf("test prompt");
+    expect(args[promptIdx - 1]).toBe("--custom-debug");
   });
 });

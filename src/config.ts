@@ -37,7 +37,8 @@ export interface RalphaiConfig {
   dockerMounts: string;
   dockerEnvVars: string;
   review: string; // "true" | "false"
-  verbose: string; // "true" | "false"
+  terse: string; // "true" | "false" — when true, agent prompt includes concise-mode instruction
+  agentVerboseFlags: string; // custom agent verbose flags (overrides built-in map)
   workspaces: Record<string, WorkspaceOverrides> | null;
 }
 
@@ -172,7 +173,8 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   dockerMounts: "",
   dockerEnvVars: "",
   review: "true",
-  verbose: "false",
+  terse: "true",
+  agentVerboseFlags: "",
   workspaces: null,
 };
 
@@ -283,7 +285,8 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "dockerMounts",
   "dockerEnvVars",
   "review",
-  "verbose",
+  "terse",
+  "agentVerboseFlags",
   "workspaces",
   "repoPath", // metadata: absolute path to the repo root (written by init)
 ]);
@@ -509,12 +512,27 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     values.review = String(v);
   }
 
-  // verbose (boolean)
+  // verbose — rejected (renamed to terse, inverted)
   if ("verbose" in obj) {
-    const v = obj.verbose;
+    err(
+      '\'verbose\' has been renamed to \'terse\' (inverted). Use "terse": true instead of "verbose": false, or "terse": false instead of "verbose": true.',
+    );
+  }
+
+  // terse (boolean)
+  if ("terse" in obj) {
+    const v = obj.terse;
     if (typeof v !== "boolean")
-      err(`'verbose' must be 'true' or 'false', got '${v}'`);
-    values.verbose = String(v);
+      err(`'terse' must be 'true' or 'false', got '${v}'`);
+    values.terse = String(v);
+  }
+
+  // agentVerboseFlags (string)
+  if ("agentVerboseFlags" in obj) {
+    const v = obj.agentVerboseFlags;
+    if (typeof v !== "string")
+      err(`'agentVerboseFlags' must be a string, got ${typeof v}`);
+    values.agentVerboseFlags = v;
   }
 
   // workspaces (object of per-package overrides)
@@ -722,12 +740,17 @@ export function applyEnvOverrides(
     overrides.review = review;
   }
 
-  // verbose (boolean)
-  const verbose = get("RALPHAI_VERBOSE");
-  if (verbose !== undefined) {
-    validateBoolean(verbose, "RALPHAI_VERBOSE");
-    overrides.verbose = verbose;
+  // terse (boolean)
+  const terse = get("RALPHAI_TERSE");
+  if (terse !== undefined) {
+    validateBoolean(terse, "RALPHAI_TERSE");
+    overrides.terse = terse;
   }
+
+  // agentVerboseFlags (string)
+  const agentVerboseFlags = get("RALPHAI_AGENT_VERBOSE_FLAGS");
+  if (agentVerboseFlags !== undefined)
+    overrides.agentVerboseFlags = agentVerboseFlags;
 
   return overrides;
 }
@@ -806,8 +829,22 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
       overrides.review = "false";
       rawFlags.review = "--no-review";
     } else if (arg === "--verbose") {
-      overrides.verbose = "true";
-      rawFlags.verbose = "--verbose";
+      // --verbose is no longer a config flag (it's a runtime-only flag for
+      // agent logging). Old behaviour was terse mode toggle — reject with
+      // guidance pointing to --terse / --no-terse.
+      throw new ConfigError(
+        "ERROR: --verbose now enables agent debug logging. To control concise mode, use --terse (default) or --no-terse, or set terse in config/env.",
+      );
+    } else if (arg === "--terse") {
+      overrides.terse = "true";
+      rawFlags.terse = "--terse";
+    } else if (arg === "--no-terse") {
+      overrides.terse = "false";
+      rawFlags.terse = "--no-terse";
+    } else if (arg.startsWith("--agent-verbose-flags=")) {
+      const v = arg.slice("--agent-verbose-flags=".length);
+      overrides.agentVerboseFlags = v;
+      rawFlags.agentVerboseFlags = arg;
     } else if (arg.startsWith("--issue-hitl-label=")) {
       const v = arg.slice("--issue-hitl-label=".length);
       if (v === "") {

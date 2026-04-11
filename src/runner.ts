@@ -224,6 +224,8 @@ export interface RunnerOptions {
   prd?: { number: number; title: string };
   /** Skip per-plan PR creation (used by PRD target to defer to aggregate PR). */
   skipPrCreation?: boolean;
+  /** Whether --verbose was passed (stream agent debug logs). */
+  verbose?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -572,6 +574,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     plan,
     once,
     skipPrCreation,
+    verbose: agentVerbose,
   } = opts;
 
   // Convert to plain values — business logic uses ConfigValues, not
@@ -592,7 +595,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const issueRepo = cfg.issueRepo;
   const issueCommentProgress = cfg.issueCommentProgress === "true";
   const review = cfg.review === "true";
-  const verbose = cfg.verbose === "true";
+  const terse = cfg.terse === "true";
 
   // --- Fail-early Docker availability check ---
   // computeEffectiveSandbox re-probes Docker at runner start. When sandbox
@@ -986,7 +989,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         gateRejection: gateState.lastGateRejection,
         nonce,
         wrapperPath,
-        verbose,
+        terse,
       });
 
       // --- Spawn agent (with output log persistence) ---
@@ -1008,6 +1011,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           : undefined,
         nonce,
         feedbackWrapperPath: wrapperPath,
+        verbose: agentVerbose,
+        agentVerboseFlags: cfg.agentVerboseFlags || undefined,
       });
 
       if (timedOut) {
