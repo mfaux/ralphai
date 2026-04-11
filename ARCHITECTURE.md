@@ -130,6 +130,10 @@ cli.ts
 
 Modules import from leaf utilities and supporting modules. `ralphai.ts` is the root dispatcher; `types.ts`, `git-helpers.ts`, and `utils.ts` are leaves with no intra-project imports. The `src/tui/` subsystem depends on `src/interactive/` for pure data helpers (menu item builders, plan filters) but not for any interactive prompts.
 
+## GitHub issue dependencies
+
+When pulling GitHub issues into plan files, native GitHub blocking relationships are queried via `Issue.blockedBy` GraphQL API (`gh api graphql`). The returned blocker issue numbers are written to `depends-on` frontmatter using issue-based slugs like `gh-42`. The GraphQL query is fail-open: if it fails, the plan proceeds with no `depends-on` entries. The dependency checker in `plan-lifecycle.ts` supports these slugs via prefix matching: `gh-42` matches any file/directory starting with `gh-42-` in the pipeline directories.
+
 ## Where to add new code
 
 - **New CLI subcommand:** Add a case to the dispatcher switch in `ralphai.ts`, implement the command in a new module, and re-export the entry function.
