@@ -1817,14 +1817,9 @@ export function discoverPrdTarget(
     );
   }
 
-  const openSubIssues: PrdSubIssue[] = allSubIssues
-    .filter((si) => si.state === "open")
-    .map((si) => ({
-      number: si.number,
-      title: si.title,
-      state: si.state,
-      node_id: si.node_id,
-    }));
+  const openSubIssues: PrdSubIssue[] = allSubIssues.filter(
+    (si) => si.state === "open",
+  );
 
   const allCompleted = allSubIssues.length > 0 && openSubIssues.length === 0;
 
