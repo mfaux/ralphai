@@ -4,61 +4,91 @@ Extension points for customizing Ralphai's behavior: lifecycle hooks, completion
 
 Back to the [README](../README.md) for setup and quickstart. See the [CLI Reference](cli-reference.md) for all commands and flags. See [How Ralphai Works](how-ralphai-works.md) for the core loop mechanics.
 
-## Lifecycle Diagram
+## Lifecycle Overview
 
-The diagram below shows every hook, gate check, and prompt injection point in firing order. Workspace overrides are resolved once per plan before the iteration loop begins.
+The diagrams below show every hook, gate check, and prompt injection point in firing order. Workspace overrides are resolved once per plan before the iteration loop begins.
+
+### High-Level Flow
 
 ```mermaid
 flowchart TD
-    Start([Plan selected]) --> Scope["resolveScope()\n— workspace overrides for feedback,\nprFeedback, validators, beforeRun, preamble"]
+    Start([Plan selected]) --> Scope[resolveScope]
     Scope --> BeforeRun{"hooks.beforeRun"}
-    BeforeRun -- "exit 0" --> IterLoop
-    BeforeRun -- "non-zero" --> Stuck([Mark stuck, skip plan])
+    BeforeRun -- "exit 0" --> IterLoop["Iteration loop\n(agent works on tasks,\nruns hooks.feedback each cycle)"]
+    BeforeRun -- "non-zero" --> Stuck([Mark stuck])
 
-    subgraph IterLoop ["Iteration Loop"]
-        Prompt["assemblePrompt()\n— preamble · agent instructions\n— file refs · scope hint\n— gate rejection context\n— learnings · feedback step\n— COMPLETE sentinel"]
-        Prompt --> Agent["Agent runs\n(executor.spawn)"]
-        Agent --> Extract["Extract learnings\nExtract progress"]
-        Extract --> StuckCheck{"No commits\nfor gate.maxStuck\niterations?"}
-        StuckCheck -- yes --> StuckOut([Mark stuck])
-        StuckCheck -- no --> IterCap{"gate.maxIterations\nexceeded?"}
-        IterCap -- yes --> StuckOut
-        IterCap -- no --> Complete{"Agent signaled\nCOMPLETE?"}
-        Complete -- no --> Prompt
-    end
+    IterLoop -- "COMPLETE" --> Gate["Completion gate\n(tasks + hooks.feedback\n+ hooks.prFeedback\n+ validators)"]
+    IterLoop -- "stuck" --> Stuck
 
-    Complete -- yes --> Gate
+    Gate -- passed --> Review{"Review pass?"}
+    Gate -- rejected --> IterLoop
+    Gate -- "budget exhausted" --> ForceOrStuck{Progress?}
+    ForceOrStuck -- "partial" --> PR
+    ForceOrStuck -- "zero" --> Stuck
 
-    subgraph Gate ["Completion Gate"]
-        TaskCheck["Task count check\n(progress.md vs plan)"]
-        TaskCheck --> LoopFB["Loop-tier feedback\n(hooks.feedback)"]
-        LoopFB --> PrFB["PR-tier feedback\n(hooks.prFeedback)"]
-        PrFB --> FBPass{"All feedback\npassed?"}
-        FBPass -- yes --> Validators["Validators\n(gate.validators)"]
-        FBPass -- no --> GateFail
-        Validators --> ValPass{"Validators\npassed?"}
-        ValPass -- yes --> GatePass([Gate passed])
-        ValPass -- no --> GateFail([Gate failed])
-    end
+    Review -- "no / skipped" --> PR([Create/update PR])
+    Review -- "changes" --> Gate
+
+    PR --> AfterRun["hooks.afterRun\n(always runs)"]
+    Stuck --> AfterRun
+    AfterRun --> Done([Next plan or exit])
+```
+
+### Iteration Loop Detail
+
+Each iteration starts a fresh agent session. `hooks.feedback` commands are included in the prompt so the agent runs them during its work — this is the fast, every-cycle feedback tier.
+
+```mermaid
+flowchart TD
+    Prompt["assemblePrompt()\n— preamble · agent instructions\n— file refs · scope hint\n— gate rejection context\n— learnings\n— hooks.feedback commands\n— COMPLETE sentinel"]
+    Prompt --> Agent["Agent runs\n(executor.spawn)"]
+    Agent --> AgentFB["Agent runs hooks.feedback\n(via wrapper script or raw commands)"]
+    AgentFB --> Extract["Extract learnings\nExtract progress"]
+    Extract --> StuckCheck{"No commits for\ngate.maxStuck\niterations?"}
+    StuckCheck -- yes --> StuckOut([Mark stuck])
+    StuckCheck -- no --> IterCap{"gate.maxIterations\nexceeded?"}
+    IterCap -- yes --> StuckOut
+    IterCap -- no --> Complete{"Agent signaled\nCOMPLETE?"}
+    Complete -- no --> Prompt
+    Complete -- yes --> Gate([To completion gate])
+```
+
+### Completion Gate Detail
+
+When the agent signals COMPLETE, the runner independently re-runs `hooks.feedback`, then runs `hooks.prFeedback` (the slow, gate-only tier), then validators. The agent does not see `hooks.prFeedback` or validators in its prompt — they only run here.
+
+```mermaid
+flowchart TD
+    TaskCheck["Task count check\n(progress.md vs plan)"]
+    TaskCheck --> LoopFB["Re-run hooks.feedback\n(loop-tier — independent verification)"]
+    LoopFB --> PrFB["Run hooks.prFeedback\n(PR-tier — gate only, not in prompt)"]
+    PrFB --> FBPass{"All feedback\npassed?"}
+    FBPass -- yes --> Validators["Run gate.validators\n(agent-invisible)"]
+    FBPass -- no --> GateFail([Gate rejected])
+    Validators --> ValPass{"Validators\npassed?"}
+    ValPass -- yes --> GatePass([Gate passed])
+    ValPass -- no --> GateFail
 
     GateFail --> Budget{"Rejections <\ngate.maxRejections?"}
-    Budget -- yes --> Prompt
-    Budget -- "no, 0 tasks done" --> StuckOut
+    Budget -- yes --> Reinvoke([Re-invoke agent\nwith rejection details])
+    Budget -- "no, 0 tasks done" --> Stuck([Mark stuck])
     Budget -- "no, partial progress" --> ForceAccept([Force-accept])
+```
 
-    GatePass --> Review{"gate.review\nenabled and\nnot yet run?"}
-    Review -- no --> PR
-    Review -- yes --> ReviewPass["Review pass\n(one-shot agent)"]
-    ReviewPass --> ReviewChanges{"Review made\ncommits?"}
-    ReviewChanges -- no --> PR
-    ReviewChanges -- yes --> Gate
+### Review Pass Detail
 
-    ForceAccept --> PR
-    PR([Create/update PR]) --> AfterRun
-    StuckOut --> AfterRun
+After the gate passes, an optional one-shot review pass performs behavior-preserving simplifications. Runs at most once per plan.
 
-    AfterRun["hooks.afterRun\n(finally — always runs,\nfailure is warning only)"]
-    AfterRun --> Done([Next plan or exit])
+```mermaid
+flowchart TD
+    GatePass([Gate passed]) --> ReviewEnabled{"gate.review enabled\nand not yet run?"}
+    ReviewEnabled -- no --> PR([Create/update PR])
+    ReviewEnabled -- yes --> Diff["git diff: changed files\nvs base branch"]
+    Diff -- "no files" --> PR
+    Diff -- "files found" --> ReviewAgent["One-shot review agent\n(simplify, run feedback, commit)"]
+    ReviewAgent --> Changes{"Review made\ncommits?"}
+    Changes -- no --> PR
+    Changes -- yes --> ReGate([Re-run completion gate])
 ```
 
 ## Config Reference
