@@ -2020,10 +2020,11 @@ async function runIssueTarget(
     cwd,
     runArgs,
   );
-  const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+  const { backlogDir, wipDir } = getRepoPipelineDirs(resolvedWorktreeDir);
 
   const pullResult = pullGithubIssueByNumber({
     backlogDir,
+    wipDir,
     cwd: resolvedWorktreeDir,
     issueSource: "github",
     standaloneLabel: worktreeConfig.standaloneLabel,
@@ -2225,10 +2226,11 @@ async function runPrdIssueTarget(
     console.log("----------------------------------------");
 
     // Pull the sub-issue into a plan file
-    const { backlogDir } = getRepoPipelineDirs(resolvedWorktreeDir);
+    const { backlogDir, wipDir } = getRepoPipelineDirs(resolvedWorktreeDir);
 
     const pullResult = pullGithubIssueByNumber({
       backlogDir,
+      wipDir,
       cwd: resolvedWorktreeDir,
       issueSource: "github",
       standaloneLabel: worktreeConfig.standaloneLabel,
@@ -2772,9 +2774,10 @@ async function runRalphaiInManagedWorktree(
       ? {
           issueSource: resolvedIssueSource,
           pullFn: () => {
-            const { backlogDir } = getRepoPipelineDirs(cwd);
+            const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
             const pullOpts: PullIssueOptions = {
               backlogDir,
+              wipDir,
               cwd,
               issueSource: resolvedIssueSource,
               standaloneLabel: resolvedIssueLabel,
