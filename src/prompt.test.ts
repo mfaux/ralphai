@@ -563,8 +563,9 @@ describe("assemblePrompt", () => {
     expect(prompt).not.toContain("TERSE MODE:");
   });
 
-  it("terse instruction mentions dropping articles, filler, pleasantries, and hedging", () => {
+  it("terse instruction scopes abbreviated style to working commentary only", () => {
     const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("working commentary");
     expect(prompt).toContain("articles");
     expect(prompt).toContain("filler");
     expect(prompt).toContain("pleasantries");
@@ -577,13 +578,21 @@ describe("assemblePrompt", () => {
     expect(prompt).toContain("exactly as-is");
   });
 
-  it("terse instruction exempts structured blocks, commit messages, and code", () => {
+  it("terse instruction requires normal prose for persisted content", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("documentation files");
+    expect(prompt).toContain("code comments");
+    expect(prompt).toContain("commit messages");
+    expect(prompt).toContain("PR descriptions");
+    expect(prompt).toContain("normal, grammatical prose");
+    expect(prompt).toContain("must not use terse style");
+  });
+
+  it("terse instruction exempts structured XML blocks", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("<learnings>");
     expect(prompt).toContain("<progress>");
     expect(prompt).toContain("<pr-summary>");
-    expect(prompt).toContain("commit messages");
-    expect(prompt).toContain("exempt from terse");
   });
 
   it("terse instruction appears before the file references", () => {
