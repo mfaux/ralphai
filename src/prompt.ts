@@ -71,14 +71,16 @@ export interface AssemblePromptOptions {
    */
   wrapperPath?: string;
   /**
-   * When true (default), the prompt includes a terse communication
-   * instruction directing the agent to drop filler words, articles,
-   * pleasantries, and hedging while keeping technical terms, code,
-   * commit messages, and structured XML blocks (`<learnings>`,
-   * `<progress>`, `<pr-summary>`) verbatim.
+   * When false (default), the prompt includes a terse communication
+   * instruction that limits abbreviated style to working commentary
+   * (status updates, reasoning notes, conversational replies). Content
+   * that persists or is read by humans — documentation files, code
+   * comments, commit messages, PR descriptions, error messages, and
+   * structured XML blocks — is explicitly required to use normal,
+   * grammatical prose.
    *
-   * When false, the terse instruction is omitted, allowing the agent
-   * to use full, unabridged prose.
+   * When true, the terse instruction is omitted entirely, allowing
+   * the agent to use full, unabridged prose everywhere.
    */
   verbose?: boolean;
   /**
@@ -318,7 +320,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
   // --- Terse communication instruction ---
   // Included by default (concise mode). Omitted when verbose is true.
   const terseInstruction = !verbose
-    ? `TERSE MODE: Keep all responses concise. Drop articles, filler words, pleasantries, and hedging. Fragments and short synonyms are fine. Keep technical terms, identifiers, and code exactly as-is. Write commit messages, PR summaries, and structured XML blocks (<learnings>, <progress>, <pr-summary>) normally — these are exempt from terse style.\n`
+    ? `TERSE MODE: Apply concise, abbreviated style ONLY to your working commentary — status updates, reasoning notes, and conversational replies. Drop articles, filler words, pleasantries, and hedging there; fragments and short synonyms are fine. For everything else — code, documentation files, code comments, JSDoc/TSDoc, commit messages, PR descriptions, error messages, and structured XML blocks (<learnings>, <progress>, <pr-summary>) — use normal, grammatical prose. These are read by humans or persisted in the codebase and must not use terse style. Keep technical terms, identifiers, and code exactly as-is everywhere.\n`
     : "";
 
   // --- Preamble resolution ---
