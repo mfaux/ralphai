@@ -259,7 +259,8 @@ describe("assemblePrompt", () => {
   it("learnings prompt includes negative guidance about what not to log", () => {
     const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain("Do NOT log:");
-    expect(prompt).toContain("session notes that go stale immediately");
+    // With context enabled (default), session notes go to context block
+    expect(prompt).toContain("session notes that belong in context");
   });
 
   it("learnings prompt includes durability quality-gate heuristic", () => {
@@ -608,6 +609,7 @@ describe("assemblePrompt", () => {
 
   it("terse instruction exempts structured XML blocks", () => {
     const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("<context>");
     expect(prompt).toContain("<learnings>");
     expect(prompt).toContain("<progress>");
     expect(prompt).toContain("<pr-summary>");
@@ -710,7 +712,9 @@ describe("assemblePrompt", () => {
   });
 
   it("omits learnings mandate when enableLearnings is false", () => {
-    const prompt = assemblePrompt(baseOptions({ enableLearnings: false }));
+    const prompt = assemblePrompt(
+      baseOptions({ enableLearnings: false, enableContext: false }),
+    );
     expect(prompt).not.toContain("block is mandatory in every response");
     expect(prompt).not.toContain("freeform prose lesson");
     // Should still have progress block
@@ -718,9 +722,153 @@ describe("assemblePrompt", () => {
   });
 
   it("omits learnings template blocks when enableLearnings is false", () => {
-    const prompt = assemblePrompt(baseOptions({ enableLearnings: false }));
+    const prompt = assemblePrompt(
+      baseOptions({ enableLearnings: false, enableContext: false }),
+    );
     expect(prompt).not.toContain("<learnings>none</learnings>");
     expect(prompt).not.toContain("Your freeform prose lesson here.");
+  });
+
+  // --- Context integration ---
+
+  it("includes context section when context array is non-empty", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        context: [
+          "src/prompt.ts contains assemblePrompt()",
+          "Config uses Zod schema in src/config.ts",
+        ],
+      }),
+    );
+    expect(prompt).toContain("Context from previous iterations");
+    expect(prompt).toContain("src/prompt.ts contains assemblePrompt()");
+    expect(prompt).toContain("Config uses Zod schema in src/config.ts");
+  });
+
+  it("omits context section when context array is empty", () => {
+    const prompt = assemblePrompt(baseOptions({ context: [] }));
+    expect(prompt).not.toContain("Context from previous iterations");
+  });
+
+  it("omits context section when context is not provided (defaults to empty)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).not.toContain("Context from previous iterations");
+  });
+
+  it("omits context section when enableContext is false regardless of array content", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        context: ["Some important context note"],
+        enableContext: false,
+      }),
+    );
+    expect(prompt).not.toContain("Context from previous iterations");
+    expect(prompt).not.toContain("Some important context note");
+  });
+
+  it("includes <context> block template when enableContext is true (default)", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("<context>");
+    expect(prompt).toContain("<context>none</context>");
+    expect(prompt).toContain("session-scoped notes");
+  });
+
+  it("includes <context> block template when enableContext is explicitly true", () => {
+    const prompt = assemblePrompt(baseOptions({ enableContext: true }));
+    expect(prompt).toContain("<context>");
+    expect(prompt).toContain("<context>none</context>");
+  });
+
+  it("omits <context> block template when enableContext is false", () => {
+    const prompt = assemblePrompt(baseOptions({ enableContext: false }));
+    expect(prompt).not.toContain("<context>none</context>");
+    expect(prompt).not.toContain("session-scoped notes");
+  });
+
+  it("places context section before learnings section in the prompt", () => {
+    const prompt = assemblePrompt(
+      baseOptions({
+        context: ["A context note"],
+        learnings: ["A learning"],
+      }),
+    );
+    const contextIdx = prompt.indexOf("Context from previous iterations");
+    const learningsIdx = prompt.indexOf("Learnings from previous iterations");
+    expect(contextIdx).toBeGreaterThanOrEqual(0);
+    expect(learningsIdx).toBeGreaterThan(contextIdx);
+  });
+
+  it("when both tiers enabled, learnings instruction says NOT to put session notes in learnings", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ enableContext: true, enableLearnings: true }),
+    );
+    expect(prompt).toContain("Do NOT put session-specific notes");
+    expect(prompt).toContain("belong in the <context");
+  });
+
+  it("when only context enabled, only <context> block instruction appears", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ enableContext: true, enableLearnings: false }),
+    );
+    expect(prompt).toContain("<context>none</context>");
+    expect(prompt).not.toContain("<learnings>none</learnings>");
+    expect(prompt).not.toContain("freeform prose lesson");
+  });
+
+  it("when only learnings enabled, only <learnings> block instruction appears (no mention of context)", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ enableContext: false, enableLearnings: true }),
+    );
+    expect(prompt).toContain("<learnings>none</learnings>");
+    expect(prompt).not.toContain("<context>none</context>");
+    expect(prompt).not.toContain("session-scoped notes");
+  });
+
+  it("when both disabled, neither block instruction appears", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ enableContext: false, enableLearnings: false }),
+    );
+    expect(prompt).not.toContain("<learnings>none</learnings>");
+    expect(prompt).not.toContain("<context>none</context>");
+    expect(prompt).not.toContain("session-scoped notes");
+    expect(prompt).not.toContain("freeform prose lesson");
+    // Progress should still be present
+    expect(prompt).toContain("<progress>");
+  });
+
+  it("includes nonce-stamped <context> tags when nonce is provided", () => {
+    const nonce = "ctx-nonce-55";
+    const prompt = assemblePrompt(baseOptions({ nonce }));
+    expect(prompt).toContain(`<context nonce="${nonce}">`);
+    expect(prompt).toContain(`<context nonce="${nonce}">none</context>`);
+    // Must NOT contain bare <context>none</context>
+    expect(prompt).not.toContain("<context>none</context>");
+  });
+
+  it("includes context hint in step 1 when context array is non-empty", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ context: ["Some context note"] }),
+    );
+    expect(prompt).toContain(
+      "Review any context notes from previous iterations",
+    );
+  });
+
+  it("omits context hint in step 1 when context array is empty", () => {
+    const prompt = assemblePrompt(baseOptions({ context: [] }));
+    expect(prompt).not.toContain(
+      "Review any context notes from previous iterations",
+    );
+  });
+
+  it("when only learnings enabled, learnings instruction uses 'omit' not 'put in context'", () => {
+    const prompt = assemblePrompt(
+      baseOptions({ enableContext: false, enableLearnings: true }),
+    );
+    // Should use the standalone learnings wording ("omit it") not the
+    // two-tier wording ("put it in the context block")
+    expect(prompt).toContain("session note, not a learning — omit it");
+    expect(prompt).not.toContain("put it in the context block");
   });
 
   // --- commitStyle ---
