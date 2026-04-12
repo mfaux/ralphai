@@ -6,7 +6,7 @@
  * deferred until `ink-testing-library` is available.
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import type { Screen } from "./types.ts";
 import type { ConfirmData } from "./screens/confirm.tsx";
 
@@ -101,7 +101,7 @@ describe("Screen confirm variant", () => {
       agentCommand: "",
       branch: "feat/plan",
       feedbackCommands: "",
-      runArgs: ["run", "--plan", "plan.md"],
+      runArgs: ["run", "--plan=plan.md"],
     };
 
     const screen: Screen = {
@@ -149,12 +149,12 @@ describe("exit-to-runner dispatch flow", () => {
       agentCommand: "claude",
       branch: "feat/test",
       feedbackCommands: "",
-      runArgs: ["run", "--plan", "test.md"],
+      runArgs: ["run", "--plan=test.md"],
     };
 
     const result = { type: "exit-to-runner" as const, args: data.runArgs };
     expect(result.type).toBe("exit-to-runner");
-    expect(result.args).toEqual(["run", "--plan", "test.md"]);
+    expect(result.args).toEqual(["run", "--plan=test.md"]);
   });
 
   it("confirm screen Esc produces navigate back to menu", () => {

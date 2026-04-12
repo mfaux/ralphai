@@ -27,7 +27,7 @@ function makeData(overrides?: Partial<ConfirmData>): ConfirmData {
     agentCommand: "claude-code",
     branch: "ralphai/feat-login",
     feedbackCommands: "bun run build && bun run test",
-    runArgs: ["run", "--plan", "feat-login.md"],
+    runArgs: ["run", "--plan=feat-login.md"],
     ...overrides,
   };
 }
@@ -223,11 +223,11 @@ describe("confirmKeyHandler", () => {
 describe("resolveConfirmIntent", () => {
   describe("confirm intent", () => {
     it("returns exit-to-runner with the data's runArgs", () => {
-      const data = makeData({ runArgs: ["run", "--plan", "my-plan.md"] });
+      const data = makeData({ runArgs: ["run", "--plan=my-plan.md"] });
       const result = resolveConfirmIntent("confirm", data, { type: "menu" });
       expect(result).toEqual({
         type: "exit-to-runner",
-        args: ["run", "--plan", "my-plan.md"],
+        args: ["run", "--plan=my-plan.md"],
       });
     });
 
