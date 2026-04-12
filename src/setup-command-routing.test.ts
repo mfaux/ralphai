@@ -287,10 +287,7 @@ describe("executeSetupCommand — Docker command construction", () => {
     // resolveMainGitDir calls execQuiet which returns "" (not a worktree),
     // so no main git dir mount is added.
     expect(dockerCall!.command).toContain("/work/my-project:/work/my-project");
-    // Count -v mounts: should only have the worktree mount (no git dir mount)
-    const vMatches = dockerCall!.command.match(/-v /g);
-    // There's always at least one -v for the worktree bind mount; there may
-    // be credential mounts too. The key assertion is no .git mount.
+    // The key assertion is no .git mount (credential mounts may exist).
     expect(dockerCall!.command).not.toContain("/.git:");
   });
 });

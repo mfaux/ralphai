@@ -13,8 +13,7 @@
  * File mounts and env vars are silently skipped when absent on the host.
  */
 
-import { spawn, type ChildProcess } from "child_process";
-import { createWriteStream, existsSync } from "fs";
+import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -28,6 +27,7 @@ import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
 import { resolveMainGitDir } from "../worktree/index.ts";
 import { resolveAgentVerboseFlags } from "./agent-flags.ts";
+import { spawnChild } from "./spawn-child.ts";
 
 // ---------------------------------------------------------------------------
 // Container user and home directory
@@ -657,97 +657,13 @@ export class DockerExecutor implements AgentExecutor {
       agentVerboseFlags,
     });
 
-    return new Promise((resolve) => {
-      // Open a write stream for the agent output log (append mode).
-      let logStream: ReturnType<typeof createWriteStream> | undefined;
-      if (outputLogPath) {
-        try {
-          logStream = createWriteStream(outputLogPath, { flags: "a" });
-        } catch {
-          // Best-effort: if we can't open the log, continue without it
-        }
-      }
-
-      let ac: AbortController | undefined;
-      let timedOut = false;
-      const spawnOpts: {
-        cwd?: string;
-        stdio: ["pipe", "pipe", "pipe"];
-        signal?: AbortSignal;
-      } = {
-        stdio: ["pipe", "pipe", "pipe"],
-      };
-
-      if (iterationTimeout > 0) {
-        ac = new AbortController();
-        spawnOpts.signal = ac.signal;
-        setTimeout(() => {
-          timedOut = true;
-          ac!.abort();
-        }, iterationTimeout * 1000);
-      }
-
-      let child: ChildProcess;
-      try {
-        child = spawn("docker", dockerArgs, spawnOpts);
-      } catch (err) {
-        console.error(
-          `Failed to spawn Docker container: ${err instanceof Error ? err.message : err}`,
-        );
-        logStream?.end();
-        resolve({ output: "", exitCode: 1, timedOut: false });
-        return;
-      }
-
-      // Close stdin so the agent knows no input is coming.
-      child.stdin?.end();
-
-      const chunks: Buffer[] = [];
-
-      child.stdout?.on("data", (data: Buffer) => {
-        process.stdout.write(data);
-        logStream?.write(data);
-        chunks.push(data);
-        ipcBroadcast?.({
-          type: "output",
-          data: data.toString(),
-          stream: "stdout",
-        });
-      });
-
-      child.stderr?.on("data", (data: Buffer) => {
-        process.stderr.write(data);
-        logStream?.write(data);
-        chunks.push(data);
-        ipcBroadcast?.({
-          type: "output",
-          data: data.toString(),
-          stream: "stderr",
-        });
-      });
-
-      child.on("close", (code) => {
-        const output = Buffer.concat(chunks).toString("utf-8");
-        if (logStream) {
-          logStream.end(() => {
-            resolve({ output, exitCode: code ?? 1, timedOut });
-          });
-        } else {
-          resolve({ output, exitCode: code ?? 1, timedOut });
-        }
-      });
-
-      child.on("error", (err) => {
-        logStream?.end();
-        if (timedOut) {
-          const output = Buffer.concat(chunks).toString("utf-8");
-          resolve({ output, exitCode: 124, timedOut: true });
-        } else {
-          console.error(`Docker container error: ${err.message}`);
-          const output = Buffer.concat(chunks).toString("utf-8");
-          resolve({ output, exitCode: 1, timedOut: false });
-        }
-      });
+    return spawnChild({
+      command: "docker",
+      args: dockerArgs,
+      iterationTimeout,
+      outputLogPath,
+      ipcBroadcast,
+      errorLabel: "Docker container",
     });
   }
 }
