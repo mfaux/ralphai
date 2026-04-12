@@ -142,7 +142,7 @@ What it does:
 --dry-run, -n                        Preview what would happen without changing anything
 --wizard, -w                         Interactively configure run options before starting
 --resume, -r                         Commit dirty state and continue
---allow-dirty                        Skip the clean working tree check
+--allow-dirty                        Skip the clean working tree check (automatically applied in worktree runs)
 --plan=<file>                        Target a specific backlog plan (default: auto-detect)
 --tags=<list>                        Comma-separated tags to filter plans (OR semantics)
 --agent-command=<command>            Override agent CLI command
