@@ -134,17 +134,6 @@ describe("resolveAction", () => {
     });
   });
 
-  describe("stay actions (future sub-screens)", () => {
-    const stayActions: ActionType[] = ["resume-stalled"];
-
-    for (const action of stayActions) {
-      it(`${action} returns stay`, () => {
-        const result = resolveAction(action);
-        expect(result.type).toBe("stay");
-      });
-    }
-  });
-
   describe("navigate actions (picker sub-screens)", () => {
     it("pick-from-backlog navigates to backlog-picker", () => {
       const result = resolveAction("pick-from-backlog");
@@ -199,6 +188,14 @@ describe("resolveAction", () => {
       expect(result).toEqual({
         type: "navigate",
         screen: { type: "clean" },
+      });
+    });
+
+    it("resume-stalled navigates to resume-stalled screen", () => {
+      const result = resolveAction("resume-stalled");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "resume-stalled" },
       });
     });
   });
@@ -355,6 +352,12 @@ describe("titleFromRunArgs", () => {
 
   it("handles large issue numbers", () => {
     expect(titleFromRunArgs(["run", "9999"])).toBe("Issue #9999");
+  });
+
+  it('extracts plan name from ["run", "--plan=feat-login.md", "--resume"]', () => {
+    expect(titleFromRunArgs(["run", "--plan=feat-login.md", "--resume"])).toBe(
+      "feat-login.md",
+    );
   });
 
   it("resolves next plan name from pipeline state for bare run", () => {
@@ -800,6 +803,15 @@ describe("transition flows", () => {
     expect(result).toEqual({
       type: "navigate",
       screen: { type: "clean" },
+    });
+  });
+
+  it("resume-stalled → resume-stalled screen (no confirm interception)", () => {
+    const actionResult = resolveAction("resume-stalled");
+    const result = toConfirmNav(actionResult, config, { type: "menu" });
+    expect(result).toEqual({
+      type: "navigate",
+      screen: { type: "resume-stalled" },
     });
   });
 });

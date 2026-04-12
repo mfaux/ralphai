@@ -8,7 +8,6 @@
 
 import { describe, it, expect } from "bun:test";
 import { handleAction } from "./app.tsx";
-import type { ActionType } from "./types.ts";
 import { ACTION_TYPES, toConfirmNav, toOptionsNav } from "./types.ts";
 import type { RunConfig } from "./types.ts";
 
@@ -69,15 +68,70 @@ describe("handleAction", () => {
     });
   });
 
-  describe("stay actions", () => {
-    const stayActions: ActionType[] = ["resume-stalled"];
-
-    for (const action of stayActions) {
-      it(`${action} returns stay`, () => {
-        const result = handleAction(action);
-        expect(result).toEqual({ type: "stay" });
+  describe("navigate actions", () => {
+    it("pick-from-backlog navigates to backlog-picker", () => {
+      const result = handleAction("pick-from-backlog");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "backlog-picker" },
       });
-    }
+    });
+
+    it("pick-from-github navigates to issue-picker", () => {
+      const result = handleAction("pick-from-github");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "issue-picker" },
+      });
+    });
+
+    it("stop-running navigates to stop screen", () => {
+      const result = handleAction("stop-running");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "stop" },
+      });
+    });
+
+    it("reset-plan navigates to reset screen", () => {
+      const result = handleAction("reset-plan");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "reset" },
+      });
+    });
+
+    it("view-status navigates to status screen", () => {
+      const result = handleAction("view-status");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "status" },
+      });
+    });
+
+    it("doctor navigates to doctor screen", () => {
+      const result = handleAction("doctor");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "doctor" },
+      });
+    });
+
+    it("clean navigates to clean screen", () => {
+      const result = handleAction("clean");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "clean" },
+      });
+    });
+
+    it("resume-stalled navigates to resume-stalled screen", () => {
+      const result = handleAction("resume-stalled");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "resume-stalled" },
+      });
+    });
   });
 
   describe("settings action", () => {

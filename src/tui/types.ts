@@ -84,6 +84,7 @@ export type Screen =
   | { type: "backlog-picker" }
   | { type: "confirm"; data: ConfirmData; backScreen?: Screen }
   | { type: "options"; data: ConfirmData; backScreen?: Screen }
+  | { type: "resume-stalled" }
   | { type: "stop" }
   | { type: "reset" }
   | { type: "status" }
@@ -113,10 +114,8 @@ export type DispatchResult =
  * Map an `ActionType` to a `DispatchResult`.
  *
  * This is a pure function that determines the routing outcome for each
- * action. Actions that require sub-screens or the agent runner will
- * evolve as those screens are built — for now, actions that would
- * normally show a sub-menu return `"stay"` (the sub-screen is not yet
- * implemented), and actions that launch the runner return
+ * action. Actions that require sub-screens navigate to the appropriate
+ * screen, while actions that launch the agent runner return
  * `"exit-to-runner"`.
  */
 export function resolveAction(action: ActionType): DispatchResult {
@@ -149,6 +148,8 @@ export function resolveAction(action: ActionType): DispatchResult {
       return { type: "navigate", screen: { type: "doctor" } };
     case "clean":
       return { type: "navigate", screen: { type: "clean" } };
+    case "resume-stalled":
+      return { type: "navigate", screen: { type: "resume-stalled" } };
 
     // --- Actions that exit the TUI and launch the runner (options) ---
     // "run-with-options" produces exit-to-runner with default ["run"]
@@ -160,12 +161,6 @@ export function resolveAction(action: ActionType): DispatchResult {
     // --- Actions that exit the TUI and launch a non-runner command ---
     case "settings":
       return { type: "exit-to-runner", args: ["init", "--force"] };
-
-    // --- Actions that will navigate to sub-screens (stubbed as "stay") ---
-    // These will be updated to `{ type: "navigate", screen: ... }` as
-    // their respective screens are implemented.
-    case "resume-stalled":
-      return { type: "stay" };
   }
 }
 

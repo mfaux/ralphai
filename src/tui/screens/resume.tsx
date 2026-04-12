@@ -1,18 +1,31 @@
 /**
- * Resume stalled plan screen helpers for the TUI.
+ * Resume stalled plan screen for the TUI.
  *
- * Pure helpers that build list items and map selections to typed intents
- * for the resume-stalled screen. No React rendering — that will be
- * composed separately by the screen component.
+ * Shows a list of stalled plans to resume, or a confirmation prompt when
+ * only one plan is stalled. Uses the `SelectableList` component.
  *
- * Exported helpers:
+ * - Single stalled plan: Y/N confirmation with progress hint
+ * - Multiple stalled plans: picker with progress hints
+ * - On resume intent: produces `exit-to-runner` with
+ *   `["run", "--plan=<slug>.md", "--resume"]`
+ * - Esc: returns to main menu
+ *
+ * Pure helpers are exported for unit testing:
  * - `buildResumeItems` — maps stalled plans to ListItem[] with progress hints
  * - `resumeSelect` — maps a selected value to a ResumeIntent
  * - `buildResumeConfirmItems` — builds Y/N confirmation items for a single plan
  * - `confirmResumeSelect` — maps a confirmation value to a ResumeIntent
  */
 
-import type { ListItem } from "../components/selectable-list.tsx";
+import { useMemo, useCallback } from "react";
+import { Box, Text } from "ink";
+
+import type {
+  ListItem,
+  ItemRenderProps,
+} from "../components/selectable-list.tsx";
+import { SelectableList } from "../components/selectable-list.tsx";
+import type { DispatchResult } from "../types.ts";
 import type { InProgressPlan } from "../../plan-lifecycle.ts";
 
 // ---------------------------------------------------------------------------
@@ -114,4 +127,156 @@ export function confirmResumeSelect(
 ): ResumeIntent {
   if (value === "__confirm__") return { type: "resume", slug, filename };
   return { type: "back" };
+}
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+export interface ResumeStalledScreenProps {
+  /** Stalled plans from pipeline state. */
+  stalledPlans: InProgressPlan[];
+  /** Called when the user selects a plan or navigates back. */
+  onResult: (result: DispatchResult) => void;
+  /** Whether keyboard input is active. @default true */
+  isActive?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Custom item renderer
+// ---------------------------------------------------------------------------
+
+function ResumeListItem({
+  item,
+  isCursor,
+  isDisabled,
+}: {
+  item: ListItem;
+  isCursor: boolean;
+  isDisabled: boolean;
+}) {
+  const cursor = isCursor ? "\u276F " : "  ";
+  const labelColor = isDisabled ? "gray" : isCursor ? "cyan" : undefined;
+
+  return (
+    <Box>
+      <Text color={isCursor ? "cyan" : undefined}>{cursor}</Text>
+      <Text color={labelColor} dimColor={isDisabled}>
+        {item.label}
+      </Text>
+      {item.hint ? <Text dimColor> {item.hint}</Text> : null}
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ResumeStalledScreen component
+// ---------------------------------------------------------------------------
+
+export function ResumeStalledScreen({
+  stalledPlans: plans,
+  onResult,
+  isActive = true,
+}: ResumeStalledScreenProps) {
+  const handleBack = useCallback(() => {
+    onResult({ type: "navigate", screen: { type: "menu" } });
+  }, [onResult]);
+
+  const renderItem = useCallback(
+    (item: ListItem, props: ItemRenderProps) => (
+      <ResumeListItem
+        item={item}
+        isCursor={props.isCursor}
+        isDisabled={props.isDisabled}
+      />
+    ),
+    [],
+  );
+
+  // --- Dispatch intent ---
+  const handleIntent = useCallback(
+    (intent: ResumeIntent) => {
+      if (intent.type === "back") {
+        handleBack();
+        return;
+      }
+      // Produce exit-to-runner with resume args
+      onResult({
+        type: "exit-to-runner",
+        args: ["run", `--plan=${intent.filename}`, "--resume"],
+      });
+    },
+    [onResult, handleBack],
+  );
+
+  // --- Empty state ---
+  if (plans.length === 0) {
+    return (
+      <Box flexDirection="column" paddingLeft={1}>
+        <Text>No stalled plans</Text>
+        <Box marginTop={1}>
+          <SelectableList
+            items={[{ value: "__back__", label: "Back" }]}
+            onSelect={handleBack}
+            onBack={handleBack}
+            isActive={isActive}
+          />
+        </Box>
+      </Box>
+    );
+  }
+
+  // --- Single plan: confirmation prompt ---
+  if (plans.length === 1) {
+    const plan = plans[0]!;
+    const confirmItems = useMemo(() => buildResumeConfirmItems(plan), [plan]);
+
+    const handleConfirmSelect = useCallback(
+      (value: string) => {
+        handleIntent(confirmResumeSelect(value, plan.slug, plan.filename));
+      },
+      [plan.slug, plan.filename, handleIntent],
+    );
+
+    return (
+      <Box flexDirection="column">
+        <Box paddingLeft={1} marginBottom={1}>
+          <Text bold>Resume stalled plan?</Text>
+        </Box>
+        <SelectableList
+          items={confirmItems}
+          onSelect={handleConfirmSelect}
+          onBack={handleBack}
+          isActive={isActive}
+          renderItem={renderItem}
+        />
+      </Box>
+    );
+  }
+
+  // --- Multiple plans: picker ---
+  const listItems = useMemo(() => buildResumeItems(plans), [plans]);
+
+  const handlePickerSelect = useCallback(
+    (value: string) => {
+      handleIntent(resumeSelect(value, plans));
+    },
+    [handleIntent, plans],
+  );
+
+  return (
+    <Box flexDirection="column">
+      <Box paddingLeft={1} marginBottom={1}>
+        <Text bold>Pick a stalled plan to resume</Text>
+        <Text dimColor> ({plans.length} stalled)</Text>
+      </Box>
+      <SelectableList
+        items={listItems}
+        onSelect={handlePickerSelect}
+        onBack={handleBack}
+        isActive={isActive}
+        renderItem={renderItem}
+      />
+    </Box>
+  );
 }
