@@ -297,6 +297,7 @@ export function buildContinuousPrBodyStructured(
     prRepo?: string;
     summary?: string;
     learnings?: string[];
+    context?: string[];
   },
 ): string {
   const parts: string[] = [];
@@ -341,6 +342,12 @@ export function buildContinuousPrBodyStructured(
   const learningsSection = formatLearningsForPr(options?.learnings ?? []);
   if (learningsSection) {
     parts.push("\n\n" + learningsSection);
+  }
+
+  // Append context section when non-empty
+  const contextSection = formatContextForPr(options?.context ?? []);
+  if (contextSection) {
+    parts.push("\n\n" + contextSection);
   }
 
   return parts.join("\n");
