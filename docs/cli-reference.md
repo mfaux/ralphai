@@ -168,8 +168,8 @@ What it does:
 --docker-env-vars=<csv>              Extra env vars to forward into Docker sandbox (comma-separated)
 --prompt-verbose                     Enable verbose mode (full unabridged agent output; default: concise)
 --prompt-preamble=<text>             Override default preamble (use @path to read from file)
---prompt-learnings                   Enable learnings extraction (default: on)
---no-prompt-learnings                Disable learnings extraction, prompt mandate, and PR section
+--prompt-learnings                   Enable durable learnings extraction (default: on)
+--no-prompt-learnings                Disable durable learnings extraction, prompt mandate, and PR section
 --prompt-context                     Enable context extraction (default: on)
 --no-prompt-context                  Disable context extraction
 --prompt-commit-style=<style>        Commit style: 'conventional' (default) or 'none'
