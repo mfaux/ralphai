@@ -174,7 +174,7 @@ Mounts use standard Docker bind-mount syntax (`host:container[:options]`). Env v
 
 The exact flag depends on which agent you use — check your agent's CLI reference for the correct option.
 
-For details on the Docker execution flow and credential forwarding, see [How Ralphai Works](how-ralphai-works.md#docker-execution-flow). For all Docker-related config keys, see [Hooks, Gates, and Prompt Controls](hooks.md#top-level-keys).
+For details on the Docker execution flow and credential forwarding, see [Docker Sandbox](docker.md). For all Docker-related config keys, see [Hooks, Gates, and Prompt Controls](hooks.md#top-level-keys).
 
 ## Test a plan without changing anything
 
