@@ -349,11 +349,10 @@ Add JWT-based authentication with login/logout endpoints, replacing the previous
 ${prSummaryClose}${
     enableLearnings
       ? `
-REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends. When reporting learnings, include specifics that help future iterations hit the ground running:
-- File paths modified or discovered (e.g. "the validation logic lives in src/validators/input.ts")
-- Exported APIs and their signatures (e.g. "parseConfig(path: string): Config is the main entry point")
-- Architecture constraints or patterns observed (e.g. "all DB access goes through the repository layer, never direct queries")
-- Error messages encountered and how they were resolved (e.g. "TS2345 type mismatch fixed by narrowing the union with a type guard")
+REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends.
+A learning must be durable: ask yourself "would this still be useful if the codebase had changed since this iteration?" If the answer is no, it is a session note, not a learning — omit it.
+Do NOT log: where a specific file lives, what a function signature looks like after you just read it, or a narration of your exploration steps. These are session notes that go stale immediately.
+DO log: behavioral patterns, architectural constraints, recurring failure modes, and project conventions that would help a future agent avoid a class of mistakes.
 Use:
 ${learningsOpen}
 Your freeform prose lesson here.
