@@ -439,28 +439,9 @@ function buildCommonDockerArgs(opts: {
  * - Does NOT mount ~/.ralphai/
  */
 export function buildDockerArgs(opts: DockerCommandOptions): string[] {
-  const {
-    agentCommand,
-    prompt,
-    cwd,
-    dockerImage,
-    dockerEnvVars = [],
-    dockerMounts = [],
-    nonce,
-    mainGitDir,
-    feedbackWrapperPath,
-    extraAgentFlags = [],
-  } = opts;
+  const { agentCommand, prompt, nonce, extraAgentFlags = [] } = opts;
 
-  const args = buildCommonDockerArgs({
-    agentCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars,
-    dockerMounts,
-    mainGitDir,
-    feedbackWrapperPath,
-  });
+  const args = buildCommonDockerArgs(opts);
 
   // Nonce env var (set explicitly with value, not from host env).
   // Inserted before the image (second-to-last position in the common args)
@@ -516,27 +497,10 @@ export interface SetupDockerCommandOptions {
 export function buildSetupDockerArgs(
   opts: SetupDockerCommandOptions,
 ): string[] {
-  const {
-    agentCommand,
-    setupCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars = [],
-    dockerMounts = [],
-    mainGitDir,
-  } = opts;
-
-  const args = buildCommonDockerArgs({
-    agentCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars,
-    dockerMounts,
-    mainGitDir,
-  });
+  const args = buildCommonDockerArgs(opts);
 
   // Setup command via sh -c
-  args.push("sh", "-c", setupCommand);
+  args.push("sh", "-c", opts.setupCommand);
 
   return args;
 }
@@ -634,35 +598,14 @@ export class DockerExecutor implements AgentExecutor {
   }
 
   async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
-    const {
-      agentCommand,
-      prompt,
-      iterationTimeout,
-      cwd,
-      outputLogPath,
-      ipcBroadcast,
-      nonce,
-      feedbackWrapperPath,
-      verbose,
-      agentVerboseFlags,
-    } = opts;
-
-    const dockerArgs = this.buildSpawnDockerArgs({
-      agentCommand,
-      prompt,
-      cwd,
-      nonce,
-      feedbackWrapperPath,
-      verbose,
-      agentVerboseFlags,
-    });
+    const dockerArgs = this.buildSpawnDockerArgs(opts);
 
     return spawnChild({
       command: "docker",
       args: dockerArgs,
-      iterationTimeout,
-      outputLogPath,
-      ipcBroadcast,
+      iterationTimeout: opts.iterationTimeout,
+      outputLogPath: opts.outputLogPath,
+      ipcBroadcast: opts.ipcBroadcast,
       errorLabel: "Docker container",
     });
   }
