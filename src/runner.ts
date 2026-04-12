@@ -1056,8 +1056,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     // Derive a feedback hint command from hooks.feedback for scope hint text.
     // Uses the first configured command (e.g. "bun test" from "bun test,bun run build").
-    const firstFeedbackCmd = feedbackCommands.split(",")[0]?.trim() ?? "";
-    const feedbackHintCmd = firstFeedbackCmd || "";
+    const feedbackHintCmd = feedbackCommands.split(",")[0]?.trim() ?? "";
 
     // Resolve feedback scope: explicit frontmatter overrides auto-detection.
     const fmFeedbackScope = extractFeedbackScope(planFile);
