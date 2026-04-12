@@ -2,13 +2,43 @@
 
 ## Unreleased
 
-### Features
-
-- **`gate.validators` config key** — run custom policy checks (changelog presence, migration files, bundle size) at the completion gate after feedback commands pass. Validators are agent-invisible and all run independently. Failures are prefixed with `[Validator]` in gate rejection details. Configurable via `RALPHAI_GATE_VALIDATORS` env var, `--gate-validators=` CLI flag, and per-workspace overrides.
+## 0.8.0
 
 ### Breaking
 
-- **`autoCommit` feature removed** — the `autoCommit` config key, `--auto-commit` / `--no-auto-commit` CLI flags, and `RALPHAI_AUTO_COMMIT` environment variable have been removed. Ralphai no longer commits changes on behalf of the agent; agents are expected to commit their own work.
+- **`autoCommit` feature removed** — the `autoCommit` config key, `--auto-commit` / `--no-auto-commit` CLI flags, and `RALPHAI_AUTO_COMMIT` environment variable have been removed. Ralphai no longer commits changes on behalf of the agent; agents are expected to commit their own work. (#399)
+- **`--drain` required for backlog draining** — `ralphai run` without a `--plan` or target no longer auto-drains the backlog. Pass `--drain` explicitly to process all pending plans. (#487)
+- **`--terse` flag replaced by `--verbose`** — concise agent output is now the default. The `--terse` flag has been removed and replaced with `--verbose` for full agent debug logging. The `terse` config key has been replaced with `verbose`. (#444, #470)
+
+### Features
+
+- **Hooks, middleware & user controls redesign** — replaces the previous hook system with composable middleware and user-facing control surfaces for prompt injection, pre/post-run hooks, and gate customization. (#473)
+- **Two-tier context/learnings split** — separates ephemeral working notes from durable cross-run lessons. Learnings now persist across runs while context notes are scoped to a single iteration. (#489)
+- **Resume Stalled Plan TUI screen** — new TUI screen to resume plans that stalled mid-run, with status display and one-key restart. (#497)
+- **Suppress husky in worktree runs** — automatically sets `HUSKY=0` and allows dirty worktree state during agent runs to prevent git hook interference. (#502)
+- **`gate.validators` config key** — run custom policy checks (changelog presence, migration files, bundle size) at the completion gate after feedback commands pass. Validators are agent-invisible and all run independently. Failures are prefixed with `[Validator]` in gate rejection details. Configurable via `RALPHAI_GATE_VALIDATORS` env var, `--gate-validators=` CLI flag, and per-workspace overrides.
+- **Allow `ralphai run/hitl` from inside a worktree** — commands can now be invoked from within a managed worktree directory, automatically resolving the parent repo. (#438)
+- **Reset removes GH-issue plans from pipeline** — `ralphai reset` now removes GitHub-issue-sourced plans from the pipeline instead of moving them back to the backlog. (#394)
+- **Include learnings in PRD aggregate PR descriptions** — PRD pull requests now include accumulated learnings in the PR body. (#382)
+- **Mount global skills directory in Docker containers** — the `~/.agents/skills` directory is now bind-mounted into Docker sandboxes so agents can access user-defined skills. (#375)
+
+### Fixes
+
+- **TUI backlog picker produces invalid `--plan` flag format** — the TUI now emits the correct `--plan=<name>` format expected by the CLI validator. (#493)
+- **Improve learnings quality** — filter junk entries, tighten the extraction prompt, and fix test fixtures. (#488)
+- **Scope terse mode to working commentary** — abbreviated output style now applies only to agent status updates and reasoning; documentation, code comments, commit messages, and PR descriptions use normal prose. (#475)
+- **Completed standalone issues retain stale in-progress label** — done transitions now correctly remove the in-progress label. (#472)
+- **Reject duplicate issue pulls** — adds a pipeline de-duplication guard to prevent the same issue from being pulled twice. (#471)
+- **Pass `feedbackWrapperPath` to executor during review pass** — fixes feedback commands failing silently in the review phase. (#469)
+- **Skip standalone issues with state labels during drain pull** — prevents re-pulling issues that already have a status label. (#468)
+- **Worktree creation respects `--base-branch` config** — worktrees now branch from the configured base branch instead of always using the default. (#433)
+- **Inject `--once` for standalone issue targets** — prevents a single-issue target from accidentally draining the full backlog. (#400)
+- **Done transitions remove all other status labels** — completing an issue now strips all stale state labels, not just the most recent one. (#390)
+- **Completion gate force-accepts plans with zero tasks completed** — the gate now correctly rejects completion claims when no tasks have actually been marked done. (#388, #389)
+- **Silently misparses unknown command as target directory** — unknown commands now produce a clear error instead of being interpreted as a target path. (#386)
+- **Redirect removed worktree subcommands** — removed subcommands now show a helpful redirect message instead of a generic "not set up" error. (#383)
+- **Docker sandbox fixes** — pre-create opencode data dir to prevent bind-mount shadowing (#380); ensure bun binary is world-executable (#379); replace opencode install script with direct binary download (#378); pre-create XDG subdirectories to prevent EACCES (#377); bind-mount feedback wrapper script into container (#374); fix root-owned files in worktrees blocking cleanup (#373); mount main repo `.git` for worktree git operations (#372)
+- **Detect agent type from binary name only** — agent detection no longer inspects flag values, preventing false matches. (#371)
 
 ## 0.7.3
 
