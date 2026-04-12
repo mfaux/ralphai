@@ -153,7 +153,7 @@ What it does:
 --hooks-after-run=<cmd>              Hook to run after each plan completes
 --hooks-feedback-timeout=<sec>       Timeout per feedback command at the gate (default: 300)
 --base-branch=<branch>               Override base branch (default: main)
---once                               Process a single work unit then exit
+--drain                              Keep processing eligible work until none remains
 --gate-max-stuck=<n>                 Stuck threshold before abort (default: 3)
 --gate-max-rejections=<n>            Max gate rejections before force-accept (default: 2, 0 = never)
 --gate-max-iterations=<n>            Max runner iterations before stuck (default: 0 = unlimited)
@@ -195,7 +195,7 @@ Requires an interactive terminal (TTY). In non-TTY contexts, prints an error wit
 
 ### Drain Mode
 
-By default, `ralphai run` drains the backlog — processing plans sequentially, one branch and PR per plan, until the queue is empty. Use `--once` to process a single work unit and exit.
+By default, `ralphai run` processes a single eligible work unit and exits. Use `--drain` to keep processing plans sequentially, one branch and PR per plan, until the queue is empty.
 
 - Each plan gets its own worktree branch and draft PR
 - Stuck plans are skipped and reported in the exit summary

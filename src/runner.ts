@@ -217,8 +217,8 @@ export interface RunnerOptions {
   resume: boolean;
   /** Whether --allow-dirty was passed. */
   allowDirty: boolean;
-  /** Whether --once was passed (process a single plan then exit). */
-  once: boolean;
+  /** Whether --drain was passed (keep processing plans until no work remains). */
+  drain: boolean;
   /** Target a specific backlog plan by filename (e.g. "my-plan.md"). */
   plan?: string;
   /** Filter plans to those matching ANY of these tags (OR semantics). */
@@ -579,7 +579,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     resume,
     plan,
     filterTags,
-    once,
+    drain,
     skipPrCreation,
     verbose: agentVerbose,
   } = opts;
@@ -718,18 +718,13 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     resolvedPreamble = readFileSync(preamblePath, "utf-8");
   }
 
-  // --- Main plan loop (drain-by-default) ---
+  // --- Main plan loop (single plan by default; --drain continues) ---
   let plansCompleted = 0;
   let lastPrSummary: string | undefined;
   const skippedSlugs = new Set<string>();
   const stuckSlugs: string[] = [];
   let activePidFile: string | null = null;
   let activeIpcServer: IpcServer | null = null;
-
-  // When a regular (non-PRD) GitHub issue is pulled, the runner should
-  // process exactly that one issue and then stop. PRD sub-issues are
-  // different — the runner continues draining all sub-issues.
-  let pulledRegularGithubIssue = false;
 
   while (!interrupted) {
     console.log();
@@ -775,10 +770,6 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
         const issueResult = pullGithubIssues(pullOpts);
         if (issueResult.pulled) {
-          // Regular GitHub issue pulled — process it, then stop the drain
-          // loop after completion. (PRD sub-issues use `continue` above
-          // without setting this flag, so they keep draining.)
-          pulledRegularGithubIssue = true;
           continue;
         }
 
@@ -1453,17 +1444,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
         break;
       }
 
-      // --- --once: stop after a single completed (or stuck) plan ---
-      if (once) {
+      // --- Default mode: stop after a single completed (or stuck) plan ---
+      if (!drain) {
         break;
       }
 
-      // --- Stop after a pulled regular GitHub issue (not PRD sub-issues) ---
-      if (pulledRegularGithubIssue) {
-        break;
-      }
-
-      // Loop back to pick the next plan (drain-by-default)
+      // Loop back to pick the next plan when --drain is active.
     } finally {
       // --- hooks.afterRun: runs once per plan on all exit paths ---
       if (afterRunHook) {

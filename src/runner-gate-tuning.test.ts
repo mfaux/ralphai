@@ -111,7 +111,7 @@ describe("runRunner — gate.maxRejections", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const { output, result } = await captureLogs(() => runRunner(opts));
@@ -152,7 +152,7 @@ describe("runRunner — gate.maxRejections", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const { output, result } = await captureLogs(() => runRunner(opts));
@@ -221,7 +221,7 @@ describe("runRunner — gate.maxIterations", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const { output, result } = await captureLogs(() => runRunner(opts));
@@ -258,7 +258,7 @@ describe("runRunner — gate.maxIterations", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const { output, result } = await captureLogs(() => runRunner(opts));

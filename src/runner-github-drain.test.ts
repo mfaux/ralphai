@@ -2,7 +2,7 @@
  * Tests for runner drain behavior with GitHub issue pulls.
  *
  * Uses mock.module to control pullGithubIssues and pullPrdSubIssue so
- * we can test the single-issue-then-stop vs PRD-continues-draining
+ * we can test default single-run vs explicit --drain behavior
  * behavior without requiring a real GitHub repo.
  *
  * Separate file because mock.module() leaks across tests in the same
@@ -161,12 +161,12 @@ describe("runner GitHub drain behavior", () => {
     else process.env.RALPHAI_HOME = savedHome;
   });
 
-  test("stops after completing a single regular GitHub issue pull", async () => {
+  test("stops after completing a single regular GitHub issue pull by default", async () => {
     const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "gh-issue-a");
 
-    // Mock: PRD returns nothing, regular pull has 3 available issues
-    // The runner should only process ONE, then stop.
+    // Mock: PRD returns nothing, regular pull has 3 available issues.
+    // Default mode should only process ONE, then stop.
     mockPullPrdSubIssue.mockImplementation(() => ({
       pulled: false,
       message: "No PRD sub-issues",
@@ -191,7 +191,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false, // NOT using --once, drain should still stop after one GitHub issue
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -211,7 +211,52 @@ describe("runner GitHub drain behavior", () => {
     expect(output).toContain("Completed 1");
   });
 
-  test("continues draining when pulling PRD sub-issues", async () => {
+  test("continues draining across regular GitHub issues with --drain", async () => {
+    const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
+    const worktreeDir = createManagedWorktree(dir, "gh-issue-a");
+
+    mockPullPrdSubIssue.mockImplementation(() => ({
+      pulled: false,
+      message: "No PRD sub-issues",
+    }));
+    mockPullGithubIssues.mockImplementation(
+      makePullGithubMultiple(backlogDir, [
+        "gh-issue-a",
+        "gh-issue-b",
+        "gh-issue-c",
+      ]),
+    );
+
+    const opts: RunnerOptions = {
+      config: makeTestResolvedConfig({
+        agent: { command: completeAgent },
+        issue: { source: "github" },
+        gate: { review: false },
+      }),
+      cwd: worktreeDir,
+      isWorktree: true,
+      mainWorktree: dir,
+      dryRun: false,
+      resume: false,
+      allowDirty: false,
+      drain: true,
+    };
+
+    const output = await captureLogs(() => runRunner(opts));
+
+    expect(existsSync(join(archiveDir, "gh-issue-a", "gh-issue-a.md"))).toBe(
+      true,
+    );
+    expect(existsSync(join(archiveDir, "gh-issue-b", "gh-issue-b.md"))).toBe(
+      true,
+    );
+    expect(existsSync(join(archiveDir, "gh-issue-c", "gh-issue-c.md"))).toBe(
+      true,
+    );
+    expect(output).toContain("Completed 3");
+  });
+
+  test("continues draining when pulling PRD sub-issues with --drain", async () => {
     const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "prd-sub-a");
 
@@ -236,7 +281,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -280,7 +325,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     await captureLogs(() => runRunner(opts));
@@ -315,7 +360,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     await captureLogs(() => runRunner(opts));
@@ -353,7 +398,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await captureLogs(() => runRunner(opts));
@@ -391,7 +436,7 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await captureLogs(() => runRunner(opts));
@@ -448,14 +493,14 @@ describe("runner GitHub drain behavior", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await captureLogs(() => runRunner(opts));
 
-    // PRD should be tried first in the priority chain
+    // PRD should be tried first in the priority chain. Once one sub-issue is
+    // pulled, this runner invocation processes that work unit and returns.
     expect(callOrder[0]).toBe("prd");
-    // After PRD sub-issues are exhausted, standalone is tried
-    expect(callOrder).toContain("standalone");
+    expect(callOrder).not.toContain("standalone");
   });
 });

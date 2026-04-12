@@ -96,6 +96,16 @@ describe("CLI help and flags", () => {
     expect(result.stdout).toContain("--no-color");
   });
 
+  it("run --help shows run usage with --drain", async () => {
+    const result = await runCliInProcess(["run", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("run");
+    expect(result.stdout).toContain("--drain");
+    expect(result.stdout).not.toContain(
+      "--once                           Run a single plan then exit",
+    );
+  });
+
   it("status --once prints once and exits", async () => {
     const env = { RALPHAI_HOME: join(ctx.dir, ".ralphai-home") };
     await runCliInProcess(["init", "--yes"], ctx.dir, env);

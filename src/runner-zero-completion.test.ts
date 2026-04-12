@@ -101,7 +101,7 @@ describe("runRunner — zero-completion guard", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const logs: string[] = [];
@@ -165,7 +165,7 @@ describe("runRunner — zero-completion guard", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const logs: string[] = [];

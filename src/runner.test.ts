@@ -91,7 +91,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     // Should not throw
@@ -109,7 +109,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const logs: string[] = [];
@@ -143,7 +143,7 @@ describe("runRunner — dry-run", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     // dry-run should not create branches or modify state
@@ -195,7 +195,7 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await runRunner(opts);
@@ -227,7 +227,7 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await runRunner(opts);
@@ -263,7 +263,7 @@ describe("runRunner — completion", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     // Stuck plans are now skipped instead of process.exit(1).
@@ -328,7 +328,7 @@ describe("runRunner — RunnerResult", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const origLog = console.log;
@@ -366,7 +366,7 @@ describe("runRunner — RunnerResult", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const result = await runRunner(opts);
@@ -397,7 +397,7 @@ describe("runRunner — RunnerResult", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const result = await runRunner(opts);
@@ -424,7 +424,7 @@ describe("runRunner — RunnerResult", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const result = await runRunner(opts);
@@ -463,7 +463,7 @@ describe("runRunner — no work", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     // Should not throw — just prints "nothing to do" and returns

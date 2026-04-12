@@ -74,7 +74,19 @@ describe("runner config", () => {
       expect(result.exitCode).toBe(0);
       const combined = result.stdout + result.stderr;
       expect(combined).toContain("--dry-run");
-      expect(combined).toContain("--once");
+      expect(combined).toContain("--drain");
+    });
+
+    it("run --once fails with guidance", async () => {
+      const result = await runCliInProcess(
+        ["run", "--once"],
+        ctx.dir,
+        testEnv(),
+      );
+      expect(result.exitCode).not.toBe(0);
+      const combined = result.stdout + result.stderr;
+      expect(combined).toContain("--once was removed");
+      expect(combined).toContain("ralphai run --drain");
     });
 
     it("run 3 is treated as an issue target (requires GitHub)", async () => {

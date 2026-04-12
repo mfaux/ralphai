@@ -200,14 +200,14 @@ The plan stays in `in-progress/<slug>/` so you can inspect and resume it.
 
 ## Drain Mode
 
-By default, `ralphai run` drains the backlog — processing plans sequentially until the queue is empty. Each plan gets its own worktree branch and draft PR.
+By default, `ralphai run` processes a single eligible work unit, then exits. Use `--drain` to keep processing plans sequentially until the queue is empty. Each completed plan gets its own worktree branch and draft PR.
 
 1. **Each completed plan** -> pushes the branch and creates a draft PR
 2. **Stuck plans** -> skipped, logged, and reported in the exit summary
 3. **Backlog empty** -> Ralphai checks for PRD sub-issues, then regular GitHub issues. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are skipped during auto-drain — they require human attention.
 4. **Nothing left** -> exits with a summary: "Completed N, skipped M (stuck)"
 
-Use `--once` to process a single work unit and exit instead of draining.
+Use `--drain` to keep going until no eligible work remains.
 
 ## Label-Driven Dispatch
 

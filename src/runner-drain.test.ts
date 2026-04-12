@@ -1,9 +1,9 @@
 /**
- * Tests for drain-by-default, --once, and exit summary behavior.
+ * Tests for default single-run, --drain, and exit summary behavior.
  *
  * These cover ACs from issue #212:
- *   - Drain: multiple plans processed sequentially until queue empty
- *   - --once: single plan processed then exit
+ *   - Default: single plan processed then exit
+ *   - --drain: multiple plans processed sequentially until queue empty
  *   - Exit summary: "Completed N, skipped M (stuck)" with stuck slugs
  *   - Priority: in-progress plan resumes before backlog plans
  */
@@ -75,10 +75,10 @@ const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\"
 const stuckAgent = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
 
 // ---------------------------------------------------------------------------
-// Drain behavior
+// Default single-run behavior
 // ---------------------------------------------------------------------------
 
-describe("drain-by-default", () => {
+describe("default single-run", () => {
   let dir: string;
   let savedHome: string | undefined;
 
@@ -92,7 +92,7 @@ describe("drain-by-default", () => {
     else process.env.RALPHAI_HOME = savedHome;
   });
 
-  test("processes multiple backlog plans sequentially", async () => {
+  test("processes only one backlog plan by default", async () => {
     const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "plan-a");
 
@@ -117,15 +117,16 @@ describe("drain-by-default", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
 
-    // Both plans should be archived
+    // Only the first plan (alphabetically) should be archived
     expect(existsSync(join(archiveDir, "plan-a", "plan-a.md"))).toBe(true);
-    expect(existsSync(join(archiveDir, "plan-b", "plan-b.md"))).toBe(true);
-    expect(output).toContain("Completed 2");
+    expect(existsSync(join(archiveDir, "plan-b", "plan-b.md"))).toBe(false);
+    expect(existsSync(join(backlogDir, "plan-b.md"))).toBe(true);
+    expect(output).toContain("Completed 1");
   });
 
   test("summary reports completed count for single plan", async () => {
@@ -148,7 +149,7 @@ describe("drain-by-default", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -157,10 +158,10 @@ describe("drain-by-default", () => {
 });
 
 // ---------------------------------------------------------------------------
-// --once flag
+// --drain flag
 // ---------------------------------------------------------------------------
 
-describe("--once flag", () => {
+describe("--drain flag", () => {
   let dir: string;
   let savedHome: string | undefined;
 
@@ -174,7 +175,7 @@ describe("--once flag", () => {
     else process.env.RALPHAI_HOME = savedHome;
   });
 
-  test("processes only one plan then exits", async () => {
+  test("processes multiple plans sequentially", async () => {
     const { backlogDir, archiveDir } = setupGlobalPipeline(dir);
     const worktreeDir = createManagedWorktree(dir, "first");
 
@@ -198,17 +199,16 @@ describe("--once flag", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true, // key difference
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
 
-    // Only the first plan (alphabetically) should be archived
+    // Both plans should be archived in drain mode
     expect(existsSync(join(archiveDir, "first", "first.md"))).toBe(true);
-    // Second plan should still be in backlog
-    expect(existsSync(join(backlogDir, "second.md"))).toBe(true);
-    expect(existsSync(join(archiveDir, "second", "second.md"))).toBe(false);
-    expect(output).toContain("Completed 1");
+    expect(existsSync(join(archiveDir, "second", "second.md"))).toBe(true);
+    expect(existsSync(join(backlogDir, "second.md"))).toBe(false);
+    expect(output).toContain("Completed 2");
   });
 });
 
@@ -250,7 +250,7 @@ describe("exit summary", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -291,7 +291,7 @@ describe("exit summary", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -319,7 +319,7 @@ describe("exit summary", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -381,14 +381,14 @@ describe("priority: in-progress before backlog", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true, // only process one to verify priority
+      drain: false, // only process one to verify priority
     };
 
     const output = await captureLogs(() => runRunner(opts));
 
     // In-progress plan should be archived (it was processed first)
     expect(existsSync(join(archiveDir, "resumed", "resumed.md"))).toBe(true);
-    // Backlog plan should still be in backlog (--once stopped after first)
+    // Backlog plan should still be in backlog (default single-run stopped after first)
     expect(existsSync(join(backlogDir, "zzz-later.md"))).toBe(true);
     expect(output).toContain("in-progress");
   });

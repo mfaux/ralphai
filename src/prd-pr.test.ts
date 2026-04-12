@@ -110,7 +110,7 @@ describe("skipPrCreation flag", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true,
+      drain: true,
       skipPrCreation: true,
     };
 
@@ -143,7 +143,7 @@ describe("skipPrCreation flag", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true,
+      drain: true,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -177,7 +177,7 @@ describe("skipPrCreation flag", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true,
+      drain: true,
       skipPrCreation: true,
     };
 
@@ -235,7 +235,7 @@ describe("runner result learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true,
+      drain: true,
       skipPrCreation: true,
     };
 
@@ -271,7 +271,7 @@ describe("runner result learnings", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: true,
+      drain: true,
       skipPrCreation: true,
     };
 

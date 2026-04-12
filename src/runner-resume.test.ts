@@ -87,7 +87,7 @@ describe("runRunner — resume", () => {
       dryRun: false,
       resume: true,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const logs: string[] = [];

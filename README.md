@@ -91,9 +91,9 @@ ralphai run
 Each run creates or reuses an isolated worktree, works on a `<type>/<slug>` branch (conventional commit style), runs build/test/lint, commits, pushes, and opens a draft PR when `gh` is available.
 
 ```bash
-ralphai run              # drain the backlog: one branch/PR per plan
+ralphai run              # process one eligible work unit
 ralphai run 42           # run GitHub issue #42 (PRD or standalone)
-ralphai run --once       # process a single plan then exit
+ralphai run --drain      # keep processing work until empty
 ralphai run --resume     # commit dirty state and continue
 ralphai run --dry-run    # preview without changing anything
 ```
