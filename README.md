@@ -56,7 +56,7 @@ Use the included skills to turn ideas into GitHub issues your agent can execute:
 - **Features** — ask your agent to `write-a-prd`, then `prd-to-issues` to decompose it into labeled sub-issues. Ralphai processes them sequentially on one branch and opens a single aggregate PR.
 - **Bugs & small tasks** — ask your agent to `triage-issue` to investigate and create a standalone issue. Each gets its own branch and PR.
 
-Both skills label the issues automatically (`ralphai-prd` / `ralphai-standalone`). You can also label issues by hand. Labels are [configurable](docs/cli-reference.md#config-keys).
+Both skills label the issues automatically (`ralphai-prd` / `ralphai-standalone`). You can also label issues by hand. Labels are [configurable](docs/cli-reference.md#labels).
 
 ### 2. Run
 

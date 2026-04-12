@@ -429,6 +429,51 @@ ralphai repos --clean
 
 A repo entry is stale when its stored `repoPath` no longer exists on disk and its pipeline is empty.
 
+## Labels
+
+Ralphai uses GitHub labels to identify which issues to process and to track their lifecycle. All labels are configurable via `config.json`, environment variables, or CLI flags.
+
+### Family Labels
+
+Family labels tell Ralphai what kind of issue it's looking at:
+
+| Config Key              | Default                   | Env Var                          | Description                        |
+| ----------------------- | ------------------------- | -------------------------------- | ---------------------------------- |
+| `issue.prdLabel`        | `"ralphai-prd"`           | `RALPHAI_ISSUE_PRD_LABEL`        | PRD parent issues.                 |
+| `issue.standaloneLabel` | `"ralphai-standalone"`    | `RALPHAI_ISSUE_STANDALONE_LABEL` | Standalone issues.                 |
+| `issue.subissueLabel`   | `"ralphai-subissue"`      | `RALPHAI_ISSUE_SUBISSUE_LABEL`   | PRD sub-issues.                    |
+| `issue.hitlLabel`       | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`       | Sub-issues requiring human input.  |
+
+### State Labels
+
+State labels track progress. Ralphai adds and removes these automatically:
+
+| Config Key              | Default           | Env Var                           | Description                              |
+| ----------------------- | ----------------- | --------------------------------- | ---------------------------------------- |
+| `issue.inProgressLabel` | `"in-progress"`   | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | Added when an issue is being worked on.  |
+| `issue.doneLabel`       | `"done"`          | `RALPHAI_ISSUE_DONE_LABEL`        | Added when work completes successfully.  |
+| `issue.stuckLabel`      | `"stuck"`         | `RALPHAI_ISSUE_STUCK_LABEL`       | Added when the agent gets stuck.         |
+
+### Customizing Labels
+
+```json
+{
+  "issue": {
+    "prdLabel": "my-prd",
+    "standaloneLabel": "my-standalone",
+    "inProgressLabel": "wip",
+    "doneLabel": "completed"
+  }
+}
+```
+
+Or via environment variables:
+
+```bash
+export RALPHAI_ISSUE_PRD_LABEL=my-prd
+export RALPHAI_ISSUE_STANDALONE_LABEL=my-standalone
+```
+
 ## Configuration
 
 Settings resolve in this order: **CLI flags > env vars > `config.json` > defaults**. See [Hooks, Gates, and Prompt Controls](hooks.md) for the full config reference with examples.
