@@ -638,6 +638,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   const verbose = cfg.prompt.verbose;
   const promptPreamble = cfg.prompt.preamble;
   const promptLearnings = cfg.prompt.learnings;
+  const promptContext = cfg.prompt.context;
   const promptCommitStyle = cfg.prompt.commitStyle;
   const prDraft = cfg.pr.draft;
   const gitBranchPrefix = cfg.git.branchPrefix;
@@ -1000,6 +1001,10 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     let reviewDone = false;
     let reviewPassMadeChanges = false;
 
+    // Accumulated context across iterations within this plan (in-memory only).
+    // Context is per-plan and is NOT returned in RunnerResult.
+    const accumulatedContext: string[] = [];
+
     /** Mark the current plan as stuck: cleanup resources, update labels. */
     function markStuck(reason: string): void {
       console.log();
@@ -1129,6 +1134,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             enableLearnings: promptLearnings,
             commitStyle: promptCommitStyle,
             feedbackHint: feedbackHintCmd,
+            context: accumulatedContext,
+            enableContext: promptContext,
           });
 
           // --- Spawn agent (with output log persistence) ---
@@ -1185,6 +1192,28 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 );
               } else {
                 console.log("No learning logged this iteration.");
+              }
+            }
+          }
+
+          // --- Process context block (before completion check) ---
+          // Same extraction pattern as learnings but scoped to the plan.
+          // Skipped entirely when prompt.context is false.
+          if (promptContext) {
+            const contextBlock = extractNoncedBlock(output, "context", nonce);
+            if (contextBlock === null) {
+              console.log("WARNING: No <context> block found in agent output.");
+            } else {
+              const contextContent = parseLearningContent(contextBlock);
+              if (contextContent !== null) {
+                if (!accumulatedContext.includes(contextContent)) {
+                  accumulatedContext.push(contextContent);
+                }
+                console.log(
+                  `Logged context: ${contextContent.slice(0, 80)}${contextContent.length > 80 ? "…" : ""}`,
+                );
+              } else {
+                console.log("No context logged this iteration.");
               }
             }
           }
@@ -1406,6 +1435,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                 prd: issueFm.prd,
                 summary: prSummary,
                 learnings: promptLearnings ? accumulatedLearnings : [],
+                context: promptContext ? accumulatedContext : [],
                 reviewPassMadeChanges,
                 commitStyle: promptCommitStyle,
                 draft: prDraft,
