@@ -92,7 +92,7 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
 /**
  * Helper: create a mock pullGithubIssues that writes a NEW plan file to the

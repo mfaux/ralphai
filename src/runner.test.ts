@@ -182,7 +182,7 @@ describe("runRunner — completion", () => {
     );
 
     // Agent command that outputs progress, COMPLETE marker, and learnings
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -214,7 +214,7 @@ describe("runRunner — completion", () => {
       "# Plan: Log Test\n\n## Implementation Tasks\n\n### Task 1: Verify logging\n",
     );
 
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "agent-says-hello"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "agent-says-hello"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -250,7 +250,7 @@ describe("runRunner — completion", () => {
     );
 
     // Agent that does nothing (no commits, no COMPLETE)
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -315,7 +315,7 @@ describe("runRunner — RunnerResult", () => {
     );
 
     // Agent that does nothing (no commits, no COMPLETE)
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -353,7 +353,7 @@ describe("runRunner — RunnerResult", () => {
       "# Plan: Success\n\n### Task 1: Test\n",
     );
 
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({

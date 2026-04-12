@@ -71,8 +71,8 @@ async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
   return logs.join("\n");
 }
 
-const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Done"; echo "**Status:** Complete"; echo "Finished."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
-const stuckAgent = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+const completeAgent = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Done"; echo "**Status:** Complete"; echo "Finished."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
+const stuckAgent = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
 // ---------------------------------------------------------------------------
 // Default single-run behavior
@@ -278,7 +278,7 @@ describe("exit summary", () => {
     const counterFile = join(dir, ".agent-counter");
     writeFileSync(counterFile, "0");
     // Agent that completes on first call, then does nothing on subsequent calls
-    const mixedAgent = `bash -c 'N=$RALPHAI_NONCE; count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; else echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"; fi'`;
+    const mixedAgent = `bash -c 'N=$RALPHAI_NONCE; count=$(cat "${counterFile}"); if [ "$count" = "0" ]; then echo 1 > "${counterFile}"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Do"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"; else echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"; fi'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({

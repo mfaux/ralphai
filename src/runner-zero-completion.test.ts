@@ -88,7 +88,7 @@ describe("runRunner — zero-completion guard", () => {
     // Agent that makes a commit each iteration (avoiding stuck detection)
     // but outputs COMPLETE without updating progress (zero tasks completed).
     // It needs to run 3 times: 1 initial + 2 rejections = exhausts budget.
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "iteration-marker-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration" --allow-empty-message; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "iteration-marker-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration" --allow-empty-message; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -152,7 +152,7 @@ describe("runRunner — zero-completion guard", () => {
     // Agent that makes a commit, reports 1/3 tasks done in progress,
     // and claims COMPLETE. The gate will reject because only 1/3 done,
     // but after exhausting the budget it should force-accept (partial progress).
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({

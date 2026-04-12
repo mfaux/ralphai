@@ -292,8 +292,8 @@ describe("parseLearningContent", () => {
   });
 
   // <entry> tag stripping behavior
-  it("returns null for a single <entry>status: none</entry>", () => {
-    expect(parseLearningContent("<entry>status: none</entry>")).toBeNull();
+  it("returns null for a single none", () => {
+    expect(parseLearningContent("none")).toBeNull();
   });
 
   it('returns null for <entry> with whitespace around "status: none"', () => {
@@ -301,19 +301,13 @@ describe("parseLearningContent", () => {
   });
 
   it("returns null when all entries are status: none", () => {
-    expect(
-      parseLearningContent(
-        "<entry>status: none</entry><entry>status: none</entry>",
-      ),
-    ).toBeNull();
+    expect(parseLearningContent("none")).toBeNull();
   });
 
   it("extracts real content and ignores status: none entries", () => {
-    expect(
-      parseLearningContent(
-        "<entry>Real lesson here.</entry><entry>status: none</entry>",
-      ),
-    ).toBe("Real lesson here.");
+    expect(parseLearningContent("<entry>Real lesson here.</entry>none")).toBe(
+      "Real lesson here.",
+    );
   });
 
   it("returns content from a single <entry> with real content", () => {
