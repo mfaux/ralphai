@@ -4,24 +4,6 @@ Common patterns for working with Ralphai. Each recipe shows the command and what
 
 Back to the [README](../README.md) for setup and quickstart. See the [CLI Reference](cli-reference.md) for all flags.
 
-## Browse plans with the interactive menu
-
-```bash
-ralphai
-```
-
-Running `ralphai` with no arguments in a terminal opens the interactive menu. The menu is organized into groups — **START**, **MANAGE**, and **TOOLS** — with hotkeys for quick action. Use arrow keys to navigate, **Enter** to select, and **Esc** to go back from sub-screens. On wide terminals (≥120 columns), a contextual detail pane shows information about the highlighted item. Press **q** to quit.
-
-This is the primary workflow for humans. Use it to browse the backlog, inspect pipeline state, and launch runs without switching commands.
-
-## Drain the backlog
-
-```bash
-ralphai run
-```
-
-Processes one eligible work unit, creating or reusing the matching branch and PR. Use `--drain` to keep processing dependency-ready plans sequentially until the queue is empty. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. HITL-labeled sub-issues are skipped during auto-drain.
-
 ## Work from a PRD (recommended for features)
 
 For multi-step features, create a PRD (Product Requirements Document) on GitHub:
@@ -73,6 +55,43 @@ On clean exit (code 0), the HITL label is removed and `done` is added. On abnorm
 
 ```bash
 ralphai hitl 55 --dry-run    # preview without spawning agent or touching labels
+```
+
+## Drain the backlog
+
+```bash
+ralphai run --drain
+```
+
+Processes dependency-ready plans sequentially until the queue is empty. When the local backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. HITL-labeled sub-issues are skipped during auto-drain.
+
+## Browse plans with the interactive menu
+
+```bash
+ralphai
+```
+
+Running `ralphai` with no arguments in a terminal opens the interactive menu. The menu is organized into groups — **START**, **MANAGE**, and **TOOLS** — with hotkeys for quick action. Use arrow keys to navigate, **Enter** to select, and **Esc** to go back from sub-screens. On wide terminals (≥120 columns), a contextual detail pane shows information about the highlighted item. Press **q** to quit.
+
+This is the primary workflow for humans. Use it to browse the backlog, inspect pipeline state, and launch runs without switching commands.
+
+## Local plan files
+
+You can drive Ralphai with local markdown files instead of GitHub issues. Place `.md` files in the backlog directory and Ralphai processes them the same way — branch isolation, feedback loops, draft PRs.
+
+Plans flow through the pipeline:
+
+```
+parked/    backlog/  →  in-progress/  →  out/
+```
+
+Park unready plans in `parked/`. Ralphai ignores that folder. Plans are flat `.md` files in `backlog/` (for example `backlog/my-plan.md`). The runner creates a slug folder automatically when moving a plan to `in-progress/`.
+
+Ask your coding agent to create plan files using the `ralphai-planning` skill, or write them by hand. Configuration and pipeline state are stored in `~/.ralphai/` (global state, not in your repo).
+
+```bash
+ralphai run                      # process the next queued plan
+ralphai run --plan=dark-mode.md  # target a specific plan
 ```
 
 ## Parallel runs
@@ -206,14 +225,6 @@ ralphai run
 ```
 
 Drains the entire backlog on one worktree per plan and opens/updates a draft PR for each. Stuck detection (`--gate-max-stuck`, default 3 consecutive iterations with no commits) skips runaway plans and continues to the next.
-
-## Work on a specific plan
-
-```bash
-ralphai run --plan=dark-mode.md
-```
-
-Targets a specific backlog plan instead of letting Ralphai pick. Creates an isolated worktree with a `feat/dark-mode` branch (type derived from the plan title).
 
 ## Manage multiple repos
 
