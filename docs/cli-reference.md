@@ -170,6 +170,8 @@ What it does:
 --prompt-preamble=<text>             Override default preamble (use @path to read from file)
 --prompt-learnings                   Enable learnings extraction (default: on)
 --no-prompt-learnings                Disable learnings extraction, prompt mandate, and PR section
+--prompt-context                     Enable context extraction (default: on)
+--no-prompt-context                  Disable context extraction
 --prompt-commit-style=<style>        Commit style: 'conventional' (default) or 'none'
 --pr-draft                           Create draft PRs (default: on)
 --no-pr-draft                        Create ready-for-review PRs instead of drafts
@@ -448,6 +450,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_PROMPT_VERBOSE`            | `prompt.verbose`           |
 | `RALPHAI_PROMPT_PREAMBLE`           | `prompt.preamble`          |
 | `RALPHAI_PROMPT_LEARNINGS`          | `prompt.learnings`         |
+| `RALPHAI_PROMPT_CONTEXT`            | `prompt.context`           |
 | `RALPHAI_PROMPT_COMMIT_STYLE`       | `prompt.commitStyle`       |
 | `RALPHAI_GATE_MAX_STUCK`            | `gate.maxStuck`            |
 | `RALPHAI_GATE_ITERATION_TIMEOUT`    | `gate.iterationTimeout`    |

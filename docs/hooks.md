@@ -71,6 +71,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `prompt.verbose`     | `false`          | `RALPHAI_PROMPT_VERBOSE`      | `--prompt-verbose`                             | When `false` (default), the prompt instructs the agent to use terse style (drop filler words, articles, pleasantries). `true` disables this instruction.          |
 | `prompt.preamble`    | _(built-in)_     | `RALPHAI_PROMPT_PREAMBLE`     | `--prompt-preamble=<text>`                     | Custom preamble text injected at the top of every prompt. Replaces the built-in default entirely. Use `@path` to read from a file (e.g. `@.ralphai-preamble.md`). |
 | `prompt.learnings`   | `true`           | `RALPHAI_PROMPT_LEARNINGS`    | `--prompt-learnings` / `--no-prompt-learnings` | Enable learnings extraction and injection. When `false`, the learnings mandate is omitted from the prompt and no `<learnings>` block is parsed.                   |
+| `prompt.context`     | `true`           | `RALPHAI_PROMPT_CONTEXT`      | `--prompt-context` / `--no-prompt-context`     | Enable context extraction and injection. When `false`, context gathering is disabled.                                                                             |
 | `prompt.commitStyle` | `"conventional"` | `RALPHAI_PROMPT_COMMIT_STYLE` | `--prompt-commit-style=<style>`                | Commit message style instruction. `"conventional"` instructs the agent to use conventional commit format; `"none"` omits commit style guidance.                   |
 
 ### `agent.*` — Agent Commands

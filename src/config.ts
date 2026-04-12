@@ -51,6 +51,7 @@ export interface PromptConfig {
   verbose: boolean;
   preamble: string;
   learnings: boolean;
+  context: boolean;
   commitStyle: string;
 }
 
@@ -182,6 +183,7 @@ export function configValues(rc: ResolvedConfig): ConfigValues {
       verbose: rc.prompt.verbose.value,
       preamble: rc.prompt.preamble.value,
       learnings: rc.prompt.learnings.value,
+      context: rc.prompt.context.value,
       commitStyle: rc.prompt.commitStyle.value,
     },
     pr: {
@@ -296,6 +298,7 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
     verbose: false,
     preamble: "",
     learnings: true,
+    context: true,
     commitStyle: "conventional",
   },
   pr: {
@@ -696,6 +699,12 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
         err(`'prompt.learnings' must be true or false, got '${v}'`);
       promptValues.learnings = v;
     }
+    if ("context" in prObj) {
+      const v = prObj.context;
+      if (typeof v !== "boolean")
+        err(`'prompt.context' must be true or false, got '${v}'`);
+      promptValues.context = v;
+    }
     if ("commitStyle" in prObj) {
       const v = prObj.commitStyle;
       if (typeof v !== "string")
@@ -1063,12 +1072,14 @@ export function applyEnvOverrides(
   const promptVerbose = get("RALPHAI_PROMPT_VERBOSE");
   const promptPreamble = get("RALPHAI_PROMPT_PREAMBLE");
   const promptLearnings = get("RALPHAI_PROMPT_LEARNINGS");
+  const promptContext = get("RALPHAI_PROMPT_CONTEXT");
   const promptCommitStyle = get("RALPHAI_PROMPT_COMMIT_STYLE");
 
   if (
     promptVerbose !== undefined ||
     promptPreamble !== undefined ||
     promptLearnings !== undefined ||
+    promptContext !== undefined ||
     promptCommitStyle !== undefined
   ) {
     const promptOverrides: Partial<PromptConfig> = {};
@@ -1080,6 +1091,10 @@ export function applyEnvOverrides(
     if (promptLearnings !== undefined) {
       validateBoolean(promptLearnings, "RALPHAI_PROMPT_LEARNINGS");
       promptOverrides.learnings = promptLearnings === "true";
+    }
+    if (promptContext !== undefined) {
+      validateBoolean(promptContext, "RALPHAI_PROMPT_CONTEXT");
+      promptOverrides.context = promptContext === "true";
     }
     if (promptCommitStyle !== undefined)
       promptOverrides.commitStyle = promptCommitStyle;
@@ -1336,6 +1351,12 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-prompt-learnings") {
       ensurePrompt().learnings = false;
       rawFlags["prompt.learnings"] = "--no-prompt-learnings";
+    } else if (arg === "--prompt-context") {
+      ensurePrompt().context = true;
+      rawFlags["prompt.context"] = "--prompt-context";
+    } else if (arg === "--no-prompt-context") {
+      ensurePrompt().context = false;
+      rawFlags["prompt.context"] = "--no-prompt-context";
     } else if (arg.startsWith("--prompt-commit-style=")) {
       const v = arg.slice("--prompt-commit-style=".length);
       ensurePrompt().commitStyle = v;

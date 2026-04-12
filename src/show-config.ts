@@ -60,6 +60,7 @@ const CONFIG_PATH_TO_ENV: Readonly<Record<string, string>> = {
   "prompt.verbose": "RALPHAI_PROMPT_VERBOSE",
   "prompt.preamble": "RALPHAI_PROMPT_PREAMBLE",
   "prompt.learnings": "RALPHAI_PROMPT_LEARNINGS",
+  "prompt.context": "RALPHAI_PROMPT_CONTEXT",
   "prompt.commitStyle": "RALPHAI_PROMPT_COMMIT_STYLE",
   "pr.draft": "RALPHAI_PR_DRAFT",
   "git.branchPrefix": "RALPHAI_GIT_BRANCH_PREFIX",
@@ -290,6 +291,16 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   );
   lines.push(
     `  prompt.verbose     = ${config.prompt.verbose.value}  (${verboseSrc})`,
+  );
+
+  // prompt.context
+  const contextSrc = sourceLabel(
+    "prompt.context",
+    config.prompt.context.source,
+    input,
+  );
+  lines.push(
+    `  prompt.context     = ${config.prompt.context.value}  (${contextSrc})`,
   );
 
   const maxStuckSrc = sourceLabel(
