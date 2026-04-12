@@ -95,6 +95,31 @@ describe("LocalExecutor", () => {
     // HOME should be inherited from the environment
     expect(result.output.trim().length).toBeGreaterThan(0);
   });
+
+  it("always passes HUSKY=0 to suppress git hooks", async () => {
+    const executor = new LocalExecutor();
+    const result = await executor.spawn({
+      agentCommand: "bash -c",
+      prompt: "echo $HUSKY",
+      iterationTimeout: 0,
+      cwd: process.cwd(),
+    });
+
+    expect(result.output.trim()).toBe("0");
+  });
+
+  it("passes HUSKY=0 alongside RALPHAI_NONCE when nonce is set", async () => {
+    const executor = new LocalExecutor();
+    const result = await executor.spawn({
+      agentCommand: "bash -c",
+      prompt: 'echo "$HUSKY:$RALPHAI_NONCE"',
+      iterationTimeout: 0,
+      cwd: process.cwd(),
+      nonce: "test-nonce-456",
+    });
+
+    expect(result.output.trim()).toBe("0:test-nonce-456");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -2122,6 +2122,7 @@ async function runIssueTarget(
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
   const shouldResume = activeWorktree !== undefined;
   const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
+  const hasAllowDirtyFlag = runArgs.includes("--allow-dirty");
   const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
   const worktreeRunOptions: RalphaiOptions = {
     ...options,
@@ -2129,6 +2130,7 @@ async function runIssueTarget(
     runTarget: undefined, // already handled
     runArgs: [
       ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+      ...(!hasAllowDirtyFlag ? ["--allow-dirty"] : []),
       ...runnerRunArgs,
     ],
   };
@@ -2367,6 +2369,7 @@ async function runPrdIssueTarget(
     const shouldResume = activeWorktree !== undefined || !isFirstSubIssue;
     const hasResumeFlag =
       runArgs.includes("--resume") || runArgs.includes("-r");
+    const hasAllowDirtyFlag = runArgs.includes("--allow-dirty");
     // Strip --drain so the outer PRD loop, not the inner runner loop,
     // controls sub-issue sequencing.
     const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
@@ -2376,6 +2379,7 @@ async function runPrdIssueTarget(
       runTarget: undefined,
       runArgs: [
         ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...(!hasAllowDirtyFlag ? ["--allow-dirty"] : []),
         ...runnerRunArgs,
       ],
     };
@@ -2837,11 +2841,13 @@ async function runRalphaiInManagedWorktree(
       const shouldResume = activeWorktree !== undefined;
       const hasResumeFlag =
         runArgs.includes("--resume") || runArgs.includes("-r");
+      const hasAllowDirtyFlag = runArgs.includes("--allow-dirty");
       const worktreeRunOptions: RalphaiOptions = {
         ...options,
         subcommand: "run",
         runArgs: [
           ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+          ...(!hasAllowDirtyFlag ? ["--allow-dirty"] : []),
           ...runArgs,
         ],
       };
@@ -3018,12 +3024,14 @@ async function runRalphaiInManagedWorktree(
       plan.source === "in-progress" || activeWorktree !== undefined;
     const hasResumeFlag =
       runArgs.includes("--resume") || runArgs.includes("-r");
+    const hasAllowDirtyFlag = runArgs.includes("--allow-dirty");
     const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
     const worktreeRunOptions: RalphaiOptions = {
       ...options,
       subcommand: "run",
       runArgs: [
         ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
+        ...(!hasAllowDirtyFlag ? ["--allow-dirty"] : []),
         ...runnerRunArgs,
       ],
     };

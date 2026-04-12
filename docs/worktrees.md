@@ -34,6 +34,10 @@ Run `ralphai run` from anywhere — if you're inside a worktree, Ralphai automat
    dependencies are available before the agent starts.
 3. Ralphai runs the agent inside that worktree and keeps the main checkout clean.
 
+Worktree runs automatically skip the dirty-state check (`--allow-dirty` is
+injected), since the setup command may leave the worktree in a dirty state
+(e.g. modified lockfiles or generated artifacts).
+
 Plan selection checks runner liveness (via PID files) before resuming
 in-progress plans, so multiple `ralphai run` processes on the same repo
 will not conflict — each process only picks up plans that have no active
@@ -105,6 +109,10 @@ Set to `""` (empty string) to disable.
   mounts as agent execution.
 - When `sandbox` is `"none"` (default), the setup command runs on the host
   via `execSync`.
+- Ralphai sets `HUSKY=0` in the environment during setup command execution and
+  agent execution. This suppresses husky's git hook installation (which would
+  otherwise produce noisy output during `prepare` scripts) and prevents
+  pre-commit hooks from interfering with agent commits.
 - On failure, Ralphai exits with code 1 and prints the failing command.
 - In `--dry-run` mode, the setup command is not executed.
 

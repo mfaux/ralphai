@@ -287,10 +287,7 @@ describe("executeSetupCommand — Docker command construction", () => {
     // resolveMainGitDir calls execQuiet which returns "" (not a worktree),
     // so no main git dir mount is added.
     expect(dockerCall!.command).toContain("/work/my-project:/work/my-project");
-    // Count -v mounts: should only have the worktree mount (no git dir mount)
-    const vMatches = dockerCall!.command.match(/-v /g);
-    // There's always at least one -v for the worktree bind mount; there may
-    // be credential mounts too. The key assertion is no .git mount.
+    // The key assertion is no .git mount (credential mounts may exist).
     expect(dockerCall!.command).not.toContain("/.git:");
   });
 });
@@ -319,5 +316,88 @@ describe("executeSetupCommand — error handling", () => {
       "process.exit(1)",
     );
     expect(exitCode).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HUSKY suppression
+// ---------------------------------------------------------------------------
+
+describe("executeSetupCommand — HUSKY suppression", () => {
+  it("sets HUSKY=0 in process.env during host setup execution", () => {
+    let capturedHusky: string | undefined;
+    restore = setExecImpl(((
+      command: string,
+      options: Record<string, unknown>,
+    ) => {
+      execCalls.push({ command, options });
+      capturedHusky = process.env.HUSKY;
+      return "";
+    }) as any);
+
+    executeSetupCommand("bun install", "/work/my-project");
+
+    expect(capturedHusky).toBe("0");
+  });
+
+  it("restores original HUSKY value after successful host setup", () => {
+    const originalHusky = process.env.HUSKY;
+    process.env.HUSKY = "original-value";
+    restore = mockExecSuccess();
+
+    executeSetupCommand("bun install", "/work/my-project");
+
+    expect(process.env.HUSKY).toBe("original-value");
+    // Clean up
+    if (originalHusky === undefined) {
+      delete process.env.HUSKY;
+    } else {
+      process.env.HUSKY = originalHusky;
+    }
+  });
+
+  it("restores original HUSKY value after failed host setup", () => {
+    const originalHusky = process.env.HUSKY;
+    process.env.HUSKY = "original-value";
+    restore = mockExecFail();
+
+    expect(() => executeSetupCommand("bun install", "/work")).toThrow(
+      "process.exit(1)",
+    );
+
+    expect(process.env.HUSKY).toBe("original-value");
+    // Clean up
+    if (originalHusky === undefined) {
+      delete process.env.HUSKY;
+    } else {
+      process.env.HUSKY = originalHusky;
+    }
+  });
+
+  it("deletes HUSKY from process.env after host setup when it was not previously set", () => {
+    const originalHusky = process.env.HUSKY;
+    delete process.env.HUSKY;
+    restore = mockExecSuccess();
+
+    executeSetupCommand("bun install", "/work/my-project");
+
+    expect(process.env.HUSKY).toBeUndefined();
+    // Clean up
+    if (originalHusky !== undefined) {
+      process.env.HUSKY = originalHusky;
+    }
+  });
+
+  it("includes HUSKY=0 in Docker setup command args", () => {
+    restore = mockExecSuccess();
+    const config: SetupSandboxConfig = {
+      sandbox: "docker",
+      agentCommand: "claude -p",
+    };
+    executeSetupCommand("bun install", "/work/my-project", config);
+
+    const dockerCall = execCalls.find((c) => c.command.startsWith("docker"));
+    expect(dockerCall).toBeDefined();
+    expect(dockerCall!.command).toContain("HUSKY=0");
   });
 });

@@ -138,7 +138,18 @@ export function executeSetupCommand(
   }
 
   console.log(`Running setup command: ${setupCommand}`);
-  const result = execInherit(setupCommand, worktreeDir);
+  const prevHusky = process.env.HUSKY;
+  process.env.HUSKY = "0";
+  let result: { exitCode: number };
+  try {
+    result = execInherit(setupCommand, worktreeDir);
+  } finally {
+    if (prevHusky === undefined) {
+      delete process.env.HUSKY;
+    } else {
+      process.env.HUSKY = prevHusky;
+    }
+  }
   if (result.exitCode !== 0) {
     console.error(
       `${TEXT}Error:${RESET} Setup command failed: ${setupCommand}`,

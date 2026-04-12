@@ -13,8 +13,7 @@
  * File mounts and env vars are silently skipped when absent on the host.
  */
 
-import { spawn, type ChildProcess } from "child_process";
-import { createWriteStream, existsSync } from "fs";
+import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -28,6 +27,7 @@ import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
 import { resolveMainGitDir } from "../worktree/index.ts";
 import { resolveAgentVerboseFlags } from "./agent-flags.ts";
+import { spawnChild } from "./spawn-child.ts";
 
 // ---------------------------------------------------------------------------
 // Container user and home directory
@@ -395,6 +395,9 @@ function buildCommonDockerArgs(opts: {
   // Set container HOME so tools and configs work for non-root user
   args.push("-e", `HOME=${CONTAINER_HOME}`);
 
+  // Suppress husky git hooks inside Docker containers
+  args.push("-e", "HUSKY=0");
+
   // Worktree bind mount (read-write)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);
@@ -436,28 +439,9 @@ function buildCommonDockerArgs(opts: {
  * - Does NOT mount ~/.ralphai/
  */
 export function buildDockerArgs(opts: DockerCommandOptions): string[] {
-  const {
-    agentCommand,
-    prompt,
-    cwd,
-    dockerImage,
-    dockerEnvVars = [],
-    dockerMounts = [],
-    nonce,
-    mainGitDir,
-    feedbackWrapperPath,
-    extraAgentFlags = [],
-  } = opts;
+  const { agentCommand, prompt, nonce, extraAgentFlags = [] } = opts;
 
-  const args = buildCommonDockerArgs({
-    agentCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars,
-    dockerMounts,
-    mainGitDir,
-    feedbackWrapperPath,
-  });
+  const args = buildCommonDockerArgs(opts);
 
   // Nonce env var (set explicitly with value, not from host env).
   // Inserted before the image (second-to-last position in the common args)
@@ -513,27 +497,10 @@ export interface SetupDockerCommandOptions {
 export function buildSetupDockerArgs(
   opts: SetupDockerCommandOptions,
 ): string[] {
-  const {
-    agentCommand,
-    setupCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars = [],
-    dockerMounts = [],
-    mainGitDir,
-  } = opts;
-
-  const args = buildCommonDockerArgs({
-    agentCommand,
-    cwd,
-    dockerImage,
-    dockerEnvVars,
-    dockerMounts,
-    mainGitDir,
-  });
+  const args = buildCommonDockerArgs(opts);
 
   // Setup command via sh -c
-  args.push("sh", "-c", setupCommand);
+  args.push("sh", "-c", opts.setupCommand);
 
   return args;
 }
@@ -631,120 +598,15 @@ export class DockerExecutor implements AgentExecutor {
   }
 
   async spawn(opts: ExecutorSpawnOptions): Promise<ExecutorSpawnResult> {
-    const {
-      agentCommand,
-      prompt,
-      iterationTimeout,
-      cwd,
-      outputLogPath,
-      ipcBroadcast,
-      nonce,
-      feedbackWrapperPath,
-      verbose,
-      agentVerboseFlags,
-    } = opts;
+    const dockerArgs = this.buildSpawnDockerArgs(opts);
 
-    const dockerArgs = this.buildSpawnDockerArgs({
-      agentCommand,
-      prompt,
-      cwd,
-      nonce,
-      feedbackWrapperPath,
-      verbose,
-      agentVerboseFlags,
-    });
-
-    return new Promise((resolve) => {
-      // Open a write stream for the agent output log (append mode).
-      let logStream: ReturnType<typeof createWriteStream> | undefined;
-      if (outputLogPath) {
-        try {
-          logStream = createWriteStream(outputLogPath, { flags: "a" });
-        } catch {
-          // Best-effort: if we can't open the log, continue without it
-        }
-      }
-
-      let ac: AbortController | undefined;
-      let timedOut = false;
-      const spawnOpts: {
-        cwd?: string;
-        stdio: ["pipe", "pipe", "pipe"];
-        signal?: AbortSignal;
-      } = {
-        stdio: ["pipe", "pipe", "pipe"],
-      };
-
-      if (iterationTimeout > 0) {
-        ac = new AbortController();
-        spawnOpts.signal = ac.signal;
-        setTimeout(() => {
-          timedOut = true;
-          ac!.abort();
-        }, iterationTimeout * 1000);
-      }
-
-      let child: ChildProcess;
-      try {
-        child = spawn("docker", dockerArgs, spawnOpts);
-      } catch (err) {
-        console.error(
-          `Failed to spawn Docker container: ${err instanceof Error ? err.message : err}`,
-        );
-        logStream?.end();
-        resolve({ output: "", exitCode: 1, timedOut: false });
-        return;
-      }
-
-      // Close stdin so the agent knows no input is coming.
-      child.stdin?.end();
-
-      const chunks: Buffer[] = [];
-
-      child.stdout?.on("data", (data: Buffer) => {
-        process.stdout.write(data);
-        logStream?.write(data);
-        chunks.push(data);
-        ipcBroadcast?.({
-          type: "output",
-          data: data.toString(),
-          stream: "stdout",
-        });
-      });
-
-      child.stderr?.on("data", (data: Buffer) => {
-        process.stderr.write(data);
-        logStream?.write(data);
-        chunks.push(data);
-        ipcBroadcast?.({
-          type: "output",
-          data: data.toString(),
-          stream: "stderr",
-        });
-      });
-
-      child.on("close", (code) => {
-        const output = Buffer.concat(chunks).toString("utf-8");
-        if (logStream) {
-          logStream.end(() => {
-            resolve({ output, exitCode: code ?? 1, timedOut });
-          });
-        } else {
-          resolve({ output, exitCode: code ?? 1, timedOut });
-        }
-      });
-
-      child.on("error", (err) => {
-        logStream?.end();
-        if (timedOut) {
-          const output = Buffer.concat(chunks).toString("utf-8");
-          resolve({ output, exitCode: 124, timedOut: true });
-        } else {
-          console.error(`Docker container error: ${err.message}`);
-          const output = Buffer.concat(chunks).toString("utf-8");
-          resolve({ output, exitCode: 1, timedOut: false });
-        }
-      });
+    return spawnChild({
+      command: "docker",
+      args: dockerArgs,
+      iterationTimeout: opts.iterationTimeout,
+      outputLogPath: opts.outputLogPath,
+      ipcBroadcast: opts.ipcBroadcast,
+      errorLabel: "Docker container",
     });
   }
 }
