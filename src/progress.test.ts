@@ -290,4 +290,43 @@ describe("parseLearningContent", () => {
       "Always use path.join() for cross-platform paths.\nNever hardcode / separators.";
     expect(parseLearningContent(block)).toBe(block);
   });
+
+  // <entry> tag stripping behavior
+  it('returns null for <entry> with whitespace around "status: none"', () => {
+    expect(parseLearningContent("<entry>  status: none  </entry>")).toBeNull();
+  });
+
+  it("returns null when all entries are status: none", () => {
+    expect(
+      parseLearningContent(
+        "<entry>status: none</entry><entry>status: none</entry>",
+      ),
+    ).toBeNull();
+  });
+
+  it("extracts real content and ignores status: none entries", () => {
+    expect(parseLearningContent("<entry>Real lesson here.</entry>none")).toBe(
+      "Real lesson here.",
+    );
+  });
+
+  it("returns content from a single <entry> with real content", () => {
+    expect(
+      parseLearningContent(
+        "<entry>The mock.module pattern requires all exports.</entry>",
+      ),
+    ).toBe("The mock.module pattern requires all exports.");
+  });
+
+  it("returns null for STATUS: NONE (case-insensitive) inside <entry>", () => {
+    expect(parseLearningContent("<entry>STATUS: NONE</entry>")).toBeNull();
+  });
+
+  it("joins multiple real entries with newline", () => {
+    expect(
+      parseLearningContent(
+        "<entry>First lesson.</entry><entry>Second lesson.</entry>",
+      ),
+    ).toBe("First lesson.\nSecond lesson.");
+  });
 });

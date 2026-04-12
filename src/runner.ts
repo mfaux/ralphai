@@ -176,11 +176,37 @@ export function appendProgressBlock(
 
 /**
  * Parse the content of a `<learnings>` block into either a prose string or
- * null. Returns null if the content is the literal string "none"
- * (case-insensitive), only whitespace, or empty. Otherwise returns the
- * trimmed prose text.
+ * null.
+ *
+ * If the block contains one or more `<entry>` tags, each tag's inner text is
+ * extracted and evaluated individually. Entries whose trimmed text is empty or
+ * matches `status: none` (case-insensitive) are discarded. If all entries are
+ * discarded, the function returns null. Otherwise the surviving entry texts are
+ * joined with newlines and returned.
+ *
+ * When no `<entry>` tags are present, the function falls back to the original
+ * behavior: returns null if the trimmed content is empty or equals "none"
+ * (case-insensitive), otherwise returns the trimmed text.
  */
 export function parseLearningContent(block: string): string | null {
+  const entryPattern = /<entry>([\s\S]*?)<\/entry>/gi;
+  const entries: string[] = [];
+  let match: RegExpExecArray | null;
+
+  // Collect all <entry> matches
+  while ((match = entryPattern.exec(block)) !== null) {
+    if (match[1] !== undefined) entries.push(match[1]);
+  }
+
+  if (entries.length > 0) {
+    const real = entries
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0 && e.toLowerCase() !== "status: none");
+    if (real.length === 0) return null;
+    return real.join("\n");
+  }
+
+  // No <entry> tags — fall back to original logic
   const trimmed = block.trim();
   if (trimmed.length === 0) return null;
   if (trimmed.toLowerCase() === "none") return null;
@@ -1030,8 +1056,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
 
     // Derive a feedback hint command from hooks.feedback for scope hint text.
     // Uses the first configured command (e.g. "bun test" from "bun test,bun run build").
-    const firstFeedbackCmd = feedbackCommands.split(",")[0]?.trim() ?? "";
-    const feedbackHintCmd = firstFeedbackCmd || "";
+    const feedbackHintCmd = feedbackCommands.split(",")[0]?.trim() ?? "";
 
     // Resolve feedback scope: explicit frontmatter overrides auto-detection.
     const fmFeedbackScope = extractFeedbackScope(planFile);

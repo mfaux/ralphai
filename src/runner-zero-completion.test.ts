@@ -49,6 +49,22 @@ function setupGlobalPipeline(cwd: string) {
   return { ralphaiHome, ...dirs };
 }
 
+/** Capture console.log output during an async function. */
+async function captureLogs(
+  fn: () => Promise<RunnerResult>,
+): Promise<{ output: string; result: RunnerResult }> {
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+  let result: RunnerResult;
+  try {
+    result = await fn();
+  } finally {
+    console.log = origLog;
+  }
+  return { output: logs.join("\n"), result };
+}
+
 // ---------------------------------------------------------------------------
 // Zero-completion guard tests
 // ---------------------------------------------------------------------------
@@ -88,7 +104,7 @@ describe("runRunner — zero-completion guard", () => {
     // Agent that makes a commit each iteration (avoiding stuck detection)
     // but outputs COMPLETE without updating progress (zero tasks completed).
     // It needs to run 3 times: 1 initial + 2 rejections = exhausts budget.
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "iteration-marker-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration" --allow-empty-message; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "iteration-marker-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration" --allow-empty-message; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -104,20 +120,7 @@ describe("runRunner — zero-completion guard", () => {
       drain: false,
     };
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-
-    let result: RunnerResult;
-    try {
-      result = await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
-
-    const output = logs.join("\n");
+    const { output, result } = await captureLogs(() => runRunner(opts));
 
     // Plan should be marked as stuck, NOT accepted
     expect(result.stuckSlugs).toContain("zero-comp");
@@ -152,7 +155,7 @@ describe("runRunner — zero-completion guard", () => {
     // Agent that makes a commit, reports 1/3 tasks done in progress,
     // and claims COMPLETE. The gate will reject because only 1/3 done,
     // but after exhausting the budget it should force-accept (partial progress).
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -168,18 +171,7 @@ describe("runRunner — zero-completion guard", () => {
       drain: false,
     };
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-
-    let result: RunnerResult;
-    try {
-      result = await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
+    const { result } = await captureLogs(() => runRunner(opts));
 
     // Plan should NOT be stuck — it should be force-accepted
     expect(result.stuckSlugs).not.toContain("partial-comp");

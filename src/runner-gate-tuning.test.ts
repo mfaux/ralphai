@@ -98,7 +98,7 @@ describe("runRunner — gate.maxRejections", () => {
 
     // Agent makes a commit and outputs COMPLETE without completing tasks.
     // With maxRejections=0, the first gate failure should mark stuck.
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -138,7 +138,7 @@ describe("runRunner — gate.maxRejections", () => {
     // The feedback command always fails, so the gate always rejects.
     // With maxRejections=5, it should reject 5 times then force-accept
     // (partial progress since 1/1 tasks done).
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -208,7 +208,7 @@ describe("runRunner — gate.maxIterations", () => {
 
     // Agent makes a commit each time but never claims COMPLETE.
     // With maxIterations=3, should be marked stuck after 3 iterations.
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work iteration"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -245,7 +245,7 @@ describe("runRunner — gate.maxIterations", () => {
 
     // Agent completes the task on first iteration and claims COMPLETE.
     // maxIterations=0 should not interfere.
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "work-$(date +%s%N)" >> work.txt; git add -A; git commit -m "work"; echo "<progress nonce=\\"$N\\">"; echo "- [x] First task"; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({

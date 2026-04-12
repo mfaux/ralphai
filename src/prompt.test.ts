@@ -250,14 +250,32 @@ describe("assemblePrompt", () => {
 
   // --- Richer learnings guidance ---
 
-  it("learnings prompt asks for file paths, APIs/signatures, architecture constraints, and error resolutions", () => {
+  it("learnings prompt does not contain removed file-path or API example bullets", () => {
     const prompt = assemblePrompt(baseOptions());
-    expect(prompt).toContain("File paths modified or discovered");
-    expect(prompt).toContain("Exported APIs and their signatures");
-    expect(prompt).toContain("Architecture constraints or patterns observed");
+    expect(prompt).not.toContain("File paths modified or discovered");
+    expect(prompt).not.toContain("Exported APIs and their signatures");
+  });
+
+  it("learnings prompt includes negative guidance about what not to log", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("Do NOT log:");
+    expect(prompt).toContain("session notes that go stale immediately");
+  });
+
+  it("learnings prompt includes durability quality-gate heuristic", () => {
+    const prompt = assemblePrompt(baseOptions());
     expect(prompt).toContain(
-      "Error messages encountered and how they were resolved",
+      "would this still be useful if the codebase had changed since this iteration?",
     );
+    expect(prompt).toContain("session note, not a learning");
+  });
+
+  it("learnings prompt retains guidance about behavioral patterns and architecture constraints", () => {
+    const prompt = assemblePrompt(baseOptions());
+    expect(prompt).toContain("behavioral patterns");
+    expect(prompt).toContain("architectural constraints");
+    expect(prompt).toContain("recurring failure modes");
+    expect(prompt).toContain("project conventions");
   });
 
   it("learnings guidance remains freeform prose (no structured schema)", () => {

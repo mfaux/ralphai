@@ -4,13 +4,7 @@
  * Focuses on key runner behaviors (dry-run, stuck detection, completion detection).
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  readFileSync,
-} from "fs";
+import { mkdtempSync, writeFileSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { execSync } from "child_process";
@@ -50,16 +44,24 @@ function createManagedWorktree(mainDir: string, slug: string): string {
  * Sets RALPHAI_HOME to a temp dir so global-state functions resolve there.
  * Returns the pipeline dirs.
  */
-function setupGlobalPipeline(cwd: string): {
-  ralphaiHome: string;
-  backlogDir: string;
-  wipDir: string;
-  archiveDir: string;
-} {
+function setupGlobalPipeline(cwd: string) {
   const ralphaiHome = mkdtempSync(join(tmpdir(), "ralphai-home-"));
   process.env.RALPHAI_HOME = ralphaiHome;
   const dirs = getRepoPipelineDirs(cwd, { RALPHAI_HOME: ralphaiHome });
   return { ralphaiHome, ...dirs };
+}
+
+/** Capture console.log output during an async function. */
+async function captureLogs(fn: () => Promise<unknown>): Promise<string> {
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+  try {
+    await fn();
+  } finally {
+    console.log = origLog;
+  }
+  return logs.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -112,16 +114,8 @@ describe("runRunner — dry-run", () => {
       drain: false,
     };
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-    try {
-      await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
+    const output = await captureLogs(() => runRunner(opts));
 
-    const output = logs.join("\n");
     // issueSource defaults to "none", so peek.message should appear
     expect(output).toContain("No runnable work found.");
     expect(output).toContain("not 'github'");
@@ -182,7 +176,7 @@ describe("runRunner — completion", () => {
     );
 
     // Agent command that outputs progress, COMPLETE marker, and learnings
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -214,7 +208,7 @@ describe("runRunner — completion", () => {
       "# Plan: Log Test\n\n## Implementation Tasks\n\n### Task 1: Verify logging\n",
     );
 
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "agent-says-hello"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "agent-says-hello"; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Verify logging"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -250,7 +244,7 @@ describe("runRunner — completion", () => {
     );
 
     // Agent that does nothing (no commits, no COMPLETE)
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -268,19 +262,8 @@ describe("runRunner — completion", () => {
 
     // Stuck plans are now skipped instead of process.exit(1).
     // The runner should exit normally after exhausting the backlog.
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
+    const output = await captureLogs(() => runRunner(opts));
 
-    try {
-      await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
-
-    const output = logs.join("\n");
     expect(output).toContain("Stuck:");
     expect(output).toContain("skipped 1 (stuck)");
     expect(output).toContain("stuck");
@@ -315,7 +298,7 @@ describe("runRunner — RunnerResult", () => {
     );
 
     // Agent that does nothing (no commits, no COMPLETE)
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "doing nothing"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
@@ -353,7 +336,7 @@ describe("runRunner — RunnerResult", () => {
       "# Plan: Success\n\n### Task 1: Test\n",
     );
 
-    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\"><entry>status: none</entry></learnings>"'`;
+    const agentScript = `bash -c 'N=$RALPHAI_NONCE; echo "<progress nonce=\\"$N\\">"; echo "### Task 1: Test"; echo "**Status:** Complete"; echo "Done."; echo "</progress>"; echo "<promise nonce=\\"$N\\">COMPLETE</promise>"; echo "<learnings nonce=\\"$N\\">none</learnings>"'`;
 
     const opts: RunnerOptions = {
       config: makeTestResolvedConfig({
