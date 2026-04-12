@@ -119,6 +119,17 @@ describe("buildDockerArgs", () => {
     expect(args[homeIdx - 1]).toBe("-e");
   });
 
+  it("includes -e HUSKY=0 to suppress git hooks", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const huskyIdx = args.indexOf("HUSKY=0");
+    expect(huskyIdx).toBeGreaterThan(-1);
+    expect(args[huskyIdx - 1]).toBe("-e");
+  });
+
   it("bind-mounts worktree at host path", () => {
     const args = buildDockerArgs({
       agentCommand: "claude -p",
@@ -874,6 +885,17 @@ describe("buildSetupDockerArgs", () => {
     const homeIdx = args.indexOf(homeEnv);
     expect(homeIdx).toBeGreaterThan(-1);
     expect(args[homeIdx - 1]).toBe("-e");
+  });
+
+  it("includes -e HUSKY=0 to suppress git hooks", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const huskyIdx = args.indexOf("HUSKY=0");
+    expect(huskyIdx).toBeGreaterThan(-1);
+    expect(args[huskyIdx - 1]).toBe("-e");
   });
 
   it("bind-mounts worktree at host path", () => {

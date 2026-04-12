@@ -395,6 +395,9 @@ function buildCommonDockerArgs(opts: {
   // Set container HOME so tools and configs work for non-root user
   args.push("-e", `HOME=${CONTAINER_HOME}`);
 
+  // Suppress husky git hooks inside Docker containers
+  args.push("-e", "HUSKY=0");
+
   // Worktree bind mount (read-write)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);

@@ -75,7 +75,11 @@ export class LocalExecutor implements AgentExecutor {
       } = {
         cwd,
         stdio: ["pipe", "pipe", "pipe"],
-        env: nonce ? { ...process.env, RALPHAI_NONCE: nonce } : undefined,
+        env: {
+          ...process.env,
+          HUSKY: "0",
+          ...(nonce ? { RALPHAI_NONCE: nonce } : {}),
+        },
       };
 
       if (iterationTimeout > 0) {
