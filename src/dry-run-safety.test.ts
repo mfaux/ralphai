@@ -96,7 +96,7 @@ describe("dry-run safety — runner auto-drain path", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await runRunner(opts);
@@ -128,7 +128,7 @@ describe("dry-run safety — runner auto-drain path", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await runRunner(opts);
@@ -161,7 +161,7 @@ describe("dry-run safety — runner auto-drain path", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureConsoleLog(async () => {
@@ -212,7 +212,7 @@ describe("dry-run safety — informational messages", () => {
       dryRun: true,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     // This should complete without making any API calls.

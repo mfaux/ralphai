@@ -107,7 +107,7 @@ describe("runRunner — review pass", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -149,7 +149,7 @@ describe("runRunner — review pass", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -186,7 +186,7 @@ describe("runRunner — review pass", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     const output = await captureLogs(() => runRunner(opts));
@@ -227,7 +227,7 @@ describe("runRunner — review pass", () => {
       dryRun: false,
       resume: false,
       allowDirty: false,
-      once: false,
+      drain: false,
     };
 
     await captureLogs(() => runRunner(opts));

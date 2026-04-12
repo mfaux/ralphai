@@ -20,7 +20,7 @@ This is the primary workflow for humans. Use it to browse the backlog, inspect p
 ralphai run
 ```
 
-Processes all dependency-ready plans sequentially, one branch and PR per plan. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. HITL-labeled sub-issues are skipped during auto-drain. Use `--once` to process a single plan and exit.
+Processes one eligible work unit, creating or reusing the matching branch and PR. Use `--drain` to keep processing dependency-ready plans sequentially until the queue is empty. When the backlog is empty, Ralphai checks for PRD sub-issues, then regular GitHub issues. HITL-labeled sub-issues are skipped during auto-drain.
 
 ## Work from a PRD (recommended for features)
 

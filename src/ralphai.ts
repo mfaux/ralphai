@@ -1653,7 +1653,7 @@ const KNOWN_RUN_FLAGS = new Set([
   "--resume",
   "-r",
   "--allow-dirty",
-  "--once",
+  "--drain",
   "--show-config",
   "--wizard",
   "-w",
@@ -1706,6 +1706,14 @@ function isRecognizedRunFlag(arg: string): boolean {
 }
 
 function validateRunArgs(runArgs: string[]): void {
+  if (runArgs.includes("--once")) {
+    console.error(
+      "ERROR: --once was removed from 'ralphai run'. Use 'ralphai run' for one work unit or 'ralphai run --drain' to keep going.",
+    );
+    showRunHelp();
+    process.exit(1);
+  }
+
   for (const arg of runArgs) {
     if (!isRecognizedRunFlag(arg)) {
       console.error(`ERROR: Unrecognized argument: ${arg}`);
@@ -1730,7 +1738,7 @@ function showRunHelp(): void {
     "Options:",
     "  --dry-run, -n                    Preview what Ralphai would do without mutating state",
     "  --wizard, -w                     Interactively configure run options before starting",
-    "  --once                           Run a single plan then exit (default: drain backlog)",
+    "  --drain                          Keep processing eligible work until none remains",
     "  --resume, -r                     Commit dirty state and continue",
     "  --allow-dirty                    Skip the clean working tree check",
     "  --plan=<file>                    Target a specific backlog plan (default: auto-detect)",
@@ -1789,11 +1797,11 @@ function showRunHelp(): void {
     "Precedence: CLI flags > env vars > config file > built-in defaults",
     "",
     "Examples:",
-    "  ralphai run                                             # auto-detect work and run",
+    "  ralphai run                                             # process one auto-detected work unit",
     "  ralphai run 42                                          # fetch issue #42, create branch, run",
     "  ralphai run my-feature.md                               # run a specific plan file",
     "  ralphai run --dry-run                                   # preview only",
-    "  ralphai run --once                                      # run a single plan then exit",
+    "  ralphai run --drain                                     # keep processing work until empty",
     "  ralphai run --resume                                    # recover dirty state and continue",
     "  ralphai run --agent-command='claude -p'                 # use Claude Code",
     "  ralphai run --agent-command='opencode run --agent build'  # use OpenCode",
@@ -2105,21 +2113,18 @@ async function runIssueTarget(
   console.log("Running ralphai in worktree...");
 
   // Build runner options: single-target, no drain.
-  // --once ensures the runner exits after completing this single issue
-  // instead of draining the backlog or pulling more GitHub issues.
   const activeWorktrees = listRalphaiWorktrees(cwd);
   const activeWorktree = activeWorktrees.find((wt) => wt.branch === branch);
   const shouldResume = activeWorktree !== undefined;
   const hasResumeFlag = runArgs.includes("--resume") || runArgs.includes("-r");
-  const hasOnceFlag = runArgs.includes("--once");
+  const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
   const worktreeRunOptions: RalphaiOptions = {
     ...options,
     subcommand: "run",
     runTarget: undefined, // already handled
     runArgs: [
       ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-      ...(!hasOnceFlag ? ["--once"] : []),
-      ...runArgs,
+      ...runnerRunArgs,
     ],
   };
 
@@ -2357,19 +2362,16 @@ async function runPrdIssueTarget(
     const shouldResume = activeWorktree !== undefined || !isFirstSubIssue;
     const hasResumeFlag =
       runArgs.includes("--resume") || runArgs.includes("-r");
-    // --once ensures the runner exits after completing this single sub-issue,
-    // so the outer for-loop (not the runner's drain loop) controls sequencing.
-    // Without this, the runner re-fetches the PRD body, finds the same
-    // unchecked sub-issue, and re-pulls it.
-    const hasOnceFlag = runArgs.includes("--once");
+    // Strip --drain so the outer PRD loop, not the inner runner loop,
+    // controls sub-issue sequencing.
+    const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
     const worktreeRunOptions: RalphaiOptions = {
       ...options,
       subcommand: "run",
       runTarget: undefined,
       runArgs: [
         ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-        ...(!hasOnceFlag ? ["--once"] : []),
-        ...runArgs,
+        ...runnerRunArgs,
       ],
     };
 
@@ -2536,6 +2538,8 @@ async function runPlanTarget(
   if (!planFlagAlreadySet) {
     runArgs = [...runArgs, `--plan=${planPath}`];
   }
+
+  runArgs = runArgs.filter((arg) => arg !== "--drain");
 
   // Validate the plan file exists before proceeding
   const { backlogDir, wipDir } = getRepoPipelineDirs(cwd);
@@ -2872,7 +2876,7 @@ async function runRalphaiInManagedWorktree(
 
   ensureRepoHasCommit(cwd);
 
-  const hasOnce = runArgs.includes("--once");
+  const hasDrain = runArgs.includes("--drain");
 
   // Build GitHub fallback options so selectPlanForWorktree can pull an issue
   // when the local backlog is empty and issueSource is "github".
@@ -2903,10 +2907,10 @@ async function runRalphaiInManagedWorktree(
         }
       : undefined;
 
-  // --- Drain loop: each plan gets its own branch and worktree ---
+  // --- Auto-detect loop: default single work unit; --drain keeps going ---
   // This mirrors how runPrdIssueTarget sequences sub-issues: the outer loop
   // controls plan selection and worktree lifecycle, while the runner processes
-  // a single plan per invocation (--once).
+  // a single plan per invocation by default.
   let plansProcessed = 0;
 
   while (true) {
@@ -3009,14 +3013,13 @@ async function runRalphaiInManagedWorktree(
       plan.source === "in-progress" || activeWorktree !== undefined;
     const hasResumeFlag =
       runArgs.includes("--resume") || runArgs.includes("-r");
-    const hasOnceFlag = runArgs.includes("--once");
+    const runnerRunArgs = runArgs.filter((arg) => arg !== "--drain");
     const worktreeRunOptions: RalphaiOptions = {
       ...options,
       subcommand: "run",
       runArgs: [
         ...(shouldResume && !hasResumeFlag ? ["--resume"] : []),
-        ...(!hasOnceFlag ? ["--once"] : []),
-        ...runArgs,
+        ...runnerRunArgs,
       ],
     };
 
@@ -3029,9 +3032,9 @@ async function runRalphaiInManagedWorktree(
     plansProcessed++;
 
     // --- Clean up worktree between plans so the next one starts fresh ---
-    // Skip cleanup on --once (the single worktree may still be useful) and
+    // Skip cleanup in single-run mode (the worktree may still be useful) and
     // when this was a pre-existing worktree we reused.
-    if (!hasOnce && !activeWorktree) {
+    if (hasDrain && !activeWorktree) {
       try {
         execSync(`git worktree remove --force "${resolvedWorktreeDir}"`, {
           cwd,
@@ -3043,8 +3046,8 @@ async function runRalphaiInManagedWorktree(
       }
     }
 
-    // --- --once: stop after a single plan ---
-    if (hasOnce) {
+    // --- Default mode: stop after a single plan ---
+    if (!hasDrain) {
       break;
     }
 
@@ -3074,7 +3077,7 @@ async function runRalphaiRunner(
   const isDryRun = runArgs.includes("--dry-run") || runArgs.includes("-n");
   let hasAllowDirty = runArgs.includes("--allow-dirty");
   const hasResume = runArgs.includes("--resume") || runArgs.includes("-r");
-  const hasOnce = runArgs.includes("--once");
+  const hasDrain = runArgs.includes("--drain");
   const hasVerbose = runArgs.includes("--verbose");
   const hasShowConfig = runArgs.includes("--show-config");
   const planFlag = runArgs.find((a) => a.startsWith("--plan="));
@@ -3216,7 +3219,7 @@ async function runRalphaiRunner(
     dryRun: isDryRun,
     resume: hasResume,
     allowDirty: hasAllowDirty,
-    once: hasOnce,
+    drain: hasDrain,
     plan: targetPlan,
     filterTags,
     prd: prdIssue,

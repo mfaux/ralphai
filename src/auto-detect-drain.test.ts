@@ -1,11 +1,11 @@
 /**
- * Tests for auto-detect drain: each standalone plan gets its own
+ * Tests for auto-detect run behavior: each standalone plan gets its own
  * branch and worktree when processed via `ralphai run` (no target).
  *
  * Covers:
  *   - Each plan gets a unique <type>/<slug> branch (conventional commit style)
- *   - --once processes exactly one plan
- *   - Worktrees are cleaned up between plans
+ *   - default run processes exactly one plan
+ *   - --drain processes multiple plans and cleans up between them
  *   - Plans with prd: frontmatter route through the PRD flow, not standalone
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
@@ -110,7 +110,7 @@ function addPrdSubIssuePlan(
 // ---------------------------------------------------------------------------
 
 describe.skipIf(process.platform === "win32")(
-  "auto-detect drain: branch-per-plan",
+  "auto-detect run behavior: branch-per-plan",
   () => {
     let dir: string;
     let ralphaiHome: string;
@@ -131,7 +131,7 @@ describe.skipIf(process.platform === "win32")(
       else process.env.RALPHAI_HOME = savedHome;
     });
 
-    test("two unrelated plans get distinct branches", () => {
+    test("default run processes only one plan", () => {
       initWithAgent(dir, testEnv());
       process.env.RALPHAI_HOME = ralphaiHome;
       addPlans(dir, testEnv(), [
@@ -147,10 +147,10 @@ describe.skipIf(process.platform === "win32")(
       });
 
       expect(branches).toContain("feat/plan-first-plan");
-      expect(branches).toContain("feat/plan-second-plan");
+      expect(branches).not.toContain("feat/plan-second-plan");
     });
 
-    test("--once processes exactly one plan when two are available", () => {
+    test("--drain processes both plans when two are available", () => {
       initWithAgent(dir, testEnv());
       process.env.RALPHAI_HOME = ralphaiHome;
       const backlogDir = addPlans(dir, testEnv(), [
@@ -158,7 +158,7 @@ describe.skipIf(process.platform === "win32")(
         { slug: "bbb-second", title: "Second Plan" },
       ]);
 
-      runCli(["run", "--once"], dir, testEnv(), 60000);
+      runCli(["run", "--drain"], dir, testEnv(), 60000);
 
       const branches = execSync("git branch --list", {
         cwd: dir,
@@ -166,8 +166,8 @@ describe.skipIf(process.platform === "win32")(
       });
 
       expect(branches).toContain("feat/plan-first-plan");
-      expect(branches).not.toContain("feat/plan-second-plan");
-      expect(existsSync(join(backlogDir, "bbb-second.md"))).toBe(true);
+      expect(branches).toContain("feat/plan-second-plan");
+      expect(existsSync(join(backlogDir, "bbb-second.md"))).toBe(false);
     });
 
     test("worktrees are cleaned up between plans in drain loop", () => {
@@ -178,7 +178,7 @@ describe.skipIf(process.platform === "win32")(
         { slug: "bbb-second", title: "Second Plan" },
       ]);
 
-      runCli(["run"], dir, testEnv(), 60000);
+      runCli(["run", "--drain"], dir, testEnv(), 60000);
 
       // After drain, earlier plan's worktree directory should be removed
       const worktreeBase = join(dir, "..", ".ralphai-worktrees");
