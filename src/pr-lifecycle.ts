@@ -21,7 +21,7 @@ import {
   type BlockedSubIssue,
   type StateLabelConfig,
 } from "./issue-lifecycle.ts";
-import { formatLearningsForPr } from "./learnings.ts";
+import { formatLearningsForPr, formatContextForPr } from "./learnings.ts";
 import { stripAnsi } from "./utils.ts";
 
 // ---------------------------------------------------------------------------
@@ -225,6 +225,7 @@ export function buildPrBody(
     prRepo?: string;
     summary?: string;
     learnings?: string[];
+    context?: string[];
     reviewPassMadeChanges?: boolean;
   },
 ): string {
@@ -261,6 +262,12 @@ export function buildPrBody(
     parts.push("\n\n" + learningsSection);
   }
 
+  // Append context section when non-empty
+  const contextSection = formatContextForPr(options?.context ?? []);
+  if (contextSection) {
+    parts.push("\n\n" + contextSection);
+  }
+
   // Append review pass note when the review pass made changes
   if (options?.reviewPassMadeChanges) {
     parts.push(
@@ -290,6 +297,7 @@ export function buildContinuousPrBodyStructured(
     prRepo?: string;
     summary?: string;
     learnings?: string[];
+    context?: string[];
   },
 ): string {
   const parts: string[] = [];
@@ -334,6 +342,12 @@ export function buildContinuousPrBodyStructured(
   const learningsSection = formatLearningsForPr(options?.learnings ?? []);
   if (learningsSection) {
     parts.push("\n\n" + learningsSection);
+  }
+
+  // Append context section when non-empty
+  const contextSection = formatContextForPr(options?.context ?? []);
+  if (contextSection) {
+    parts.push("\n\n" + contextSection);
   }
 
   return parts.join("\n");
@@ -404,6 +418,8 @@ export interface CreatePrOptions {
   summary?: string;
   /** Accumulated learnings from agent runs to include in PR body. */
   learnings?: string[];
+  /** Accumulated context notes from agent runs to include in PR body. */
+  context?: string[];
   /** Whether the review pass made simplification changes. */
   reviewPassMadeChanges?: boolean;
   /** Commit style: "conventional" applies CC prefix; "none" uses plain title. */
@@ -539,6 +555,7 @@ export function createPr(options: CreatePrOptions): CreatePrResult {
     prRepo,
     summary: options.summary,
     learnings: options.learnings,
+    context: options.context,
     reviewPassMadeChanges: options.reviewPassMadeChanges,
   });
   const prTitle = sanitizePrText(

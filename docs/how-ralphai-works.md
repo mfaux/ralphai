@@ -12,7 +12,8 @@ Ralphai avoids this by starting each iteration with a **fresh agent session** co
 
 - the plan file
 - a progress log
-- learnings from past mistakes
+- context notes from earlier iterations on this plan
+- durable learnings from past mistakes
 
 Iteration 10 gets the same quality of context as iteration 1.
 
@@ -23,10 +24,10 @@ Each iteration, the agent runs your project's real build, test, and lint command
 When a feedback wrapper script (`_ralphai_feedback.sh`) exists in the pipeline state directory, the prompt tells the agent to run the wrapper instead of listing raw commands. The wrapper provides concise output on success and full diagnostics on failure (see [Feedback Wrapper Script](#feedback-wrapper-script) below). When the wrapper is absent (e.g. on Windows), the prompt falls back to listing raw commands directly.
 
 ```
-    ┌─────────────────────────────────────┐
-    │            Fresh session            │
-    │   plan + progress log + learnings   │
-    └──────────────────┬──────────────────┘
+    ┌──────────────────────────────────────────────┐
+    │              Fresh session                   │
+    │   plan + progress log + context + learnings  │
+    └──────────────────────┬───────────────────────┘
                        ▼
                ┌───────────────┐
                │  Agent works  │
@@ -142,7 +143,7 @@ Key properties:
 
 - **One pass maximum** — the review pass runs at most once per plan, regardless of outcome. If the gate is rejected after review changes, the agent is re-invoked to fix the issue, but the review pass is not repeated.
 - **Best-effort** — if the review pass fails (agent error or timeout), Ralphai logs a warning and proceeds to PR creation. The review pass never blocks PR creation.
-- **No sentinel tags** — the review prompt is a utility prompt with no completion, learnings, or progress sentinels. The agent simply reviews, optionally commits, and exits.
+- **No sentinel tags** — the review prompt is a utility prompt with no completion, learnings, context, or progress sentinels. The agent simply reviews, optionally commits, and exits.
 - **Short-circuits on empty diffs** — if no files have changed between the base branch and HEAD, the review pass is skipped entirely.
 
 ## Plan Structure
@@ -468,11 +469,44 @@ scope: ui
 ---
 ```
 
-## Learnings System
+## Context and Learnings (Two-Tier Memory)
 
-Ralphai accumulates learnings in memory during each run. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into the PR body for review — both for standalone single-plan PRs and for PRD aggregate PRs. For PRD runs, learnings from all sub-issue runs are merged and deduplicated into a single section. Learnings are also injected into subsequent iterations as anti-repeat memory.
+Ralphai uses a two-tier memory system to carry information across iterations without polluting the agent's context window.
 
-The prompt asks agents to report specific categories of information in their learnings — file paths modified or discovered, exported APIs and their signatures, architecture constraints or patterns observed, and error messages encountered with how they were resolved. The format remains free-form prose; the categories are guidance, not schema enforcement. Vague or empty learnings still work — the guidance is best-effort.
+### Context (session-scoped)
+
+Context captures ephemeral, session-scoped notes: code locations, API surfaces, navigation breadcrumbs, and decisions made during the current plan. The agent includes a `<context>` block in its output each iteration, and Ralphai extracts and re-injects those notes into the next iteration's prompt.
+
+Key properties:
+
+- **Per-plan scope** — context is accumulated only within a single plan's run. When the plan completes or is skipped, the accumulated context is discarded.
+- **Not aggregated across sub-issues** — for PRD runs, each sub-issue starts with a blank context slate. Context does not flow from one sub-issue to the next.
+- **PR rendering** — context notes appear in per-plan PR bodies as a collapsed `<details>` block, keeping them available for debugging without cluttering the description. Context is omitted from PRD aggregate PR bodies.
+- **Config** — controlled by `prompt.context` (default: `true`). Set to `false` to disable context extraction, the `<context>` mandate in the prompt, and PR body rendering.
+
+### Learnings (durable)
+
+Learnings capture durable behavioral lessons: architectural constraints, recurring failure modes, project conventions, and patterns that apply beyond the current plan. The agent includes a `<learnings>` block in its output, and Ralphai extracts and persists entries into subsequent iterations and the PR body.
+
+Key properties:
+
+- **Cross-plan scope** — learnings accumulate across all plans within a runner session. They survive plan boundaries.
+- **Aggregated at PRD level** — for PRD runs, learnings from all sub-issue runs are merged and deduplicated into a single `## Learnings` section in the aggregate PR body.
+- **PR rendering** — learnings appear as a `## Learnings` heading with bullet points in both per-plan and PRD aggregate PR bodies.
+- **Config** — controlled by `prompt.learnings` (default: `true`). Set to `false` to disable learnings extraction, the `<learnings>` mandate in the prompt, and PR body rendering.
+
+### Two-tier comparison
+
+| Aspect          | Context                       | Learnings                    |
+| --------------- | ----------------------------- | ---------------------------- |
+| Scope           | Per-plan (ephemeral)          | Cross-plan (durable)         |
+| Purpose         | Session notes, code locations | Behavioral lessons, patterns |
+| PRD aggregation | Not aggregated                | Merged across sub-issues     |
+| PR body format  | Collapsed `<details>` block   | `## Learnings` heading       |
+| Config key      | `prompt.context`              | `prompt.learnings`           |
+| Sentinel tag    | `<context>`                   | `<learnings>`                |
+
+The prompt asks agents to report specific categories of information in their learnings — architectural constraints or patterns observed, error messages encountered with how they were resolved, and behavioral lessons worth applying to future iterations. Context notes should capture session-specific details — file paths discovered, API surfaces explored, and decisions made. The format for both is free-form prose; the categories are guidance, not schema enforcement.
 
 ## Docker Execution Flow
 
@@ -551,7 +585,7 @@ At the start of each run, Ralphai pulls the resolved image (`docker pull --quiet
 
 ### Stdio-based progress extraction
 
-Because the container's stdout and stderr are piped back to the runner process, all existing progress extraction, learnings extraction, and completion sentinel detection work unchanged. The `<progress>`, `<learnings>`, `<promise>`, and `<pr-summary>` sentinel tags are parsed from the container's output stream the same way they are parsed from a local process.
+Because the container's stdout and stderr are piped back to the runner process, all existing progress extraction, learnings extraction, context extraction, and completion sentinel detection work unchanged. The `<progress>`, `<learnings>`, `<context>`, `<promise>`, and `<pr-summary>` sentinel tags are parsed from the container's output stream the same way they are parsed from a local process.
 
 ## Progress Extraction
 

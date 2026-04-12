@@ -25,7 +25,7 @@ Every hook, gate check, and prompt injection point listed in firing order. Works
 1. **Plan selected** — a plan is picked from the backlog or resumed from in-progress.
 2. **Resolve scope** — workspace overrides for feedback, prFeedback, validators, beforeRun, and preamble are resolved once.
 3. **`hooks.beforeRun`** — runs once. Non-zero exit marks the plan stuck; the iteration loop never starts.
-4. **Iteration loop** — each iteration starts a fresh agent session containing the plan, progress log, learnings, and `hooks.feedback` commands. The agent works on the next task, runs `hooks.feedback` to verify, commits, and either signals COMPLETE or loops back.
+4. **Iteration loop** — each iteration starts a fresh agent session containing the plan, progress log, context notes, learnings, and `hooks.feedback` commands. The agent works on the next task, runs `hooks.feedback` to verify, commits, and either signals COMPLETE or loops back.
    - **Stuck detection:** if no new commits appear for `gate.maxStuck` consecutive iterations, the plan is marked stuck.
    - **Iteration cap:** if `gate.maxIterations` is set and exceeded, the plan is marked stuck.
 5. **Completion gate** — triggered when the agent signals COMPLETE. Runs these checks in order:
@@ -66,12 +66,13 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 
 ### `prompt.*` — Prompt Controls
 
-| Key                  | Default          | Env Var                       | CLI Flag                                       | Description                                                                                                                                                       |
-| -------------------- | ---------------- | ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prompt.verbose`     | `false`          | `RALPHAI_PROMPT_VERBOSE`      | `--prompt-verbose`                             | When `false` (default), the prompt instructs the agent to use terse style (drop filler words, articles, pleasantries). `true` disables this instruction.          |
-| `prompt.preamble`    | _(built-in)_     | `RALPHAI_PROMPT_PREAMBLE`     | `--prompt-preamble=<text>`                     | Custom preamble text injected at the top of every prompt. Replaces the built-in default entirely. Use `@path` to read from a file (e.g. `@.ralphai-preamble.md`). |
-| `prompt.learnings`   | `true`           | `RALPHAI_PROMPT_LEARNINGS`    | `--prompt-learnings` / `--no-prompt-learnings` | Enable learnings extraction and injection. When `false`, the learnings mandate is omitted from the prompt and no `<learnings>` block is parsed.                   |
-| `prompt.commitStyle` | `"conventional"` | `RALPHAI_PROMPT_COMMIT_STYLE` | `--prompt-commit-style=<style>`                | Commit message style instruction. `"conventional"` instructs the agent to use conventional commit format; `"none"` omits commit style guidance.                   |
+| Key                  | Default          | Env Var                       | CLI Flag                                       | Description                                                                                                                                                                                                                          |
+| -------------------- | ---------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `prompt.verbose`     | `false`          | `RALPHAI_PROMPT_VERBOSE`      | `--prompt-verbose`                             | When `false` (default), the prompt instructs the agent to use terse style (drop filler words, articles, pleasantries). `true` disables this instruction.                                                                             |
+| `prompt.preamble`    | _(built-in)_     | `RALPHAI_PROMPT_PREAMBLE`     | `--prompt-preamble=<text>`                     | Custom preamble text injected at the top of every prompt. Replaces the built-in default entirely. Use `@path` to read from a file (e.g. `@.ralphai-preamble.md`).                                                                    |
+| `prompt.learnings`   | `true`           | `RALPHAI_PROMPT_LEARNINGS`    | `--prompt-learnings` / `--no-prompt-learnings` | Enable durable learnings extraction and injection. Learnings capture behavioral lessons and patterns that persist across plans. When `false`, the learnings mandate is omitted from the prompt and no `<learnings>` block is parsed. |
+| `prompt.context`     | `true`           | `RALPHAI_PROMPT_CONTEXT`      | `--prompt-context` / `--no-prompt-context`     | Enable session-scoped context extraction and injection. Context captures ephemeral notes (code locations, decisions, API surfaces) that persist only within a single plan's run. When `false`, context gathering is disabled.        |
+| `prompt.commitStyle` | `"conventional"` | `RALPHAI_PROMPT_COMMIT_STYLE` | `--prompt-commit-style=<style>`                | Commit message style instruction. `"conventional"` instructs the agent to use conventional commit format; `"none"` omits commit style guidance.                                                                                      |
 
 ### `agent.*` — Agent Commands
 
@@ -233,7 +234,21 @@ Disables the default terse instruction so the agent produces full, unabridged ou
 }
 ```
 
-Removes the learnings mandate from the prompt and disables `<learnings>` extraction. The Learnings section is also omitted from PR bodies.
+Removes the durable learnings mandate from the prompt and disables `<learnings>` extraction. The Learnings section is also omitted from PR bodies. Session-scoped context (controlled by `prompt.context`) is unaffected.
+
+**Disable context:**
+
+```json
+{
+  "prompt": {
+    "context": false
+  }
+}
+```
+
+Removes the session context mandate from the prompt and disables `<context>` extraction. Durable learnings (controlled by `prompt.learnings`) are unaffected.
+
+**Two-tier memory:** Ralphai uses two separate tiers of agent memory. **Context** (`prompt.context`) captures ephemeral, session-scoped notes — code locations, API surfaces, decisions — that persist only within a single plan's run and are not aggregated across PRD sub-issues. **Learnings** (`prompt.learnings`) capture durable behavioral lessons — architectural constraints, failure modes, conventions — that accumulate across plans and are merged at the PRD level. See [How Ralphai Works — Context and Learnings](how-ralphai-works.md#context-and-learnings-two-tier-memory) for the full explanation.
 
 ### Agent Instructions (Per-Plan)
 

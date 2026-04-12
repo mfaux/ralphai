@@ -10,7 +10,10 @@
  */
 import { existsSync, readFileSync } from "fs";
 import type { PlanFormat } from "./plan-lifecycle.ts";
-import { formatLearningsForPrompt } from "./learnings.ts";
+import {
+  formatLearningsForPrompt,
+  formatContextForPrompt,
+} from "./learnings.ts";
 
 // ---------------------------------------------------------------------------
 // Default preamble
@@ -113,6 +116,19 @@ export interface AssemblePromptOptions {
    * back to a generic suggestion.
    */
   feedbackHint?: string;
+  /**
+   * Accumulated context notes from prior iterations (in-memory).
+   * Context captures session-scoped notes: code locations, API surfaces,
+   * navigation breadcrumbs, and decisions. These are ephemeral and do not
+   * persist across plans.
+   */
+  context?: string[];
+  /**
+   * Whether context extraction is enabled. When true (default), the prompt
+   * includes the `<context>` block mandate and injects any accumulated
+   * context notes. When false, context is omitted entirely.
+   */
+  enableContext?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +214,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     scopeHint,
     feedbackScope,
     learnings,
+    context = [],
     planFormat = "tasks",
     gateRejection,
     nonce,
@@ -206,6 +223,7 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
     preamble = "",
     agentInstructions = "",
     enableLearnings = true,
+    enableContext = true,
     commitStyle = "conventional",
     feedbackHint = "",
   } = options;
@@ -228,6 +246,13 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const learningsHint =
     learnings.length > 0
       ? " Apply any relevant learnings from previous iterations included below."
+      : "";
+
+  // --- Context notes (in-memory, session-scoped) ---
+  const contextContext = enableContext ? formatContextForPrompt(context) : "";
+  const contextHint =
+    enableContext && context.length > 0
+      ? " Review any context notes from previous iterations included below."
       : "";
 
   // --- Feedback commands text ---
@@ -268,6 +293,8 @@ export function assemblePrompt(options: AssemblePromptOptions): string {
   const promiseClose = "</promise>";
   const learningsOpen = `<learnings${nonceAttr}>`;
   const learningsClose = "</learnings>";
+  const contextOpen = `<context${nonceAttr}>`;
+  const contextClose = "</context>";
   const progressOpen = `<progress${nonceAttr}>`;
   const progressClose = "</progress>";
   const prSummaryOpen = `<pr-summary${nonceAttr}>`;
@@ -308,7 +335,11 @@ Implemented input validation (3.1), error messages (3.2), and updated tests (3.3
 ${progressClose}
 Ralphai extracts this block and appends it to the progress file automatically. Do NOT write progress.md directly.`;
 
-  // --- Learnings context section (injected before instructions when non-empty) ---
+  // --- Context section (injected before learnings when non-empty and enabled) ---
+  const contextSection =
+    contextContext.length > 0 ? `\n${contextContext}\n` : "";
+
+  // --- Learnings context section (injected after context when non-empty) ---
   const learningsSection =
     learningsContext.length > 0 ? `\n${learningsContext}\n` : "";
 
@@ -320,7 +351,7 @@ Ralphai extracts this block and appends it to the progress file automatically. D
   // --- Terse communication instruction ---
   // Included by default (concise mode). Omitted when verbose is true.
   const terseInstruction = !verbose
-    ? `TERSE MODE: Apply concise, abbreviated style ONLY to your working commentary — status updates, reasoning notes, and conversational replies. Drop articles, filler words, pleasantries, and hedging there; fragments and short synonyms are fine. For everything else — code, documentation files, code comments, JSDoc/TSDoc, commit messages, PR descriptions, error messages, and structured XML blocks (<learnings>, <progress>, <pr-summary>) — use normal, grammatical prose. These are read by humans or persisted in the codebase and must not use terse style. Keep technical terms, identifiers, and code exactly as-is everywhere.\n`
+    ? `TERSE MODE: Apply concise, abbreviated style ONLY to your working commentary — status updates, reasoning notes, and conversational replies. Drop articles, filler words, pleasantries, and hedging there; fragments and short synonyms are fine. For everything else — code, documentation files, code comments, JSDoc/TSDoc, commit messages, PR descriptions, error messages, and structured XML blocks (<context>, <learnings>, <progress>, <pr-summary>) — use normal, grammatical prose. These are read by humans or persisted in the codebase and must not use terse style. Keep technical terms, identifiers, and code exactly as-is everywhere.\n`
     : "";
 
   // --- Preamble resolution ---
@@ -334,8 +365,8 @@ Ralphai extracts this block and appends it to the progress file automatically. D
 
   // --- Assemble the prompt ---
   return `${terseInstruction}${effectivePreamble}
-${agentInstructionsSection}${fileRefs}${scopeHint}${gateSection}${learningsSection}
-1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${learningsHint}
+${agentInstructionsSection}${fileRefs}${scopeHint}${gateSection}${contextSection}${learningsSection}
+1. Review the plan and progress content provided above (already inlined — do NOT attempt to read plan.md or progress.md from disk; they do not exist in the worktree).${contextHint}${learningsHint}
 2. ${step2}
 3. Implement it with small, focused changes.
 4. ${feedbackStep}${feedbackScopeHint}
@@ -346,9 +377,34 @@ IMPORTANT: Ralphai runs an independent completion gate after you output COMPLETE
 When you output COMPLETE, also include a ${prSummaryOpen}...${prSummaryClose} block containing a 1-3 sentence plain-language description of what this PR accomplishes. Write it for a human reviewer — explain the purpose and impact, not a list of commits. Example:
 ${prSummaryOpen}
 Add JWT-based authentication with login/logout endpoints, replacing the previous cookie-based session system. Includes rate limiting on auth routes and automatic token refresh.
-${prSummaryClose}${
-    enableLearnings
-      ? `
+${prSummaryClose}${(() => {
+    // Build the context + learnings block instructions based on enable flags
+    const parts: string[] = [];
+
+    if (enableContext) {
+      parts.push(`
+REQUIRED: At the very end of your response, include a ${contextOpen}...${contextClose} block. Record session-scoped notes that will help you (or a future iteration) stay oriented: code locations discovered, API surfaces explored, architectural decisions made, navigation breadcrumbs, and working-state observations. These notes are ephemeral — they persist only for the current plan's run, not across plans.
+If you have no context notes this iteration, use:
+${contextOpen}none${contextClose}
+The ${contextOpen}...${contextClose} block is mandatory in every response. Ralphai will parse it and carry forward the notes to subsequent iterations.`);
+    }
+
+    if (enableLearnings && enableContext) {
+      parts.push(`
+REQUIRED: Also include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends.
+IMPORTANT: Do NOT put session-specific notes (file paths, API signatures, code locations, navigation breadcrumbs) in the learnings block — those belong in the ${contextOpen}...${contextClose} block above. Learnings are for durable behavioral lessons that would still be useful if the codebase had changed since this iteration.
+A learning must be durable: ask yourself "would this still be useful if the codebase had changed since this iteration?" If the answer is no, it is a session note, not a learning — put it in the context block instead.
+Do NOT log: where a specific file lives, what a function signature looks like after you just read it, or a narration of your exploration steps. These are session notes that belong in context.
+DO log: behavioral patterns, architectural constraints, recurring failure modes, and project conventions that would help a future agent avoid a class of mistakes.
+Use:
+${learningsOpen}
+Your freeform prose lesson here.
+${learningsClose}
+If no learnings this iteration, use:
+${learningsOpen}none${learningsClose}
+The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.`);
+    } else if (enableLearnings) {
+      parts.push(`
 REQUIRED: At the very end of your response, include a ${learningsOpen}...${learningsClose} block. If you made a mistake or learned something this iteration, write a durable, generalizable lesson as freeform prose — something worth considering for AGENTS.md. Do not log one-off typos or dead ends.
 A learning must be durable: ask yourself "would this still be useful if the codebase had changed since this iteration?" If the answer is no, it is a session note, not a learning — omit it.
 Do NOT log: where a specific file lives, what a function signature looks like after you just read it, or a narration of your exploration steps. These are session notes that go stale immediately.
@@ -359,8 +415,10 @@ Your freeform prose lesson here.
 ${learningsClose}
 If no learnings this iteration, use:
 ${learningsOpen}none${learningsClose}
-The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.`
-      : ""
-  }
+The ${learningsOpen}...${learningsClose} block is mandatory in every response. Ralphai will parse it and persist logged entries automatically.`);
+    }
+
+    return parts.join("");
+  })()}
 ${progressBlock}`;
 }
