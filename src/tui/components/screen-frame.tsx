@@ -46,6 +46,7 @@ export const SCREEN_LABELS: Record<Screen["type"], string> = {
   "backlog-picker": "backlog",
   confirm: "confirm",
   options: "options",
+  "resume-stalled": "resume",
   stop: "stop",
   reset: "reset",
   status: "status",

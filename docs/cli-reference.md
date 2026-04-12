@@ -88,7 +88,7 @@ Some menu actions open sub-screens instead of exiting the TUI:
 - **Pick from GitHub** — list of open GitHub issues (standalone + PRD)
 - **Run with options** — config wizard to override run options before launch
 - **Confirm** — review run details (target, agent, feedback commands) before launching
-- **Stop / Reset / Status / Doctor / Clean** — inline sub-screens for pipeline management
+- **Stop / Reset / Status / Doctor / Clean / Resume stalled** — inline sub-screens for pipeline management
 
 Press `Esc` to return from any sub-screen to the main menu.
 
@@ -437,22 +437,22 @@ Ralphai uses GitHub labels to identify which issues to process and to track thei
 
 Family labels tell Ralphai what kind of issue it's looking at:
 
-| Config Key              | Default                   | Env Var                          | Description                        |
-| ----------------------- | ------------------------- | -------------------------------- | ---------------------------------- |
-| `issue.prdLabel`        | `"ralphai-prd"`           | `RALPHAI_ISSUE_PRD_LABEL`        | PRD parent issues.                 |
-| `issue.standaloneLabel` | `"ralphai-standalone"`    | `RALPHAI_ISSUE_STANDALONE_LABEL` | Standalone issues.                 |
-| `issue.subissueLabel`   | `"ralphai-subissue"`      | `RALPHAI_ISSUE_SUBISSUE_LABEL`   | PRD sub-issues.                    |
-| `issue.hitlLabel`       | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`       | Sub-issues requiring human input.  |
+| Config Key              | Default                   | Env Var                          | Description                       |
+| ----------------------- | ------------------------- | -------------------------------- | --------------------------------- |
+| `issue.prdLabel`        | `"ralphai-prd"`           | `RALPHAI_ISSUE_PRD_LABEL`        | PRD parent issues.                |
+| `issue.standaloneLabel` | `"ralphai-standalone"`    | `RALPHAI_ISSUE_STANDALONE_LABEL` | Standalone issues.                |
+| `issue.subissueLabel`   | `"ralphai-subissue"`      | `RALPHAI_ISSUE_SUBISSUE_LABEL`   | PRD sub-issues.                   |
+| `issue.hitlLabel`       | `"ralphai-subissue-hitl"` | `RALPHAI_ISSUE_HITL_LABEL`       | Sub-issues requiring human input. |
 
 ### State Labels
 
 State labels track progress. Ralphai adds and removes these automatically:
 
-| Config Key              | Default           | Env Var                           | Description                              |
-| ----------------------- | ----------------- | --------------------------------- | ---------------------------------------- |
-| `issue.inProgressLabel` | `"in-progress"`   | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | Added when an issue is being worked on.  |
-| `issue.doneLabel`       | `"done"`          | `RALPHAI_ISSUE_DONE_LABEL`        | Added when work completes successfully.  |
-| `issue.stuckLabel`      | `"stuck"`         | `RALPHAI_ISSUE_STUCK_LABEL`       | Added when the agent gets stuck.         |
+| Config Key              | Default         | Env Var                           | Description                             |
+| ----------------------- | --------------- | --------------------------------- | --------------------------------------- |
+| `issue.inProgressLabel` | `"in-progress"` | `RALPHAI_ISSUE_IN_PROGRESS_LABEL` | Added when an issue is being worked on. |
+| `issue.doneLabel`       | `"done"`        | `RALPHAI_ISSUE_DONE_LABEL`        | Added when work completes successfully. |
+| `issue.stuckLabel`      | `"stuck"`       | `RALPHAI_ISSUE_STUCK_LABEL`       | Added when the agent gets stuck.        |
 
 ### Customizing Labels
 

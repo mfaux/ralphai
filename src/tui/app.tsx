@@ -41,9 +41,11 @@ import { ResetScreen } from "./screens/reset.tsx";
 import { StatusScreen } from "./screens/status.tsx";
 import { DoctorScreen } from "./screens/doctor.tsx";
 import { CleanScreen } from "./screens/clean.tsx";
+import { ResumeStalledScreen } from "./screens/resume.tsx";
 import {
   runningPlans,
   resettablePlans,
+  stalledPlans,
 } from "../interactive/pipeline-actions.ts";
 import { runRalphaiStop } from "../stop.ts";
 import { resetPlanBySlug } from "../ralphai.ts";
@@ -343,6 +345,15 @@ export function App({
             onResult={dispatch}
             backScreen={screen.backScreen}
             resolvedConfig={resolvedConfig}
+            isActive={true}
+          />
+        );
+
+      case "resume-stalled":
+        return (
+          <ResumeStalledScreen
+            stalledPlans={pipeline.state ? stalledPlans(pipeline.state) : []}
+            onResult={dispatchViaConfirm({ type: "resume-stalled" })}
             isActive={true}
           />
         );

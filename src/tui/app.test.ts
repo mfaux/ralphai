@@ -8,7 +8,6 @@
 
 import { describe, it, expect } from "bun:test";
 import { handleAction } from "./app.tsx";
-import type { ActionType } from "./types.ts";
 import { ACTION_TYPES, toConfirmNav, toOptionsNav } from "./types.ts";
 import type { RunConfig } from "./types.ts";
 
@@ -69,55 +68,6 @@ describe("handleAction", () => {
     });
   });
 
-  describe("stay actions", () => {
-    const stayActions: ActionType[] = ["resume-stalled"];
-
-    for (const action of stayActions) {
-      it(`${action} returns stay`, () => {
-        const result = handleAction(action);
-        expect(result).toEqual({ type: "stay" });
-      });
-    }
-  });
-
-  describe("settings action", () => {
-    it('settings returns exit-to-runner with ["init", "--force"] (dispatched directly, no confirm screen)', () => {
-      const result = handleAction("settings");
-      expect(result).toEqual({
-        type: "exit-to-runner",
-        args: ["init", "--force"],
-      });
-
-      // Unlike run actions, settings dispatches directly — it does NOT
-      // go through toConfirmNav. The App component has a special case
-      // for "settings" that calls dispatch(result) directly so the
-      // TUI exits and `ralphai init --force` runs in the terminal.
-    });
-  });
-
-  describe("options action", () => {
-    it("run-with-options returns exit-to-runner (intercepted by App via toOptionsNav)", () => {
-      const result = handleAction("run-with-options");
-      expect(result).toEqual({ type: "exit-to-runner", args: ["run"] });
-
-      // The App component wraps this through toOptionsNav, producing
-      // a navigate-to-options result. Verify the full flow:
-      const config: RunConfig = {
-        agentCommand: "claude-code",
-        feedbackCommands: "bun test",
-      };
-      const optioned = toOptionsNav(result!, config, { type: "menu" });
-      expect(optioned.type).toBe("navigate");
-      if (optioned.type === "navigate") {
-        expect(optioned.screen.type).toBe("options");
-        if (optioned.screen.type === "options") {
-          expect(optioned.screen.backScreen?.type).toBe("menu");
-          expect(optioned.screen.data.runArgs).toEqual(["run"]);
-        }
-      }
-    });
-  });
-
   describe("navigate actions", () => {
     it("pick-from-backlog navigates to backlog-picker", () => {
       const result = handleAction("pick-from-backlog");
@@ -173,6 +123,52 @@ describe("handleAction", () => {
         type: "navigate",
         screen: { type: "clean" },
       });
+    });
+
+    it("resume-stalled navigates to resume-stalled screen", () => {
+      const result = handleAction("resume-stalled");
+      expect(result).toEqual({
+        type: "navigate",
+        screen: { type: "resume-stalled" },
+      });
+    });
+  });
+
+  describe("settings action", () => {
+    it('settings returns exit-to-runner with ["init", "--force"] (dispatched directly, no confirm screen)', () => {
+      const result = handleAction("settings");
+      expect(result).toEqual({
+        type: "exit-to-runner",
+        args: ["init", "--force"],
+      });
+
+      // Unlike run actions, settings dispatches directly — it does NOT
+      // go through toConfirmNav. The App component has a special case
+      // for "settings" that calls dispatch(result) directly so the
+      // TUI exits and `ralphai init --force` runs in the terminal.
+    });
+  });
+
+  describe("options action", () => {
+    it("run-with-options returns exit-to-runner (intercepted by App via toOptionsNav)", () => {
+      const result = handleAction("run-with-options");
+      expect(result).toEqual({ type: "exit-to-runner", args: ["run"] });
+
+      // The App component wraps this through toOptionsNav, producing
+      // a navigate-to-options result. Verify the full flow:
+      const config: RunConfig = {
+        agentCommand: "claude-code",
+        feedbackCommands: "bun test",
+      };
+      const optioned = toOptionsNav(result!, config, { type: "menu" });
+      expect(optioned.type).toBe("navigate");
+      if (optioned.type === "navigate") {
+        expect(optioned.screen.type).toBe("options");
+        if (optioned.screen.type === "options") {
+          expect(optioned.screen.backScreen?.type).toBe("menu");
+          expect(optioned.screen.data.runArgs).toEqual(["run"]);
+        }
+      }
     });
   });
 

@@ -206,7 +206,7 @@ The runner handles SIGTERM gracefully: it finishes the current iteration, preser
 ralphai run
 ```
 
-Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the interactive menu (`ralphai`) to see current progress and launch a new run from there.
+Ralphai auto-detects in-progress work and picks up where it left off. You can also reopen the interactive menu (`ralphai`) to see current progress and launch a new run from there. Stalled plans can also be resumed directly from the TUI via the "Resume stalled plan" action (hotkey **r**) — it shows a picker when multiple plans are stalled, or a Y/N confirmation for a single plan, then routes through the confirm screen before launching.
 
 If the agent left uncommitted changes from a previous run, use `--resume` to commit the dirty state before continuing:
 
