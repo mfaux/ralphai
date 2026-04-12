@@ -6,10 +6,10 @@ Back to the [README](../README.md) for setup and quickstart. See the [CLI Refere
 
 ## Work from a PRD (recommended for features)
 
-For multi-step features, create a PRD (Product Requirements Document) on GitHub:
+For multi-step features, use the planning skills to go from idea to executable issues:
 
-1. Create a GitHub issue for the feature. Label it with the PRD label (`ralphai-prd` by default, configurable via `issue.prdLabel`).
-2. Add sub-issues for each piece of work. Use GitHub's native blocking relationships for ordering.
+1. Ask your agent to **`write-a-prd`** — it interviews you and creates a PRD as a GitHub issue, labeled `ralphai-prd`.
+2. Ask your agent to **`prd-to-issues`** — it decomposes the PRD into vertical-slice sub-issues with GitHub blocking relationships for ordering.
 3. Point Ralphai at the PRD:
 
 ```bash
@@ -18,11 +18,13 @@ ralphai run 42           # issue #42: detected as PRD via label, processes sub-i
 
 Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items.
 
+You can also create PRD issues and sub-issues by hand — just apply the `ralphai-prd` label (configurable via `issue.prdLabel`) and add sub-issues. The skills automate this.
+
 The interactive menu also supports PRDs: select "Pick from GitHub" (or press **g**) and PRD issues appear with their sub-issue tree.
 
 ## Run a single GitHub issue
 
-For one-off bugs or small tasks, label a GitHub issue with `ralphai-standalone` (configurable via `issue.standaloneLabel`) and target it directly:
+For one-off bugs or small tasks, ask your agent to **`triage-issue`** — it investigates the problem and creates a labeled standalone issue. Or label any GitHub issue with `ralphai-standalone` (configurable via `issue.standaloneLabel`) and target it directly:
 
 ```bash
 ralphai run 57           # run standalone issue #57: one branch, one PR

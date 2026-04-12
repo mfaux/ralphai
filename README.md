@@ -49,14 +49,14 @@ npx skills add mfaux/ralphai -g           # install agent skills (recommended)
 
 ## How It Works
 
-### 1. Label GitHub issues
+### 1. Plan with your agent
 
-Use two labels to tell Ralphai what to work on:
+Use the included skills to turn ideas into GitHub issues your agent can execute:
 
-- **`ralphai-prd`** — for features. Add sub-issues for each piece of work; Ralphai processes them sequentially on one branch and opens a single aggregate PR.
-- **`ralphai-standalone`** — for bugs and small tasks. Each gets its own branch and PR.
+- **Features** — ask your agent to `write-a-prd`, then `prd-to-issues` to decompose it into labeled sub-issues. Ralphai processes them sequentially on one branch and opens a single aggregate PR.
+- **Bugs & small tasks** — ask your agent to `triage-issue` to investigate and create a standalone issue. Each gets its own branch and PR.
 
-Sub-issues support dependencies via GitHub's native blocking relationships. Labels are [configurable](docs/cli-reference.md#config-keys).
+Both skills label the issues automatically (`ralphai-prd` / `ralphai-standalone`). You can also label issues by hand. Labels are [configurable](docs/cli-reference.md#config-keys).
 
 ### 2. Run
 
@@ -78,7 +78,7 @@ Running bare `ralphai` opens a TUI to browse the pipeline, pick issues, and laun
 
 ### Local plan files
 
-You can also drive Ralphai with local markdown files instead of GitHub issues. See [Workflows → Local plan files](docs/workflows.md#local-plan-files). The recommended workflow is GitHub issues: plan with a skill (`write-a-prd`, `triage-issue`), decompose with `prd-to-issues`, then let Ralphai run.
+You can also drive Ralphai with local markdown files instead of GitHub issues — see [Workflows → Local plan files](docs/workflows.md#local-plan-files).
 
 ## Day-to-Day
 
