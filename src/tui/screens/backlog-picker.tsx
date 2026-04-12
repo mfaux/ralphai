@@ -82,7 +82,7 @@ export function buildBacklogPickerItems(
 /**
  * Map a selected backlog picker value to a `DispatchResult`.
  *
- * Returns `exit-to-runner` with `["run", "--plan", filename]` for valid
+ * Returns `exit-to-runner` with `["run", "--plan=<filename>"]` for valid
  * plan filenames. Returns `null` for the back sentinel or unexpected
  * values.
  */
@@ -90,7 +90,7 @@ export function backlogPickerSelect(value: string): DispatchResult | null {
   if (value === "__back__") return null;
   if (!value) return null;
 
-  return { type: "exit-to-runner", args: ["run", "--plan", value] };
+  return { type: "exit-to-runner", args: ["run", `--plan=${value}`] };
 }
 
 // ---------------------------------------------------------------------------

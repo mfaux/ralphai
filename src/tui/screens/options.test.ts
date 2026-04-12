@@ -41,7 +41,7 @@ function makeData(overrides?: Partial<ConfirmData>): ConfirmData {
     agentCommand: "claude-code",
     branch: "ralphai/feat-login",
     feedbackCommands: "bun run build && bun run test",
-    runArgs: ["run", "--plan", "feat-login.md"],
+    runArgs: ["run", "--plan=feat-login.md"],
     ...overrides,
   };
 }
@@ -126,11 +126,11 @@ describe("optionsKeyHandler", () => {
 describe("resolveOptionsIntent", () => {
   describe("confirm intent", () => {
     it("returns exit-to-runner with the data's runArgs", () => {
-      const data = makeData({ runArgs: ["run", "--plan", "my-plan.md"] });
+      const data = makeData({ runArgs: ["run", "--plan=my-plan.md"] });
       const result = resolveOptionsIntent("confirm", data, { type: "menu" });
       expect(result).toEqual({
         type: "exit-to-runner",
-        args: ["run", "--plan", "my-plan.md"],
+        args: ["run", "--plan=my-plan.md"],
       });
     });
 
@@ -286,28 +286,24 @@ describe("buildCheckboxItems", () => {
 describe("mergeWizardFlags", () => {
   it("inserts flags after 'run' in runArgs", () => {
     const result = mergeWizardFlags(
-      ["run", "--plan", "test.md"],
+      ["run", "--plan=test.md"],
       ["--gate-max-stuck=5", "--base-branch=dev"],
     );
     expect(result).toEqual([
       "run",
       "--gate-max-stuck=5",
       "--base-branch=dev",
-      "--plan",
-      "test.md",
+      "--plan=test.md",
     ]);
   });
 
   it("inserts flags at the start when no 'run' in args", () => {
-    const result = mergeWizardFlags(
-      ["--plan", "test.md"],
-      ["--gate-max-stuck=5"],
-    );
-    expect(result).toEqual(["--gate-max-stuck=5", "--plan", "test.md"]);
+    const result = mergeWizardFlags(["--plan=test.md"], ["--gate-max-stuck=5"]);
+    expect(result).toEqual(["--gate-max-stuck=5", "--plan=test.md"]);
   });
 
   it("returns original args unchanged when no wizard flags", () => {
-    const original = ["run", "--plan", "test.md"];
+    const original = ["run", "--plan=test.md"];
     const result = mergeWizardFlags(original, []);
     expect(result).toEqual(original);
     // Should be a new array, not the same reference
@@ -325,7 +321,7 @@ describe("mergeWizardFlags", () => {
   });
 
   it("does not modify the original runArgs array", () => {
-    const original = ["run", "--plan", "test.md"];
+    const original = ["run", "--plan=test.md"];
     const originalCopy = [...original];
     mergeWizardFlags(original, ["--gate-max-stuck=5"]);
     expect(original).toEqual(originalCopy);
@@ -341,10 +337,10 @@ describe("resolveWizardResult", () => {
     const values: Partial<Record<WizardConfigKey, string>> = {
       "gate.maxStuck": "5",
     };
-    const result = resolveWizardResult(values, ["run", "--plan", "test.md"]);
+    const result = resolveWizardResult(values, ["run", "--plan=test.md"]);
     expect(result).toEqual({
       type: "exit-to-runner",
-      args: ["run", "--gate-max-stuck=5", "--plan", "test.md"],
+      args: ["run", "--gate-max-stuck=5", "--plan=test.md"],
     });
   });
 
@@ -475,7 +471,7 @@ describe("wizard flow: pure logic end-to-end", () => {
       "gate.maxStuck": "10",
       sandbox: "docker",
     };
-    const runArgs = ["run", "--plan", "my-feature.md"];
+    const runArgs = ["run", "--plan=my-feature.md"];
 
     const result = resolveWizardResult(values, runArgs);
 
@@ -483,11 +479,10 @@ describe("wizard flow: pure logic end-to-end", () => {
     if (result.type === "exit-to-runner") {
       expect(result.args).toContain("--gate-max-stuck=10");
       expect(result.args).toContain("--sandbox=docker");
-      expect(result.args).toContain("--plan");
-      expect(result.args).toContain("my-feature.md");
-      // Wizard flags should appear before --plan
+      expect(result.args).toContain("--plan=my-feature.md");
+      // Wizard flags should appear before --plan=
       const maxStuckIdx = result.args.indexOf("--gate-max-stuck=10");
-      const planIdx = result.args.indexOf("--plan");
+      const planIdx = result.args.indexOf("--plan=my-feature.md");
       expect(maxStuckIdx).toBeLessThan(planIdx);
     }
   });

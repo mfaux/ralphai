@@ -199,7 +199,7 @@ export interface RunConfig {
  *
  * - `["run"]` → next plan name from state, or "Auto-detect (next plan)"
  * - `["run", "42"]` → "Issue #42"
- * - `["run", "--plan", "feat-login.md"]` → "feat-login.md"
+ * - `["run", "--plan=feat-login.md"]` → "feat-login.md"
  *
  * When `state` is provided and the args indicate auto-detection,
  * resolves the actual next plan name using the same dependency-aware
@@ -219,10 +219,10 @@ export function titleFromRunArgs(
     return "Auto-detect (next plan)";
   }
 
-  // --plan <filename>
-  const planIdx = rest.indexOf("--plan");
-  if (planIdx !== -1 && planIdx + 1 < rest.length) {
-    return rest[planIdx + 1]!;
+  // --plan=<filename> (equals-sign format, matching CLI validator)
+  const planArg = rest.find((a) => a.startsWith("--plan="));
+  if (planArg) {
+    return planArg.slice("--plan=".length);
   }
 
   // Bare number → issue
@@ -241,7 +241,7 @@ export function titleFromRunArgs(
  *
  * - `["run"]` → "(auto)"
  * - `["run", "42"]` → "(auto)"
- * - `["run", "--plan", "feat-login.md"]` → "(auto)"
+ * - `["run", "--plan=feat-login.md"]` → "(auto)"
  */
 export function branchFromRunArgs(_args: string[]): string {
   return "(auto)";

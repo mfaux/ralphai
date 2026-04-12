@@ -159,7 +159,7 @@ describe("backlogPickerSelect", () => {
 
     expect(result).toEqual({
       type: "exit-to-runner",
-      args: ["run", "--plan", "feat-login.md"],
+      args: ["run", "--plan=feat-login.md"],
     });
   });
 
@@ -176,7 +176,23 @@ describe("backlogPickerSelect", () => {
 
     expect(result).toEqual({
       type: "exit-to-runner",
-      args: ["run", "--plan", "gh-42-add-feature.md"],
+      args: ["run", "--plan=gh-42-add-feature.md"],
     });
+  });
+
+  it("produces args compatible with CLI --plan= validator", () => {
+    // The CLI argument validator (in ralphai.ts) uses /^--plan=/ to recognize
+    // the plan flag. Verify that backlogPickerSelect produces args that match
+    // this pattern, preventing "Unrecognized argument: --plan" errors.
+    const result = backlogPickerSelect("feat-login.md");
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("exit-to-runner");
+
+    if (result!.type === "exit-to-runner") {
+      const planArg = result!.args.find((a: string) => a !== "run");
+      expect(planArg).toBeDefined();
+      expect(/^--plan=/.test(planArg!)).toBe(true);
+      expect(planArg).toBe("--plan=feat-login.md");
+    }
   });
 });

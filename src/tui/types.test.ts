@@ -340,14 +340,14 @@ describe("titleFromRunArgs", () => {
     expect(titleFromRunArgs(["run", "42"])).toBe("Issue #42");
   });
 
-  it('returns plan filename for ["run", "--plan", "feat-login.md"]', () => {
-    expect(titleFromRunArgs(["run", "--plan", "feat-login.md"])).toBe(
+  it('returns plan filename for ["run", "--plan=feat-login.md"]', () => {
+    expect(titleFromRunArgs(["run", "--plan=feat-login.md"])).toBe(
       "feat-login.md",
     );
   });
 
   it("handles --plan with complex filenames", () => {
-    expect(titleFromRunArgs(["run", "--plan", "gh-42-add-feature.md"])).toBe(
+    expect(titleFromRunArgs(["run", "--plan=gh-42-add-feature.md"])).toBe(
       "gh-42-add-feature.md",
     );
   });
@@ -415,7 +415,7 @@ describe("branchFromRunArgs", () => {
   it('returns "(auto)" for any args', () => {
     expect(branchFromRunArgs(["run"])).toBe("(auto)");
     expect(branchFromRunArgs(["run", "42"])).toBe("(auto)");
-    expect(branchFromRunArgs(["run", "--plan", "feat.md"])).toBe("(auto)");
+    expect(branchFromRunArgs(["run", "--plan=feat.md"])).toBe("(auto)");
   });
 });
 
@@ -448,11 +448,11 @@ describe("buildConfirmDataFromArgs", () => {
 
   it("builds ConfirmData for plan run", () => {
     const data = buildConfirmDataFromArgs(
-      ["run", "--plan", "feat-login.md"],
+      ["run", "--plan=feat-login.md"],
       config,
     );
     expect(data.title).toBe("feat-login.md");
-    expect(data.runArgs).toEqual(["run", "--plan", "feat-login.md"]);
+    expect(data.runArgs).toEqual(["run", "--plan=feat-login.md"]);
   });
 
   it("uses config values for agent and feedback", () => {
@@ -534,7 +534,7 @@ describe("toConfirmNav", () => {
   it("sets backScreen to backlog-picker for backlog selections", () => {
     const result: DispatchResult = {
       type: "exit-to-runner",
-      args: ["run", "--plan", "feat.md"],
+      args: ["run", "--plan=feat.md"],
     };
     const backScreen: Screen = { type: "backlog-picker" };
     const converted = toConfirmNav(result, config, backScreen);
@@ -569,7 +569,7 @@ describe("toConfirmNav", () => {
   it("builds correct ConfirmData from run args and config", () => {
     const result: DispatchResult = {
       type: "exit-to-runner",
-      args: ["run", "--plan", "my-plan.md"],
+      args: ["run", "--plan=my-plan.md"],
     };
     const converted = toConfirmNav(result, config, { type: "backlog-picker" });
 
@@ -579,7 +579,7 @@ describe("toConfirmNav", () => {
         agentCommand: "claude-code",
         branch: "(auto)",
         feedbackCommands: "bun test",
-        runArgs: ["run", "--plan", "my-plan.md"],
+        runArgs: ["run", "--plan=my-plan.md"],
       });
     }
   });
@@ -755,7 +755,7 @@ describe("transition flows", () => {
     // Simulates what backlogPickerSelect returns
     const pickerResult: DispatchResult = {
       type: "exit-to-runner",
-      args: ["run", "--plan", "feat-login.md"],
+      args: ["run", "--plan=feat-login.md"],
     };
     const confirmNav = toConfirmNav(pickerResult, config, {
       type: "backlog-picker",
