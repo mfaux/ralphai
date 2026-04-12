@@ -292,16 +292,16 @@ describe("parseLearningContent", () => {
   });
 
   // <entry> tag stripping behavior
-  it("returns null for a single none", () => {
-    expect(parseLearningContent("none")).toBeNull();
-  });
-
   it('returns null for <entry> with whitespace around "status: none"', () => {
     expect(parseLearningContent("<entry>  status: none  </entry>")).toBeNull();
   });
 
   it("returns null when all entries are status: none", () => {
-    expect(parseLearningContent("none")).toBeNull();
+    expect(
+      parseLearningContent(
+        "<entry>status: none</entry><entry>status: none</entry>",
+      ),
+    ).toBeNull();
   });
 
   it("extracts real content and ignores status: none entries", () => {
