@@ -49,6 +49,22 @@ function setupGlobalPipeline(cwd: string) {
   return { ralphaiHome, ...dirs };
 }
 
+/** Capture console.log output during an async function. */
+async function captureLogs(
+  fn: () => Promise<RunnerResult>,
+): Promise<{ output: string; result: RunnerResult }> {
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+  let result: RunnerResult;
+  try {
+    result = await fn();
+  } finally {
+    console.log = origLog;
+  }
+  return { output: logs.join("\n"), result };
+}
+
 // ---------------------------------------------------------------------------
 // Zero-completion guard tests
 // ---------------------------------------------------------------------------
@@ -104,20 +120,7 @@ describe("runRunner — zero-completion guard", () => {
       drain: false,
     };
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-
-    let result: RunnerResult;
-    try {
-      result = await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
-
-    const output = logs.join("\n");
+    const { output, result } = await captureLogs(() => runRunner(opts));
 
     // Plan should be marked as stuck, NOT accepted
     expect(result.stuckSlugs).toContain("zero-comp");
@@ -168,18 +171,7 @@ describe("runRunner — zero-completion guard", () => {
       drain: false,
     };
 
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-
-    let result: RunnerResult;
-    try {
-      result = await runRunner(opts);
-    } finally {
-      console.log = origLog;
-    }
+    const { result } = await captureLogs(() => runRunner(opts));
 
     // Plan should NOT be stuck — it should be force-accepted
     expect(result.stuckSlugs).not.toContain("partial-comp");
