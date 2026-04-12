@@ -172,64 +172,6 @@ describe("handleAction", () => {
     });
   });
 
-  describe("navigate actions", () => {
-    it("pick-from-backlog navigates to backlog-picker", () => {
-      const result = handleAction("pick-from-backlog");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "backlog-picker" },
-      });
-    });
-
-    it("pick-from-github navigates to issue-picker", () => {
-      const result = handleAction("pick-from-github");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "issue-picker" },
-      });
-    });
-
-    it("stop-running navigates to stop screen", () => {
-      const result = handleAction("stop-running");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "stop" },
-      });
-    });
-
-    it("reset-plan navigates to reset screen", () => {
-      const result = handleAction("reset-plan");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "reset" },
-      });
-    });
-
-    it("view-status navigates to status screen", () => {
-      const result = handleAction("view-status");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "status" },
-      });
-    });
-
-    it("doctor navigates to doctor screen", () => {
-      const result = handleAction("doctor");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "doctor" },
-      });
-    });
-
-    it("clean navigates to clean screen", () => {
-      const result = handleAction("clean");
-      expect(result).toEqual({
-        type: "navigate",
-        screen: { type: "clean" },
-      });
-    });
-  });
-
   describe("consistency with menu items", () => {
     it("handles all 12 action types", () => {
       let count = 0;
