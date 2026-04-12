@@ -6,7 +6,7 @@
  * deferred until `ink-testing-library` is available.
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "bun:test";
 import type { Screen } from "./types.ts";
 import type { ConfirmData } from "./screens/confirm.tsx";
 

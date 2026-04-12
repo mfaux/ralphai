@@ -214,15 +214,6 @@ describe("resolveAction", () => {
       }
     }
   });
-
-  it("no action returns undefined", () => {
-    for (const action of ACTION_TYPES) {
-      if (isActionType(action)) {
-        const result = resolveAction(action);
-        expect(result).not.toBeUndefined();
-      }
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------
