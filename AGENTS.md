@@ -43,6 +43,15 @@ Don't treat a task as done until you've traced how your changes affect the rest 
 
 The `--dry-run` / `-n` flag must never cause side effects. When adding code that runs before the runner loop starts (in `src/runner.ts` or the CLI layer in `src/ralphai.ts`), verify it is read-only. Common violations: creating directories, writing files, running `git worktree add`, or calling external APIs like `gh issue edit`.
 
+## TUI / CLI Alignment
+
+The TUI and CLI communicate through a string array of CLI arguments — there is no shared schema. The TUI constructs args (e.g. `["run", "--plan=dark-mode.md"]`), the CLI parses and validates them. Format mismatches cause silent failures: the TUI happily builds args that the CLI rejects at runtime with `process.exit(1)`.
+
+- **Value flags use `=` format.** Always `--flag=value`, never `--flag value` (space-separated). The CLI validator uses regex patterns like `/^--plan=/`; a bare `--plan` token fails validation, and the separated value gets misinterpreted as a positional target.
+- **New CLI flag? Update the validator.** When adding a flag to `run`, add it to `KNOWN_RUN_FLAGS` (boolean) or `CONFIG_FLAG_PATTERNS` (value) in the CLI layer. If the wizard can produce it, also add it to `WIZARD_KEYS` and `FLAG_NAMES` in the wizard-options module. A flag the wizard produces but the validator doesn't recognize will crash at runtime.
+- **New TUI action that exits to runner?** Verify the constructed args pass `validateRunArgs` by tracing them through `parseRalphaiOptions` → `validateRunArgs`. Check that `titleFromRunArgs` can extract a meaningful display title from the new arg shape.
+- **Changing a flag's name or format?** Search for the old name in TUI screens, the wizard-options module, `titleFromRunArgs`, and TUI test assertions — not just the CLI layer.
+
 ## Cross-Platform Tests
 
 CI runs on both Ubuntu and Windows. Don't hardcode Unix paths or assume Linux-specific behavior in tests. Use `path.join()` for path assertions and `describe.skipIf(process.platform === "win32")` for inherently platform-specific tests.
