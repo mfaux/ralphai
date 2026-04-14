@@ -129,6 +129,7 @@ Ralphai works with any CLI agent that accepts a prompt argument. **Claude Code**
 - Matt Pocock — [Getting Started With Ralph](https://www.aihero.dev/getting-started-with-ralph), [mattpocock/skills](https://github.com/mattpocock/skills) (original source of planning and TDD skills), [Sandcastle](https://github.com/mattpocock/sandcastle) (ephemeral-container-per-invocation pattern for agent sandboxing)
 - [Caveman](https://github.com/JuliusBrussee/caveman) by Julius Brussee — inspiration for the caveman communication skill
 - [Vercel CLI](https://github.com/vercel/vercel) for CLI DX inspiration
+- [juriruegger](https://github.com/juriruegger) for the [review pass](https://github.com/mfaux/ralphai/blob/main/docs/how-ralphai-works.md#review-pass) step that helps prevent code bloat
 
 ## License
 
