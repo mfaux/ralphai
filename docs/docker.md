@@ -84,7 +84,7 @@ Ralphai publishes pre-built Docker images for supported agents:
 - `ghcr.io/mfaux/ralphai-sandbox:opencode`
 - `ghcr.io/mfaux/ralphai-sandbox:codex`
 
-Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), pnpm (via corepack), Bun, and the agent CLI. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
+Images are based on `debian:bookworm-slim` and include git, curl, Node.js (LTS), pnpm (via corepack), Bun, the Docker CLI, and the agent CLI. The Docker CLI is present but inert by default — it requires the host runtime socket to be forwarded into the container (via the `docker.hostRuntime` config key) to communicate with a Docker daemon. The image is auto-resolved from the agent command (e.g., `claude -p` → `:claude`). Unrecognized agents fall back to the `:latest` tag. Override with the `dockerImage` config key for custom images.
 
 At the start of each run, Ralphai pulls the resolved image (`docker pull --quiet`) to ensure the local cache is up to date. The pull is fail-open: if it fails (e.g., no network), the run continues with whatever image is cached locally.
 

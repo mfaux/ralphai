@@ -36,6 +36,20 @@ RUN apt-get update && \
       unzip && \
     rm -rf /var/lib/apt/lists/*
 
+# Install Docker CE CLI (client only — no daemon or containerd).
+# The CLI is inert without a socket; it becomes useful when the host runtime
+# socket is forwarded into the container via docker.hostRuntime.
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg \
+      -o /etc/apt/keyrings/docker.asc && \
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/debian bookworm stable" \
+      > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends docker-ce-cli && \
+    rm -rf /var/lib/apt/lists/* && \
+    chmod 755 /usr/bin/docker
+
 # Install Node.js (LTS via NodeSource)
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
