@@ -18,13 +18,6 @@ export interface SocketDetectionResult {
   forwardDockerHost: boolean;
 }
 
-/** Default socket paths to probe, in priority order. */
-const DEFAULT_SOCKET_PATHS = [
-  "/var/run/docker.sock",
-  // Podman user socket via XDG_RUNTIME_DIR (placeholder; expanded at call time)
-  // ~/.docker/run/docker.sock (placeholder; expanded at call time)
-];
-
 /**
  * Build the list of default socket paths to probe, expanding environment
  * variables and home directory references.
