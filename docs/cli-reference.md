@@ -175,6 +175,8 @@ What it does:
 --prompt-commit-style=<style>        Commit style: 'conventional' (default) or 'none'
 --pr-draft                           Create draft PRs (default: on)
 --no-pr-draft                        Create ready-for-review PRs instead of drafts
+--docker-host-runtime                Forward host Docker/Podman socket into sandbox
+--no-docker-host-runtime             Disable host runtime forwarding (default)
 --git-branch-prefix=<prefix>         Override branch prefix (e.g. 'ralphai/' produces ralphai/<slug>)
 --issue-hitl-label=<label>           Label marking sub-issues as requiring human interaction
 --show-config                        Print resolved settings and exit
@@ -504,6 +506,7 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | `RALPHAI_GATE_REVIEW_MAX_FILES`     | `gate.reviewMaxFiles`      |
 | `RALPHAI_GATE_VALIDATORS`           | `gate.validators`          |
 | `RALPHAI_PR_DRAFT`                  | `pr.draft`                 |
+| `RALPHAI_DOCKER_HOST_RUNTIME`       | `docker.hostRuntime`       |
 | `RALPHAI_GIT_BRANCH_PREFIX`         | `git.branchPrefix`         |
 | `RALPHAI_NO_UPDATE_CHECK`           | _(none)_                   |
 | `RALPHAI_ISSUE_SOURCE`              | `issue.source`             |

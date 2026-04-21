@@ -461,6 +461,7 @@ export function makeTestResolvedConfig(
     gate: wrapGroup(merged.gate),
     prompt: wrapGroup(merged.prompt),
     pr: wrapGroup(merged.pr),
+    docker: wrapGroup(merged.docker),
     git: wrapGroup(merged.git),
     issue: wrapGroup(merged.issue),
     baseBranch: { value: merged.baseBranch, source: "default" },

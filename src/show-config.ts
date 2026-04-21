@@ -63,6 +63,7 @@ const CONFIG_PATH_TO_ENV: Readonly<Record<string, string>> = {
   "prompt.context": "RALPHAI_PROMPT_CONTEXT",
   "prompt.commitStyle": "RALPHAI_PROMPT_COMMIT_STYLE",
   "pr.draft": "RALPHAI_PR_DRAFT",
+  "docker.hostRuntime": "RALPHAI_DOCKER_HOST_RUNTIME",
   "git.branchPrefix": "RALPHAI_GIT_BRANCH_PREFIX",
   "issue.source": "RALPHAI_ISSUE_SOURCE",
   "issue.standaloneLabel": "RALPHAI_ISSUE_STANDALONE_LABEL",
@@ -239,7 +240,8 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     config.sandbox.value === "docker" ||
     config.dockerImage.source !== "default" ||
     config.dockerMounts.source !== "default" ||
-    config.dockerEnvVars.source !== "default"
+    config.dockerEnvVars.source !== "default" ||
+    config.docker.hostRuntime.source !== "default"
   ) {
     const dockerImageVal = config.dockerImage.value || "<auto-resolve>";
     const dockerImageSrc = sourceLabel(
@@ -356,6 +358,16 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   const prDraftSrc = sourceLabel("pr.draft", config.pr.draft.source, input);
   lines.push(
     `  pr.draft           = ${config.pr.draft.value}  (${prDraftSrc})`,
+  );
+
+  // docker.hostRuntime
+  const dockerHostRuntimeSrc = sourceLabel(
+    "docker.hostRuntime",
+    config.docker.hostRuntime.source,
+    input,
+  );
+  lines.push(
+    `  docker.hostRuntime = ${config.docker.hostRuntime.value}  (${dockerHostRuntimeSrc})`,
   );
 
   // git.branchPrefix
