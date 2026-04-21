@@ -540,25 +540,13 @@ function runDryRun(
   // Docker dry-run: print the full docker run command
   if (effectiveSandbox === "docker") {
     const agentCmd = cfg.agent.command;
-    const dockerEnvVars = cfg.dockerEnvVars
-      ? cfg.dockerEnvVars
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-      : [];
-    const dockerMountsVal = cfg.dockerMounts
-      ? cfg.dockerMounts
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-      : [];
     const dockerArgs = buildDockerArgs({
       agentCommand: agentCmd,
       prompt: "<PROMPT>",
       cwd: worktreeDir,
       dockerImage: cfg.dockerImage || undefined,
-      dockerEnvVars,
-      dockerMounts: dockerMountsVal,
+      dockerEnvVars: csvToArray(cfg.dockerEnvVars),
+      dockerMounts: csvToArray(cfg.dockerMounts),
       mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
     });
     console.log(`[dry-run] Docker command: ${formatDockerCommand(dockerArgs)}`);
@@ -572,6 +560,15 @@ function runDryRun(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Split a comma-separated config string into a trimmed, non-empty array. */
+function csvToArray(csv: string | undefined): string[] {
+  if (!csv) return [];
+  return csv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 /**
  * Resolve the GitHub repo slug from explicit config or by parsing the issue URL.
@@ -690,18 +687,8 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     effectiveSandbox === "docker"
       ? {
           dockerImage: cfg.dockerImage || undefined,
-          dockerEnvVars: cfg.dockerEnvVars
-            ? cfg.dockerEnvVars
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : undefined,
-          dockerMounts: cfg.dockerMounts
-            ? cfg.dockerMounts
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : undefined,
+          dockerEnvVars: csvToArray(cfg.dockerEnvVars),
+          dockerMounts: csvToArray(cfg.dockerMounts),
           // Mount the main repo's .git directory for worktree support.
           // Without this, git operations inside the container fail because
           // the worktree's .git file points to a path outside the container.
