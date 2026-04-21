@@ -263,6 +263,41 @@ If you still see permission denied errors, check these common causes:
 - **Rootless Docker** — UID/GID mapping may prevent the container user from accessing host files. Ensure the container user has read/write access to the worktree directory.
 - **Read-only credential mounts** — Credential files (e.g., `.gitconfig`, API key files) are intentionally mounted read-only (`:ro`). If the agent attempts to write to these paths, it will fail. This is by design — credential files should not be modified by the agent.
 
+### Feedback commands fail with container runtime errors
+
+When running inside a Docker sandbox, feedback commands (tests, builds) that depend on Docker or Podman will fail because the container does not have access to the host's container runtime by default. Common error messages include:
+
+- `Could not find a working container runtime strategy` (Testcontainers)
+- `Cannot connect to the Docker daemon` (Docker CLI)
+- `Cannot connect to Podman` (Podman)
+
+Ralphai automatically detects these patterns in feedback output and includes an `[Advisory]` in the gate rejection details, suggesting the appropriate fix.
+
+**Diagnosis:**
+
+1. Check the gate rejection output for an `[Advisory]` line mentioning container runtime.
+2. Confirm your tests or build require Docker/Podman (e.g., Testcontainers, docker-compose).
+
+**Fix:**
+
+- **If running in a Docker sandbox** (`sandbox=docker`): Enable host runtime forwarding by setting `docker.hostRuntime` to `true` in `ralphai.json`:
+
+  ```json
+  {
+    "docker": {
+      "hostRuntime": true
+    }
+  }
+  ```
+
+  Or pass the flag on the command line: `ralphai run --docker-host-runtime`.
+
+- **If `docker.hostRuntime` is already enabled**: Verify that the host Docker/Podman daemon is running and the socket is accessible. Check that the socket path exists (typically `/var/run/docker.sock` or `$XDG_RUNTIME_DIR/podman/podman.sock`).
+
+- **If not using a sandbox** (`sandbox=none`): Ensure Docker or Podman is installed and running on the host machine.
+
+See [docs/docker.md](docker.md) for more details on sandbox configuration.
+
 ## "Completed issue still has `in-progress` label"
 
 In earlier versions, a race condition could leave both `in-progress` and `done` labels on a completed issue. This happened when a duplicate pull re-added `in-progress` after the done transition had already removed it. This is now fixed — the pull transition checks for the `done` label and refuses to add `in-progress` if it is present.

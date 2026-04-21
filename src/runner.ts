@@ -58,6 +58,7 @@ import {
 } from "./issue-lifecycle.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
+import type { SandboxContext } from "./container-runtime-error.ts";
 import { runReviewPass, getChangedFiles } from "./review-pass.ts";
 import {
   detectPlan,
@@ -660,6 +661,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     process.exit(1);
   }
   const effectiveSandbox = sandboxResult.sandbox;
+
+  // Sandbox context for container-runtime error detection in gate rejections.
+  const sandboxContext: SandboxContext = {
+    sandbox: effectiveSandbox,
+    hostRuntime: cfg.docker.hostRuntime,
+  };
 
   // --- Pull Docker image to ensure local cache is up to date ---
   // Fail-open: if the pull fails (e.g. no network), continue with the
@@ -1301,6 +1308,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               validators,
               cwd,
               feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+              sandboxContext,
             });
 
             const gateFailureOpts = {
@@ -1368,6 +1376,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                       validators,
                       cwd,
                       feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+                      sandboxContext,
                     });
 
                     if (!reGateResult.passed) {
