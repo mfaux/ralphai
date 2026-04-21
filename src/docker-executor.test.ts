@@ -1420,6 +1420,7 @@ describe("buildDockerArgs — hostRuntime socket forwarding", () => {
         prompt: "test",
         cwd: "/work",
         hostRuntime: true,
+        _fileExists: () => false,
       });
 
       expect(warnSpy).toHaveBeenCalledTimes(1);

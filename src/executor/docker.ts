@@ -358,6 +358,13 @@ export interface DockerCommandOptions {
   extraAgentFlags?: string[];
   /** Forward the host Docker/Podman socket into the container. */
   hostRuntime?: boolean;
+  /**
+   * Override for `fs.existsSync` — used by `detectHostSocket` to probe
+   * socket paths.  Injected only in tests so host environment doesn't
+   * influence assertions.  Defaults to `existsSync`.
+   * @internal
+   */
+  _fileExists?: (path: string) => boolean;
 }
 
 /**
@@ -377,6 +384,7 @@ function buildCommonDockerArgs(opts: {
   mainGitDir?: string;
   feedbackWrapperPath?: string;
   hostRuntime?: boolean;
+  _fileExists?: (path: string) => boolean;
 }): string[] {
   const {
     agentCommand,
@@ -387,6 +395,7 @@ function buildCommonDockerArgs(opts: {
     mainGitDir,
     feedbackWrapperPath,
     hostRuntime = false,
+    _fileExists = existsSync,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -433,7 +442,7 @@ function buildCommonDockerArgs(opts: {
 
   // Host container runtime forwarding (docker.hostRuntime)
   if (hostRuntime) {
-    const detection = detectHostSocket(process.env, existsSync);
+    const detection = detectHostSocket(process.env, _fileExists);
     if (detection.socketPath) {
       // Bind-mount the host socket into the well-known container path.
       // Read-write is required so the agent can issue Docker commands.
