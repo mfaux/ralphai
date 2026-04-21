@@ -2,7 +2,9 @@
  * show-config.ts — Formats the --show-config output.
  */
 
+import { existsSync } from "fs";
 import type { ResolvedConfig, WorkspaceOverrides } from "./config.ts";
+import { detectHostSocket } from "./docker-socket.ts";
 
 // ---------------------------------------------------------------------------
 // Agent type detection
@@ -63,6 +65,7 @@ const CONFIG_PATH_TO_ENV: Readonly<Record<string, string>> = {
   "prompt.context": "RALPHAI_PROMPT_CONTEXT",
   "prompt.commitStyle": "RALPHAI_PROMPT_COMMIT_STYLE",
   "pr.draft": "RALPHAI_PR_DRAFT",
+  "docker.hostRuntime": "RALPHAI_DOCKER_HOST_RUNTIME",
   "git.branchPrefix": "RALPHAI_GIT_BRANCH_PREFIX",
   "issue.source": "RALPHAI_ISSUE_SOURCE",
   "issue.standaloneLabel": "RALPHAI_ISSUE_STANDALONE_LABEL",
@@ -239,7 +242,8 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
     config.sandbox.value === "docker" ||
     config.dockerImage.source !== "default" ||
     config.dockerMounts.source !== "default" ||
-    config.dockerEnvVars.source !== "default"
+    config.dockerEnvVars.source !== "default" ||
+    config.docker.hostRuntime.source !== "default"
   ) {
     const dockerImageVal = config.dockerImage.value || "<auto-resolve>";
     const dockerImageSrc = sourceLabel(
@@ -357,6 +361,32 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   lines.push(
     `  pr.draft           = ${config.pr.draft.value}  (${prDraftSrc})`,
   );
+
+  // docker.hostRuntime
+  const dockerHostRuntimeSrc = sourceLabel(
+    "docker.hostRuntime",
+    config.docker.hostRuntime.source,
+    input,
+  );
+  lines.push(
+    `  docker.hostRuntime = ${config.docker.hostRuntime.value}  (${dockerHostRuntimeSrc})`,
+  );
+
+  // docker.hostRuntime — resolved socket path (shown only when enabled)
+  if (config.docker.hostRuntime.value) {
+    const socketResult = detectHostSocket(process.env, existsSync);
+    if (socketResult.socketPath) {
+      lines.push(
+        `  docker.socketPath  = ${socketResult.socketPath}  (auto-detected)`,
+      );
+    } else if (socketResult.forwardDockerHost) {
+      lines.push(
+        `  docker.socketPath  = <none — forwarding DOCKER_HOST>  (auto-detected)`,
+      );
+    } else {
+      lines.push(`  docker.socketPath  = <not found>  (auto-detected)`);
+    }
+  }
 
   // git.branchPrefix
   const branchPrefixVal = config.git.branchPrefix.value || "<none>";

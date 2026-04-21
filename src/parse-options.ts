@@ -52,6 +52,7 @@ export interface WizardAnswers {
   prFeedbackCommands: string;
   issueSource: "none" | "github";
   sandbox?: "none" | "docker";
+  hostRuntime?: boolean;
   updateAgentsMd?: boolean;
   createSamplePlan?: boolean;
   workspaces?: Record<string, { feedbackCommands: string[] }>;

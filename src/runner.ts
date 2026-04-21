@@ -58,6 +58,7 @@ import {
 } from "./issue-lifecycle.ts";
 import { archiveRun, createPr } from "./pr-lifecycle.ts";
 import { runCompletionGate, formatGateRejection } from "./completion-gate.ts";
+import type { SandboxContext } from "./container-runtime-error.ts";
 import { runReviewPass, getChangedFiles } from "./review-pass.ts";
 import {
   detectPlan,
@@ -539,25 +540,13 @@ function runDryRun(
   // Docker dry-run: print the full docker run command
   if (effectiveSandbox === "docker") {
     const agentCmd = cfg.agent.command;
-    const dockerEnvVars = cfg.dockerEnvVars
-      ? cfg.dockerEnvVars
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-      : [];
-    const dockerMountsVal = cfg.dockerMounts
-      ? cfg.dockerMounts
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean)
-      : [];
     const dockerArgs = buildDockerArgs({
       agentCommand: agentCmd,
       prompt: "<PROMPT>",
       cwd: worktreeDir,
       dockerImage: cfg.dockerImage || undefined,
-      dockerEnvVars,
-      dockerMounts: dockerMountsVal,
+      dockerEnvVars: csvToArray(cfg.dockerEnvVars),
+      dockerMounts: csvToArray(cfg.dockerMounts),
       mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
     });
     console.log(`[dry-run] Docker command: ${formatDockerCommand(dockerArgs)}`);
@@ -571,6 +560,15 @@ function runDryRun(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Split a comma-separated config string into a trimmed, non-empty array. */
+function csvToArray(csv: string | undefined): string[] {
+  if (!csv) return [];
+  return csv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 /**
  * Resolve the GitHub repo slug from explicit config or by parsing the issue URL.
@@ -661,6 +659,12 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
   }
   const effectiveSandbox = sandboxResult.sandbox;
 
+  // Sandbox context for container-runtime error detection in gate rejections.
+  const sandboxContext: SandboxContext = {
+    sandbox: effectiveSandbox,
+    hostRuntime: cfg.docker.hostRuntime,
+  };
+
   // --- Pull Docker image to ensure local cache is up to date ---
   // Fail-open: if the pull fails (e.g. no network), continue with the
   // cached image. Skipped in dry-run mode (no side effects).
@@ -683,22 +687,13 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
     effectiveSandbox === "docker"
       ? {
           dockerImage: cfg.dockerImage || undefined,
-          dockerEnvVars: cfg.dockerEnvVars
-            ? cfg.dockerEnvVars
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : undefined,
-          dockerMounts: cfg.dockerMounts
-            ? cfg.dockerMounts
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            : undefined,
+          dockerEnvVars: csvToArray(cfg.dockerEnvVars),
+          dockerMounts: csvToArray(cfg.dockerMounts),
           // Mount the main repo's .git directory for worktree support.
           // Without this, git operations inside the container fail because
           // the worktree's .git file points to a path outside the container.
           mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
+          hostRuntime: cfg.docker.hostRuntime,
         }
       : undefined;
   const executor: AgentExecutor = createExecutor(
@@ -1301,6 +1296,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
               validators,
               cwd,
               feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+              sandboxContext,
             });
 
             const gateFailureOpts = {
@@ -1368,6 +1364,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
                       validators,
                       cwd,
                       feedbackTimeoutMs: feedbackTimeoutSeconds * 1000,
+                      sandboxContext,
                     });
 
                     if (!reGateResult.passed) {

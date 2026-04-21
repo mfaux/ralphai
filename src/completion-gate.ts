@@ -13,6 +13,10 @@
  */
 import { existsSync, readFileSync } from "fs";
 
+import {
+  detectContainerRuntimeError,
+  type SandboxContext,
+} from "./container-runtime-error.ts";
 import { execRun } from "./exec.ts";
 import {
   countCompletedFromProgress,
@@ -33,6 +37,8 @@ export interface CompletionGateInput {
   feedbackResults: FeedbackResult[];
   /** Results of running validator commands (run after feedback passes). */
   validatorResults?: FeedbackResult[];
+  /** Optional sandbox context for container-runtime error detection. */
+  sandboxContext?: SandboxContext;
 }
 
 /** Feedback tier: loop-tier runs during each iteration; PR-tier runs only at the completion gate. */
@@ -90,6 +96,20 @@ export function checkCompletionGate(input: CompletionGateInput): GateOutcome {
   }
   if (hasFailedCmds) {
     reasons.push("failing feedback commands");
+
+    // Check for container-runtime errors and append advisory if detected.
+    for (const result of input.feedbackResults) {
+      if (result.exitCode !== 0 && result.output) {
+        const advisory = detectContainerRuntimeError(
+          result.output,
+          input.sandboxContext,
+        );
+        if (advisory) {
+          details.push(advisory);
+          break; // One advisory is enough — avoid duplicates.
+        }
+      }
+    }
   }
 
   // --- Validator check (skipped when feedback fails) ---
@@ -190,6 +210,8 @@ export interface RunCompletionGateOptions {
   cwd: string;
   /** Per-command timeout in milliseconds. Defaults to 300_000 (5 minutes). */
   feedbackTimeoutMs?: number;
+  /** Optional sandbox context for container-runtime error detection. */
+  sandboxContext?: SandboxContext;
 }
 
 /**
@@ -240,6 +262,7 @@ export function runCompletionGate(
     totalTasks: options.totalTasks,
     feedbackResults,
     validatorResults,
+    sandboxContext: options.sandboxContext,
   });
 }
 

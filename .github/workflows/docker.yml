@@ -49,5 +49,6 @@ jobs:
               node --version && \
               pnpm --version && \
               bun --version && \
+              docker --version && \
               ${{ matrix.agent }} --version
             "

@@ -80,8 +80,8 @@ describe("init command", () => {
     const config = readFileSync(configPath(), "utf-8");
     const parsed = JSON.parse(config);
 
-    // Verify exactly 6 top-level keys are present (agent, hooks, baseBranch, issue, sandbox, repoPath)
-    expect(Object.keys(parsed)).toHaveLength(6);
+    // Verify exactly 7 top-level keys are present (agent, hooks, baseBranch, issue, sandbox, docker, repoPath)
+    expect(Object.keys(parsed)).toHaveLength(7);
 
     // Core settings from wizard
     expect(typeof parsed.agent.command).toBe("string");
@@ -98,6 +98,9 @@ describe("init command", () => {
 
     // Sandbox (auto-detected: "docker" if Docker available, "none" otherwise)
     expect(["none", "docker"]).toContain(parsed.sandbox);
+
+    // Host runtime forwarding defaults to false
+    expect(parsed.docker.hostRuntime).toBe(false);
   });
 
   it("init --yes --agent-command uses the provided agent command", async () => {
@@ -111,7 +114,7 @@ describe("init command", () => {
     const parsed = JSON.parse(config);
     expect(parsed.agent.command).toBe("claude -p");
     // Other keys should still get defaults
-    expect(Object.keys(parsed)).toHaveLength(6);
+    expect(Object.keys(parsed)).toHaveLength(7);
   });
 
   it("init --yes warns when agent command binary is not in PATH", async () => {

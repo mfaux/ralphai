@@ -60,6 +60,11 @@ export interface PrConfig {
   draft: boolean;
 }
 
+/** Docker-related config keys (nested group). */
+export interface DockerConfig {
+  hostRuntime: boolean;
+}
+
 /** Git-related config keys. */
 export interface GitConfig {
   branchPrefix: string;
@@ -95,6 +100,7 @@ export interface RalphaiConfig {
   gate: GateConfig;
   prompt: PromptConfig;
   pr: PrConfig;
+  docker: DockerConfig;
   git: GitConfig;
   issue: IssueConfig;
   baseBranch: string;
@@ -131,6 +137,7 @@ export interface ResolvedConfig {
   gate: ResolvedGroup<GateConfig>;
   prompt: ResolvedGroup<PromptConfig>;
   pr: ResolvedGroup<PrConfig>;
+  docker: ResolvedGroup<DockerConfig>;
   git: ResolvedGroup<GitConfig>;
   issue: ResolvedGroup<IssueConfig>;
   baseBranch: ResolvedValue<string>;
@@ -188,6 +195,9 @@ export function configValues(rc: ResolvedConfig): ConfigValues {
     },
     pr: {
       draft: rc.pr.draft.value,
+    },
+    docker: {
+      hostRuntime: rc.docker.hostRuntime.value,
     },
     git: {
       branchPrefix: rc.git.branchPrefix.value,
@@ -303,6 +313,9 @@ export const DEFAULTS: Readonly<RalphaiConfig> = {
   },
   pr: {
     draft: true,
+  },
+  docker: {
+    hostRuntime: false,
   },
   git: {
     branchPrefix: "",
@@ -737,6 +750,26 @@ export function parseConfigFile(filePath: string): ParsedConfigFile | null {
     }
   }
 
+  // --- docker group ---
+  if ("docker" in obj) {
+    const d = obj.docker;
+    if (d === null || typeof d !== "object" || Array.isArray(d))
+      err("'docker' must be an object");
+    const dObj = d as Record<string, unknown>;
+    const dockerValues: Partial<DockerConfig> = {};
+
+    if ("hostRuntime" in dObj) {
+      const v = dObj.hostRuntime;
+      if (typeof v !== "boolean")
+        err(`'docker.hostRuntime' must be true or false, got '${v}'`);
+      dockerValues.hostRuntime = v;
+    }
+
+    if (Object.keys(dockerValues).length > 0) {
+      values.docker = { ...DEFAULTS.docker, ...dockerValues };
+    }
+  }
+
   // --- git group ---
   if ("git" in obj) {
     const g = obj.git;
@@ -1108,6 +1141,16 @@ export function applyEnvOverrides(
     overrides.pr = { ...DEFAULTS.pr, draft: prDraft === "true" };
   }
 
+  // --- docker group ---
+  const dockerHostRuntime = get("RALPHAI_DOCKER_HOST_RUNTIME");
+  if (dockerHostRuntime !== undefined) {
+    validateBoolean(dockerHostRuntime, "RALPHAI_DOCKER_HOST_RUNTIME");
+    overrides.docker = {
+      ...DEFAULTS.docker,
+      hostRuntime: dockerHostRuntime === "true",
+    };
+  }
+
   // --- git group ---
   const gitBranchPrefix = get("RALPHAI_GIT_BRANCH_PREFIX");
   if (gitBranchPrefix !== undefined) {
@@ -1246,6 +1289,10 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     if (!overrides.pr) overrides.pr = { ...DEFAULTS.pr };
     return overrides.pr;
   }
+  function ensureDocker(): DockerConfig {
+    if (!overrides.docker) overrides.docker = { ...DEFAULTS.docker };
+    return overrides.docker;
+  }
   function ensureGit(): GitConfig {
     if (!overrides.git) overrides.git = { ...DEFAULTS.git };
     return overrides.git;
@@ -1369,6 +1416,14 @@ export function parseCLIArgs(args: readonly string[]): ParsedCLIArgs {
     } else if (arg === "--no-pr-draft") {
       ensurePr().draft = false;
       rawFlags["pr.draft"] = "--no-pr-draft";
+
+      // --- docker group ---
+    } else if (arg === "--docker-host-runtime") {
+      ensureDocker().hostRuntime = true;
+      rawFlags["docker.hostRuntime"] = "--docker-host-runtime";
+    } else if (arg === "--no-docker-host-runtime") {
+      ensureDocker().hostRuntime = false;
+      rawFlags["docker.hostRuntime"] = "--no-docker-host-runtime";
 
       // --- git group ---
     } else if (arg.startsWith("--git-branch-prefix=")) {
@@ -1522,6 +1577,7 @@ function buildDefaultResolved(): ResolvedConfig {
     gate: wrapGroup(DEFAULTS.gate),
     prompt: wrapGroup(DEFAULTS.prompt),
     pr: wrapGroup(DEFAULTS.pr),
+    docker: wrapGroup(DEFAULTS.docker),
     git: wrapGroup(DEFAULTS.git),
     issue: wrapGroup(DEFAULTS.issue),
     baseBranch: { value: DEFAULTS.baseBranch, source: "default" },
@@ -1586,6 +1642,13 @@ export function resolveConfig(input: ResolveConfigInput): ResolveConfigResult {
       );
     if (partial.pr)
       applyGroupOverride(resolved.pr, DEFAULTS.pr, partial.pr, source);
+    if (partial.docker)
+      applyGroupOverride(
+        resolved.docker,
+        DEFAULTS.docker,
+        partial.docker,
+        source,
+      );
     if (partial.git)
       applyGroupOverride(resolved.git, DEFAULTS.git, partial.git, source);
     if (partial.issue)

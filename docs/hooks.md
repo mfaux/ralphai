@@ -88,6 +88,12 @@ Settings resolve in this order: **CLI flags > env vars > `config.json` > default
 | ---------- | ------- | ------------------ | ------------------------------ | ----------------------------------------------------------------------- |
 | `pr.draft` | `true`  | `RALPHAI_PR_DRAFT` | `--pr-draft` / `--no-pr-draft` | Open PRs as drafts. Use `--no-pr-draft` to create ready-for-review PRs. |
 
+### `docker.*` — Docker
+
+| Key                  | Default | Env Var                       | CLI Flag                                             | Description                                                       |
+| -------------------- | ------- | ----------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `docker.hostRuntime` | `false` | `RALPHAI_DOCKER_HOST_RUNTIME` | `--docker-host-runtime` / `--no-docker-host-runtime` | Forward the host Docker/Podman socket into the sandbox container. |
+
 ### `git.*` — Git
 
 | Key                | Default | Env Var                     | CLI Flag                       | Description                                                                           |

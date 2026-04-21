@@ -4,7 +4,7 @@
  *
  * All tests use mocks — no real Docker required.
  */
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import { execSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -33,6 +33,21 @@ import {
 } from "./config.ts";
 import { buildConfirmLines } from "./tui/screens/confirm.tsx";
 import { useTempDir } from "./test-utils.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract the values following every `-v` flag from a Docker args array. */
+function extractVolumeFlags(args: string[]): string[] {
+  return args.reduce<string[]>((acc, a, i) => {
+    if (a === "-v") {
+      const next = args[i + 1];
+      if (next) acc.push(next);
+    }
+    return acc;
+  }, []);
+}
 
 // ---------------------------------------------------------------------------
 // resolveDockerImage
@@ -130,6 +145,75 @@ describe("buildDockerArgs", () => {
     expect(args[huskyIdx - 1]).toBe("-e");
   });
 
+  it("includes -e TURBO_CACHE_DIR=.turbo for build-tool cache isolation", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("TURBO_CACHE_DIR=.turbo");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("includes -e NX_CACHE_DIRECTORY=.nx/cache for build-tool cache isolation", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("allows user-supplied dockerEnvVars to override TURBO_CACHE_DIR", () => {
+    // dockerEnvVars are env var names forwarded from the host.
+    // When the host has TURBO_CACHE_DIR set, buildEnvFlags emits `-e TURBO_CACHE_DIR`
+    // (which Docker resolves from the host env), appearing after the hardcoded
+    // `-e TURBO_CACHE_DIR=.turbo`. Docker's last-write-wins means the host value wins.
+    const prev = process.env.TURBO_CACHE_DIR;
+    process.env.TURBO_CACHE_DIR = "/custom/turbo";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        dockerEnvVars: ["TURBO_CACHE_DIR"],
+      });
+      const hardcoded = args.indexOf("TURBO_CACHE_DIR=.turbo");
+      // The forwarded flag is just the var name (Docker reads value from host env)
+      const forwarded = args.indexOf("TURBO_CACHE_DIR");
+      expect(hardcoded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(hardcoded);
+    } finally {
+      if (prev === undefined) delete process.env.TURBO_CACHE_DIR;
+      else process.env.TURBO_CACHE_DIR = prev;
+    }
+  });
+
+  it("allows user-supplied dockerEnvVars to override NX_CACHE_DIRECTORY", () => {
+    const prev = process.env.NX_CACHE_DIRECTORY;
+    process.env.NX_CACHE_DIRECTORY = "/custom/nx";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        dockerEnvVars: ["NX_CACHE_DIRECTORY"],
+      });
+      const hardcoded = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+      const forwarded = args.indexOf("NX_CACHE_DIRECTORY");
+      expect(hardcoded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(hardcoded);
+    } finally {
+      if (prev === undefined) delete process.env.NX_CACHE_DIRECTORY;
+      else process.env.NX_CACHE_DIRECTORY = prev;
+    }
+  });
+
   it("bind-mounts worktree at host path", () => {
     const args = buildDockerArgs({
       agentCommand: "claude -p",
@@ -215,13 +299,7 @@ describe("buildDockerArgs", () => {
       cwd: "/work/my-worktree",
       mainGitDir: "/work/main-repo/.git",
     });
-    const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") {
-        const next = args[i + 1];
-        if (next) acc.push(next);
-      }
-      return acc;
-    }, []);
+    const vFlags = extractVolumeFlags(args);
     const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
     expect(gitMount).toBeDefined();
     expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
@@ -235,13 +313,7 @@ describe("buildDockerArgs", () => {
       prompt: "do stuff",
       cwd: "/work/my-project",
     });
-    const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") {
-        const next = args[i + 1];
-        if (next) acc.push(next);
-      }
-      return acc;
-    }, []);
+    const vFlags = extractVolumeFlags(args);
     // Should have exactly one -v mount for the worktree (plus any credential mounts)
     const workdirMount = vFlags.find((f) =>
       f.startsWith("/work/my-project:/work/my-project"),
@@ -898,6 +970,28 @@ describe("buildSetupDockerArgs", () => {
     expect(args[huskyIdx - 1]).toBe("-e");
   });
 
+  it("includes -e TURBO_CACHE_DIR=.turbo for build-tool cache isolation", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("TURBO_CACHE_DIR=.turbo");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("includes -e NX_CACHE_DIRECTORY=.nx/cache for build-tool cache isolation", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
   it("bind-mounts worktree at host path", () => {
     const args = buildSetupDockerArgs({
       agentCommand: "claude -p",
@@ -993,13 +1087,7 @@ describe("buildSetupDockerArgs", () => {
       cwd: "/work/my-worktree",
       mainGitDir: "/work/main-repo/.git",
     });
-    const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") {
-        const next = args[i + 1];
-        if (next) acc.push(next);
-      }
-      return acc;
-    }, []);
+    const vFlags = extractVolumeFlags(args);
     const gitMount = vFlags.find((f) => f.includes("/work/main-repo/.git"));
     expect(gitMount).toBeDefined();
     expect(gitMount).toBe("/work/main-repo/.git:/work/main-repo/.git");
@@ -1012,13 +1100,7 @@ describe("buildSetupDockerArgs", () => {
       setupCommand: "bun install",
       cwd: "/work/my-project",
     });
-    const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") {
-        const next = args[i + 1];
-        if (next) acc.push(next);
-      }
-      return acc;
-    }, []);
+    const vFlags = extractVolumeFlags(args);
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
     expect(gitMount).toBeUndefined();
   });
@@ -1153,13 +1235,7 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
           prompt: "test prompt",
           cwd: worktreeDir,
         });
-        const vFlags = args.reduce<string[]>((acc, a, i) => {
-          if (a === "-v") {
-            const next = args[i + 1];
-            if (next) acc.push(next);
-          }
-          return acc;
-        }, []);
+        const vFlags = extractVolumeFlags(args);
         const gitMount = vFlags.find((f) => f.includes(join(mainRepo, ".git")));
         expect(gitMount).toBeDefined();
         expect(gitMount).toBe(
@@ -1185,13 +1261,7 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
       prompt: "test prompt",
       cwd: mainRepo,
     });
-    const vFlags = args.reduce<string[]>((acc, a, i) => {
-      if (a === "-v") {
-        const next = args[i + 1];
-        if (next) acc.push(next);
-      }
-      return acc;
-    }, []);
+    const vFlags = extractVolumeFlags(args);
     const gitMount = vFlags.find((f) => f.includes("/.git:"));
     expect(gitMount).toBeUndefined();
   });
@@ -1239,5 +1309,161 @@ describe("DockerExecutor.buildSpawnDockerArgs", () => {
     });
     const promptIdx = args.lastIndexOf("test prompt");
     expect(args[promptIdx - 1]).toBe("--custom-debug");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Host runtime forwarding (docker.hostRuntime)
+// ---------------------------------------------------------------------------
+
+describe("buildDockerArgs — hostRuntime socket forwarding", () => {
+  const ctx = useTempDir();
+
+  it("mounts host socket at /var/run/docker.sock when hostRuntime=true and socket exists", () => {
+    // Create a fake socket file
+    const socketPath = join(ctx.dir, "docker.sock");
+    writeFileSync(socketPath, "");
+
+    // Override DOCKER_HOST to point to our fake socket
+    const prevDockerHost = process.env.DOCKER_HOST;
+    process.env.DOCKER_HOST = `unix://${socketPath}`;
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: "/work",
+        hostRuntime: true,
+      });
+
+      const vFlags = extractVolumeFlags(args);
+
+      const socketMount = vFlags.find((f) =>
+        f.includes("/var/run/docker.sock"),
+      );
+      expect(socketMount).toBeDefined();
+      expect(socketMount).toBe(`${socketPath}:/var/run/docker.sock`);
+    } finally {
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
+  });
+
+  it("forwards DOCKER_HOST env var for tcp:// scheme when hostRuntime=true", () => {
+    const prevDockerHost = process.env.DOCKER_HOST;
+    process.env.DOCKER_HOST = "tcp://192.168.1.100:2375";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: "/work",
+        hostRuntime: true,
+      });
+
+      // Should have -e DOCKER_HOST (forwarded from host env)
+      const dockerHostIdx = args.indexOf("DOCKER_HOST");
+      expect(dockerHostIdx).toBeGreaterThan(-1);
+      expect(args[dockerHostIdx - 1]).toBe("-e");
+
+      // Should NOT have a socket mount
+      const vFlags = extractVolumeFlags(args);
+      const socketMount = vFlags.find((f) =>
+        f.includes("/var/run/docker.sock"),
+      );
+      expect(socketMount).toBeUndefined();
+    } finally {
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
+  });
+
+  it("does NOT mount socket when hostRuntime is false", () => {
+    const prevDockerHost = process.env.DOCKER_HOST;
+    process.env.DOCKER_HOST = "unix:///var/run/docker.sock";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: "/work",
+        hostRuntime: false,
+      });
+
+      const vFlags = extractVolumeFlags(args);
+      const socketMount = vFlags.find((f) =>
+        f.includes("/var/run/docker.sock"),
+      );
+      expect(socketMount).toBeUndefined();
+    } finally {
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
+  });
+
+  it("does NOT mount socket when hostRuntime is undefined (default)", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "test",
+      cwd: "/work",
+    });
+
+    const vFlags = extractVolumeFlags(args);
+    const socketMount = vFlags.find((f) => f.includes("/var/run/docker.sock"));
+    expect(socketMount).toBeUndefined();
+  });
+
+  it("emits console warning when hostRuntime=true but no socket found", () => {
+    const prevDockerHost = process.env.DOCKER_HOST;
+    delete process.env.DOCKER_HOST;
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: "/work",
+        hostRuntime: true,
+        _fileExists: () => false,
+      });
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]![0]).toContain(
+        "docker.hostRuntime is enabled but no Docker/Podman socket was found",
+      );
+    } finally {
+      warnSpy.mockRestore();
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
+  });
+});
+
+describe("DockerExecutor — hostRuntime config", () => {
+  const ctx = useTempDir();
+
+  it("passes hostRuntime through to buildDockerArgs", () => {
+    const mainRepo = ctx.dir;
+    execSync("git init", { cwd: mainRepo, stdio: "ignore" });
+
+    // Create a fake socket
+    const socketPath = join(ctx.dir, "docker.sock");
+    writeFileSync(socketPath, "");
+
+    const prevDockerHost = process.env.DOCKER_HOST;
+    process.env.DOCKER_HOST = `unix://${socketPath}`;
+    try {
+      const executor = new DockerExecutor({ hostRuntime: true });
+      const args = executor.buildSpawnDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: mainRepo,
+      });
+
+      const vFlags = extractVolumeFlags(args);
+      const socketMount = vFlags.find((f) =>
+        f.includes("/var/run/docker.sock"),
+      );
+      expect(socketMount).toBeDefined();
+    } finally {
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
   });
 });
