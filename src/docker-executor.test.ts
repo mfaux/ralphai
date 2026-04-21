@@ -130,6 +130,75 @@ describe("buildDockerArgs", () => {
     expect(args[huskyIdx - 1]).toBe("-e");
   });
 
+  it("includes -e TURBO_CACHE_DIR=.turbo for build-tool cache isolation", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("TURBO_CACHE_DIR=.turbo");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("includes -e NX_CACHE_DIRECTORY=.nx/cache for build-tool cache isolation", () => {
+    const args = buildDockerArgs({
+      agentCommand: "claude -p",
+      prompt: "do stuff",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("allows user-supplied dockerEnvVars to override TURBO_CACHE_DIR", () => {
+    // dockerEnvVars are env var names forwarded from the host.
+    // When the host has TURBO_CACHE_DIR set, buildEnvFlags emits `-e TURBO_CACHE_DIR`
+    // (which Docker resolves from the host env), appearing after the hardcoded
+    // `-e TURBO_CACHE_DIR=.turbo`. Docker's last-write-wins means the host value wins.
+    const prev = process.env.TURBO_CACHE_DIR;
+    process.env.TURBO_CACHE_DIR = "/custom/turbo";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        dockerEnvVars: ["TURBO_CACHE_DIR"],
+      });
+      const hardcoded = args.indexOf("TURBO_CACHE_DIR=.turbo");
+      // The forwarded flag is just the var name (Docker reads value from host env)
+      const forwarded = args.indexOf("TURBO_CACHE_DIR");
+      expect(hardcoded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(hardcoded);
+    } finally {
+      if (prev === undefined) delete process.env.TURBO_CACHE_DIR;
+      else process.env.TURBO_CACHE_DIR = prev;
+    }
+  });
+
+  it("allows user-supplied dockerEnvVars to override NX_CACHE_DIRECTORY", () => {
+    const prev = process.env.NX_CACHE_DIRECTORY;
+    process.env.NX_CACHE_DIRECTORY = "/custom/nx";
+    try {
+      const args = buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "do stuff",
+        cwd: "/work/my-project",
+        dockerEnvVars: ["NX_CACHE_DIRECTORY"],
+      });
+      const hardcoded = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+      const forwarded = args.indexOf("NX_CACHE_DIRECTORY");
+      expect(hardcoded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(-1);
+      expect(forwarded).toBeGreaterThan(hardcoded);
+    } finally {
+      if (prev === undefined) delete process.env.NX_CACHE_DIRECTORY;
+      else process.env.NX_CACHE_DIRECTORY = prev;
+    }
+  });
+
   it("bind-mounts worktree at host path", () => {
     const args = buildDockerArgs({
       agentCommand: "claude -p",
@@ -896,6 +965,28 @@ describe("buildSetupDockerArgs", () => {
     const huskyIdx = args.indexOf("HUSKY=0");
     expect(huskyIdx).toBeGreaterThan(-1);
     expect(args[huskyIdx - 1]).toBe("-e");
+  });
+
+  it("includes -e TURBO_CACHE_DIR=.turbo for build-tool cache isolation", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("TURBO_CACHE_DIR=.turbo");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
+  });
+
+  it("includes -e NX_CACHE_DIRECTORY=.nx/cache for build-tool cache isolation", () => {
+    const args = buildSetupDockerArgs({
+      agentCommand: "claude -p",
+      setupCommand: "bun install",
+      cwd: "/work/my-project",
+    });
+    const idx = args.indexOf("NX_CACHE_DIRECTORY=.nx/cache");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx - 1]).toBe("-e");
   });
 
   it("bind-mounts worktree at host path", () => {

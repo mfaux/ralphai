@@ -398,6 +398,12 @@ function buildCommonDockerArgs(opts: {
   // Suppress husky git hooks inside Docker containers
   args.push("-e", "HUSKY=0");
 
+  // Keep build-tool caches inside the worktree so they don't resolve to
+  // the parent repo directory (outside the container), which causes
+  // permission errors.  Values are relative to CWD (the worktree root).
+  args.push("-e", "TURBO_CACHE_DIR=.turbo");
+  args.push("-e", "NX_CACHE_DIRECTORY=.nx/cache");
+
   // Worktree bind mount (read-write)
   args.push("-v", `${cwd}:${cwd}`);
   args.push("-w", cwd);

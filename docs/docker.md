@@ -54,6 +54,19 @@ Git identity vars (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, 
 
 Env vars that are unset or empty on the host are silently skipped.
 
+### Build-tool cache env vars
+
+Ralphai automatically sets the following env vars in every Docker sandbox container to keep build-tool caches inside the worktree. Without these, tools like Turborepo and Nx may resolve their cache directories to the parent repo (outside the container), causing permission errors.
+
+| Env var              | Value       | Tool      |
+| -------------------- | ----------- | --------- |
+| `TURBO_CACHE_DIR`    | `.turbo`    | Turborepo |
+| `NX_CACHE_DIRECTORY` | `.nx/cache` | Nx        |
+
+Values are relative paths resolved against the container working directory (the worktree root). These vars are harmless when the corresponding tool is not present.
+
+To override a value, set the same variable in `dockerEnvVars` in your config file — Docker processes `-e` flags left-to-right, so user-supplied values take precedence.
+
 **File mounts** are forwarded per-agent as read-only bind mounts:
 
 | Agent    | Mounted files (relative to `~`)                              |
