@@ -267,6 +267,24 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
 
   const sandbox: "none" | "docker" = sandboxConfirm ? "docker" : "none";
 
+  // 5b. Host runtime forwarding (only when sandbox=docker)
+  let hostRuntime = false;
+  if (sandbox === "docker") {
+    const hostRuntimeConfirm = await clack.confirm({
+      message:
+        "Forward host Docker/Podman socket into the sandbox? " +
+        "(grants container access to host Docker daemon)",
+      initialValue: false,
+    });
+
+    if (clack.isCancel(hostRuntimeConfirm)) {
+      clack.cancel("Setup cancelled.");
+      return null;
+    }
+
+    hostRuntime = hostRuntimeConfirm;
+  }
+
   // 6. GitHub Issues integration (enabled by default)
   clack.note(
     "When Ralphai's backlog is empty, it will automatically pull the oldest\n" +
@@ -327,6 +345,7 @@ async function runWizard(cwd: string): Promise<WizardAnswers | null> {
     feedbackCommands: feedbackCommands || "",
     prFeedbackCommands: prFeedbackCommands || "",
     sandbox,
+    hostRuntime,
     issueSource: enableIssues ? "github" : "none",
     updateAgentsMd,
     createSamplePlan,
@@ -512,6 +531,9 @@ function scaffold(answers: WizardAnswers, cwd: string): void {
       commentProgress: true,
     },
     sandbox: answers.sandbox ?? "none",
+    docker: {
+      hostRuntime: answers.hostRuntime ?? false,
+    },
   };
 
   // Conditionally include workspaces to keep config clean for single-project repos
@@ -1490,6 +1512,7 @@ async function runRalphaiInit(
       feedbackCommands: detectedFeedbackStr,
       prFeedbackCommands: detectedPrFeedbackStr,
       sandbox: sandboxValue,
+      hostRuntime: false,
       issueSource: "github",
       updateAgentsMd: !agentsMdHasSection,
       createSamplePlan: true,

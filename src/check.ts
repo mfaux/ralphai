@@ -8,13 +8,14 @@
 import { existsSync } from "fs";
 import { getConfigFilePath, parseConfigFile, DEFAULTS } from "./config.ts";
 import type { RalphaiConfig } from "./config.ts";
+import { detectHostSocket } from "./docker-socket.ts";
 
 // ---------------------------------------------------------------------------
 // Capability map
 // ---------------------------------------------------------------------------
 
 /** Supported capability names. */
-export const SUPPORTED_CAPABILITIES = ["issues"] as const;
+export const SUPPORTED_CAPABILITIES = ["issues", "docker-socket"] as const;
 export type CapabilityName = (typeof SUPPORTED_CAPABILITIES)[number];
 
 interface CapabilityResult {
@@ -33,6 +34,34 @@ const CAPABILITY_MAP: Record<CapabilityName, CapabilityCheck> = {
     return {
       pass: false,
       message: `configured, but missing capability: issues (issue.source is "${issueSource}")`,
+    };
+  },
+  "docker-socket"(values) {
+    const hostRuntime = values.docker?.hostRuntime ?? false;
+    if (!hostRuntime) {
+      return {
+        pass: false,
+        message:
+          "configured, but missing capability: docker-socket (docker.hostRuntime is false)",
+      };
+    }
+    const result = detectHostSocket(process.env, existsSync);
+    if (result.socketPath) {
+      return {
+        pass: true,
+        message: `docker-socket: ${result.socketPath}`,
+      };
+    }
+    if (result.forwardDockerHost) {
+      return {
+        pass: true,
+        message: `docker-socket: forwarding DOCKER_HOST`,
+      };
+    }
+    return {
+      pass: false,
+      message:
+        "configured, but missing capability: docker-socket (no socket found)",
     };
   },
 };

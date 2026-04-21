@@ -2,7 +2,9 @@
  * show-config.ts — Formats the --show-config output.
  */
 
+import { existsSync } from "fs";
 import type { ResolvedConfig, WorkspaceOverrides } from "./config.ts";
+import { detectHostSocket } from "./docker-socket.ts";
 
 // ---------------------------------------------------------------------------
 // Agent type detection
@@ -369,6 +371,22 @@ export function formatShowConfig(input: FormatShowConfigInput): string {
   lines.push(
     `  docker.hostRuntime = ${config.docker.hostRuntime.value}  (${dockerHostRuntimeSrc})`,
   );
+
+  // docker.hostRuntime — resolved socket path (shown only when enabled)
+  if (config.docker.hostRuntime.value) {
+    const socketResult = detectHostSocket(process.env, existsSync);
+    if (socketResult.socketPath) {
+      lines.push(
+        `  docker.socketPath  = ${socketResult.socketPath}  (auto-detected)`,
+      );
+    } else if (socketResult.forwardDockerHost) {
+      lines.push(
+        `  docker.socketPath  = <none — forwarding DOCKER_HOST>  (auto-detected)`,
+      );
+    } else {
+      lines.push(`  docker.socketPath  = <not found>  (auto-detected)`);
+    }
+  }
 
   // git.branchPrefix
   const branchPrefixVal = config.git.branchPrefix.value || "<none>";

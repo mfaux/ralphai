@@ -88,6 +88,38 @@ describe("init wizard", () => {
     expect(ralphaiSrc).toContain('sandbox: answers.sandbox ?? "none"');
   });
 
+  // ---------------------------------------------------------------------------
+  // Host runtime forwarding follow-up
+  // ---------------------------------------------------------------------------
+
+  it("wizard prompts for host runtime forwarding when sandbox=docker", () => {
+    expect(ralphaiSrc).toContain(
+      "Forward host Docker/Podman socket into the sandbox?",
+    );
+  });
+
+  it("wizard prompt includes security advisory", () => {
+    expect(ralphaiSrc).toContain(
+      "grants container access to host Docker daemon",
+    );
+  });
+
+  it("WizardAnswers type includes hostRuntime field", () => {
+    const parseOptsSrc = readFileSync(
+      join(__dirname, "parse-options.ts"),
+      "utf-8",
+    );
+    expect(parseOptsSrc).toContain("hostRuntime?: boolean");
+  });
+
+  it("scaffold writes docker.hostRuntime to config", () => {
+    expect(ralphaiSrc).toContain("hostRuntime: answers.hostRuntime ?? false");
+  });
+
+  it("--yes mode defaults hostRuntime to false", () => {
+    expect(ralphaiSrc).toContain("hostRuntime: false");
+  });
+
   it("--yes mode auto-detects Docker for sandbox", () => {
     expect(ralphaiSrc).toContain("detectDockerAvailable()");
     // Sandbox is included in the detection summary
