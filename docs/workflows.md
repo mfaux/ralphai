@@ -174,6 +174,24 @@ Mounts use standard Docker bind-mount syntax (`host:container[:options]`). Env v
 
 The exact flag depends on which agent you use — check your agent's CLI reference for the correct option.
 
+**Host runtime forwarding:** If your project has container-dependent tests (e.g., Testcontainers), the agent needs access to a Docker daemon. Enable `docker.hostRuntime` to forward the host's Docker or Podman socket into the sandbox:
+
+```bash
+ralphai run --docker-host-runtime
+```
+
+Or in config:
+
+```json
+{
+  "docker": {
+    "hostRuntime": true
+  }
+}
+```
+
+See [Docker Sandbox — Host runtime forwarding](docker.md#host-runtime-forwarding) for detection order and security implications.
+
 For details on the Docker execution flow and credential forwarding, see [Docker Sandbox](docker.md). For all Docker-related config keys, see [Hooks, Gates, and Prompt Controls](hooks.md#top-level-keys).
 
 ## Test a plan without changing anything

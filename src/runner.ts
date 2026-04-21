@@ -706,6 +706,7 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
           // Without this, git operations inside the container fail because
           // the worktree's .git file points to a path outside the container.
           mainGitDir: mainWorktree ? join(mainWorktree, ".git") : undefined,
+          hostRuntime: cfg.docker.hostRuntime,
         }
       : undefined;
   const executor: AgentExecutor = createExecutor(

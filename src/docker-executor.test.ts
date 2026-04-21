@@ -4,7 +4,7 @@
  *
  * All tests use mocks — no real Docker required.
  */
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import { execSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -1408,6 +1408,29 @@ describe("buildDockerArgs — hostRuntime socket forwarding", () => {
     const vFlags = extractVolumeFlags(args);
     const socketMount = vFlags.find((f) => f.includes("/var/run/docker.sock"));
     expect(socketMount).toBeUndefined();
+  });
+
+  it("emits console warning when hostRuntime=true but no socket found", () => {
+    const prevDockerHost = process.env.DOCKER_HOST;
+    delete process.env.DOCKER_HOST;
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      buildDockerArgs({
+        agentCommand: "claude -p",
+        prompt: "test",
+        cwd: "/work",
+        hostRuntime: true,
+      });
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0]![0]).toContain(
+        "docker.hostRuntime is enabled but no Docker/Podman socket was found",
+      );
+    } finally {
+      warnSpy.mockRestore();
+      if (prevDockerHost === undefined) delete process.env.DOCKER_HOST;
+      else process.env.DOCKER_HOST = prevDockerHost;
+    }
   });
 });
 

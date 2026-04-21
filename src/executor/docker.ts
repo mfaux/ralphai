@@ -23,6 +23,7 @@ import type {
   ExecutorSpawnResult,
 } from "./types.ts";
 
+import { detectHostSocket } from "../docker-socket.ts";
 import { shellSplit } from "../shell-split.ts";
 import { detectAgentType } from "../show-config.ts";
 import { resolveMainGitDir } from "../worktree/index.ts";
@@ -355,6 +356,8 @@ export interface DockerCommandOptions {
   feedbackWrapperPath?: string;
   /** Extra flags to inject between the agent command and the prompt (for verbose mode). */
   extraAgentFlags?: string[];
+  /** Forward the host Docker/Podman socket into the container. */
+  hostRuntime?: boolean;
 }
 
 /**
@@ -373,6 +376,7 @@ function buildCommonDockerArgs(opts: {
   dockerMounts?: string[];
   mainGitDir?: string;
   feedbackWrapperPath?: string;
+  hostRuntime?: boolean;
 }): string[] {
   const {
     agentCommand,
@@ -382,6 +386,7 @@ function buildCommonDockerArgs(opts: {
     dockerMounts = [],
     mainGitDir,
     feedbackWrapperPath,
+    hostRuntime = false,
   } = opts;
 
   const agentType = detectAgentType(agentCommand);
@@ -425,6 +430,27 @@ function buildCommonDockerArgs(opts: {
 
   // Credential file mounts
   args.push(...buildMountFlags(agentType, dockerMounts));
+
+  // Host container runtime forwarding (docker.hostRuntime)
+  if (hostRuntime) {
+    const detection = detectHostSocket(process.env, existsSync);
+    if (detection.socketPath) {
+      // Bind-mount the host socket into the well-known container path.
+      // Read-write is required so the agent can issue Docker commands.
+      args.push("-v", `${detection.socketPath}:/var/run/docker.sock`);
+    }
+    if (detection.forwardDockerHost) {
+      // tcp:// or npipe:// — no socket file to mount, forward the env var
+      args.push("-e", "DOCKER_HOST");
+    }
+    if (!detection.socketPath && !detection.forwardDockerHost) {
+      console.warn(
+        "Warning: docker.hostRuntime is enabled but no Docker/Podman socket was found and DOCKER_HOST is not set. " +
+          "The agent will not have access to a container runtime. " +
+          "Set DOCKER_HOST or ensure a socket exists at /var/run/docker.sock.",
+      );
+    }
+  }
 
   // Image
   args.push(image);
@@ -490,6 +516,8 @@ export interface SetupDockerCommandOptions {
    * because setup commands may need git access.
    */
   mainGitDir?: string;
+  /** Forward the host Docker/Podman socket into the container. */
+  hostRuntime?: boolean;
 }
 
 /**
@@ -546,6 +574,16 @@ export interface DockerExecutorConfig {
    * Derived by the caller from `resolveWorktreeInfo()`.
    */
   mainGitDir?: string;
+  /**
+   * When true, forward the host Docker/Podman socket into the container
+   * so the agent can run container commands (e.g. docker build, testcontainers).
+   *
+   * Socket detection uses `detectHostSocket()` to find the runtime socket.
+   * When a Unix socket is found, it is bind-mounted read-write at
+   * `/var/run/docker.sock` inside the container. When DOCKER_HOST uses
+   * tcp:// or npipe://, the env var is forwarded instead.
+   */
+  hostRuntime?: boolean;
 }
 
 /**
@@ -600,6 +638,7 @@ export class DockerExecutor implements AgentExecutor {
       mainGitDir,
       feedbackWrapperPath: opts.feedbackWrapperPath,
       extraAgentFlags,
+      hostRuntime: this.config.hostRuntime,
     });
   }
 

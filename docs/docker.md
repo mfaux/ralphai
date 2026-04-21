@@ -76,6 +76,50 @@ To override a value, set the same variable in `dockerEnvVars` in your config fil
 
 Files that don't exist on the host are silently skipped. Globally-installed skills (via `npx skills add ... -g`) are automatically available to agents in Docker mode through the `.agents/skills/` mount. Additional mounts can be added via the `dockerMounts` config key.
 
+## Host runtime forwarding
+
+When the agent needs to build or run Docker containers (e.g., for Testcontainers-based integration tests), it must communicate with a Docker or Podman daemon. The `docker.hostRuntime` config key controls whether the host's container runtime socket is forwarded into the sandbox container.
+
+**Config key:** `docker.hostRuntime` (default: `false`)
+
+```yaml
+# ralphai.yaml
+docker:
+  hostRuntime: true
+```
+
+Or via CLI flag: `--docker-host-runtime` / `--no-docker-host-runtime`
+Or via env var: `RALPHAI_DOCKER_HOST_RUNTIME=true`
+
+### How it works
+
+When `docker.hostRuntime` is `true`, Ralphai detects the host's container runtime socket using the following search order:
+
+1. **`DOCKER_HOST` env var** — if set:
+   - `unix:///path/to/socket` → extracts the socket path and bind-mounts it
+   - `tcp://host:port` or `npipe://...` → forwards `DOCKER_HOST` as an env var (no socket mount)
+2. **Default socket paths** (probed in order, first existing file wins):
+   - `/var/run/docker.sock` (Docker daemon)
+   - `$XDG_RUNTIME_DIR/podman/podman.sock` (Podman rootless)
+   - `$HOME/.docker/run/docker.sock` (Docker Desktop on macOS)
+
+The detected socket is bind-mounted read-write at `/var/run/docker.sock` inside the container. Read-write access is required because the Docker client communicates with the daemon over this socket.
+
+If no socket is found and `DOCKER_HOST` is not set, Ralphai emits a console warning and proceeds — the user may have a remote daemon configured through other means.
+
+When `sandbox` is `"none"`, the `docker.hostRuntime` setting is ignored (the agent already has direct access to the host environment).
+
+### Security implications
+
+Forwarding the Docker socket grants the agent **full control over the host's Docker daemon**. This means the agent can:
+
+- Create, start, stop, and remove any container on the host
+- Pull and push images
+- Mount arbitrary host directories into new containers
+- Access the host network
+
+Only enable `docker.hostRuntime` when you trust the agent's workload and understand the risks. In CI environments, consider using a dedicated Docker daemon or a Docker-in-Docker (DinD) sidecar instead.
+
 ## Pre-built images
 
 Ralphai publishes pre-built Docker images for supported agents:
