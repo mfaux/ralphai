@@ -3,5 +3,12 @@
   "extends": ["config:recommended", "group:allNonMajor"],
   "labels": ["dependencies"],
   "semanticCommitScope": "",
-  "minimumReleaseAge": "7 days"
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
 }
