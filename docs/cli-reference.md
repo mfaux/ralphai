@@ -226,6 +226,7 @@ PRD behavior:
 - Per-sub-issue PRs are suppressed; one aggregate draft PR is opened at the end
 - Stuck sub-issues are skipped and listed in the PR body; the PRD continues to the next
 - HITL sub-issues (labeled with `issue.hitlLabel`, default `ralphai-subissue-hitl`) and sub-issues blocked by HITL dependencies are skipped; the PRD continues to the next eligible sub-issue
+- `Ctrl+C` stops the PRD run without advancing to later sub-issues or opening the aggregate PR for that interrupted run
 - The aggregate PR title uses `feat: <PRD title>` and includes completed/stuck/HITL checklists
 
 The `ralphai run <number>` form uses label-driven dispatch: it reads the issue's labels to classify it as standalone (`ralphai-standalone`), sub-issue (`ralphai-subissue`), or PRD (`ralphai-prd`). Sub-issues automatically discover their parent PRD and process through the PRD flow. Issues with no recognized label produce an error with guidance. The old unified `ralphai` label is not recognized.

@@ -2329,6 +2329,7 @@ async function runPrdIssueTarget(
   const subIssueSummaries = new Map<number, string>();
   const prdLearnings: string[] = [];
   let completedCount = 0;
+  let prdInterrupted = false;
 
   for (const subIssueNumber of eligibleSubIssues) {
     console.log();
@@ -2421,6 +2422,13 @@ async function runPrdIssueTarget(
         },
         { skipPrCreation: true },
       );
+      if (result.interrupted) {
+        prdInterrupted = true;
+        console.log(
+          `Sub-issue #${subIssueNumber} interrupted — stopping PRD run.`,
+        );
+        break;
+      }
       if (result.stuckSlugs.length > 0) {
         // Runner returned normally but the sub-issue got stuck
         stuckSubIssues.push(subIssueNumber);
@@ -2450,6 +2458,14 @@ async function runPrdIssueTarget(
         `Skipping sub-issue #${subIssueNumber} — continuing to next.`,
       );
     }
+  }
+
+  if (prdInterrupted) {
+    console.log();
+    console.log(
+      `Interrupted during PRD #${prd.number}. Work is preserved in in-progress — resume with another run.`,
+    );
+    return;
   }
 
   // --- Summary ---
@@ -3107,7 +3123,7 @@ async function runRalphaiRunner(
   // --- Handle --help ---
   if (runArgs.includes("--help") || runArgs.includes("-h")) {
     showRunHelp();
-    return { stuckSlugs: [], accumulatedLearnings: [] };
+    return { stuckSlugs: [], accumulatedLearnings: [], interrupted: false };
   }
 
   // --- Reject unrecognized flags ---
@@ -3170,7 +3186,7 @@ async function runRalphaiRunner(
       workspaces: configValues(config).workspaces,
     });
     console.log(text);
-    return { stuckSlugs: [], accumulatedLearnings: [] };
+    return { stuckSlugs: [], accumulatedLearnings: [], interrupted: false };
   }
 
   // Check that ralphai has been initialized (global config exists).

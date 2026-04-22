@@ -16,7 +16,7 @@ For multi-step features, use the planning skills to go from idea to executable i
 ralphai run 42           # issue #42: detected as PRD via label, processes sub-issues
 ```
 
-Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items.
+Ralphai creates a single worktree on a `feat/<prd-slug>` branch and processes sub-issues one at a time. Stuck sub-issues are skipped — the PRD continues to the next. Sub-issues labeled with the HITL label (`ralphai-subissue-hitl` by default, configurable via `issue.hitlLabel`) are also skipped — they require human review. Sub-issues that depend on a HITL sub-issue are skipped as blocked. When all sub-issues are done (or skipped), Ralphai opens one aggregate draft PR listing completed, stuck, HITL, and blocked items. If you press `Ctrl+C` during a PRD run, Ralphai stops the PRD run after the current sub-issue instead of advancing to later sub-issues.
 
 You can also create PRD issues and sub-issues by hand — just apply the `ralphai-prd` label (configurable via `issue.prdLabel`) and add sub-issues. The skills automate this.
 

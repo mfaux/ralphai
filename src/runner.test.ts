@@ -355,6 +355,7 @@ describe("runRunner — RunnerResult", () => {
     const result = await runRunner(opts);
 
     expect(result.stuckSlugs).toEqual([]);
+    expect(result.interrupted).toBe(false);
   });
 
   test("returns accumulated learnings from the run", async () => {
@@ -414,6 +415,7 @@ describe("runRunner — RunnerResult", () => {
 
     expect(result.stuckSlugs).toEqual([]);
     expect(result.accumulatedLearnings).toEqual([]);
+    expect(result.interrupted).toBe(false);
   });
 });
 
