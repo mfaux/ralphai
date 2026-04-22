@@ -77,6 +77,8 @@ describe("pushBranch", () => {
     const result = pushBranch("main", ctx.dir, true);
     expect(result.ok).toBe(false);
     expect(result.message).toContain("Failed to push");
+    // The error message should include the underlying git error reason
+    expect(result.message).toContain("Reason:");
   });
 });
 

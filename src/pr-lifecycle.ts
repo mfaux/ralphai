@@ -11,7 +11,7 @@
  */
 import { existsSync, mkdirSync, renameSync } from "fs";
 import { basename, dirname, join } from "path";
-import { execQuiet, execWithStdin } from "./exec.ts";
+import { execQuiet, execRun, execWithStdin } from "./exec.ts";
 import { extractIssueFrontmatter } from "./plan-lifecycle.ts";
 import {
   checkGhAvailable,
@@ -445,10 +445,13 @@ export function pushBranch(
   setUpstream = true,
 ): PushResult {
   const flag = setUpstream ? " -u" : "";
-  if (execQuiet(`git push${flag} origin "${branch}"`, cwd) === null) {
+  const result = execRun(`git push${flag} origin "${branch}"`, cwd);
+  if (result.exitCode !== 0) {
+    const detail = (result.stderr || result.stdout).trim();
+    const reason = detail ? ` Reason: ${detail}` : "";
     return {
       ok: false,
-      message: `Failed to push branch '${branch}'. Branch left intact for manual push.`,
+      message: `Failed to push branch '${branch}'. Branch left intact for manual push.${reason}`,
     };
   }
   return { ok: true, message: `Pushed ${branch} to origin` };
