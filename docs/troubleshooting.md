@@ -90,7 +90,7 @@ If a runner crashes without cleaning up its PID file, the next `ralphai run` aut
 
 ## "How do I stop a running agent?"
 
-**Headless (`ralphai run`):** Press Ctrl-C in the terminal where the runner is active. The runner catches SIGINT/SIGTERM, finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`, so you can resume later.
+**Headless (`ralphai run`):** Press Ctrl-C in the terminal where the runner is active. The runner catches SIGINT/SIGTERM, finishes the current iteration cleanly, then exits. Work is preserved in `in-progress/<slug>/`, so you can resume later. During a PRD run, Ralphai stops after the current sub-issue and does not advance to later sub-issues or create the aggregate PR for that interrupted run.
 
 **From another terminal:** Use `ralphai stop` to send SIGTERM to a running plan runner:
 
