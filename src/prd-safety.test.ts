@@ -43,43 +43,37 @@ describe("createPrdPr nothing-to-merge detection", () => {
   });
 
   it("returns success with descriptive message when branch has no commits ahead of base", () => {
-    // Create a repo where the feature branch is at the same commit as main
-    // (simulating all work already merged)
-    const remoteDir = join(ctx.dir, "remote.git");
-    const repoDir = join(ctx.dir, "repo");
-    mkdirSync(remoteDir, { recursive: true });
-    realExecSync("git init --bare", { cwd: remoteDir, stdio: "ignore" });
-    realExecSync(`git clone "${remoteDir}" repo`, {
-      cwd: ctx.dir,
-      stdio: "ignore",
-    });
-    realExecSync('git config user.email "test@test.com"', {
-      cwd: repoDir,
-      stdio: "ignore",
-    });
-    realExecSync('git config user.name "Test"', {
-      cwd: repoDir,
-      stdio: "ignore",
-    });
-    writeFileSync(join(repoDir, "init.txt"), "init\n");
-    realExecSync('git add -A && git commit -m "init"', {
-      cwd: repoDir,
-      stdio: "ignore",
-    });
-    realExecSync("git push", { cwd: repoDir, stdio: "ignore" });
-    // Create a branch that points to the same commit as main (nothing to merge)
-    realExecSync("git checkout -b feat/prd-empty", {
-      cwd: repoDir,
-      stdio: "ignore",
-    });
-    realExecSync("git push -u origin feat/prd-empty", {
+    // Create a repo where the feature branch is at the same commit as base
+    // (simulating all sub-issue work already merged)
+    const repoDir = initRepoWithRemoteAndBranch(ctx.dir, "feat/prd-empty");
+
+    // initRepoWithRemoteAndBranch creates one extra commit on the feature branch.
+    // Reset to match the base (simulating nothing to merge).
+    realExecSync("git reset --hard HEAD~1", {
       cwd: repoDir,
       stdio: "ignore",
     });
 
+    // Push the (now-reset) feature branch to origin so that createPrdPr's
+    // internal pushBranch call is a no-op ("Everything up-to-date").
+    realExecSync('git push -u origin "feat/prd-empty"', {
+      cwd: repoDir,
+      stdio: "ignore",
+    });
+
+    // Use the first branch listed in remote refs (excluding the feature branch)
+    // as the base branch. initRepoWithRemoteAndBranch pushes the default branch.
+    const remoteBranches = realExecSync(
+      "git branch -r --format='%(refname:short)'",
+      { cwd: repoDir, encoding: "utf-8" },
+    ).trim().split("\n").map((b) => b.replace(/^'?origin\//, "").replace(/'$/, ""));
+    const baseBranch = remoteBranches.find(
+      (b) => b !== "feat/prd-empty" && b !== "HEAD",
+    ) ?? "main";
+
     const result = createPrdPr({
       branch: "feat/prd-empty",
-      baseBranch: "main",
+      baseBranch,
       prd: { number: 100, title: "feat: Cross-pod SSE" },
       completedSubIssues: [101, 102],
       stuckSubIssues: [],
