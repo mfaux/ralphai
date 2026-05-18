@@ -2268,6 +2268,21 @@ async function runPrdIssueTarget(
     setupSandboxConfig,
   );
 
+  // Safety assertion: the worktree must not resolve back to the main repo.
+  // If it does, sub-issue commits would land on the base branch directly.
+  if (resolve(resolvedWorktreeDir) === resolve(cwd)) {
+    console.error(
+      `ERROR: Worktree resolved to the main repo directory (${cwd}).`,
+    );
+    console.error(
+      "This would cause sub-issue commits to land directly on the base branch.",
+    );
+    console.error(
+      `Expected a separate worktree at ../.ralphai-worktrees/${prdSlug}/`,
+    );
+    process.exit(1);
+  }
+
   const worktreeConfig = resolveWorktreeConfig(
     resolvedWorktreeDir,
     cwd,

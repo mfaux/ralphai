@@ -1135,6 +1135,27 @@ export async function runRunner(opts: RunnerOptions): Promise<RunnerResult> {
             enableContext: promptContext,
           });
 
+          // --- Safety: verify branch isolation for PRD sub-issues ---
+          // When skipPrCreation is set, we're processing a PRD sub-issue.
+          // Commits must never land on the base branch directly.
+          if (skipPrCreation) {
+            const currentBranchCheck =
+              execQuiet("git rev-parse --abbrev-ref HEAD", cwd) ?? "";
+            if (currentBranchCheck === baseBranch) {
+              console.error(
+                `ERROR: PRD sub-issue about to commit to the base branch '${baseBranch}'.`,
+              );
+              console.error(
+                "This indicates a branch isolation failure — aborting to prevent commits on the base branch.",
+              );
+              console.error(
+                "The plan has been rolled back to the backlog. Re-run the PRD to create a proper feature branch.",
+              );
+              rollbackPlan(planFile, dirs.backlogDir);
+              process.exit(1);
+            }
+          }
+
           // --- Spawn agent (with output log persistence) ---
           const outputLogPath = join(wipDir, "agent-output.log");
           try {
