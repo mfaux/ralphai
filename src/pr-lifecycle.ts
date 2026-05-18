@@ -750,6 +750,26 @@ export function createPrdPr(options: CreatePrdPrOptions): CreatePrResult {
   const push = pushBranch(branch, cwd, true);
   if (!push.ok) return { ok: false, prUrl: "", message: push.message };
 
+  // --- Check if branch has commits ahead of base ---
+  // If all sub-issue work was already merged to the base branch (e.g., via
+  // individual PRs from a prior run), the PRD branch has nothing to merge.
+  // In this case, skip PR creation and report success with a descriptive message.
+  const commitCount = execQuiet(
+    `git rev-list --count "${baseBranch}..${branch}"`,
+    cwd,
+  );
+  if (commitCount !== null && parseInt(commitCount.trim(), 10) === 0) {
+    const subIssueRefs = completedSubIssues.map((n) => `#${n}`).join(", ");
+    return {
+      ok: true,
+      prUrl: "",
+      message:
+        `All sub-issue work already merged to '${baseBranch}'. ` +
+        `No PRD PR needed.\n` +
+        `Completed sub-issues: ${subIssueRefs || "(none)"}`,
+    };
+  }
+
   const prRepo = detectIssueRepo(cwd) ?? undefined;
 
   // Check if a PR already exists for this branch
